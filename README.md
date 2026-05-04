@@ -48,11 +48,15 @@ It intentionally does not replace Rust's `Display`, `FromStr`, `TryFrom`, or
 - **Lowercase by Default**: `HexCodec::new()` produces contiguous lowercase hex.
 - **Uppercase Mode**: `HexCodec::upper()` or `with_uppercase(true)` produces
   uppercase digits.
-- **Optional Per-Byte Prefix**: add and require a prefix such as `0x` before
-  each encoded byte.
+- **Optional Whole Prefix**: add and require a prefix such as `0x` before the
+  entire encoded value.
+- **Optional Per-Byte Prefix**: add and require a byte prefix such as `0x`
+  before each encoded byte.
 - **Optional Separator**: write and accept separators between bytes, such as
   `:` or a space.
 - **Whitespace Handling**: optionally ignore ASCII whitespace while decoding.
+- **Prefix Case Handling**: optionally ignore ASCII case when matching
+  configured prefixes while decoding.
 - **Buffer APIs**: `encode_into` and `decode_into` append into existing buffers.
 
 ### 🔐 **Base64 Bytes**
@@ -91,7 +95,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.1.0"
+qubit-codec = "0.2.0"
 ```
 
 ## Quick Start
@@ -107,10 +111,10 @@ fn main() {
         .with_separator(" ");
 
     let encoded = codec.encode(&[0x1f, 0x8b, 0x00, 0xff]);
-    assert_eq!("0x1F 0x8B 0x00 0xFF", encoded);
+    assert_eq!("0x1F 8B 00 FF", encoded);
 
     let decoded = codec
-        .decode("0x1F 0x8B 0x00 0xFF")
+        .decode("0x1F 8B 00 FF")
         .expect("hex text should decode");
     assert_eq!(vec![0x1f, 0x8b, 0x00, 0xff], decoded);
 }
@@ -231,9 +235,11 @@ fn main() {
 | `new()` | Create a lowercase codec without prefix or separators |
 | `upper()` | Create an uppercase codec without prefix or separators |
 | `with_uppercase(enabled)` | Configure digit case |
-| `with_prefix(prefix)` | Add and require a prefix before every byte, such as `0x1F 0x8B` |
+| `with_prefix(prefix)` | Add and require a whole-output prefix, such as `0x1F8B` |
+| `with_byte_prefix(prefix)` | Add and require a prefix before every byte, such as `0x1F 0x8B` |
 | `with_separator(separator)` | Add and accept a separator between bytes |
 | `with_ignored_ascii_whitespace(enabled)` | Ignore ASCII whitespace while decoding |
+| `with_ignore_prefix_case(enabled)` | Ignore ASCII case when matching configured prefixes while decoding |
 | `encode(bytes)` | Encode bytes into hexadecimal text |
 | `encode_into(bytes, output)` | Append encoded text into an existing `String` |
 | `decode(text)` | Decode hexadecimal text into bytes |
@@ -268,7 +274,7 @@ Bundled decoders return `CodecResult<T>`, an alias for
 
 | Error | Meaning |
 |-------|---------|
-| `MissingPrefix` | A configured per-byte hex prefix was required but missing |
+| `MissingPrefix` | A configured whole or per-byte hex prefix was required but missing |
 | `OddHexLength` | Hex input contained an odd number of digits after normalization |
 | `InvalidHexDigit` | Hex input contained a non-hexadecimal character |
 | `InvalidBase64` | Base64 input was malformed |
