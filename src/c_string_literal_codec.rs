@@ -124,6 +124,7 @@ fn decode_escape(
         ));
     };
     match escape {
+        ' ' => push_simple_escape(position, output, b' '),
         '\'' => push_simple_escape(position, output, b'\''),
         '"' => push_simple_escape(position, output, b'"'),
         '?' => push_simple_escape(position, output, b'?'),

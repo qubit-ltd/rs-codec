@@ -39,6 +39,12 @@ fn test_decode_plain_text_and_simple_escapes() {
             .expect("remaining simple escapes should decode")
     );
     assert_eq!(
+        b"<!DOCTYPE xbel".to_vec(),
+        codec
+            .decode(r"<!DOCTYPE\ xbel")
+            .expect("escaped space should match Java CStringLiteral")
+    );
+    assert_eq!(
         b"\t\n\x0b\x0c".to_vec(),
         codec
             .decode("\t\n\u{0b}\u{0c}")
