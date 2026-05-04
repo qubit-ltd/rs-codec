@@ -1,36 +1,348 @@
-# qubit-codec
+# Qubit Codec
+
+[![CircleCI](https://circleci.com/gh/qubit-ltd/rs-codec.svg?style=shield)](https://circleci.com/gh/qubit-ltd/rs-codec)
+[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-codec/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-codec?branch=main)
+[![Crates.io](https://img.shields.io/crates/v/qubit-codec.svg?color=blue)](https://crates.io/crates/qubit-codec)
+[![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
 Reusable byte and text codecs for Rust applications.
 
-This crate focuses on stable textual encodings that are useful across Qubit
-Rust crates:
+## Overview
 
-- hexadecimal bytes
-- Base64 bytes
+Qubit Codec provides small, explicit codecs for stable byte and text encodings
+commonly needed across Qubit Rust crates and applications. Its API stays
+lightweight, typed, and idiomatic, with direct concrete methods for common use
+cases and traits for generic boundaries.
+
+This crate focuses on textual encodings with clear wire-format semantics:
+
+- hexadecimal byte strings
+- Base64 byte strings
 - percent-encoded UTF-8 text
 - `application/x-www-form-urlencoded` UTF-8 text fragments
 
 It intentionally does not replace Rust's `Display`, `FromStr`, `TryFrom`, or
 `serde` APIs for ordinary object conversion.
 
+## Design Goals
+
+- **Explicit Semantics**: each codec documents its alphabet, separator, padding,
+  and decoding rules.
+- **Small API Surface**: expose direct `encode` and `decode` methods first, with
+  traits available for generic call sites.
+- **No Hidden Panics**: malformed input is reported as `CodecError` instead of
+  panicking.
+- **Composable Traits**: `Encoder`, `Decoder`, and `Codec` support reusable
+  boundaries without forcing dynamic dispatch.
+- **Reusable Implementations**: common encodings live in one crate instead of
+  being reimplemented by downstream crates.
+- **Minimal Dependencies**: rely on well-maintained crates only where they add
+  real value.
+
+## Features
+
+### 🔡 **Hexadecimal Bytes**
+
+- **Lowercase by Default**: `HexCodec::new()` produces contiguous lowercase hex.
+- **Uppercase Mode**: `HexCodec::upper()` or `with_uppercase(true)` produces
+  uppercase digits.
+- **Optional Per-Byte Prefix**: add and require a prefix such as `0x` before
+  each encoded byte.
+- **Optional Separator**: write and accept separators between bytes, such as
+  `:` or a space.
+- **Whitespace Handling**: optionally ignore ASCII whitespace while decoding.
+- **Buffer APIs**: `encode_into` and `decode_into` append into existing buffers.
+
+### 🔐 **Base64 Bytes**
+
+- **Standard Alphabet**: padded and no-padding standard Base64.
+- **URL-Safe Alphabet**: padded and no-padding URL-safe Base64.
+- **Typed Errors**: malformed input is reported as `CodecError::InvalidBase64`.
+
+### 🌐 **Percent-Encoding**
+
+- **UTF-8 Text**: encodes and decodes UTF-8 strings.
+- **RFC 3986 Unreserved Set**: leaves ASCII letters, digits, `-`, `.`, `_`, and
+  `~` unchanged.
+- **Uppercase Escapes**: writes percent escapes such as `%2F` and `%E4`.
+- **Malformed Escape Detection**: reports truncated or invalid `%XX` sequences.
+
+### 📝 **Form URL Encoding**
+
+- **Form Fragment Codec**: handles `application/x-www-form-urlencoded` text
+  fragments.
+- **Space as Plus**: encodes spaces as `+` and decodes `+` back to spaces.
+- **Percent Compatibility**: shares the same UTF-8 and `%XX` validation behavior
+  as `PercentCodec`.
+
+### 🎯 **Focused Public API**
+
+- **`Encoder<Input>`**: encodes borrowed input into an associated output type.
+- **`Decoder<Input>`**: decodes borrowed input into an associated output type.
+- **`Codec<EncodeInput, DecodeInput>`**: combines encoder and decoder traits.
+- **`CodecError` / `CodecResult`**: common error and result types for bundled
+  codecs.
+
+## Installation
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+qubit-codec = "0.1.0"
+```
+
+## Quick Start
+
+### Hexadecimal Bytes
+
+```rust
+use qubit_codec::HexCodec;
+
+fn main() {
+    let codec = HexCodec::upper()
+        .with_prefix("0x")
+        .with_separator(" ");
+
+    let encoded = codec.encode(&[0x1f, 0x8b, 0x00, 0xff]);
+    assert_eq!("0x1F 0x8B 0x00 0xFF", encoded);
+
+    let decoded = codec
+        .decode("0x1F 0x8B 0x00 0xFF")
+        .expect("hex text should decode");
+    assert_eq!(vec![0x1f, 0x8b, 0x00, 0xff], decoded);
+}
+```
+
+### Base64 Bytes
+
+```rust
+use qubit_codec::Base64Codec;
+
+fn main() {
+    let codec = Base64Codec::standard();
+
+    let encoded = codec.encode(b"hello");
+    assert_eq!("aGVsbG8=", encoded);
+
+    let decoded = codec
+        .decode("aGVsbG8=")
+        .expect("Base64 text should decode");
+    assert_eq!(b"hello".to_vec(), decoded);
+}
+```
+
+### URL-Safe Base64 Without Padding
+
+```rust
+use qubit_codec::Base64Codec;
+
+fn main() {
+    let codec = Base64Codec::url_safe_no_pad();
+
+    let encoded = codec.encode(&[251, 255, 239]);
+    assert_eq!("-__v", encoded);
+
+    let decoded = codec
+        .decode("-__v")
+        .expect("URL-safe Base64 text should decode");
+    assert_eq!(vec![251, 255, 239], decoded);
+}
+```
+
+### Percent-Encoding UTF-8 Text
+
+```rust
+use qubit_codec::PercentCodec;
+
+fn main() {
+    let codec = PercentCodec::new();
+
+    let encoded = codec.encode("a b/中");
+    assert_eq!("a%20b%2F%E4%B8%AD", encoded);
+
+    let decoded = codec
+        .decode("a%20b%2F%E4%B8%AD")
+        .expect("percent-encoded text should decode");
+    assert_eq!("a b/中", decoded);
+}
+```
+
+### Form URL Encoding
+
+```rust
+use qubit_codec::FormUrlencodedCodec;
+
+fn main() {
+    let codec = FormUrlencodedCodec::new();
+
+    let encoded = codec.encode("name=Qubit Codec");
+    assert_eq!("name%3DQubit+Codec", encoded);
+
+    let decoded = codec
+        .decode("name%3DQubit+Codec")
+        .expect("form-url-encoded text should decode");
+    assert_eq!("name=Qubit Codec", decoded);
+}
+```
+
+### Generic Trait Usage
+
+Use the traits when application code should depend on an encoding capability
+instead of a concrete codec type.
+
 ```rust
 use qubit_codec::{
-    Base64Codec,
+    CodecError,
+    Encoder,
     HexCodec,
-    PercentCodec,
 };
 
-let hex = HexCodec::upper()
-    .with_prefix("0x")
-    .with_separator(" ")
-    .encode(&[0x1f, 0x8b]);
-assert_eq!("0x1F 8B", hex);
+fn encode_payload<C>(codec: &C, payload: &[u8]) -> Result<String, CodecError>
+where
+    C: Encoder<[u8], Output = String, Error = CodecError>,
+{
+    codec.encode(payload)
+}
 
-let bytes = Base64Codec::standard()
-    .decode("aGVsbG8=")
-    .expect("valid Base64 should decode");
-assert_eq!(b"hello".to_vec(), bytes);
-
-let text = PercentCodec::new().encode("a b/中");
-assert_eq!("a%20b%2F%E4%B8%AD", text);
+fn main() {
+    let text = encode_payload(&HexCodec::new(), &[0xab, 0xcd])
+        .expect("hex encoding should not fail");
+    assert_eq!("abcd", text);
+}
 ```
+
+## API Reference
+
+### Trait Operations
+
+| Trait | Method | Description |
+|-------|--------|-------------|
+| `Encoder<Input>` | `encode(&Input)` | Encode borrowed input into an associated output type |
+| `Decoder<Input>` | `decode(&Input)` | Decode borrowed input into an associated output type |
+| `Codec<EncodeInput, DecodeInput>` | - | Marker-style combination of `Encoder` and `Decoder` |
+
+### `HexCodec` Operations
+
+| Method | Description |
+|--------|-------------|
+| `new()` | Create a lowercase codec without prefix or separators |
+| `upper()` | Create an uppercase codec without prefix or separators |
+| `with_uppercase(enabled)` | Configure digit case |
+| `with_prefix(prefix)` | Add and require a prefix before every byte, such as `0x1F 0x8B` |
+| `with_separator(separator)` | Add and accept a separator between bytes |
+| `with_ignored_ascii_whitespace(enabled)` | Ignore ASCII whitespace while decoding |
+| `encode(bytes)` | Encode bytes into hexadecimal text |
+| `encode_into(bytes, output)` | Append encoded text into an existing `String` |
+| `decode(text)` | Decode hexadecimal text into bytes |
+| `decode_into(text, output)` | Append decoded bytes into an existing `Vec<u8>` |
+
+### `Base64Codec` Operations
+
+| Method | Alphabet | Padding | Description |
+|--------|----------|---------|-------------|
+| `standard()` | Standard | Yes | Create standard Base64 codec |
+| `standard_no_pad()` | Standard | No | Create standard Base64 codec without padding |
+| `url_safe()` | URL-safe | Yes | Create URL-safe Base64 codec |
+| `url_safe_no_pad()` | URL-safe | No | Create URL-safe Base64 codec without padding |
+| `encode(bytes)` | Configured | Configured | Encode bytes into Base64 text |
+| `decode(text)` | Configured | Configured | Decode Base64 text into bytes |
+
+### Text Codec Operations
+
+| Type | Method | Description |
+|------|--------|-------------|
+| `PercentCodec` | `new()` | Create a percent codec |
+| `PercentCodec` | `encode(text)` | Encode UTF-8 text using percent encoding |
+| `PercentCodec` | `decode(text)` | Decode percent-encoded UTF-8 text |
+| `FormUrlencodedCodec` | `new()` | Create a form-url-encoded codec |
+| `FormUrlencodedCodec` | `encode(text)` | Encode UTF-8 text, using `+` for spaces |
+| `FormUrlencodedCodec` | `decode(text)` | Decode UTF-8 text, treating `+` as spaces |
+
+## Error Handling
+
+Bundled decoders return `CodecResult<T>`, an alias for
+`Result<T, CodecError>`.
+
+| Error | Meaning |
+|-------|---------|
+| `MissingPrefix` | A configured per-byte hex prefix was required but missing |
+| `OddHexLength` | Hex input contained an odd number of digits after normalization |
+| `InvalidHexDigit` | Hex input contained a non-hexadecimal character |
+| `InvalidBase64` | Base64 input was malformed |
+| `InvalidPercentEscape` | Percent input contained a malformed `%XX` escape |
+| `InvalidUtf8` | Decoded bytes were not valid UTF-8 |
+
+## Testing & Code Coverage
+
+This project keeps codec behavior covered by integration tests under `tests/`.
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run with coverage report
+./coverage.sh
+
+# Generate text format report
+./coverage.sh text
+
+# Align code with CI requirements
+./align-ci.sh
+
+# Run CI checks (format, clippy, test, coverage, audit)
+./ci-check.sh
+```
+
+## Dependencies
+
+Runtime dependencies are intentionally small:
+
+- `base64` provides the Base64 engines.
+- `thiserror` provides the public error type implementation.
+
+## License
+
+Copyright (c) 2026. Haixing Hu.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+See [LICENSE](LICENSE) for the full license text.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Guidelines
+
+- Follow Rust API Guidelines.
+- Keep tests comprehensive and deterministic.
+- Document public APIs and behavior changes.
+- Ensure all checks pass before submitting a PR.
+
+## Author
+
+**Haixing Hu**
+
+## Related Projects
+
+More Rust libraries from Qubit are available under the
+[qubit-ltd](https://github.com/qubit-ltd) GitHub organization.
+
+---
+
+Repository: [https://github.com/qubit-ltd/rs-codec](https://github.com/qubit-ltd/rs-codec)
