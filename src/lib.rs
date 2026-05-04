@@ -19,6 +19,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod base64_codec;
+mod c_integer_literal_codec;
 mod c_string_literal_codec;
 mod codec;
 mod codec_error;
@@ -29,6 +30,7 @@ mod hex_codec;
 mod percent_codec;
 
 pub use base64_codec::Base64Codec;
+pub use c_integer_literal_codec::CIntegerLiteralCodec;
 pub use c_string_literal_codec::CStringLiteralCodec;
 pub use codec::Codec;
 pub use codec_error::{

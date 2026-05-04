@@ -20,6 +20,7 @@ This crate focuses on textual encodings with clear wire-format semantics:
 
 - hexadecimal byte strings
 - Base64 byte strings
+- C integer literal fragments
 - C string literal byte fragments
 - percent-encoded UTF-8 text
 - `application/x-www-form-urlencoded` UTF-8 text fragments
@@ -75,6 +76,13 @@ It intentionally does not replace Rust's `Display`, `FromStr`, `TryFrom`, or
 - **Byte-Oriented Output**: decodes directly to raw bytes without requiring
   UTF-8.
 
+### 🔢 **C Integer Literals**
+
+- **Radix Detection**: decodes decimal, octal, and `0x`/`0X` hexadecimal
+  integer literals.
+- **Unsigned Output**: returns `u64` for non-negative integer literal fragments.
+- **Precise Errors**: reports invalid digits with their original input index.
+
 ### 🌐 **Percent-Encoding**
 
 - **UTF-8 Text**: encodes and decodes UTF-8 strings.
@@ -105,7 +113,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.3.0"
+qubit-codec = "0.3.2"
 ```
 
 ## Quick Start
@@ -181,6 +189,23 @@ fn main() {
 
     let encoded = codec.encode(&[0xd0, 0xcf, 0x11, 0xe0]);
     assert_eq!(r"\xD0\xCF\x11\xE0", encoded);
+}
+```
+
+### C Integer Literals
+
+```rust
+use qubit_codec::CIntegerLiteralCodec;
+
+fn main() {
+    let codec = CIntegerLiteralCodec::new();
+
+    assert_eq!(123, codec.decode("123").expect("decimal should decode"));
+    assert_eq!(83, codec.decode("0123").expect("octal should decode"));
+    assert_eq!(
+        0xbeef_c0de,
+        codec.decode("0xBEEFC0DE").expect("hex should decode")
+    );
 }
 ```
 
@@ -291,6 +316,13 @@ fn main() {
 | `new()` | Create a C string literal byte codec |
 | `encode(bytes)` | Encode bytes into a C string literal fragment |
 | `decode(text)` | Decode a C string literal fragment into bytes |
+
+### `CIntegerLiteralCodec` Operations
+
+| Method | Description |
+|--------|-------------|
+| `new()` | Create a C integer literal decoder |
+| `decode(text)` | Decode a non-negative C integer literal fragment into `u64` |
 
 ### Text Codec Operations
 
