@@ -29,6 +29,8 @@
 /// [`decode_unchecked`](Self::decode_unchecked) and
 /// [`encode_unchecked`](Self::encode_unchecked). In particular, unchecked
 /// implementations must not read or write outside the caller-provided ranges.
+/// Implementations should use `debug_assert!` to state the expected buffer
+/// bounds at the unchecked entry point.
 pub unsafe trait Codec<Value, Unit: Copy> {
     /// Error reported when decoding malformed units.
     type DecodeError;
