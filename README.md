@@ -18,8 +18,9 @@ implementations.
 
 This crate provides:
 
-- `Encoder`, `Decoder`, and `Codec` traits for whole-value conversions.
-- `Coder`, `CoderProgress`, and `CoderStatus` for caller-managed buffer
+- `Codec<Value, Unit>` for low-level single-value buffer codecs.
+- `Encoder` and `Decoder` traits for owned whole-value convenience APIs.
+- `Coder`, `CoderProgress`, and `CoderStatus` for caller-managed batch buffer
   conversion.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
   metadata shared by binary and text codecs.
@@ -46,10 +47,11 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 ### Core Conversion Traits
 
+- **`Codec<Value, Unit>`**: encodes and decodes one value or codec quantum
+  against a caller-managed unit buffer.
 - **`Encoder<Input>`**: converts a borrowed value into an owned output type.
 - **`Decoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
-- **`Codec<EncodeInput, DecodeInput>`**: marker trait for bidirectional codecs.
 
 ### Buffer Coder Primitives
 
@@ -112,13 +114,13 @@ assert_eq!(CoderStatus::Complete, progress.status());
 
 ## API Reference
 
-### Whole-Value Traits
+### Core Codec Traits
 
 | Trait | Purpose | Typical Implementor |
 |-------|---------|---------------------|
-| `Encoder<Input>` | Encode a borrowed input into an owned output | Text, binary, or misc encoder |
-| `Decoder<Input>` | Decode a borrowed input into an owned output | Text, binary, or misc decoder |
-| `Codec<EncodeInput, DecodeInput>` | Mark one type as both encoder and decoder | Bidirectional codecs |
+| `Codec<Value, Unit>` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
+| `Encoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
+| `Decoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 
 ### `Coder` Operations
 

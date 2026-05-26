@@ -10,7 +10,6 @@
 //! Tests for lightweight encoder and decoder traits.
 
 use qubit_codec::{
-    Codec,
     Decoder,
     Encoder,
 };
@@ -44,15 +43,4 @@ fn test_codec_types_can_be_used_through_traits() {
 
     assert_eq!("ABC", encoded);
     assert_eq!("abc", decoded);
-}
-
-#[test]
-fn test_bidirectional_codec_trait_accepts_combined_implementor() {
-    fn accepts_codec<C>(_codec: &C)
-    where
-        C: Codec<str, str>,
-    {
-    }
-
-    accepts_codec(&UppercaseCodec);
 }

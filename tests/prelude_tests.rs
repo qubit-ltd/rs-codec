@@ -12,7 +12,6 @@ use qubit_codec::prelude::{
     BigEndian,
     ByteOrder,
     ByteOrderSpec,
-    Codec,
     CoderProgress,
     CoderStatus,
     Decoder,
@@ -40,18 +39,11 @@ impl Decoder<str> for EchoCodec {
     }
 }
 
-fn takes_codec<C>(_codec: &C)
-where
-    C: Codec<str, str>,
-{
-}
-
 #[test]
 fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
 
     let codec = EchoCodec;
-    takes_codec(&codec);
 
     let encoded = Encoder::<str>::encode(&codec, "abc").expect("echo encode should be infallible");
     let decoded = Decoder::<str>::decode(&codec, &encoded).expect("echo decode should be infallible");

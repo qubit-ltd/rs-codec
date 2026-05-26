@@ -12,8 +12,9 @@
 //! Core codec traits and buffer conversion primitives for Rust applications.
 //!
 //! This crate contains only domain-neutral building blocks such as value
-//! encoder/decoder traits, byte-order markers, and progress-oriented buffer
-//! coders. Concrete binary, text, misc, and I/O adapters live in sibling crates.
+//! codecs, owned encoder/decoder helpers, byte-order markers, and
+//! progress-oriented buffer coders. Concrete binary, text, misc, and I/O
+//! adapters live in sibling crates.
 //!
 
 #![deny(missing_docs)]

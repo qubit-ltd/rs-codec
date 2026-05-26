@@ -10,8 +10,9 @@
 
 //! Common codec traits and buffer conversion primitives.
 //!
-//! Importing this module brings the domain-neutral codec traits, byte-order
-//! markers, and progress-oriented coder types into scope.
+//! Importing this module brings the domain-neutral codec traits, convenience
+//! encoder/decoder traits, byte-order markers, and progress-oriented coder
+//! types into scope.
 
 pub use crate::{
     BigEndian,

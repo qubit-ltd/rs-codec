@@ -7,46 +7,55 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Tests for the bidirectional codec trait.
+//! Tests for the low-level codec trait.
 
-use qubit_codec::{
-    Codec,
-    Decoder,
-    Encoder,
-};
+use qubit_codec::Codec;
 
 #[derive(Default)]
-struct EchoCodec;
+struct ByteIncrementCodec;
 
-impl Encoder<str> for EchoCodec {
-    type Output = String;
-    type Error = core::convert::Infallible;
+unsafe impl Codec<u8, u8> for ByteIncrementCodec {
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
-        Ok(input.to_owned())
+    fn min_units_per_value(&self) -> usize {
+        1
     }
-}
 
-impl Decoder<str> for EchoCodec {
-    type Output = String;
-    type Error = core::convert::Infallible;
-
-    fn decode(&self, input: &str) -> Result<Self::Output, Self::Error> {
-        Ok(input.to_owned())
+    fn max_units_per_value(&self) -> usize {
+        1
     }
-}
 
-fn roundtrip<C>(codec: &C, text: &str) -> String
-where
-    C: Codec<str, str>
-        + Encoder<str, Output = String, Error = core::convert::Infallible>
-        + Decoder<str, Output = String, Error = core::convert::Infallible>,
-{
-    let encoded = Encoder::<str>::encode(codec, text).expect("echo encoding should be infallible");
-    Decoder::<str>::decode(codec, &encoded).expect("echo decoding should be infallible")
+    unsafe fn decode_unchecked(&self, input: &[u8], index: usize) -> Result<(u8, usize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        // SAFETY: The caller guarantees that `index` is readable.
+        let value = unsafe { *input.as_ptr().add(index) };
+        Ok((value.wrapping_sub(1), 1))
+    }
+
+    unsafe fn encode_unchecked(&self, value: u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        // SAFETY: The caller guarantees that `index` is writable.
+        unsafe {
+            *output.as_mut_ptr().add(index) = value.wrapping_add(1);
+        }
+        Ok(1)
+    }
 }
 
 #[test]
-fn test_codec_trait_combines_encoder_and_decoder() {
-    assert_eq!("codec", roundtrip(&EchoCodec, "codec"));
+fn test_codec_trait_encodes_and_decodes_one_value() {
+    let codec = ByteIncrementCodec;
+    let mut output = [0_u8; 1];
+
+    let written = unsafe { codec.encode_unchecked(41, &mut output, 0) }.expect("encoding should be infallible");
+    let (decoded, consumed) = unsafe { codec.decode_unchecked(&output, 0) }.expect("decoding should be infallible");
+
+    assert_eq!(1, codec.min_units_per_value());
+    assert_eq!(1, codec.max_units_per_value());
+    assert_eq!(1, written);
+    assert_eq!(1, consumed);
+    assert_eq!(41, decoded);
 }

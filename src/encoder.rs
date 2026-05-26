@@ -7,9 +7,13 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Encoder trait.
+//! Owned-value encoder trait.
 
-/// Encodes a borrowed input value into another representation.
+/// Encodes a borrowed input value into an owned representation.
+///
+/// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
+/// single-value buffer encoding and [`crate::Coder`] for batch conversion over
+/// caller-provided buffers.
 pub trait Encoder<Input: ?Sized> {
     /// Encoded output type.
     type Output;

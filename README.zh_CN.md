@@ -17,8 +17,9 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 本库提供：
 
-- 用于完整值转换的 `Encoder`、`Decoder` 和 `Codec` trait。
-- 用于调用方管理缓冲区转换的 `Coder`、`CoderProgress` 和 `CoderStatus`。
+- 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait。
+- 用于完整值便捷转换的 `Encoder` 和 `Decoder` trait。
+- 用于调用方管理批量缓冲区转换的 `Coder`、`CoderProgress` 和 `CoderStatus`。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
   `BigEndian` 和 `LittleEndian`。
 
@@ -38,9 +39,9 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ### 核心转换 Trait
 
+- **`Codec<Value, Unit>`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
 - **`Encoder<Input>`**：把借用输入编码为自有输出。
 - **`Decoder<Input>`**：把借用的编码输入解码为自有输出。
-- **`Codec<EncodeInput, DecodeInput>`**：标记一个类型同时支持编码和解码。
 
 ### 缓冲区 Coder 原语
 
@@ -99,13 +100,13 @@ assert_eq!(CoderStatus::Complete, progress.status());
 
 ## API 参考
 
-### 完整值转换 Trait
+### 核心 Codec Trait
 
 | Trait | 用途 | 典型实现者 |
 |-------|------|------------|
-| `Encoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc encoder |
-| `Decoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc decoder |
-| `Codec<EncodeInput, DecodeInput>` | 标记一个类型同时支持编码和解码 | 双向 codec |
+| `Codec<Value, Unit>` | 在调用方缓冲区中编码/解码一个值或 quantum | 二进制标量、字符集字符、转义 byte、Base64 quantum |
+| `Encoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
+| `Decoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
 
 ### `Coder` 操作
 
