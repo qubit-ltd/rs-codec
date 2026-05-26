@@ -1,0 +1,44 @@
+[package]
+name = "qubit-codec"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+autotests = false
+authors = ["Haixing Hu <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/qubit-ltd/rs-codec"
+description = "Core codec traits and buffer conversion primitives for Rust"
+homepage = "https://github.com/qubit-ltd/rs-codec"
+documentation = "https://docs.rs/qubit-codec"
+readme = "README.md"
+keywords = ["codec", "coder", "byteorder", "buffer", "qubit"]
+categories = ["encoding", "rust-patterns"]
+include = [
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/README.zh_CN.md",
+    "/RUST_CODING_STYLE.md",
+    "/RUST_CODING_STYLE.zh_CN.md",
+    "/doc/**/user_guide*.md",
+    "/examples/**",
+    "/resources/**",
+    "/src/**",
+    "/tests/**",
+]
+
+[dependencies]
+
+[[test]]
+name = "tests"
+path = "tests/mod.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1
