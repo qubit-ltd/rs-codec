@@ -11,8 +11,8 @@
 
 mod byte_order;
 mod codec_tests;
-mod coder;
 mod decoder_tests;
 mod encoder_tests;
 mod prelude_tests;
 mod trait_tests;
+mod transcoder;

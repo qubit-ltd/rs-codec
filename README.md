@@ -20,7 +20,7 @@ This crate provides:
 
 - `Codec<Value, Unit>` for low-level single-value buffer codecs.
 - `Encoder` and `Decoder` traits for owned whole-value convenience APIs.
-- `Coder`, `CoderProgress`, and `CoderStatus` for caller-managed batch buffer
+- `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for caller-managed logical-stream
   conversion.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
   metadata shared by binary and text codecs.
@@ -40,7 +40,7 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   domain crates.
 - **Zero-Cost Markers**: represent byte order as copyable type/value markers
   without runtime allocation.
-- **Stable Progress Reporting**: use `CoderProgress` and `CoderStatus` to make
+- **Stable Progress Reporting**: use `TranscodeProgress` and `TranscodeStatus` to make
   caller-managed buffer conversion explicit.
 
 ## Features
@@ -53,13 +53,13 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`Decoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
 
-### Buffer Coder Primitives
+### Buffer Transcoder Primitives
 
-- **`Coder<Input, Output>`**: converts input units into output units inside
-  caller-provided buffers.
-- **`CoderProgress`**: reports relative input units read and output units
+- **`Transcoder<Input, Output>`**: converts input units into output units inside
+  caller-provided buffers, then finalizes pending stream state at EOF.
+- **`TranscodeProgress`**: reports relative input units read and output units
   written.
-- **`CoderStatus`**: distinguishes complete conversion from `NeedInput` and
+- **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
   `NeedOutput` stops.
 
 ### Byte Order Markers
@@ -80,15 +80,15 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.1"
+qubit-codec = "0.4"
 ```
 
 ## Quick Start
 
 ```rust
 use qubit_codec::{
-    CoderProgress,
-    CoderStatus,
+    TranscodeProgress,
+    TranscodeStatus,
     Encoder,
 };
 
@@ -106,8 +106,8 @@ impl Encoder<str> for StringEncoder {
 let encoded = Encoder::<str>::encode(&StringEncoder, "codec")?;
 assert_eq!("codec", encoded);
 
-let progress = CoderProgress::complete(3, 4);
-assert_eq!(CoderStatus::Complete, progress.status());
+let progress = TranscodeProgress::complete(3, 4);
+assert_eq!(TranscodeStatus::Complete, progress.status());
 
 # Ok::<(), core::convert::Infallible>(())
 ```
@@ -122,21 +122,22 @@ assert_eq!(CoderStatus::Complete, progress.status());
 | `Encoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 | `Decoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 
-### `Coder` Operations
+### `Transcoder` Operations
 
 | Method | Description |
 |--------|-------------|
 | `max_output_len(input_len)` | Return a finite output upper bound when known |
-| `reset()` | Reset retained conversion state |
-| `convert(input, input_index, output, output_index)` | Convert input units into output units |
-| `finish(output, output_index)` | Flush buffered output after all input has been consumed |
+| `max_finish_output_len()` | Return a finite finalization output upper bound when known |
+| `reset()` | Reset retained stream state while keeping configuration |
+| `transcode(input, input_index, output, output_index)` | Convert input units into output units |
+| `finish(output, output_index)` | Finalize EOF state, flush trailers, or reject incomplete input |
 
-### `CoderStatus` Values
+### `TranscodeStatus` Values
 
 | Status | Meaning |
 |--------|---------|
 | `Complete` | The current conversion step completed |
-| `NeedInput` | More input units are required |
+| `NeedInput` | More input units are required unless the caller is ready to call `finish()` at EOF |
 | `NeedOutput` | More output capacity is required |
 
 ### Byte Order Types

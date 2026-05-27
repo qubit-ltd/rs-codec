@@ -13,7 +13,7 @@
 //!
 //! This crate contains only domain-neutral building blocks such as value
 //! codecs, owned encoder/decoder helpers, byte-order markers, and
-//! progress-oriented buffer coders. Concrete binary, text, misc, and I/O
+//! progress-oriented buffer transcoders. Concrete binary, text, misc, and I/O
 //! adapters live in sibling crates.
 //!
 
@@ -22,9 +22,9 @@
 
 mod byte_order;
 mod codec;
-mod coder;
 mod decoder;
 mod encoder;
+mod transcoder;
 
 pub mod prelude;
 pub use byte_order::{
@@ -34,10 +34,10 @@ pub use byte_order::{
     LittleEndian,
 };
 pub use codec::Codec;
-pub use coder::{
-    Coder,
-    CoderProgress,
-    CoderStatus,
-};
 pub use decoder::Decoder;
 pub use encoder::Encoder;
+pub use transcoder::{
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
+};

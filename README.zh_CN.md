@@ -19,7 +19,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait。
 - 用于完整值便捷转换的 `Encoder` 和 `Decoder` trait。
-- 用于调用方管理批量缓冲区转换的 `Coder`、`CoderProgress` 和 `CoderStatus`。
+- 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus`。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
   `BigEndian` 和 `LittleEndian`。
 
@@ -33,7 +33,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **不耦合 I/O**：避免引入 `std::io` 依赖，使缓冲区级 codec 可用于非 stream 场景。
 - **策略中立**：charset、畸形输入和线格式规则由领域 crate 自己定义。
 - **零成本标记**：用可复制的类型和值标记表达字节序，不产生运行时分配。
-- **稳定进度报告**：用 `CoderProgress` 和 `CoderStatus` 明确表达调用方管理缓冲区时的转换进度。
+- **稳定进度报告**：用 `TranscodeProgress` 和 `TranscodeStatus` 明确表达调用方管理缓冲区时的转换进度。
 
 ## 特性
 
@@ -43,11 +43,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`Encoder<Input>`**：把借用输入编码为自有输出。
 - **`Decoder<Input>`**：把借用的编码输入解码为自有输出。
 
-### 缓冲区 Coder 原语
+### 缓冲区 Transcoder 原语
 
-- **`Coder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元。
-- **`CoderProgress`**：报告相对读取和写入的单元数量。
-- **`CoderStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
+- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在 EOF 时收尾内部状态。
+- **`TranscodeProgress`**：报告相对读取和写入的单元数量。
+- **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
 ### 字节序标记
 
@@ -66,15 +66,15 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ```toml
 [dependencies]
-qubit-codec = "0.1"
+qubit-codec = "0.4"
 ```
 
 ## 快速开始
 
 ```rust
 use qubit_codec::{
-    CoderProgress,
-    CoderStatus,
+    TranscodeProgress,
+    TranscodeStatus,
     Encoder,
 };
 
@@ -92,8 +92,8 @@ impl Encoder<str> for StringEncoder {
 let encoded = Encoder::<str>::encode(&StringEncoder, "codec")?;
 assert_eq!("codec", encoded);
 
-let progress = CoderProgress::complete(3, 4);
-assert_eq!(CoderStatus::Complete, progress.status());
+let progress = TranscodeProgress::complete(3, 4);
+assert_eq!(TranscodeStatus::Complete, progress.status());
 
 # Ok::<(), core::convert::Infallible>(())
 ```
@@ -108,21 +108,22 @@ assert_eq!(CoderStatus::Complete, progress.status());
 | `Encoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
 | `Decoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
 
-### `Coder` 操作
+### `Transcoder` 操作
 
 | 方法 | 描述 |
 |------|------|
 | `max_output_len(input_len)` | 在可确定时返回输出长度上界 |
-| `reset()` | 重置转换过程保留的状态 |
-| `convert(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
-| `finish(output, output_index)` | 在所有输入消费完后刷新缓冲输出 |
+| `max_finish_output_len()` | 在可确定时返回 EOF 收尾输出长度上界 |
+| `reset()` | 保留配置并重置逻辑流状态 |
+| `transcode(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
+| `finish(output, output_index)` | 在 EOF 时完成收尾、刷新 trailer 或拒绝不完整输入 |
 
-### `CoderStatus` 取值
+### `TranscodeStatus` 取值
 
 | 状态 | 含义 |
 |------|------|
 | `Complete` | 当前转换步骤已完成 |
-| `NeedInput` | 需要更多输入单元 |
+| `NeedInput` | 需要更多输入单元；若已到 EOF，应调用 `finish()` 收口 |
 | `NeedOutput` | 需要更多输出空间 |
 
 ### 字节序类型

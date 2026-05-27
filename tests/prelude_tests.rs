@@ -12,10 +12,10 @@ use qubit_codec::prelude::{
     BigEndian,
     ByteOrder,
     ByteOrderSpec,
-    CoderProgress,
-    CoderStatus,
     Decoder,
     Encoder,
+    TranscodeProgress,
+    TranscodeStatus,
 };
 
 #[derive(Default)]
@@ -49,6 +49,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let decoded = Decoder::<str>::decode(&codec, &encoded).expect("echo decode should be infallible");
     assert_eq!("abc", decoded);
 
-    let progress = CoderProgress::complete(1, 2);
-    assert_eq!(CoderStatus::Complete, progress.status());
+    let progress = TranscodeProgress::complete(1, 2);
+    assert_eq!(TranscodeStatus::Complete, progress.status());
 }

@@ -7,20 +7,20 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-use super::CoderStatus;
+use super::TranscodeStatus;
 
-/// Counts how much work a [`crate::Coder`] completed before returning.
+/// Counts how much work a [`crate::Transcoder`] completed before returning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct CoderProgress {
-    /// Stop reason reported by the coder.
-    status: CoderStatus,
+pub struct TranscodeProgress {
+    /// Stop reason reported by the transcoder.
+    status: TranscodeStatus,
     /// Number of input units consumed from the requested input index.
     read: usize,
     /// Number of output units written from the requested output index.
     written: usize,
 }
 
-impl CoderProgress {
+impl TranscodeProgress {
     /// Creates a progress value.
     ///
     /// # Parameters
@@ -34,7 +34,7 @@ impl CoderProgress {
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
     #[inline]
-    pub const fn new(status: CoderStatus, read: usize, written: usize) -> Self {
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self { status, read, written }
     }
 
@@ -47,21 +47,21 @@ impl CoderProgress {
     ///
     /// # Returns
     ///
-    /// Returns a progress value whose status is [`CoderStatus::Complete`].
+    /// Returns a progress value whose status is [`TranscodeStatus::Complete`].
     #[must_use]
     #[inline]
     pub const fn complete(read: usize, written: usize) -> Self {
-        Self::new(CoderStatus::Complete, read, written)
+        Self::new(TranscodeStatus::Complete, read, written)
     }
 
     /// Returns the status that stopped conversion.
     ///
     /// # Returns
     ///
-    /// Returns the stored [`CoderStatus`].
+    /// Returns the stored [`TranscodeStatus`].
     #[must_use]
     #[inline]
-    pub const fn status(self) -> CoderStatus {
+    pub const fn status(self) -> TranscodeStatus {
         self.status
     }
 
@@ -96,24 +96,24 @@ impl CoderProgress {
     #[inline]
     pub const fn required(self) -> usize {
         match self.status {
-            CoderStatus::Complete => 0,
-            CoderStatus::NeedInput { required, .. } => required,
-            CoderStatus::NeedOutput { required, .. } => required,
+            TranscodeStatus::Complete => 0,
+            TranscodeStatus::NeedInput { required, .. } => required,
+            TranscodeStatus::NeedOutput { required, .. } => required,
         }
     }
 
     /// Returns the absolute boundary index associated with this status, if any.
     ///
-    /// - For [`CoderStatus::NeedInput`], returns `input_index`.
-    /// - For [`CoderStatus::NeedOutput`], returns `output_index`.
-    /// - For [`CoderStatus::Complete`], returns `None`.
+    /// - For [`TranscodeStatus::NeedInput`], returns `input_index`.
+    /// - For [`TranscodeStatus::NeedOutput`], returns `output_index`.
+    /// - For [`TranscodeStatus::Complete`], returns `None`.
     #[must_use]
     #[inline]
     pub const fn index(self) -> Option<usize> {
         match self.status {
-            CoderStatus::Complete => None,
-            CoderStatus::NeedInput { input_index, .. } => Some(input_index),
-            CoderStatus::NeedOutput { output_index, .. } => Some(output_index),
+            TranscodeStatus::Complete => None,
+            TranscodeStatus::NeedInput { input_index, .. } => Some(input_index),
+            TranscodeStatus::NeedOutput { output_index, .. } => Some(output_index),
         }
     }
 
@@ -126,9 +126,9 @@ impl CoderProgress {
     #[inline]
     pub const fn available(self) -> usize {
         match self.status {
-            CoderStatus::Complete => 0,
-            CoderStatus::NeedInput { available, .. } => available,
-            CoderStatus::NeedOutput { available, .. } => available,
+            TranscodeStatus::Complete => 0,
+            TranscodeStatus::NeedInput { available, .. } => available,
+            TranscodeStatus::NeedOutput { available, .. } => available,
         }
     }
 }

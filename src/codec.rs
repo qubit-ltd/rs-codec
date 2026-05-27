@@ -13,9 +13,18 @@
 ///
 /// `Codec` is the lowest-level abstraction in the codec stack. It is intended
 /// for hot paths that have already validated buffer capacity and want to avoid
-/// constructing subslices for every value. Higher-level coders and convenience
+/// constructing subslices for every value. Higher-level transcoders and convenience
 /// APIs are responsible for checked buffer management, partial-input reporting,
 /// and owned output allocation.
+///
+/// `min_units_per_value` and `max_units_per_value` describe the representation
+/// width bounds for one value. The minimum is a lower-bound hint for checked
+/// layers: if fewer than this many units are available, no complete value can
+/// exist, so a streaming caller can request more input, report an incomplete
+/// EOF tail, or avoid attempting an encode when the output buffer is too small.
+/// It is not a safety precondition for unchecked methods. The maximum is the
+/// conservative bound callers normally use to prove that unchecked reads and
+/// writes stay inside the provided buffers.
 ///
 /// # Type Parameters
 ///
@@ -38,12 +47,29 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// Error reported when encoding an unsupported value.
     type EncodeError;
 
-    /// Returns the minimum unit count needed to encode or decode one value.
+    /// Returns the minimum possible unit count for one encoded value.
+    ///
+    /// This is a lower bound used by checked callers for planning and fast
+    /// impossibility checks. If a streaming decoder has fewer than this many
+    /// readable units, no complete value can be present at the current position.
+    /// If the stream has reached EOF, such a tail is necessarily incomplete;
+    /// otherwise the caller should read more input. Similarly, an encoder or
+    /// transcoder can avoid calling into the codec when the remaining output
+    /// capacity is smaller than this lower bound.
+    ///
+    /// This value does not prove that decoding or encoding will fit. For
+    /// variable-width representations, a value may require more units, up to
+    /// [`max_units_per_value`](Self::max_units_per_value). Callers must not use
+    /// this method as the safety precondition for
+    /// [`decode_unchecked`](Self::decode_unchecked) or
+    /// [`encode_unchecked`](Self::encode_unchecked).
     ///
     /// # Returns
     ///
     /// Returns a lower bound for one complete value. Variable-width codecs such
-    /// as LEB128 should return the shortest valid representation length.
+    /// as LEB128 should return the shortest valid representation length. For
+    /// example, a UTF-16 byte codec can return `2`, while its maximum is `4`
+    /// because a surrogate pair needs four bytes.
     #[must_use]
     fn min_units_per_value(&self) -> usize;
 

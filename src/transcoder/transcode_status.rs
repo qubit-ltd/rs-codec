@@ -7,13 +7,16 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-/// Reports why a [`crate::Coder`] stopped converting input.
+/// Reports why a [`crate::Transcoder`] stopped converting input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CoderStatus {
+pub enum TranscodeStatus {
     /// All currently supplied input was consumed.
     Complete,
 
     /// More input is needed to complete the next output value.
+    ///
+    /// If the caller has reached EOF, it should call [`crate::Transcoder::finish`]
+    /// so the transcoder can finalize or reject the incomplete stream state.
     ///
     /// - `input_index`: Absolute input index where input ended while decoding.
     /// - `required`: Number of additional input units required to continue.

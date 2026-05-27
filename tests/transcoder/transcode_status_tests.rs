@@ -1,22 +1,22 @@
-use qubit_codec::CoderStatus;
+use qubit_codec::TranscodeStatus;
 
 #[test]
-fn test_coder_status_variants_are_distinct() {
+fn test_transcoder_status_variants_are_distinct() {
     assert_ne!(
-        CoderStatus::Complete,
-        CoderStatus::NeedInput {
+        TranscodeStatus::Complete,
+        TranscodeStatus::NeedInput {
             input_index: 0,
             required: 0,
             available: 0
         }
     );
     assert_ne!(
-        CoderStatus::NeedInput {
+        TranscodeStatus::NeedInput {
             input_index: 0,
             required: 0,
             available: 0
         },
-        CoderStatus::NeedOutput {
+        TranscodeStatus::NeedOutput {
             output_index: 0,
             required: 0,
             available: 0,

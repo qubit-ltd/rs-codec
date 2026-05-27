@@ -11,10 +11,10 @@
 
 #![allow(clippy::module_inception)]
 
-mod coder;
-mod coder_progress;
-mod coder_status;
+mod transcode_progress;
+mod transcode_status;
+mod transcoder;
 
-pub use coder::Coder;
-pub use coder_progress::CoderProgress;
-pub use coder_status::CoderStatus;
+pub use transcode_progress::TranscodeProgress;
+pub use transcode_status::TranscodeStatus;
+pub use transcoder::Transcoder;
