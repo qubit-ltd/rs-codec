@@ -7,11 +7,8 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Integration tests for qubit-codec.
+//! Tests for low-level codec contracts and failure metadata.
 
-mod buffered;
-mod byte_order;
-mod codec;
-mod prelude_tests;
-mod trait_tests;
-mod value;
+mod codec_tests;
+mod decode_error_info_tests;
+mod decode_failure_tests;

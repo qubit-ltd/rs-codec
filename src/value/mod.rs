@@ -7,11 +7,12 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Integration tests for qubit-codec.
+//! Owned value conversion traits and adapters.
 
-mod buffered;
-mod byte_order;
-mod codec;
-mod prelude_tests;
-mod trait_tests;
-mod value;
+mod codec_value_encoder;
+mod value_decoder;
+mod value_encoder;
+
+pub use codec_value_encoder::CodecValueEncoder;
+pub use value_decoder::ValueDecoder;
+pub use value_encoder::ValueEncoder;

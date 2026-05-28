@@ -14,7 +14,7 @@
 /// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
 /// single-value buffer encoding and [`crate::Transcoder`] for batch conversion over
 /// caller-provided buffers.
-pub trait Encoder<Input: ?Sized> {
+pub trait ValueEncoder<Input: ?Sized> {
     /// Encoded output type.
     type Output;
     /// Encoding error type.

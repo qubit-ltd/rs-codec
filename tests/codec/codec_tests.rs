@@ -34,7 +34,7 @@ unsafe impl Codec<u8, u8> for ByteIncrementCodec {
         Ok((value.wrapping_sub(1), 1))
     }
 
-    unsafe fn encode_unchecked(&self, value: u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
@@ -50,7 +50,7 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
     let codec = ByteIncrementCodec;
     let mut output = [0_u8; 1];
 
-    let written = unsafe { codec.encode_unchecked(41, &mut output, 0) }.expect("encoding should be infallible");
+    let written = unsafe { codec.encode_unchecked(&41, &mut output, 0) }.expect("encoding should be infallible");
     let (decoded, consumed) = unsafe { codec.decode_unchecked(&output, 0) }.expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value());

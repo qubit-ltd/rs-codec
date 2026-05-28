@@ -18,10 +18,15 @@ implementations.
 
 This crate provides:
 
-- `Codec<Value, Unit>` for low-level single-value buffer codecs.
-- `Encoder` and `Decoder` traits for owned whole-value convenience APIs.
+- `Codec<Value, Unit>` plus `DecodeFailure` / `DecodeErrorInfo` for low-level
+  single-value buffer codecs and buffered-error control flow.
+- `CodecValueEncoder` and `CodecBufferedEncoder` adapters for encoding through
+  a supplied `Codec`.
+- `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for caller-managed logical-stream
   conversion.
+- `BufferedEncoder`, `BufferedDecoder`, and `BufferedConverter` marker traits
+  for semantic transcoder direction.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
   metadata shared by binary and text codecs.
 
@@ -49,14 +54,26 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 - **`Codec<Value, Unit>`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
-- **`Encoder<Input>`**: converts a borrowed value into an owned output type.
-- **`Decoder<Input>`**: converts a borrowed encoded value into an owned decoded
+- **`DecodeFailure` / `DecodeErrorInfo`**: expose the minimal incomplete-vs-invalid
+  view of codec-specific decode errors for buffered adapters.
+- **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
+- **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
+- **`CodecValueEncoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
+  `ValueEncoder<Value>` that returns owned `Vec<Unit>` output.
 
 ### Buffer Transcoder Primitives
 
 - **`Transcoder<Input, Output>`**: converts input units into output units inside
   caller-provided buffers, then finalizes pending stream state at EOF.
+- **`BufferedEncoder<Value, Unit>`**: semantic `Transcoder` bound for value-to-unit
+  buffered encoding.
+- **`BufferedDecoder<Unit, Value>`**: semantic `Transcoder` bound for unit-to-value
+  buffered decoding.
+- **`BufferedConverter<InputUnit, OutputUnit>`**: semantic `Transcoder` bound for
+  unit-to-unit buffered conversion.
+- **`CodecBufferedEncoder<C>`**: wraps a `Codec<Value, Unit>` as a
+  `BufferedEncoder<Value, Unit>` over caller-provided output buffers.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -89,12 +106,12 @@ qubit-codec = "0.4"
 use qubit_codec::{
     TranscodeProgress,
     TranscodeStatus,
-    Encoder,
+    ValueEncoder,
 };
 
 struct StringEncoder;
 
-impl Encoder<str> for StringEncoder {
+impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
@@ -103,7 +120,7 @@ impl Encoder<str> for StringEncoder {
     }
 }
 
-let encoded = Encoder::<str>::encode(&StringEncoder, "codec")?;
+let encoded = ValueEncoder::<str>::encode(&StringEncoder, "codec")?;
 assert_eq!("codec", encoded);
 
 let progress = TranscodeProgress::complete(3, 4);
@@ -119,8 +136,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Trait | Purpose | Typical Implementor |
 |-------|---------|---------------------|
 | `Codec<Value, Unit>` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
-| `Encoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
-| `Decoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
+| `ValueEncoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
+| `ValueDecoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
+| `BufferedEncoder<Value, Unit>` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
+| `BufferedDecoder<Unit, Value>` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
+| `BufferedConverter<InputUnit, OutputUnit>` | Convert encoded units between representations | Charset or binary buffered converter |
+
+| Type | Purpose |
+|------|---------|
+| `DecodeFailure` | Generic incomplete-or-invalid view of a codec-specific decode error |
+| `DecodeErrorInfo` | Trait implemented by decode errors that expose `DecodeFailure` metadata |
+
+### Codec Adapters
+
+| Type | Purpose |
+|------|---------|
+| `CodecValueEncoder<C, Value, Unit>` | Allocate owned `Vec<Unit>` output for one borrowed `Value` by using `C: Codec<Value, Unit>` without requiring `Value: Clone` |
+| `CodecBufferedEncoder<C>` | Encode `Value` slices into caller-provided `Unit` buffers by using `C: Codec<Value, Unit>` |
 
 ### `Transcoder` Operations
 
@@ -157,10 +189,11 @@ domain crates so downstream users can depend on only the layers they need.
 
 ## Performance Considerations
 
-All core abstractions are trait or marker types. `BigEndian` and `LittleEndian`
-are zero-sized, and `ByteOrder` is a small copyable enum. The crate performs no
-heap allocation by itself; allocation behavior is controlled by concrete codec
-implementations in downstream crates.
+Core traits and buffered adapters do not require heap allocation. `BigEndian`
+and `LittleEndian` are zero-sized, and `ByteOrder` is a small copyable enum.
+`CodecValueEncoder` allocates owned `Vec<Unit>` output because that is the
+`ValueEncoder` contract; concrete downstream codecs may have their own
+allocation behavior.
 
 ## Testing & Code Coverage
 

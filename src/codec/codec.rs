@@ -13,9 +13,9 @@
 ///
 /// `Codec` is the lowest-level abstraction in the codec stack. It is intended
 /// for hot paths that have already validated buffer capacity and want to avoid
-/// constructing subslices for every value. Higher-level transcoders and convenience
-/// APIs are responsible for checked buffer management, partial-input reporting,
-/// and owned output allocation.
+/// constructing subslices for every value. Higher-level transcoders and
+/// convenience APIs are responsible for checked buffer management and owned
+/// output allocation.
 ///
 /// `min_units_per_value` and `max_units_per_value` describe the representation
 /// width bounds for one value. The minimum is a lower-bound hint for checked
@@ -57,12 +57,13 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// transcoder can avoid calling into the codec when the remaining output
     /// capacity is smaller than this lower bound.
     ///
-    /// This value does not prove that decoding or encoding will fit. For
-    /// variable-width representations, a value may require more units, up to
-    /// [`max_units_per_value`](Self::max_units_per_value). Callers must not use
-    /// this method as the safety precondition for
-    /// [`decode_unchecked`](Self::decode_unchecked) or
-    /// [`encode_unchecked`](Self::encode_unchecked).
+    /// This value does not prove that encoding will fit. For variable-width
+    /// representations, a value may require more units, up to
+    /// [`max_units_per_value`](Self::max_units_per_value). For decoding, this is
+    /// the minimum safety precondition required by
+    /// [`decode_unchecked`](Self::decode_unchecked); if fewer units are
+    /// available, a checked caller must request more input or report a closed
+    /// incomplete tail without calling into the unchecked method.
     ///
     /// # Returns
     ///
@@ -94,18 +95,24 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     ///
     /// # Errors
     ///
-    /// Returns `Self::DecodeError` when the units are malformed for this codec.
+    /// Returns `Self::DecodeError` when the units are malformed, non-canonical,
+    /// incomplete, or otherwise invalid for this codec. The concrete error type
+    /// carries the codec-specific reason and context.
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that the implementation can read enough units
-    /// for one complete value starting at `index`. For fixed-width codecs this
-    /// means at least [`max_units_per_value`](Self::max_units_per_value) units.
-    /// For variable-width codecs this means either a valid terminator appears
-    /// before that maximum, or the full maximum-width range is readable.
+    /// The caller must guarantee that `index` is a valid boundary in `input`
+    /// and that at least [`min_units_per_value`](Self::min_units_per_value)
+    /// units are readable from `index`. Implementations must not read beyond the
+    /// currently available units under that precondition. They may return
+    /// `Self::DecodeError` when those units are a valid but incomplete prefix.
+    ///
+    /// On success, implementations must return a consumed unit count greater
+    /// than zero and no larger than the available input. Implementations should
+    /// use `debug_assert!` to state these unchecked entry-point assumptions.
     unsafe fn decode_unchecked(&self, input: &[Unit], index: usize) -> Result<(Value, usize), Self::DecodeError>;
 
-    /// Encodes one value into `output` starting at `index`.
+    /// Encodes one borrowed value into `output` starting at `index`.
     ///
     /// # Parameters
     ///
@@ -129,7 +136,7 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// `index`.
     unsafe fn encode_unchecked(
         &self,
-        value: Value,
+        value: &Value,
         output: &mut [Unit],
         index: usize,
     ) -> Result<usize, Self::EncodeError>;

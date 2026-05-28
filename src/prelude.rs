@@ -11,18 +11,25 @@
 //! Common codec traits and buffer conversion primitives.
 //!
 //! Importing this module brings the domain-neutral codec traits, convenience
-//! encoder/decoder traits, byte-order markers, and progress-oriented transcoder
-//! types into scope.
+//! value encoder/decoder traits, byte-order markers, and progress-oriented
+//! transcoder types into scope.
 
 pub use crate::{
     BigEndian,
+    BufferedConverter,
+    BufferedDecoder,
+    BufferedEncoder,
     ByteOrder,
     ByteOrderSpec,
     Codec,
-    Decoder,
-    Encoder,
+    CodecBufferedEncoder,
+    CodecValueEncoder,
+    DecodeErrorInfo,
+    DecodeFailure,
     LittleEndian,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
+    ValueDecoder,
+    ValueEncoder,
 };

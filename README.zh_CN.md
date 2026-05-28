@@ -17,9 +17,14 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 本库提供：
 
-- 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait。
-- 用于完整值便捷转换的 `Encoder` 和 `Decoder` trait。
+- 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait，以及面向
+  buffered 错误控制流的 `DecodeFailure` / `DecodeErrorInfo`。
+- 基于给定 `Codec` 执行编码的 `CodecValueEncoder` 和
+  `CodecBufferedEncoder` adapter。
+- 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus`。
+- 用于表达 transcoder 语义方向的 `BufferedEncoder`、`BufferedDecoder` 和
+  `BufferedConverter` marker trait。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
   `BigEndian` 和 `LittleEndian`。
 
@@ -40,12 +45,24 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 ### 核心转换 Trait
 
 - **`Codec<Value, Unit>`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
-- **`Encoder<Input>`**：把借用输入编码为自有输出。
-- **`Decoder<Input>`**：把借用的编码输入解码为自有输出。
+- **`DecodeFailure` / `DecodeErrorInfo`**：把 codec-specific decode error 暴露为
+  incomplete-vs-invalid 的最小控制流视图，供 buffered adapter 使用。
+- **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
+- **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
+- **`CodecValueEncoder<C, Value, Unit>`**：把 `Codec<Value, Unit>` 包装为
+  返回自有 `Vec<Unit>` 的 `ValueEncoder<Value>`。
 
 ### 缓冲区 Transcoder 原语
 
 - **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在 EOF 时收尾内部状态。
+- **`BufferedEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
+  `Transcoder` bound。
+- **`BufferedDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
+  `Transcoder` bound。
+- **`BufferedConverter<InputUnit, OutputUnit>`**：表示 unit-to-unit 缓冲区转换的语义化
+  `Transcoder` bound。
+- **`CodecBufferedEncoder<C>`**：把 `Codec<Value, Unit>` 包装为在调用方输出缓冲区上工作的
+  `BufferedEncoder<Value, Unit>`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -75,12 +92,12 @@ qubit-codec = "0.4"
 use qubit_codec::{
     TranscodeProgress,
     TranscodeStatus,
-    Encoder,
+    ValueEncoder,
 };
 
 struct StringEncoder;
 
-impl Encoder<str> for StringEncoder {
+impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
@@ -89,7 +106,7 @@ impl Encoder<str> for StringEncoder {
     }
 }
 
-let encoded = Encoder::<str>::encode(&StringEncoder, "codec")?;
+let encoded = ValueEncoder::<str>::encode(&StringEncoder, "codec")?;
 assert_eq!("codec", encoded);
 
 let progress = TranscodeProgress::complete(3, 4);
@@ -105,8 +122,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Trait | 用途 | 典型实现者 |
 |-------|------|------------|
 | `Codec<Value, Unit>` | 在调用方缓冲区中编码/解码一个值或 quantum | 二进制标量、字符集字符、转义 byte、Base64 quantum |
-| `Encoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
-| `Decoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
+| `ValueEncoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
+| `ValueDecoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
+| `BufferedEncoder<Value, Unit>` | 把逻辑值编码进调用方提供的 unit 缓冲区 | Charset 或 binary buffered encoder |
+| `BufferedDecoder<Unit, Value>` | 把编码 unit 解码进调用方提供的 value 缓冲区 | Charset 或 binary buffered decoder |
+| `BufferedConverter<InputUnit, OutputUnit>` | 在两种编码 unit 表示之间转换 | Charset 或 binary buffered converter |
+
+| 类型 | 用途 |
+|------|------|
+| `DecodeFailure` | codec-specific decode error 的通用 incomplete-or-invalid 视图 |
+| `DecodeErrorInfo` | 由 decode error 实现，用于暴露 `DecodeFailure` 元信息 |
+
+### Codec Adapter
+
+| 类型 | 用途 |
+|------|------|
+| `CodecValueEncoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把一个借用 `Value` 编码成自有 `Vec<Unit>`，不要求 `Value: Clone` |
+| `CodecBufferedEncoder<C>` | 通过 `C: Codec<Value, Unit>` 把 `Value` slice 编码进调用方提供的 `Unit` 缓冲区 |
 
 ### `Transcoder` 操作
 
@@ -143,9 +175,10 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ## 性能考虑
 
-本 crate 中的核心抽象都是 trait 或标记类型。`BigEndian` 和 `LittleEndian`
-是零大小类型，`ByteOrder` 是小型可复制枚举。本 crate 自身不做堆分配；
-具体分配行为由下游 crate 中的具体 codec 实现决定。
+核心 trait 和 buffered adapter 不要求堆分配。`BigEndian` 和 `LittleEndian`
+是零大小类型，`ByteOrder` 是小型可复制枚举。`CodecValueEncoder` 会分配自有
+`Vec<Unit>` 输出，因为这是 `ValueEncoder` 契约；下游具体 codec 仍可能有自己的
+分配行为。
 
 ## 测试与代码覆盖率
 

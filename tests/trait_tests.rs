@@ -10,14 +10,14 @@
 //! Tests for lightweight encoder and decoder traits.
 
 use qubit_codec::{
-    Decoder,
-    Encoder,
+    ValueDecoder,
+    ValueEncoder,
 };
 
 #[derive(Default)]
 struct UppercaseCodec;
 
-impl Encoder<str> for UppercaseCodec {
+impl ValueEncoder<str> for UppercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
@@ -26,7 +26,7 @@ impl Encoder<str> for UppercaseCodec {
     }
 }
 
-impl Decoder<str> for UppercaseCodec {
+impl ValueDecoder<str> for UppercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
@@ -38,8 +38,8 @@ impl Decoder<str> for UppercaseCodec {
 #[test]
 fn test_codec_types_can_be_used_through_traits() {
     let codec = UppercaseCodec;
-    let encoded = Encoder::<str>::encode(&codec, "abc").expect("uppercase encoding should be infallible");
-    let decoded = Decoder::<str>::decode(&codec, &encoded).expect("lowercase decoding should be infallible");
+    let encoded = ValueEncoder::<str>::encode(&codec, "abc").expect("uppercase encoding should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&codec, &encoded).expect("lowercase decoding should be infallible");
 
     assert_eq!("ABC", encoded);
     assert_eq!("abc", decoded);

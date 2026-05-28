@@ -7,11 +7,13 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Integration tests for qubit-codec.
+//! Low-level codec contracts and decode failure metadata.
 
-mod buffered;
-mod byte_order;
+#[allow(clippy::module_inception)]
 mod codec;
-mod prelude_tests;
-mod trait_tests;
-mod value;
+mod decode_error_info;
+mod decode_failure;
+
+pub use codec::Codec;
+pub use decode_error_info::DecodeErrorInfo;
+pub use decode_failure::DecodeFailure;

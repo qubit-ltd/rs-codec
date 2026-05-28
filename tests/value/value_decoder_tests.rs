@@ -7,25 +7,25 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Tests for the encoder trait contract.
+//! Tests for the decoder trait contract.
 
-use qubit_codec::Encoder;
+use qubit_codec::ValueDecoder;
 
 #[derive(Default)]
-struct StringEncoder;
+struct StringDecoder;
 
-impl Encoder<str> for StringEncoder {
+impl ValueDecoder<str> for StringDecoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn decode(&self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
 
 #[test]
-fn test_encoder_trait_dispatches_to_implementor() {
-    let encoded = Encoder::<str>::encode(&StringEncoder, "text").expect("encoding should be infallible");
+fn test_decoder_trait_dispatches_to_implementor() {
+    let decoded = ValueDecoder::<str>::decode(&StringDecoder, "text").expect("decoding should be infallible");
 
-    assert_eq!("text", encoded);
+    assert_eq!("text", decoded);
 }
