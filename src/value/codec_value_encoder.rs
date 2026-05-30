@@ -12,7 +12,10 @@
 use core::marker::PhantomData;
 
 use super::ValueEncoder;
-use crate::Codec;
+use crate::{
+    Codec,
+    codec::debug_assert_unit_bounds,
+};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -46,7 +49,7 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
     ///
     /// Returns a value encoder adapter for the supplied codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
             codec,
@@ -60,7 +63,7 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
     ///
     /// Returns a shared reference to the wrapped low-level codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn codec(&self) -> &C {
         &self.codec
     }
@@ -71,7 +74,7 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
     ///
     /// Returns a mutable reference to the wrapped low-level codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
     }
@@ -82,7 +85,7 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
     ///
     /// Returns the codec supplied at construction time.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub fn into_codec(self) -> C {
         self.codec
     }
@@ -111,7 +114,8 @@ where
     /// Returns the wrapped codec's encode error when `input` cannot be
     /// represented.
     fn encode(&self, input: &Value) -> Result<Self::Output, Self::Error> {
-        let mut output = vec![Unit::default(); self.codec.max_units_per_value()];
+        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+        let mut output = vec![Unit::default(); self.codec.max_units_per_value().get()];
         // SAFETY: The output buffer is allocated to the codec's declared maximum
         // width, which is the safety precondition for one-value encoding.
         let written = unsafe { self.codec.encode_unchecked(input, &mut output, 0) }?;

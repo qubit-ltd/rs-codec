@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Low-level value codec trait.
 
+use core::num::NonZeroUsize;
+
 /// Encodes and decodes one value or codec quantum against a unit buffer.
 ///
 /// `Codec` is the lowest-level abstraction in the codec stack. It is intended
@@ -21,10 +23,11 @@
 /// width bounds for one value. The minimum is a lower-bound hint for checked
 /// layers: if fewer than this many units are available, no complete value can
 /// exist, so a streaming caller can request more input, report an incomplete
-/// EOF tail, or avoid attempting an encode when the output buffer is too small.
-/// It is not a safety precondition for unchecked methods. The maximum is the
-/// conservative bound callers normally use to prove that unchecked reads and
-/// writes stay inside the provided buffers.
+/// EOF tail. For decoding, this minimum is the smallest safety precondition
+/// checked callers must satisfy before entering
+/// [`decode_unchecked`](Self::decode_unchecked). The maximum is the conservative
+/// bound callers normally use to prove that unchecked writes stay inside the
+/// provided output buffer.
 ///
 /// # Type Parameters
 ///
@@ -40,6 +43,12 @@
 /// implementations must not read or write outside the caller-provided ranges.
 /// Implementations should use `debug_assert!` to state the expected buffer
 /// bounds at the unchecked entry point.
+///
+/// Implementations must also guarantee that
+/// [`min_units_per_value`](Self::min_units_per_value) is less than or equal to
+/// [`max_units_per_value`](Self::max_units_per_value). Both bounds are non-zero
+/// by type, and `max_units_per_value` must be a valid upper bound for one
+/// complete encoded value or codec quantum.
 pub unsafe trait Codec<Value, Unit: Copy> {
     /// Error reported when decoding malformed units.
     type DecodeError;
@@ -67,20 +76,20 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     ///
     /// # Returns
     ///
-    /// Returns a lower bound for one complete value. Variable-width codecs such
-    /// as LEB128 should return the shortest valid representation length. For
-    /// example, a UTF-16 byte codec can return `2`, while its maximum is `4`
-    /// because a surrogate pair needs four bytes.
+    /// Returns a non-zero lower bound for one complete value. Variable-width
+    /// codecs such as LEB128 should return the shortest valid representation
+    /// length. For example, a UTF-16 byte codec can return `2`, while its
+    /// maximum is `4` because a surrogate pair needs four bytes.
     #[must_use]
-    fn min_units_per_value(&self) -> usize;
+    fn min_units_per_value(&self) -> NonZeroUsize;
 
-    /// Returns the maximum unit count needed to encode or decode one value.
+    /// Returns the maximum non-zero unit count needed to encode or decode one value.
     ///
     /// # Returns
     ///
     /// Returns an upper bound for one complete value or codec quantum.
     #[must_use]
-    fn max_units_per_value(&self) -> usize;
+    fn max_units_per_value(&self) -> NonZeroUsize;
 
     /// Decodes one value from `input` starting at `index`.
     ///
@@ -91,7 +100,7 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     ///
     /// # Returns
     ///
-    /// Returns the decoded value and the number of consumed units.
+    /// Returns the decoded value and the non-zero number of consumed units.
     ///
     /// # Errors
     ///
@@ -107,10 +116,12 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// currently available units under that precondition. They may return
     /// `Self::DecodeError` when those units are a valid but incomplete prefix.
     ///
-    /// On success, implementations must return a consumed unit count greater
-    /// than zero and no larger than the available input. Implementations should
-    /// use `debug_assert!` to state these unchecked entry-point assumptions.
-    unsafe fn decode_unchecked(&self, input: &[Unit], index: usize) -> Result<(Value, usize), Self::DecodeError>;
+    /// On success, implementations must return a consumed unit count no larger
+    /// than the available input. The return type guarantees that successful
+    /// decoding always consumes at least one unit. Implementations should use
+    /// `debug_assert!` to state these unchecked entry-point assumptions.
+    unsafe fn decode_unchecked(&self, input: &[Unit], index: usize)
+    -> Result<(Value, NonZeroUsize), Self::DecodeError>;
 
     /// Encodes one borrowed value into `output` starting at `index`.
     ///
@@ -122,7 +133,8 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     ///
     /// # Returns
     ///
-    /// Returns the number of written units.
+    /// Returns the number of written units. Implementations may return `0` to
+    /// represent a value that intentionally emits no encoded units.
     ///
     /// # Errors
     ///
@@ -140,4 +152,24 @@ pub unsafe trait Codec<Value, Unit: Copy> {
         output: &mut [Unit],
         index: usize,
     ) -> Result<usize, Self::EncodeError>;
+}
+
+/// Checks the public unit-bound invariant required by [`Codec`].
+#[inline(always)]
+pub(crate) fn debug_assert_unit_bounds<C, Value, Unit>(codec: &C)
+where
+    C: Codec<Value, Unit>,
+    Unit: Copy,
+{
+    #[cfg(debug_assertions)]
+    {
+        debug_assert!(
+            codec.min_units_per_value() <= codec.max_units_per_value(),
+            "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()",
+        );
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = codec;
+    }
 }

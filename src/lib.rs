@@ -27,10 +27,24 @@ mod value;
 
 pub mod prelude;
 pub use buffered::{
+    BufferedConvertEngine,
+    BufferedConvertHooks,
     BufferedConverter,
+    BufferedDecodeEngine,
+    BufferedDecodeHooks,
     BufferedDecoder,
+    BufferedEncodeEngine,
+    BufferedEncodeHooks,
     BufferedEncoder,
+    CodecBufferedConverter,
+    CodecBufferedDecoder,
     CodecBufferedEncoder,
+    ConvertDecodeResult,
+    ConvertState,
+    ConvertWriteResult,
+    DecodeAction,
+    DecodeContext,
+    EncodePlan,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -43,10 +57,17 @@ pub use byte_order::{
 };
 pub use codec::{
     Codec,
+    CodecConvertError,
+    CodecDecodeError,
+    CodecEncodeError,
+    ConvertErrorFactory,
+    DecodeErrorFactory,
     DecodeErrorInfo,
     DecodeFailure,
+    EncodeErrorFactory,
 };
 pub use value::{
+    CodecValueDecoder,
     CodecValueEncoder,
     ValueDecoder,
     ValueEncoder,

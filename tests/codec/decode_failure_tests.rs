@@ -14,7 +14,7 @@ use qubit_codec::DecodeFailure;
 #[test]
 fn test_decode_failure_reports_incomplete_input() {
     let failure = DecodeFailure::Incomplete {
-        required: 2,
+        required_total: 2,
         available: 1,
     };
 

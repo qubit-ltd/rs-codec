@@ -9,10 +9,12 @@
  ******************************************************************************/
 //! Owned value conversion traits and adapters.
 
+mod codec_value_decoder;
 mod codec_value_encoder;
 mod value_decoder;
 mod value_encoder;
 
+pub use codec_value_decoder::CodecValueDecoder;
 pub use codec_value_encoder::CodecValueEncoder;
 pub use value_decoder::ValueDecoder;
 pub use value_encoder::ValueEncoder;

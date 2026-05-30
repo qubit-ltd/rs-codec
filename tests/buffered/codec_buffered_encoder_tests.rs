@@ -13,6 +13,7 @@ use qubit_codec::{
     BufferedEncoder,
     Codec,
     CodecBufferedEncoder,
+    CodecEncodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -24,20 +25,24 @@ unsafe impl Codec<u8, u8> for PairByteCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> usize {
-        1
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
     }
 
-    fn max_units_per_value(&self) -> usize {
-        2
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(&self, input: &[u8], index: usize) -> Result<(u8, usize), Self::DecodeError> {
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
         let value = unsafe { *input.as_ptr().add(index) };
-        Ok((value, 1))
+        Ok((value, core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
@@ -59,20 +64,24 @@ unsafe impl Codec<u8, u8> for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    fn min_units_per_value(&self) -> usize {
-        1
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
     }
 
-    fn max_units_per_value(&self) -> usize {
-        1
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(&self, input: &[u8], index: usize) -> Result<(u8, usize), Self::DecodeError> {
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
         let value = unsafe { *input.as_ptr().add(index) };
-        Ok((value, 1))
+        Ok((value, core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
@@ -105,7 +114,7 @@ fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            required: 2,
+            additional: 2,
             available: 0,
         },
         progress.status(),
@@ -114,6 +123,7 @@ fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
     assert_eq!(Some(6), encoder.max_output_len(3));
+    assert_eq!(Some(0), encoder.max_finish_output_len());
     assert_eq!(None, encoder.max_output_len(usize::MAX));
 }
 
@@ -144,7 +154,7 @@ fn test_codec_buffered_encoder_reports_partial_output_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            required: 1,
+            additional: 1,
             available: 1,
         },
         progress.status(),
@@ -157,10 +167,37 @@ fn test_codec_buffered_encoder_reports_partial_output_capacity() {
 #[test]
 fn test_codec_buffered_encoder_exposes_wrapped_codec_accessors() {
     let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
+    let mut output = [0_u8; 1];
 
     assert_eq!(&PairByteCodec, encoder.codec());
     assert_eq!(&mut PairByteCodec, encoder.codec_mut());
+    encoder.reset();
+    let progress = encoder.finish(&mut output, 0).expect("finish is a no-op");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
     assert_eq!(PairByteCodec, encoder.into_codec());
+}
+
+#[test]
+fn test_codec_buffered_encoder_finish_reports_output_index_beyond_buffer() {
+    let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
+    let mut output = [];
+
+    let progress = encoder
+        .finish(&mut output, 1)
+        .expect("out-of-range finish output index should request capacity");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]
@@ -172,6 +209,12 @@ fn test_codec_buffered_encoder_propagates_encode_error() {
         .transcode(&[2, 3], 0, &mut output, 0)
         .expect_err("odd value should be rejected");
 
-    assert_eq!("odd value", error);
+    assert_eq!(
+        CodecEncodeError::Encode {
+            source: "odd value",
+            input_index: 1,
+        },
+        error,
+    );
     assert_eq!([2, 0], output);
 }

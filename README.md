@@ -20,8 +20,15 @@ This crate provides:
 
 - `Codec<Value, Unit>` plus `DecodeFailure` / `DecodeErrorInfo` for low-level
   single-value buffer codecs and buffered-error control flow.
-- `CodecValueEncoder` and `CodecBufferedEncoder` adapters for encoding through
-  a supplied `Codec`.
+- `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
+  `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
+  codec-backed value and buffered conversion.
+- `BufferedEncodeEngine`, `BufferedEncodeHooks`, `EncodePlan`, and
+  `EncodeErrorFactory` for reusing the common buffered encoding loop in
+  policy-aware downstream encoders.
+- `BufferedDecodeEngine`, `BufferedDecodeHooks`, `DecodeAction`, and
+  `DecodeErrorFactory` for reusing the common buffered decoding loop in
+  policy-aware downstream decoders.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for caller-managed logical-stream
   conversion.
@@ -56,16 +63,24 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   against a caller-managed unit buffer.
 - **`DecodeFailure` / `DecodeErrorInfo`**: expose the minimal incomplete-vs-invalid
   view of codec-specific decode errors for buffered adapters.
+- **`DecodeErrorFactory<C>` / `EncodeErrorFactory<C>`**: construct
+  adapter-level input-index errors for reusable buffered engines.
+- **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
+  adapter-level encode, decode, and conversion errors without hiding
+  codec-specific failures.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
 - **`CodecValueEncoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
   `ValueEncoder<Value>` that returns owned `Vec<Unit>` output.
+- **`CodecValueDecoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
+  `ValueDecoder<[Unit]>` that accepts exactly one encoded value.
 
 ### Buffer Transcoder Primitives
 
 - **`Transcoder<Input, Output>`**: converts input units into output units inside
-  caller-provided buffers, then finalizes pending stream state at EOF.
+  caller-provided buffers, then finishes internally retained output after the
+  caller has handled any incomplete input tail.
 - **`BufferedEncoder<Value, Unit>`**: semantic `Transcoder` bound for value-to-unit
   buffered encoding.
 - **`BufferedDecoder<Unit, Value>`**: semantic `Transcoder` bound for unit-to-value
@@ -74,6 +89,27 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   unit-to-unit buffered conversion.
 - **`CodecBufferedEncoder<C>`**: wraps a `Codec<Value, Unit>` as a
   `BufferedEncoder<Value, Unit>` over caller-provided output buffers.
+- **`BufferedEncodeEngine<C, H>`**: reusable engine that owns a codec plus
+  policy hooks and runs the common buffered encoding loop.
+- **`BufferedEncodeHooks<C, Value, Unit>`**: policy hook trait used by
+  codec-backed encoders that need custom transcode/finalization behavior while
+  sharing the common loop.
+- **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
+  required before a hook writes one value.
+- **`EncodeErrorFactory<C>`**: constructs adapter-level errors required by the
+  encoder engine without turning error creation into a policy hook.
+- **`CodecBufferedDecoder<C, Unit>`**: wraps a `Codec<Value, Unit>` as a
+  policy-free `BufferedDecoder<Unit, Value>` that leaves incomplete tails in the
+  caller's input buffer.
+- **`BufferedDecodeEngine<C, H, Unit>`**: reusable engine that owns a codec,
+  policy hooks, and the common decode loop.
+- **`BufferedDecodeHooks<C, Unit, Value>`**: policy hook trait used by
+  codec-backed decoders that need custom malformed/incomplete behavior while
+  sharing the common decode loop.
+- **`DecodeAction<Value>`**: hook return value used by decoder engines for
+  transcode-stage policy decisions.
+- **`CodecBufferedConverter<D, E, Value, InputUnit>`**: composes a decoding codec
+  and an encoding codec as a policy-free `BufferedConverter`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -146,30 +182,56 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `DecodeFailure` | Generic incomplete-or-invalid view of a codec-specific decode error |
 | `DecodeErrorInfo` | Trait implemented by decode errors that expose `DecodeFailure` metadata |
+| `DecodeErrorFactory<C>` | Error construction contract used when decoder engines detect invalid input indices |
+| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid input indices |
+| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid indices, or trailing input |
+| `CodecConvertError<D, E>` | Adapter-level converter error that separates decode and encode failures |
 
 ### Codec Adapters
 
 | Type | Purpose |
 |------|---------|
 | `CodecValueEncoder<C, Value, Unit>` | Allocate owned `Vec<Unit>` output for one borrowed `Value` by using `C: Codec<Value, Unit>` without requiring `Value: Clone` |
+| `CodecValueDecoder<C, Value, Unit>` | Decode exactly one borrowed `[Unit]` slice into `Value` by using `C: Codec<Value, Unit>` |
 | `CodecBufferedEncoder<C>` | Encode `Value` slices into caller-provided `Unit` buffers by using `C: Codec<Value, Unit>` |
+| `CodecBufferedDecoder<C, Unit>` | Decode `Unit` slices into caller-provided `Value` buffers by using `C: Codec<Value, Unit>` and `DecodeErrorInfo` |
+| `CodecBufferedConverter<D, E, Value, InputUnit>` | Decode source units with `D: Codec<Value, InputUnit>` and encode target units with `E: Codec<Value, OutputUnit>` |
+
+### Encoder Hooks And Engines
+
+| Type | Purpose |
+|------|---------|
+| `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
+| `BufferedEncodeHooks<C, Value, Unit>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
+| `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write payload |
+| `EncodeErrorFactory<C>` | Error construction contract used when the engine detects invalid input indices |
+
+### Decoder Hooks And Engines
+
+| Type | Purpose |
+|------|---------|
+| `BufferedDecodeEngine<C, H, Unit>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
+| `BufferedDecodeHooks<C, Unit, Value>` | Hook contract for malformed/incomplete decode policy |
+| `DecodeContext` | Context passed to decode policy hooks |
+| `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
+| `DecodeErrorFactory<C>` | Error construction contract used when the engine detects invalid input indices |
 
 ### `Transcoder` Operations
 
 | Method | Description |
 |--------|-------------|
 | `max_output_len(input_len)` | Return a finite output upper bound when known |
-| `max_finish_output_len()` | Return a finite finalization output upper bound when known |
+| `max_finish_output_len()` | Return a finite final-output upper bound when known |
 | `reset()` | Reset retained stream state while keeping configuration |
 | `transcode(input, input_index, output, output_index)` | Convert input units into output units |
-| `finish(output, output_index)` | Finalize EOF state, flush trailers, or reject incomplete input |
+| `finish(output, output_index)` | Finish internally retained output such as reset bytes, digests, or trailers |
 
 ### `TranscodeStatus` Values
 
 | Status | Meaning |
 |--------|---------|
 | `Complete` | The current conversion step completed |
-| `NeedInput` | More input units are required unless the caller is ready to call `finish()` at EOF |
+| `NeedInput` | More input units are required; the incomplete tail remains in the caller's input buffer |
 | `NeedOutput` | More output capacity is required |
 
 ### Byte Order Types
@@ -221,7 +283,9 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 
 ## Dependencies
 
-`qubit-codec` has no runtime dependencies.
+Runtime dependencies are intentionally small:
+
+- `thiserror` provides public error type implementations.
 
 ## License
 

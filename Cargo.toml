@@ -28,6 +28,7 @@ include = [
 ]
 
 [dependencies]
+thiserror = "2.0"
 
 [[test]]
 name = "tests"

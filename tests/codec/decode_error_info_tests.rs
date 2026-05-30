@@ -25,15 +25,19 @@ unsafe impl Codec<u8, u8> for RejectingCodec {
     type DecodeError = RejectingDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> usize {
-        1
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
     }
 
-    fn max_units_per_value(&self) -> usize {
-        2
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(&self, _input: &[u8], _index: usize) -> Result<(u8, usize), Self::DecodeError> {
+    unsafe fn decode_unchecked(
+        &self,
+        _input: &[u8],
+        _index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
         Err(RejectingDecodeError)
     }
 

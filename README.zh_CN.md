@@ -19,8 +19,15 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait，以及面向
   buffered 错误控制流的 `DecodeFailure` / `DecodeErrorInfo`。
-- 基于给定 `Codec` 执行编码的 `CodecValueEncoder` 和
-  `CodecBufferedEncoder` adapter。
+- 基于给定 `Codec` 显式适配 value 与 buffered 转换的
+  `CodecValueEncoder`、`CodecValueDecoder`、`CodecBufferedEncoder`、
+  `CodecBufferedDecoder` 和 `CodecBufferedConverter` adapter。
+- 用于下游带策略 encoder 复用公共 buffered encode 循环的
+  `BufferedEncodeEngine`、`BufferedEncodeHooks`、`EncodePlan` 和
+  `EncodeErrorFactory`。
+- 用于下游带策略 decoder 复用公共 buffered decode 循环的
+  `BufferedDecodeEngine`、`BufferedDecodeHooks`、`DecodeAction` 和
+  `DecodeErrorFactory`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus`。
 - 用于表达 transcoder 语义方向的 `BufferedEncoder`、`BufferedDecoder` 和
@@ -47,14 +54,21 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`Codec<Value, Unit>`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
 - **`DecodeFailure` / `DecodeErrorInfo`**：把 codec-specific decode error 暴露为
   incomplete-vs-invalid 的最小控制流视图，供 buffered adapter 使用。
+- **`DecodeErrorFactory<C>` / `EncodeErrorFactory<C>`**：为可复用 buffered engine 构造
+  adapter 层非法输入下标错误。
+- **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
+  adapter 自己产生的 encode / decode / convert 错误，同时保留
+  codec-specific failure。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C, Value, Unit>`**：把 `Codec<Value, Unit>` 包装为
   返回自有 `Vec<Unit>` 的 `ValueEncoder<Value>`。
+- **`CodecValueDecoder<C, Value, Unit>`**：把 `Codec<Value, Unit>` 包装为
+  接收恰好一个完整编码值的 `ValueDecoder<[Unit]>`。
 
 ### 缓冲区 Transcoder 原语
 
-- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在 EOF 时收尾内部状态。
+- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
 - **`BufferedEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
   `Transcoder` bound。
 - **`BufferedDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
@@ -63,6 +77,21 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `Transcoder` bound。
 - **`CodecBufferedEncoder<C>`**：把 `Codec<Value, Unit>` 包装为在调用方输出缓冲区上工作的
   `BufferedEncoder<Value, Unit>`。
+- **`BufferedEncodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共 buffered
+  encode 循环的可复用 engine。
+- **`BufferedEncodeHooks<C, Value, Unit>`**：供带策略 codec-backed encoder
+  共享公共循环时实现的 transcode/finalization 策略 hook trait。
+- **`EncodePlan<P>`**：单值写入计划，携带写入前必须保证的输出容量上界。
+- **`EncodeErrorFactory<C>`**：为 engine 检测出的 adapter 层错误构造具体错误对象。
+- **`CodecBufferedDecoder<C, Unit>`**：把 `Codec<Value, Unit>` 包装为无策略的
+  `BufferedDecoder<Unit, Value>`，不完整尾部保留在调用方输入缓冲区中。
+- **`BufferedDecodeEngine<C, H, Unit>`**：持有 codec 与策略 hooks，并运行公共
+  decode 循环的可复用 engine。
+- **`BufferedDecodeHooks<C, Unit, Value>`**：供带策略 codec-backed decoder
+  共享公共 decode 循环时实现的策略 hook trait。
+- **`DecodeAction<Value>`**：decoder engine hook 在 transcode 阶段返回的策略动作。
+- **`CodecBufferedConverter<D, E, Value, InputUnit>`**：组合一个解码 codec 和一个编码
+  codec，形成无策略的 `BufferedConverter`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -132,30 +161,56 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `DecodeFailure` | codec-specific decode error 的通用 incomplete-or-invalid 视图 |
 | `DecodeErrorInfo` | 由 decode error 实现，用于暴露 `DecodeFailure` 元信息 |
+| `DecodeErrorFactory<C>` | decoder engine 检测到非法输入下标时使用的错误构造契约 |
+| `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法输入下标 |
+| `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法下标或尾随输入 |
+| `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 和 encode 失败 |
 
 ### Codec Adapter
 
 | 类型 | 用途 |
 |------|------|
 | `CodecValueEncoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把一个借用 `Value` 编码成自有 `Vec<Unit>`，不要求 `Value: Clone` |
+| `CodecValueDecoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把恰好一个借用 `[Unit]` slice 解码成 `Value` |
 | `CodecBufferedEncoder<C>` | 通过 `C: Codec<Value, Unit>` 把 `Value` slice 编码进调用方提供的 `Unit` 缓冲区 |
+| `CodecBufferedDecoder<C, Unit>` | 通过 `C: Codec<Value, Unit>` 和 `DecodeErrorInfo` 把 `Unit` slice 解码进调用方提供的 `Value` 缓冲区 |
+| `CodecBufferedConverter<D, E, Value, InputUnit>` | 先用 `D: Codec<Value, InputUnit>` 解码 source unit，再用 `E: Codec<Value, OutputUnit>` 编码 target unit |
+
+### Encoder Hooks 和 Engine
+
+| 类型 | 用途 |
+|------|------|
+| `BufferedEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
+| `BufferedEncodeHooks<C, Value, Unit>` | 准备、写入、重置并完成 encoded output 收尾的 hook 契约 |
+| `EncodePlan<P>` | 已准备好的单值容量上界和实现自定义写入 payload |
+| `EncodeErrorFactory<C>` | engine 检测到非法输入下标时使用的错误构造契约 |
+
+### Decoder Hooks 和 Engine
+
+| 类型 | 用途 |
+|------|------|
+| `BufferedDecodeEngine<C, H, Unit>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
+| `BufferedDecodeHooks<C, Unit, Value>` | malformed/incomplete decode 策略 hook 契约 |
+| `DecodeContext` | 传递给 decode policy hook 的上下文 |
+| `DecodeAction<Value>` | transcode 阶段的策略动作：需要输入、跳过输入或输出一个值 |
+| `DecodeErrorFactory<C>` | engine 检测到非法输入下标时使用的错误构造契约 |
 
 ### `Transcoder` 操作
 
 | 方法 | 描述 |
 |------|------|
 | `max_output_len(input_len)` | 在可确定时返回输出长度上界 |
-| `max_finish_output_len()` | 在可确定时返回 EOF 收尾输出长度上界 |
+| `max_finish_output_len()` | 在可确定时返回 finish 收尾输出长度上界 |
 | `reset()` | 保留配置并重置逻辑流状态 |
 | `transcode(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
-| `finish(output, output_index)` | 在 EOF 时完成收尾、刷新 trailer 或拒绝不完整输入 |
+| `finish(output, output_index)` | 完成内部收尾输出，例如 reset bytes、digest 或 trailer |
 
 ### `TranscodeStatus` 取值
 
 | 状态 | 含义 |
 |------|------|
 | `Complete` | 当前转换步骤已完成 |
-| `NeedInput` | 需要更多输入单元；若已到 EOF，应调用 `finish()` 收口 |
+| `NeedInput` | 需要更多输入单元；不完整尾部仍留在调用方输入缓冲区中 |
 | `NeedOutput` | 需要更多输出空间 |
 
 ### 字节序类型
@@ -205,7 +260,9 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 
 ## 依赖项
 
-`qubit-codec` 没有运行时依赖。
+运行时依赖保持很少：
+
+- `thiserror` 提供公共错误类型实现。
 
 ## 许可证
 

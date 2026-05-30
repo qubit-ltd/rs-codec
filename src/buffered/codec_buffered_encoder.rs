@@ -12,10 +12,14 @@
 use super::{
     BufferedEncoder,
     TranscodeProgress,
-    TranscodeStatus,
     Transcoder,
+    buffered_encode_engine::BufferedEncodeEngine,
+    codec_buffered_encode_hooks::CodecBufferedEncodeHooks,
 };
-use crate::Codec;
+use crate::{
+    Codec,
+    CodecEncodeError,
+};
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
 ///
@@ -23,15 +27,15 @@ use crate::Codec;
 /// [`Codec`] contract to the buffered [`Transcoder`] and [`BufferedEncoder`]
 /// contracts. It encodes complete values only; when the remaining output
 /// capacity is smaller than `codec.max_units_per_value()`, it stops before
-/// consuming the next input value and reports [`TranscodeStatus::NeedOutput`].
+/// consuming the next input value and reports [`crate::TranscodeStatus::NeedOutput`].
 ///
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode values.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct CodecBufferedEncoder<C> {
-    /// Low-level codec used for one-value encoding.
-    codec: C,
+    /// Common buffered encoding engine.
+    engine: BufferedEncodeEngine<C, CodecBufferedEncodeHooks>,
 }
 
 impl<C> CodecBufferedEncoder<C> {
@@ -45,9 +49,11 @@ impl<C> CodecBufferedEncoder<C> {
     ///
     /// Returns a buffered encoder adapter for the supplied codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn new(codec: C) -> Self {
-        Self { codec }
+        Self {
+            engine: BufferedEncodeEngine::new(codec, CodecBufferedEncodeHooks),
+        }
     }
 
     /// Returns the wrapped codec.
@@ -56,9 +62,9 @@ impl<C> CodecBufferedEncoder<C> {
     ///
     /// Returns a shared reference to the wrapped low-level codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn codec(&self) -> &C {
-        &self.codec
+        self.engine.codec()
     }
 
     /// Returns a mutable reference to the wrapped codec.
@@ -67,9 +73,9 @@ impl<C> CodecBufferedEncoder<C> {
     ///
     /// Returns a mutable reference to the wrapped low-level codec.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub fn codec_mut(&mut self) -> &mut C {
-        &mut self.codec
+        self.engine.codec_mut()
     }
 
     /// Consumes the adapter and returns the wrapped codec.
@@ -78,9 +84,9 @@ impl<C> CodecBufferedEncoder<C> {
     ///
     /// Returns the codec supplied at construction time.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub fn into_codec(self) -> C {
-        self.codec
+        self.engine.into_codec()
     }
 }
 
@@ -89,14 +95,28 @@ where
     C: Codec<Value, Unit>,
     Unit: Copy,
 {
-    type Error = C::EncodeError;
+    type Error = CodecEncodeError<C::EncodeError>;
 
     /// Returns the maximum number of output units needed for `input_len` values.
+    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        input_len.checked_mul(self.codec.max_units_per_value())
+        self.engine.max_output_len::<Value, Unit>(input_len)
+    }
+
+    /// Returns the maximum units emitted by finishing internal state.
+    #[inline(always)]
+    fn max_finish_output_len(&self) -> Option<usize> {
+        self.engine.max_finish_output_len::<Value, Unit>()
+    }
+
+    /// Resets hook-owned state.
+    #[inline(always)]
+    fn reset(&mut self) {
+        self.engine.reset::<Value, Unit>();
     }
 
     /// Encodes values into the supplied output buffer.
+    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[Value],
@@ -104,34 +124,14 @@ where
         output: &mut [Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        let max_units = self.codec.max_units_per_value();
-        let required_units = max_units.max(1);
-        let mut read = 0;
-        let mut written = 0;
+        self.engine
+            .transcode::<Value, Unit>(input, input_index, output, output_index)
+    }
 
-        while input_index + read < input.len() {
-            let output_position = output_index.saturating_add(written);
-            let available = output.len().saturating_sub(output_position);
-            if available < max_units {
-                let status = TranscodeStatus::NeedOutput {
-                    output_index: output_position,
-                    required: required_units.saturating_sub(available),
-                    available,
-                };
-                return Ok(TranscodeProgress::new(status, read, written));
-            }
-
-            // SAFETY: The remaining output capacity is at least the codec's
-            // declared maximum width for one encoded value.
-            let produced = unsafe {
-                self.codec
-                    .encode_unchecked(&input[input_index + read], output, output_position)
-            }?;
-            read += 1;
-            written += produced;
-        }
-
-        Ok(TranscodeProgress::complete(read, written))
+    /// Finishes internally retained output after EOF.
+    #[inline(always)]
+    fn finish(&mut self, output: &mut [Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+        self.engine.finish::<Value, Unit>(output, output_index)
     }
 }
 

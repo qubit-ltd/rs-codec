@@ -19,7 +19,7 @@ pub enum DecodeFailure {
     /// The currently available units are a valid prefix but not a complete value.
     Incomplete {
         /// Total units required from the current decode start.
-        required: usize,
+        required_total: usize,
         /// Units currently available from the current decode start.
         available: usize,
     },
@@ -36,13 +36,16 @@ impl DecodeFailure {
     ///
     /// # Returns
     ///
-    /// Returns `Some((required, available))` for [`Self::Incomplete`], or
+    /// Returns `Some((required_total, available))` for [`Self::Incomplete`], or
     /// `None` for [`Self::Invalid`].
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn incomplete(self) -> Option<(usize, usize)> {
         match self {
-            Self::Incomplete { required, available } => Some((required, available)),
+            Self::Incomplete {
+                required_total,
+                available,
+            } => Some((required_total, available)),
             Self::Invalid { .. } => None,
         }
     }
@@ -54,7 +57,7 @@ impl DecodeFailure {
     /// Returns `Some(consumed)` for [`Self::Invalid`], or `None` for
     /// [`Self::Incomplete`].
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn invalid_consumed(self) -> Option<usize> {
         match self {
             Self::Invalid { consumed } => Some(consumed),

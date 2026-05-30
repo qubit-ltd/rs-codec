@@ -33,7 +33,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
         } else {
             let status = TranscodeStatus::NeedOutput {
                 output_index: output_index + written,
-                required: 1,
+                additional: 1,
                 available: output.len().saturating_sub(output_index + written),
             };
             Ok(TranscodeProgress::new(status, read, written))
@@ -78,7 +78,7 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
             if output_index + written == output.len() {
                 let status = TranscodeStatus::NeedOutput {
                     output_index: output_index + written,
-                    required: suffix.len() - self.suffix_index,
+                    additional: suffix.len() - self.suffix_index,
                     available: 0,
                 };
                 return Ok(TranscodeProgress::new(status, 0, written));
@@ -115,12 +115,33 @@ fn test_transcoder_default_reset_and_finish_are_noops() {
     assert_eq!(Some(0), transcoder.max_finish_output_len());
 
     Transcoder::<u8, u8>::reset(&mut transcoder);
-    let progress = Transcoder::<u8, u8>::finish(&mut transcoder, &mut output, 0).expect("finish is noop");
+    let progress = transcoder.finish(&mut output, 0).expect("finish is noop");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
+}
+
+#[test]
+fn test_transcoder_default_finish_reports_output_index_beyond_buffer() {
+    let mut transcoder = CopyTranscoder;
+    let mut output = [];
+
+    let progress = transcoder
+        .finish(&mut output, 1)
+        .expect("out-of-range finish output index should request capacity");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]

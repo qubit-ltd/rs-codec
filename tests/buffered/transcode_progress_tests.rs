@@ -9,13 +9,13 @@ fn test_transcoder_progress_exposes_status_and_counts() {
     assert_eq!(TranscodeStatus::Complete, complete.status());
     assert_eq!(2, complete.read());
     assert_eq!(3, complete.written());
-    assert_eq!(0, complete.required());
+    assert_eq!(0, complete.additional());
     assert_eq!(None, complete.index());
     assert_eq!(0, complete.available());
 
     let status = TranscodeStatus::NeedInput {
         input_index: 0,
-        required: 0,
+        additional: 0,
         available: 0,
     };
     assert!(matches!(
@@ -24,17 +24,17 @@ fn test_transcoder_progress_exposes_status_and_counts() {
     ));
     let status = TranscodeStatus::NeedInput {
         input_index: 4,
-        required: 3,
+        additional: 3,
         available: 1,
     };
     let need_input = TranscodeProgress::new(status, 1, 2);
-    assert_eq!(3, need_input.required());
+    assert_eq!(3, need_input.additional());
     assert_eq!(Some(4), need_input.index());
     assert_eq!(1, need_input.available());
 
     let status = TranscodeStatus::NeedOutput {
         output_index: 0,
-        required: 0,
+        additional: 0,
         available: 0,
     };
     assert!(matches!(
@@ -43,11 +43,24 @@ fn test_transcoder_progress_exposes_status_and_counts() {
     ));
     let status = TranscodeStatus::NeedOutput {
         output_index: 7,
-        required: 8,
+        additional: 8,
         available: 9,
     };
     let need_output = TranscodeProgress::new(status, 5, 6);
-    assert_eq!(8, need_output.required());
+    assert_eq!(8, need_output.additional());
     assert_eq!(Some(7), need_output.index());
     assert_eq!(9, need_output.available());
+}
+
+#[test]
+fn test_transcoder_progress_constructors_create_expected_progress() {
+    let need_input = TranscodeProgress::need_input(4, 2, 1, 5, 6);
+    assert_eq!(TranscodeStatus::need_input(4, 2, 1), need_input.status());
+    assert_eq!(5, need_input.read());
+    assert_eq!(6, need_input.written());
+
+    let need_output = TranscodeProgress::need_output(7, 3, 0, 8, 9);
+    assert_eq!(TranscodeStatus::need_output(7, 3, 0), need_output.status());
+    assert_eq!(8, need_output.read());
+    assert_eq!(9, need_output.written());
 }

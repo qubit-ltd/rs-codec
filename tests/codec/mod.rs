@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Tests for low-level codec contracts and failure metadata.
 
+mod codec_convert_error_tests;
+mod codec_decode_error_tests;
 mod codec_tests;
 mod decode_error_info_tests;
 mod decode_failure_tests;

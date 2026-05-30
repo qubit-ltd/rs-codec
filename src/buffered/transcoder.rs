@@ -11,18 +11,20 @@ use super::transcode_progress::TranscodeProgress;
 
 /// Converts one logical stream of input units into one logical stream of output units.
 ///
-/// `transcode` is the main streaming API. It transforms a provided input segment and
-/// writes as much output as available buffer space allows, without automatically
-/// finalizing internal pending state.
+/// `transcode` is the main streaming API. It transforms a provided input
+/// segment and writes as much output as available buffer space allows.
 ///
 /// A transcoder instance has a simple lifecycle:
 ///
 /// 1. A newly created or reset instance is ready for a new logical stream.
 /// 2. Call [`Transcoder::transcode`] zero or more times while input is available.
-/// 3. Call [`Transcoder::finish`] after the caller knows no more input remains.
-/// 4. Continue calling [`Transcoder::finish`] while it reports
+/// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
+///    the caller-owned input buffer.
+/// 4. Call [`Transcoder::finish`] after the caller knows no more input remains
+///    and has handled any incomplete tail.
+/// 5. Continue calling [`Transcoder::finish`] while it reports
 ///    [`crate::TranscodeStatus::NeedOutput`].
-/// 5. After [`Transcoder::finish`] reports [`crate::TranscodeStatus::Complete`],
+/// 6. After [`Transcoder::finish`] reports [`crate::TranscodeStatus::Complete`],
 ///    call [`Transcoder::reset`] before starting another logical stream with the
 ///    same instance.
 ///
@@ -65,7 +67,7 @@ use super::transcode_progress::TranscodeProgress;
 ///             if output_index + written == output.len() {
 ///                 let status = TranscodeStatus::NeedOutput {
 ///                     output_index: output_index + written,
-///                     required: 1,
+///                     additional: 1,
 ///                     available: 0,
 ///                 };
 ///                 return Ok(TranscodeProgress::new(status, read, written));
@@ -79,10 +81,11 @@ use super::transcode_progress::TranscodeProgress;
 ///         if input_index + read == input.len() {
 ///             Ok(TranscodeProgress::complete(read, written))
 ///         } else {
+///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 required: 2,
-///                 available: input.len() - (input_index + read),
+///                 additional: 2 - available,
+///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
 ///         }
@@ -96,7 +99,7 @@ use super::transcode_progress::TranscodeProgress;
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedOutput {
 ///     output_index: 1,
-///     required: 1,
+///     additional: 1,
 ///     available: 0,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -109,7 +112,7 @@ use super::transcode_progress::TranscodeProgress;
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedInput {
 ///     input_index: 2,
-///     required: 2,
+///     additional: 1,
 ///     available: 1,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -133,6 +136,10 @@ pub trait Transcoder<Input, Output> {
 
     /// Returns an upper bound for output units produced from `input_len` units.
     ///
+    /// For stateful transcoders, this bound is evaluated against the current
+    /// instance state and must include any already-retained output that may be
+    /// emitted before or alongside output derived from the supplied input.
+    ///
     /// # Parameters
     ///
     /// - `input_len`: Number of input units the caller plans to transcode.
@@ -144,20 +151,20 @@ pub trait Transcoder<Input, Output> {
     #[must_use]
     fn max_output_len(&self, input_len: usize) -> Option<usize>;
 
-    /// Returns an upper bound for output units produced by finalization.
+    /// Returns an upper bound for output units produced by stream finalization.
     ///
     /// This bound is evaluated against the transcoder's current state. It does
     /// not include output that may be produced by future [`Transcoder::transcode`]
     /// calls. Use it before [`Transcoder::finish`] when the caller wants to size
-    /// a flush buffer for the already supplied input.
+    /// a final output buffer for the already supplied input.
     ///
     /// # Returns
     ///
     /// Returns `Some(bound)` when the transcoder can provide a finite upper bound
-    /// for finalization output. Returns `None` when the bound is not known.
+    /// for final output. Returns `None` when the bound is not known.
     /// Stateless transcoders default to `Some(0)`.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     fn max_finish_output_len(&self) -> Option<usize> {
         Some(0)
     }
@@ -169,17 +176,15 @@ pub trait Transcoder<Input, Output> {
     /// Pending input, pending output, and completed-stream state must be
     /// discarded by stateful implementations. Stateless transcoders may keep
     /// the default no-op implementation.
-    #[inline]
+    #[inline(always)]
     fn reset(&mut self) {}
 
     /// Converts available input units into output units.
     ///
     /// This method processes an input segment without closing the logical input
-    /// stream. When the current segment ends in a partial value, a transcoder may
-    /// either keep enough internal state to continue later or report
-    /// [`crate::TranscodeStatus::NeedInput`]. Callers that have reached EOF must
-    /// call [`Transcoder::finish`] so the transcoder can either flush, replace,
-    /// ignore, or reject pending incomplete state according to its policy.
+    /// stream. When the current segment ends in a partial value, the transcoder
+    /// reports [`crate::TranscodeStatus::NeedInput`] without consuming that
+    /// tail. The caller owns input-buffer refill and EOF incomplete-tail policy.
     ///
     /// # Parameters
     ///
@@ -205,13 +210,14 @@ pub trait Transcoder<Input, Output> {
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error>;
 
-    /// Finalizes the current logical stream after all input has been supplied.
+    /// Finishes internally retained output after all input has been supplied.
     ///
     /// `transcode` handles ordinary input consumption. `finish` is called only
-    /// after the caller knows no more input remains. It is responsible for
-    /// flushing buffered output, validating pending incomplete input, and
-    /// emitting any stream trailer required by the concrete transcoder. If the
-    /// provided output buffer is too small, `finish` returns
+    /// after the caller knows no more input remains and has handled any
+    /// incomplete input tail reported by `transcode`. It is responsible for
+    /// emitting final output derived from the transcoder's internal state, such
+    /// as reset bytes, checksums, digests, or trailers. If the provided output
+    /// buffer is too small, `finish` returns
     /// [`crate::TranscodeStatus::NeedOutput`] and may be called again with more
     /// output capacity.
     ///
@@ -253,7 +259,7 @@ pub trait Transcoder<Input, Output> {
     ///         } else {
     ///             let status = qubit_codec::TranscodeStatus::NeedOutput {
     ///                 output_index: output_index + written,
-    ///                 required: 1,
+    ///                 additional: 1,
     ///                 available: output.len().saturating_sub(output_index + written),
     ///             };
     ///             Ok(qubit_codec::TranscodeProgress::new(
@@ -274,7 +280,7 @@ pub trait Transcoder<Input, Output> {
     ///
     /// let finish = transcoder
     ///     .finish(&mut output, 1)
-    ///     .expect("finish does not emit buffered state for no-op transcoders");
+    ///     .expect("finish does not emit final state for no-op transcoders");
     /// assert_eq!(TranscodeStatus::Complete, finish.status());
     /// ```
     ///
@@ -291,10 +297,19 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` if pending state cannot be flushed according to the
-    /// transcoder's policy.
-    #[inline]
-    fn finish(&mut self, _output: &mut [Output], _output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    /// Returns `Self::Error` if internal state cannot be finished according to
+    /// the transcoder's policy.
+    #[inline(always)]
+    fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+        if output_index > output.len() {
+            return Ok(TranscodeProgress::need_output(
+                output_index,
+                self.max_finish_output_len().unwrap_or(1).max(1),
+                0,
+                0,
+                0,
+            ));
+        }
         Ok(TranscodeProgress::complete(0, 0))
     }
 }

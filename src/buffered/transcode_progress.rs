@@ -33,7 +33,7 @@ impl TranscodeProgress {
     ///
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self { status, read, written }
     }
@@ -49,9 +49,67 @@ impl TranscodeProgress {
     ///
     /// Returns a progress value whose status is [`TranscodeStatus::Complete`].
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn complete(read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::Complete, read, written)
+    }
+
+    /// Creates progress that stopped because more input is needed.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_index`: Absolute input boundary where conversion stopped.
+    /// - `additional`: Additional input units required to continue.
+    /// - `available`: Input units currently available at the boundary.
+    /// - `read`: Number of consumed input units.
+    /// - `written`: Number of produced output units.
+    ///
+    /// # Returns
+    ///
+    /// Returns a progress value with [`TranscodeStatus::NeedInput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn need_input(
+        input_index: usize,
+        additional: usize,
+        available: usize,
+        read: usize,
+        written: usize,
+    ) -> Self {
+        Self::new(
+            TranscodeStatus::need_input(input_index, additional, available),
+            read,
+            written,
+        )
+    }
+
+    /// Creates progress that stopped because more output capacity is needed.
+    ///
+    /// # Parameters
+    ///
+    /// - `output_index`: Absolute output boundary where conversion stopped.
+    /// - `additional`: Additional output units required to continue.
+    /// - `available`: Output units currently available at the boundary.
+    /// - `read`: Number of consumed input units.
+    /// - `written`: Number of produced output units.
+    ///
+    /// # Returns
+    ///
+    /// Returns a progress value with [`TranscodeStatus::NeedOutput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn need_output(
+        output_index: usize,
+        additional: usize,
+        available: usize,
+        read: usize,
+        written: usize,
+    ) -> Self {
+        Self::new(
+            TranscodeStatus::need_output(output_index, additional, available),
+            read,
+            written,
+        )
     }
 
     /// Returns the status that stopped conversion.
@@ -60,7 +118,7 @@ impl TranscodeProgress {
     ///
     /// Returns the stored [`TranscodeStatus`].
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn status(self) -> TranscodeStatus {
         self.status
     }
@@ -71,7 +129,7 @@ impl TranscodeProgress {
     ///
     /// Returns a count relative to the input index passed to the conversion call.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn read(self) -> usize {
         self.read
     }
@@ -82,7 +140,7 @@ impl TranscodeProgress {
     ///
     /// Returns a count relative to the output index passed to the conversion call.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn written(self) -> usize {
         self.written
     }
@@ -93,12 +151,12 @@ impl TranscodeProgress {
     ///
     /// Returns `0` when conversion completed.
     #[must_use]
-    #[inline]
-    pub const fn required(self) -> usize {
+    #[inline(always)]
+    pub const fn additional(self) -> usize {
         match self.status {
             TranscodeStatus::Complete => 0,
-            TranscodeStatus::NeedInput { required, .. } => required,
-            TranscodeStatus::NeedOutput { required, .. } => required,
+            TranscodeStatus::NeedInput { additional, .. } => additional,
+            TranscodeStatus::NeedOutput { additional, .. } => additional,
         }
     }
 
@@ -108,7 +166,7 @@ impl TranscodeProgress {
     /// - For [`TranscodeStatus::NeedOutput`], returns `output_index`.
     /// - For [`TranscodeStatus::Complete`], returns `None`.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn index(self) -> Option<usize> {
         match self.status {
             TranscodeStatus::Complete => None,
@@ -123,7 +181,7 @@ impl TranscodeProgress {
     ///
     /// Returns `0` when conversion completed.
     #[must_use]
-    #[inline]
+    #[inline(always)]
     pub const fn available(self) -> usize {
         match self.status {
             TranscodeStatus::Complete => 0,
