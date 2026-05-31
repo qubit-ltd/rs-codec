@@ -116,7 +116,6 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
     let output = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect("single byte should decode");
 
     assert_eq!(7, output);
-    assert_eq!(&SingleByteCodec, decoder.codec());
 }
 
 #[test]
@@ -163,13 +162,4 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
         },
         error,
     );
-}
-
-#[test]
-fn test_codec_value_decoder_exposes_wrapped_codec_accessors() {
-    let mut decoder = CodecValueDecoder::<SingleByteCodec, u8, u8>::new(SingleByteCodec);
-
-    assert_eq!(&SingleByteCodec, decoder.codec());
-    assert_eq!(&mut SingleByteCodec, decoder.codec_mut());
-    assert_eq!(SingleByteCodec, decoder.into_codec());
 }

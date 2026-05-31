@@ -57,38 +57,6 @@ impl<C, Value, Unit> CodecValueDecoder<C, Value, Unit> {
         }
     }
 
-    /// Returns the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns a shared reference to the wrapped low-level codec.
-    #[must_use]
-    #[inline(always)]
-    pub const fn codec(&self) -> &C {
-        &self.codec
-    }
-
-    /// Returns a mutable reference to the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns a mutable reference to the wrapped low-level codec.
-    #[must_use]
-    #[inline(always)]
-    pub fn codec_mut(&mut self) -> &mut C {
-        &mut self.codec
-    }
-
-    /// Consumes the adapter and returns the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns the codec supplied at construction time.
-    #[must_use]
-    #[inline(always)]
-    pub fn into_codec(self) -> C {
-        self.codec
-    }
 }
 
 impl<C, Value, Unit> ValueDecoder<[Unit]> for CodecValueDecoder<C, Value, Unit>

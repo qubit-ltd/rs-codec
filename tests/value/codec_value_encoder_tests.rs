@@ -150,7 +150,6 @@ fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
     let output = ValueEncoder::<u8>::encode(&encoder, &7).expect("encoding should be infallible");
 
     assert_eq!(vec![7, 8], output);
-    assert_eq!(&PairByteCodec, encoder.codec());
 }
 
 #[test]
@@ -161,15 +160,6 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
         .expect("encoding should not require cloning the value");
 
     assert_eq!(vec![11], output);
-}
-
-#[test]
-fn test_codec_value_encoder_exposes_wrapped_codec_accessors() {
-    let mut encoder = CodecValueEncoder::<PairByteCodec, u8, u8>::new(PairByteCodec);
-
-    assert_eq!(&PairByteCodec, encoder.codec());
-    assert_eq!(&mut PairByteCodec, encoder.codec_mut());
-    assert_eq!(PairByteCodec, encoder.into_codec());
 }
 
 #[test]
