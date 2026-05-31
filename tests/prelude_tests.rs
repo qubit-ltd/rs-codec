@@ -10,7 +10,6 @@
 
 use qubit_codec::prelude::{
     BigEndian,
-    BufferedConvertEngine,
     BufferedConvertHooks,
     BufferedConverter,
     BufferedDecoder,
@@ -27,7 +26,6 @@ use qubit_codec::prelude::{
     CodecValueDecoder,
     CodecValueEncoder,
     ConvertErrorFactory,
-    ConvertState,
     DecodeErrorFactory,
     DecodeErrorInfo,
     DecodeFailure,
@@ -110,7 +108,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     fn _accept_buffered_convert_engine<T>() {}
     fn _accept_buffered_decode_hooks<T: qubit_codec::BufferedDecodeHooks<EchoCodec, u8, u8>>() {}
     fn _accept_buffered_encode_hooks<T: qubit_codec::BufferedEncodeHooks<EchoCodec, u8, u8>>() {}
-    fn _accept_buffered_convert_hooks<T: BufferedConvertHooks<EchoCodec, EchoCodec, u8, u8, u8>>() {}
+    fn _accept_buffered_convert_hooks<T: BufferedConvertHooks<EchoCodec, EchoCodec, u8, u8>>() {}
 
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec, u8, u8>>();
@@ -120,11 +118,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_buffered_converter::<CodecBufferedConverter<EchoCodec, EchoCodec, u8, u8>>();
     _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, (), u8>>();
     _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, ()>>();
-    _accept_buffered_convert_engine::<BufferedConvertEngine<EchoCodec, EchoCodec, (), u8>>();
-    let mut convert_output = [0_u8; 1];
-    let convert_state = ConvertState::new(&[1_u8], 0, &mut convert_output, 0);
-    assert_eq!(1, convert_state.available_input());
-
     let codec = EchoCodec;
 
     let encoded = ValueEncoder::<str>::encode(&codec, "abc").expect("echo encode should be infallible");

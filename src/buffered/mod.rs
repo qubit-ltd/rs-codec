@@ -25,22 +25,25 @@ mod codec_buffered_decode_hooks;
 mod codec_buffered_decoder;
 mod codec_buffered_encode_hooks;
 mod codec_buffered_encoder;
+mod convert_decode_attempt_result;
+mod convert_encode_result;
+mod convert_error_of;
 mod convert_state;
+mod convert_step_result;
 mod decode_action;
+mod decode_attempt;
 mod decode_context;
 mod decode_state;
+mod encode_attempt;
 mod encode_plan;
 mod encode_state;
+mod pending_value;
 mod transcode_progress;
 mod transcode_status;
 mod transcoder;
 
 pub use buffered_convert_engine::BufferedConvertEngine;
-pub use buffered_convert_hooks::{
-    BufferedConvertHooks,
-    ConvertDecodeResult,
-    ConvertWriteResult,
-};
+pub use buffered_convert_hooks::BufferedConvertHooks;
 pub use buffered_converter::BufferedConverter;
 pub use buffered_decode_engine::BufferedDecodeEngine;
 pub use buffered_decode_hooks::BufferedDecodeHooks;
@@ -52,7 +55,6 @@ pub use capacity_error::CapacityError;
 pub use codec_buffered_converter::CodecBufferedConverter;
 pub use codec_buffered_decoder::CodecBufferedDecoder;
 pub use codec_buffered_encoder::CodecBufferedEncoder;
-pub use convert_state::ConvertState;
 pub use decode_action::DecodeAction;
 pub use decode_context::DecodeContext;
 pub use encode_plan::EncodePlan;

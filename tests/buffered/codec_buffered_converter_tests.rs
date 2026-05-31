@@ -11,6 +11,7 @@
 
 use qubit_codec::{
     BufferedConverter,
+    CapacityError,
     Codec,
     CodecBufferedConverter,
     CodecConvertError,
@@ -186,7 +187,7 @@ fn test_codec_buffered_converter_converts_values_until_output_needs_capacity() {
     assert_eq!(3, progress.read());
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
-    assert_eq!(Some(2), converter.max_finish_output_len());
+    assert_eq!(Ok(2), converter.max_finish_output_len());
 }
 
 #[test]
@@ -197,9 +198,12 @@ fn test_codec_buffered_converter_reports_bounds_and_finishes_noop() {
     );
     let mut output = [0_u8; 2];
 
-    assert_eq!(Some(6), converter.max_output_len(3));
-    assert_eq!(Some(0), converter.max_finish_output_len());
-    assert_eq!(None, converter.max_output_len(usize::MAX));
+    assert_eq!(Ok(6), converter.max_output_len(3));
+    assert_eq!(Ok(0), converter.max_finish_output_len());
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        converter.max_output_len(usize::MAX),
+    );
 
     converter.reset();
     let finish = converter
@@ -286,7 +290,7 @@ fn test_codec_buffered_converter_keeps_decoded_value_pending_when_output_is_shor
     assert_eq!(1, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
-    assert_eq!(Some(8), converter.max_output_len(3));
+    assert_eq!(Ok(8), converter.max_output_len(3));
 
     let mut output = [0_u8; 2];
     let progress = converter
@@ -297,6 +301,32 @@ fn test_codec_buffered_converter_keeps_decoded_value_pending_when_output_is_shor
     assert_eq!(0, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([3, 4], output);
+}
+
+#[test]
+fn test_codec_buffered_converter_finish_drains_pending_decoded_value() {
+    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8>::new(
+        VariableByteDecoder,
+        PairByteEncoder,
+    );
+    let mut short_output = [0_u8; 1];
+
+    let progress = converter
+        .transcode(&[7], 0, &mut short_output, 0)
+        .expect("short output should retain the decoded value");
+    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
+
+    let mut output = [0_u8; 2];
+    let finish = converter
+        .finish(&mut output, 0)
+        .expect("finish should write the retained decoded value");
+
+    assert_eq!(TranscodeStatus::Complete, finish.status());
+    assert_eq!(0, finish.read());
+    assert_eq!(2, finish.written());
+    assert_eq!([7, 8], output);
 }
 
 #[test]
@@ -389,18 +419,4 @@ fn test_codec_buffered_converter_finish_does_not_handle_input_tail() {
     assert_eq!(TranscodeStatus::Complete, finish.status());
     assert_eq!(0, finish.read());
     assert_eq!(0, finish.written());
-}
-
-#[test]
-fn test_codec_buffered_converter_exposes_wrapped_codec_accessors() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
-
-    assert_eq!(&VariableByteDecoder, converter.decoder());
-    assert_eq!(&PairByteEncoder, converter.encoder());
-    assert_eq!(&mut VariableByteDecoder, converter.decoder_mut());
-    assert_eq!(&mut PairByteEncoder, converter.encoder_mut());
-    assert_eq!((VariableByteDecoder, PairByteEncoder), converter.into_codecs());
 }
