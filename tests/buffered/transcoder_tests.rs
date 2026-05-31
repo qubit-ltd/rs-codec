@@ -1,4 +1,5 @@
 use qubit_codec::{
+    CapacityError,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -10,8 +11,8 @@ struct CopyTranscoder;
 impl Transcoder<u8, u8> for CopyTranscoder {
     type Error = core::convert::Infallible;
 
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        Some(input_len)
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
     }
 
     fn transcode(
@@ -49,12 +50,12 @@ struct FinishingTranscoder {
 impl Transcoder<u8, u8> for FinishingTranscoder {
     type Error = core::convert::Infallible;
 
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        Some(input_len)
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
     }
 
-    fn max_finish_output_len(&self) -> Option<usize> {
-        Some(2 - self.suffix_index)
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(2 - self.suffix_index)
     }
 
     fn reset(&mut self) {
@@ -111,8 +112,8 @@ fn test_transcoder_default_reset_and_finish_are_noops() {
     let mut transcoder = CopyTranscoder;
     let mut output = [0_u8; 1];
 
-    assert_eq!(Some(3), transcoder.max_output_len(3));
-    assert_eq!(Some(0), transcoder.max_finish_output_len());
+    assert_eq!(Ok(3), transcoder.max_output_len(3));
+    assert_eq!(Ok(0), transcoder.max_finish_output_len());
 
     Transcoder::<u8, u8>::reset(&mut transcoder);
     let progress = transcoder.finish(&mut output, 0).expect("finish is noop");
@@ -149,7 +150,7 @@ fn test_transcoder_finish_can_report_bounded_pending_output() {
     let mut transcoder = FinishingTranscoder::default();
     let mut output = [0_u8; 1];
 
-    assert_eq!(Some(2), transcoder.max_finish_output_len());
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
     let progress = transcoder
         .finish(&mut output, 0)
@@ -159,7 +160,7 @@ fn test_transcoder_finish_can_report_bounded_pending_output() {
     assert_eq!(0, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([b'!'], output);
-    assert_eq!(Some(1), transcoder.max_finish_output_len());
+    assert_eq!(Ok(1), transcoder.max_finish_output_len());
 
     let progress = transcoder
         .finish(&mut output, 0)
@@ -169,8 +170,8 @@ fn test_transcoder_finish_can_report_bounded_pending_output() {
     assert_eq!(0, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([b'\n'], output);
-    assert_eq!(Some(0), transcoder.max_finish_output_len());
+    assert_eq!(Ok(0), transcoder.max_finish_output_len());
 
     transcoder.reset();
-    assert_eq!(Some(2), transcoder.max_finish_output_len());
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
 }

@@ -36,6 +36,7 @@ pub use buffered::{
     BufferedEncodeEngine,
     BufferedEncodeHooks,
     BufferedEncoder,
+    CapacityError,
     CodecBufferedConverter,
     CodecBufferedDecoder,
     CodecBufferedEncoder,

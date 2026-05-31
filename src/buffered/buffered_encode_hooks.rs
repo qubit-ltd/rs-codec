@@ -14,6 +14,7 @@ use super::{
     transcode_progress::TranscodeProgress,
 };
 use crate::{
+    CapacityError,
     Codec,
     EncodeErrorFactory,
 };
@@ -23,6 +24,61 @@ use crate::{
 /// Hooks own policy state, such as replacement or ignore behavior, but not the
 /// codec or engine cursor state. The engine passes the codec into hook methods
 /// when policy code needs codec metadata or one-value encode operations.
+///
+/// Implement this trait when a buffered encoder needs policy decisions around
+/// individual values while reusing the common engine loop. Examples include
+/// rejecting unsupported values with adapter-level context, consuming values
+/// without writing output, writing replacement units, or emitting final state in
+/// [`finish`](Self::finish).
+///
+/// The engine calls [`prepare_encode`](Self::prepare_encode) before each value
+/// is consumed. The returned [`EncodePlan`] states the required output capacity
+/// and may carry a payload computed by the hook. Only after that capacity is
+/// available does the engine call [`write_encode`](Self::write_encode). This
+/// split lets the engine stop with [`crate::TranscodeStatus::NeedOutput`]
+/// without consuming the next input value.
+///
+/// # Example
+///
+/// This hook writes each value with the wrapped codec and uses the codec's
+/// maximum width as the capacity plan.
+///
+/// ```rust,ignore
+/// use qubit_codec::{BufferedEncodeHooks, Codec, CodecEncodeError, EncodePlan};
+///
+/// struct StrictHooks;
+///
+/// impl<C, Value, Unit> BufferedEncodeHooks<C, Value, Unit> for StrictHooks
+/// where
+///     C: Codec<Value, Unit>,
+///     Unit: Copy,
+/// {
+///     type Error = CodecEncodeError<C::EncodeError>;
+///     type PlanPayload = ();
+///
+///     fn prepare_encode(
+///         &mut self,
+///         codec: &C,
+///         _value: &Value,
+///         _input_index: usize,
+///     ) -> Result<EncodePlan<()>, Self::Error> {
+///         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
+///     }
+///
+///     unsafe fn write_encode(
+///         &mut self,
+///         codec: &C,
+///         value: &Value,
+///         input_index: usize,
+///         _payload: (),
+///         output: &mut [Unit],
+///         output_index: usize,
+///     ) -> Result<usize, Self::Error> {
+///         unsafe { codec.encode_unchecked(value, output, output_index) }
+///             .map_err(|error| CodecEncodeError::encode(error, input_index))
+///     }
+/// }
+/// ```
 ///
 /// # Type Parameters
 ///
@@ -50,11 +106,13 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound derived from the codec's
-    /// [`Codec::max_units_per_value`], or `None` on overflow.
-    #[must_use]
+    /// [`Codec::max_units_per_value`].
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Option<usize> {
-        input_len.checked_mul(codec.max_units_per_value().get())
+    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+        input_len
+            .checked_mul(codec.max_units_per_value().get())
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns an upper bound for units emitted by finishing hook-owned state.
@@ -69,11 +127,11 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a finite upper bound when known.
+    /// Returns the finite final-output upper bound.
     #[must_use]
     #[inline(always)]
-    fn max_finish_output_len(&self, _codec: &C) -> Option<usize> {
-        Some(0)
+    fn max_finish_output_len(&self, _codec: &C) -> usize {
+        0
     }
 
     /// Prepares an encoding plan for one input value.
@@ -160,13 +218,12 @@ where
     #[inline(always)]
     fn finish(
         &mut self,
-        codec: &C,
+        _codec: &C,
         output: &mut [Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            let additional = self.max_finish_output_len(codec).unwrap_or(1).max(1);
-            return Ok(TranscodeProgress::need_output(output_index, additional, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }

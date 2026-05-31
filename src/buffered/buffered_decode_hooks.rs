@@ -15,6 +15,7 @@ use super::{
     transcode_progress::TranscodeProgress,
 };
 use crate::{
+    CapacityError,
     Codec,
     DecodeErrorFactory,
 };
@@ -24,6 +25,51 @@ use crate::{
 /// Hooks own policy state, such as malformed-input replacement behavior. The
 /// engine passes the codec into hook methods when policy code needs codec
 /// metadata.
+///
+/// Implement this trait when a buffered decoder needs policy decisions after
+/// the low-level codec reports an error. The engine handles input/output cursor
+/// bookkeeping, output-capacity checks, and successful one-value decodes; hooks
+/// decide whether a decode error means "need more input", "skip these units",
+/// "emit a replacement value", or "return an error".
+///
+/// The hook receives a [`DecodeContext`] with absolute input/output cursors, so
+/// errors can include useful positions without duplicating engine arithmetic.
+/// Stateful hooks may also use [`finish`](Self::finish) to emit final values
+/// after the caller has supplied all input and handled any incomplete tail.
+///
+/// # Example
+///
+/// This hook maps incomplete codec errors to `NeedInput`, replaces malformed
+/// units with `b'?'`, and otherwise lets the engine keep decoding.
+///
+/// ```rust,ignore
+/// use qubit_codec::{
+///     BufferedDecodeHooks, CodecDecodeError, DecodeAction, DecodeContext,
+///     DecodeErrorInfo, DecodeFailure,
+/// };
+///
+/// struct ReplacementHooks;
+///
+/// impl BufferedDecodeHooks<MyCodec, u8, u8> for ReplacementHooks {
+///     type Error = CodecDecodeError<MyDecodeError>;
+///
+///     fn handle_decode_error(
+///         &mut self,
+///         _codec: &MyCodec,
+///         error: MyDecodeError,
+///         _context: DecodeContext,
+///     ) -> Result<DecodeAction<u8>, Self::Error> {
+///         match error.failure() {
+///             DecodeFailure::Incomplete { required_total, .. } => {
+///                 Ok(DecodeAction::NeedInput { required_total })
+///             }
+///             DecodeFailure::Invalid { consumed } => {
+///                 Ok(DecodeAction::Emit { value: b'?', consumed })
+///             }
+///         }
+///     }
+/// }
+/// ```
 ///
 /// # Type Parameters
 ///
@@ -49,10 +95,10 @@ where
     ///
     /// Returns a conservative upper bound derived from
     /// [`Codec::min_units_per_value`].
-    #[must_use]
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Option<usize> {
-        Some(input_len / codec.min_units_per_value().get())
+    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len / codec.min_units_per_value().get())
     }
 
     /// Returns an upper bound for values emitted by finishing hook-owned state.
@@ -67,11 +113,11 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a finite upper bound when known.
+    /// Returns the finite final-output upper bound.
     #[must_use]
     #[inline(always)]
-    fn max_finish_output_len(&self, _codec: &C) -> Option<usize> {
-        Some(0)
+    fn max_finish_output_len(&self, _codec: &C) -> usize {
+        0
     }
 
     /// Handles a codec decode error during `transcode`.
@@ -120,13 +166,12 @@ where
     #[inline(always)]
     fn finish(
         &mut self,
-        codec: &C,
+        _codec: &C,
         output: &mut [Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            let additional = self.max_finish_output_len(codec).unwrap_or(1).max(1);
-            return Ok(TranscodeProgress::need_output(output_index, additional, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }

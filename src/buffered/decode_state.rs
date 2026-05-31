@@ -151,7 +151,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             "decode step consumed beyond available input",
         );
         debug_assert!(!self.needs_output(), "decode step emitted without output capacity",);
-        self.output[self.output_cursor] = value;
+        // SAFETY: `needs_output()` returned false, so the output cursor points
+        // at a writable slot.
+        unsafe {
+            *self.output.get_unchecked_mut(self.output_cursor) = value;
+        }
         self.input_cursor += consumed;
         self.output_cursor += 1;
     }

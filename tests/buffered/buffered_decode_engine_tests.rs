@@ -170,8 +170,8 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for FinishHooks {
         }
     }
 
-    fn max_finish_output_len(&self, _codec: &PrefixCodec) -> Option<usize> {
-        Some(usize::from(self.pending_suffix))
+    fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
+        usize::from(self.pending_suffix)
     }
 
     fn finish(
@@ -260,16 +260,12 @@ impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
 }
 
 #[test]
-fn test_buffered_decode_engine_exposes_accessors_and_finish_bounds() {
+fn test_buffered_decode_engine_reports_finish_bounds() {
     let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
-    assert_eq!(&PrefixCodec, decoder.codec());
-    assert_eq!(&mut PrefixCodec, decoder.codec_mut());
-    assert_eq!(&ReplacingHooks, decoder.hooks());
-    assert_eq!(&mut ReplacingHooks, decoder.hooks_mut());
-    assert_eq!(Some(3), decoder.max_output_len::<u8>(3));
-    assert_eq!(Some(0), decoder.max_finish_output_len::<u8>());
+    assert_eq!(Ok(3), decoder.max_output_len::<u8>(3));
+    assert_eq!(0, decoder.max_finish_output_len::<u8>());
 
     decoder.reset::<u8>();
     let progress = decoder
@@ -278,7 +274,6 @@ fn test_buffered_decode_engine_exposes_accessors_and_finish_bounds() {
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
-    assert_eq!(PrefixCodec, decoder.into_codec());
 }
 
 #[test]
@@ -286,7 +281,7 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
     let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
-    assert_eq!(Some(1), decoder.max_finish_output_len::<u8>());
+    assert_eq!(1, decoder.max_finish_output_len::<u8>());
 
     let progress = decoder
         .finish::<u8>(&mut [], 0)
@@ -299,7 +294,7 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
         },
         progress.status(),
     );
-    assert_eq!(Some(1), decoder.max_finish_output_len::<u8>());
+    assert_eq!(1, decoder.max_finish_output_len::<u8>());
 
     let progress = decoder
         .finish::<u8>(&mut output, 0)
@@ -308,7 +303,7 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
     assert_eq!(0, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([0xee], output);
-    assert_eq!(Some(0), decoder.max_finish_output_len::<u8>());
+    assert_eq!(0, decoder.max_finish_output_len::<u8>());
 }
 
 #[test]

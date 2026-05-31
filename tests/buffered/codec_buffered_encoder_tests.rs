@@ -11,6 +11,7 @@
 
 use qubit_codec::{
     BufferedEncoder,
+    CapacityError,
     Codec,
     CodecBufferedEncoder,
     CodecEncodeError,
@@ -122,9 +123,12 @@ fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(2, progress.read());
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
-    assert_eq!(Some(6), encoder.max_output_len(3));
-    assert_eq!(Some(0), encoder.max_finish_output_len());
-    assert_eq!(None, encoder.max_output_len(usize::MAX));
+    assert_eq!(Ok(6), encoder.max_output_len(3));
+    assert_eq!(Ok(0), encoder.max_finish_output_len());
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        encoder.max_output_len(usize::MAX),
+    );
 }
 
 #[test]
@@ -162,21 +166,6 @@ fn test_codec_buffered_encoder_reports_partial_output_capacity() {
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
-}
-
-#[test]
-fn test_codec_buffered_encoder_exposes_wrapped_codec_accessors() {
-    let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
-    let mut output = [0_u8; 1];
-
-    assert_eq!(&PairByteCodec, encoder.codec());
-    assert_eq!(&mut PairByteCodec, encoder.codec_mut());
-    encoder.reset();
-    let progress = encoder.finish(&mut output, 0).expect("finish is a no-op");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
-    assert_eq!(PairByteCodec, encoder.into_codec());
 }
 
 #[test]

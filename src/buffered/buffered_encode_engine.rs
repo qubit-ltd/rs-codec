@@ -11,10 +11,12 @@
 
 use super::{
     buffered_encode_hooks::BufferedEncodeHooks,
+    encode_plan::EncodePlan,
     encode_state::EncodeState,
     transcode_progress::TranscodeProgress,
 };
 use crate::{
+    CapacityError,
     Codec,
     EncodeErrorFactory,
     codec::debug_assert_unit_bounds,
@@ -24,8 +26,42 @@ use crate::{
 ///
 /// The engine owns the low-level codec and hook object. It keeps the common
 /// buffered encoding loop private: input-index validation, output-capacity
-/// checks, input consumption, output progress, and [`TranscodeStatus`]
+/// checks, input consumption, output progress, and [`crate::TranscodeStatus`]
 /// reporting.
+///
+/// Use this type to build a streaming encoder over a one-value [`Codec`]. The
+/// engine does not allocate output. It repeatedly asks hooks to plan one input
+/// value, verifies that the caller-provided output slice can hold that plan, and
+/// then lets the hooks write the value. If the next value would not fit, the
+/// engine returns [`crate::TranscodeStatus::NeedOutput`] without consuming that
+/// value; the caller can provide a larger or fresh output buffer and resume
+/// with the returned input index.
+///
+/// For the common strict policy that simply wraps codec errors, use
+/// [`crate::CodecBufferedEncoder`]. Use `BufferedEncodeEngine` directly when
+/// the encode policy needs custom planning, replacement, skipped values, or
+/// finish-time output.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use qubit_codec::{BufferedEncodeEngine, TranscodeStatus};
+///
+/// let mut engine = BufferedEncodeEngine::new(ByteCodec, StrictHooks);
+/// let input = [1_u8, 2, 3];
+/// let mut output = [0_u8; 2];
+///
+/// let progress = engine.transcode(&input, 0, &mut output, 0)?;
+/// match progress.status() {
+///     TranscodeStatus::Complete => {}
+///     TranscodeStatus::NeedOutput { output_index, .. } => {
+///         // Write out `output[..output_index]`, then resume at
+///         // `progress.read()` with fresh output capacity.
+///     }
+///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),
+/// }
+/// # Ok::<(), MyError>(())
+/// ```
 ///
 /// # Type Parameters
 ///
@@ -34,9 +70,9 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct BufferedEncodeEngine<C, H> {
     /// Low-level codec used for one-value encoding.
-    codec: C,
+    pub(super) codec: C,
     /// Policy hooks used for planning and writing values.
-    hooks: H,
+    pub(super) hooks: H,
 }
 
 impl<C, H> BufferedEncodeEngine<C, H> {
@@ -56,59 +92,52 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         Self { codec, hooks }
     }
 
-    /// Returns the wrapped low-level codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns a shared reference to the codec.
-    #[must_use]
+    /// Prepares one value for writing through the configured encode hooks.
     #[inline(always)]
-    pub const fn codec(&self) -> &C {
-        &self.codec
+    pub(crate) fn prepare_value<Value, Unit>(
+        &mut self,
+        input_value: &Value,
+        input_index: usize,
+    ) -> Result<EncodePlan<H::PlanPayload>, <H as BufferedEncodeHooks<C, Value, Unit>>::Error>
+    where
+        C: Codec<Value, Unit>,
+        H: BufferedEncodeHooks<C, Value, Unit>,
+        Unit: Copy,
+    {
+        self.hooks.prepare_encode(&self.codec, input_value, input_index)
     }
 
-    /// Returns the wrapped low-level codec mutably.
+    /// Writes one value using a previously prepared encode plan.
     ///
-    /// # Returns
+    /// # Safety
     ///
-    /// Returns a mutable reference to the codec.
-    #[must_use]
+    /// The caller must guarantee that `output` has at least
+    /// `plan.max_output_units` writable units from `output_index`.
     #[inline(always)]
-    pub fn codec_mut(&mut self) -> &mut C {
-        &mut self.codec
-    }
-
-    /// Returns the policy hooks.
-    ///
-    /// # Returns
-    ///
-    /// Returns a shared reference to the hooks.
-    #[must_use]
-    #[inline(always)]
-    pub const fn hooks(&self) -> &H {
-        &self.hooks
-    }
-
-    /// Returns the policy hooks mutably.
-    ///
-    /// # Returns
-    ///
-    /// Returns a mutable reference to the hooks.
-    #[must_use]
-    #[inline(always)]
-    pub fn hooks_mut(&mut self) -> &mut H {
-        &mut self.hooks
-    }
-
-    /// Consumes the engine and returns the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns the codec supplied at construction time.
-    #[must_use]
-    #[inline(always)]
-    pub fn into_codec(self) -> C {
-        self.codec
+    pub(crate) unsafe fn write_prepared_value<Value, Unit>(
+        &mut self,
+        input_value: &Value,
+        input_index: usize,
+        plan: EncodePlan<H::PlanPayload>,
+        output: &mut [Unit],
+        output_index: usize,
+    ) -> Result<usize, <H as BufferedEncodeHooks<C, Value, Unit>>::Error>
+    where
+        C: Codec<Value, Unit>,
+        H: BufferedEncodeHooks<C, Value, Unit>,
+        Unit: Copy,
+    {
+        // SAFETY: Forwarded from this method's safety contract.
+        unsafe {
+            self.hooks.write_encode(
+                &self.codec,
+                input_value,
+                input_index,
+                plan.payload,
+                output,
+                output_index,
+            )
+        }
     }
 
     /// Returns the maximum output units needed for `input_len` values.
@@ -119,10 +148,11 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     ///
     /// # Returns
     ///
-    /// Returns a conservative upper bound, or `None` on overflow.
-    #[must_use]
+    /// Returns a conservative upper bound, or a capacity error on arithmetic
+    /// overflow.
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len<Value, Unit>(&self, input_len: usize) -> Option<usize>
+    pub fn max_output_len<Value, Unit>(&self, input_len: usize) -> Result<usize, CapacityError>
     where
         C: Codec<Value, Unit>,
         H: BufferedEncodeHooks<C, Value, Unit>,
@@ -139,7 +169,7 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     /// Returns the hook-provided final output bound.
     #[must_use]
     #[inline(always)]
-    pub fn max_finish_output_len<Value, Unit>(&self) -> Option<usize>
+    pub fn max_finish_output_len<Value, Unit>(&self) -> usize
     where
         C: Codec<Value, Unit>,
         H: BufferedEncodeHooks<C, Value, Unit>,
@@ -207,26 +237,21 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         }
 
         while state.has_input() {
-            let (input_value, input_cursor) = state.current_input();
-            let plan = self.hooks.prepare_encode(&self.codec, input_value, input_cursor)?;
+            // SAFETY: The loop condition proves that the current input cursor
+            // points at an available value.
+            let (input_value, input_cursor) = unsafe { state.current_input_unchecked() };
+            let plan = self.prepare_value::<Value, Unit>(input_value, input_cursor)?;
             let max_output_units = plan.max_output_units;
             if !state.has_output_for(max_output_units) {
                 return Ok(state.need_output_progress(max_output_units));
             }
 
-            let (input_value, input_cursor, output, output_cursor) = state.write_parts();
+            // SAFETY: The same loop condition still proves current input
+            // availability; the output capacity is checked above.
+            let (input_value, input_cursor, output, output_cursor) = unsafe { state.write_parts_unchecked() };
             // SAFETY: The capacity check above guarantees the bound requested
             // by the prepared plan.
-            let written = unsafe {
-                self.hooks.write_encode(
-                    &self.codec,
-                    input_value,
-                    input_cursor,
-                    plan.payload,
-                    output,
-                    output_cursor,
-                )
-            }?;
+            let written = unsafe { self.write_prepared_value(input_value, input_cursor, plan, output, output_cursor) }?;
             debug_assert!(
                 written <= max_output_units,
                 "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",
@@ -267,8 +292,7 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         Unit: Copy,
     {
         if output_index > output.len() {
-            let additional = self.hooks.max_finish_output_len(&self.codec).unwrap_or(1).max(1);
-            return Ok(TranscodeProgress::need_output(output_index, additional, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
         }
         self.hooks.finish(&self.codec, output, output_index)
     }

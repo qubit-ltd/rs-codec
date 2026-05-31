@@ -13,6 +13,7 @@ use qubit_codec::{
     BufferedConverter,
     BufferedDecoder,
     BufferedEncoder,
+    CapacityError,
     TranscodeProgress,
     Transcoder,
 };
@@ -23,8 +24,8 @@ struct CharToByte;
 impl Transcoder<char, u8> for CharToByte {
     type Error = core::convert::Infallible;
 
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        Some(input_len)
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
     }
 
     fn transcode(
@@ -52,8 +53,8 @@ struct ByteToChar;
 impl Transcoder<u8, char> for ByteToChar {
     type Error = core::convert::Infallible;
 
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        Some(input_len)
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
     }
 
     fn transcode(
@@ -81,8 +82,8 @@ struct ByteToWord;
 impl Transcoder<u8, u16> for ByteToWord {
     type Error = core::convert::Infallible;
 
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
-        Some(input_len)
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
     }
 
     fn transcode(

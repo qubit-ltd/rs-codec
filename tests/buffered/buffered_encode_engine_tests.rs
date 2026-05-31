@@ -12,6 +12,7 @@
 use qubit_codec::{
     BufferedEncodeEngine,
     BufferedEncodeHooks,
+    CapacityError,
     Codec,
     EncodeErrorFactory,
     EncodePlan,
@@ -199,8 +200,8 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
         Ok(1)
     }
 
-    fn max_finish_output_len(&self, _codec: &WideCodec) -> Option<usize> {
-        Some(usize::from(self.pending_suffix))
+    fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
+        usize::from(self.pending_suffix)
     }
 
     fn finish(
@@ -234,17 +235,16 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
 }
 
 #[test]
-fn test_buffered_encode_engine_exposes_accessors() {
+fn test_buffered_encode_engine_reports_bounds_and_resets() {
     let mut encoder = BufferedEncodeEngine::new(WideCodec, ExactWidthHooks);
 
-    assert_eq!(&WideCodec, encoder.codec());
-    assert_eq!(&mut WideCodec, encoder.codec_mut());
-    assert_eq!(&ExactWidthHooks, encoder.hooks());
-    assert_eq!(&mut ExactWidthHooks, encoder.hooks_mut());
-    assert_eq!(Some(8), encoder.max_output_len::<u8, u8>(2));
-    assert_eq!(Some(0), encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(Ok(8), encoder.max_output_len::<u8, u8>(2));
+    assert_eq!(0, encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        encoder.max_output_len::<u8, u8>(usize::MAX),
+    );
     encoder.reset::<u8, u8>();
-    assert_eq!(WideCodec, encoder.into_codec());
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     let mut encoder = BufferedEncodeEngine::new(WideCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
-    assert_eq!(Some(1), encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(1, encoder.max_finish_output_len::<u8, u8>());
 
     let progress = encoder
         .finish::<u8, u8>(&mut [], 0)
@@ -265,7 +265,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
         },
         progress.status(),
     );
-    assert_eq!(Some(1), encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(1, encoder.max_finish_output_len::<u8, u8>());
 
     let progress = encoder
         .finish::<u8, u8>(&mut output, 0)
@@ -274,11 +274,11 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     assert_eq!(0, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([0xee], output);
-    assert_eq!(Some(0), encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(0, encoder.max_finish_output_len::<u8, u8>());
 
     let mut encoder = BufferedEncodeEngine::new(WideCodec, FinishHooks::default());
     encoder.reset::<u8, u8>();
-    assert_eq!(Some(0), encoder.max_finish_output_len::<u8, u8>());
+    assert_eq!(0, encoder.max_finish_output_len::<u8, u8>());
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn test_buffered_encode_engine_uses_plan_capacity_instead_of_codec_max_width() {
     assert_eq!(1, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([11], output);
-    assert_eq!(Some(8), encoder.max_output_len::<u8, u8>(2));
+    assert_eq!(Ok(8), encoder.max_output_len::<u8, u8>(2));
 }
 
 #[test]

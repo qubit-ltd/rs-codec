@@ -7,7 +7,10 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-use super::transcode_progress::TranscodeProgress;
+use super::{
+    capacity_error::CapacityError,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Converts one logical stream of input units into one logical stream of output units.
 ///
@@ -50,8 +53,8 @@ use super::transcode_progress::TranscodeProgress;
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
 ///     type Error = core::convert::Infallible;
 ///
-///     fn max_output_len(&self, input_len: usize) -> Option<usize> {
-///         Some(input_len / 2)
+///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
+///         Ok(input_len / 2)
 ///     }
 ///
 ///     fn transcode(
@@ -146,10 +149,11 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Returns
     ///
-    /// Returns `Some(bound)` when the transcoder can provide a finite upper bound.
-    /// Returns `None` when the bound is not known.
-    #[must_use]
-    fn max_output_len(&self, input_len: usize) -> Option<usize>;
+    /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
+    /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
+    /// overflows.
+    #[must_use = "capacity planning can fail on overflow"]
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for output units produced by stream finalization.
     ///
@@ -160,13 +164,13 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Returns
     ///
-    /// Returns `Some(bound)` when the transcoder can provide a finite upper bound
-    /// for final output. Returns `None` when the bound is not known.
-    /// Stateless transcoders default to `Some(0)`.
-    #[must_use]
+    /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
+    /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
+    /// overflows. Stateless transcoders default to `Ok(0)`.
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    fn max_finish_output_len(&self) -> Option<usize> {
-        Some(0)
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
     }
 
     /// Resets state retained between conversion calls.
@@ -236,8 +240,8 @@ pub trait Transcoder<Input, Output> {
     /// impl Transcoder<u8, u8> for ByteCopy {
     ///     type Error = core::convert::Infallible;
     ///
-    ///     fn max_output_len(&self, input_len: usize) -> Option<usize> {
-    ///         Some(input_len)
+    ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
+    ///         Ok(input_len)
     ///     }
     ///
     ///     fn transcode(
@@ -302,13 +306,7 @@ pub trait Transcoder<Input, Output> {
     #[inline(always)]
     fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                self.max_finish_output_len().unwrap_or(1).max(1),
-                0,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }

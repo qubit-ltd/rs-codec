@@ -17,6 +17,7 @@ use super::{
     codec_buffered_decode_hooks::CodecBufferedDecodeHooks,
 };
 use crate::{
+    CapacityError,
     Codec,
     CodecDecodeError,
     DecodeErrorInfo,
@@ -56,39 +57,6 @@ impl<C, Unit> CodecBufferedDecoder<C, Unit> {
             engine: BufferedDecodeEngine::new(codec, CodecBufferedDecodeHooks),
         }
     }
-
-    /// Returns the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns a shared reference to the wrapped low-level codec.
-    #[must_use]
-    #[inline(always)]
-    pub const fn codec(&self) -> &C {
-        self.engine.codec()
-    }
-
-    /// Returns a mutable reference to the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns a mutable reference to the wrapped low-level codec.
-    #[must_use]
-    #[inline(always)]
-    pub fn codec_mut(&mut self) -> &mut C {
-        self.engine.codec_mut()
-    }
-
-    /// Consumes the adapter and returns the wrapped codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns the codec supplied at construction time.
-    #[must_use]
-    #[inline(always)]
-    pub fn into_codec(self) -> C {
-        self.engine.into_codec()
-    }
 }
 
 impl<C, Value, Unit> Transcoder<Unit, Value> for CodecBufferedDecoder<C, Unit>
@@ -101,14 +69,14 @@ where
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
     #[inline(always)]
-    fn max_output_len(&self, input_len: usize) -> Option<usize> {
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len::<Value>(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
     #[inline(always)]
-    fn max_finish_output_len(&self) -> Option<usize> {
-        self.engine.max_finish_output_len::<Value>()
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(self.engine.max_finish_output_len::<Value>())
     }
 
     /// Resets hook-owned state.

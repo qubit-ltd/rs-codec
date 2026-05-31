@@ -114,8 +114,8 @@ fn test_codec_buffered_decoder_reports_bounds_and_resets_state() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 1];
 
-    assert_eq!(Some(3), decoder.max_output_len(3));
-    assert_eq!(Some(0), decoder.max_finish_output_len());
+    assert_eq!(Ok(3), decoder.max_output_len(3));
+    assert_eq!(Ok(0), decoder.max_finish_output_len());
 
     decoder.reset();
     let finish = decoder
@@ -238,13 +238,4 @@ fn test_codec_buffered_decoder_wraps_invalid_codec_error() {
         },
         error,
     );
-}
-
-#[test]
-fn test_codec_buffered_decoder_exposes_wrapped_codec_accessors() {
-    let mut decoder = CodecBufferedDecoder::<VariableByteCodec, u8>::new(VariableByteCodec);
-
-    assert_eq!(&VariableByteCodec, decoder.codec());
-    assert_eq!(&mut VariableByteCodec, decoder.codec_mut());
-    assert_eq!(VariableByteCodec, decoder.into_codec());
 }

@@ -62,9 +62,15 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns the current input value and its absolute index.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) fn current_input(&self) -> (&Value, usize) {
-        (&self.input[self.input_cursor], self.input_cursor)
+    pub(super) unsafe fn current_input_unchecked(&self) -> (&Value, usize) {
+        // SAFETY: Guaranteed by the caller.
+        let value = unsafe { self.input.get_unchecked(self.input_cursor) };
+        (value, self.input_cursor)
     }
 
     /// Returns whether the output cursor is within the visible output slice.
@@ -86,14 +92,15 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns write arguments for the current input value and output cursor.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) fn write_parts(&mut self) -> (&Value, usize, &mut [Unit], usize) {
-        (
-            &self.input[self.input_cursor],
-            self.input_cursor,
-            &mut *self.output,
-            self.output_cursor,
-        )
+    pub(super) unsafe fn write_parts_unchecked(&mut self) -> (&Value, usize, &mut [Unit], usize) {
+        // SAFETY: Guaranteed by the caller.
+        let value = unsafe { self.input.get_unchecked(self.input_cursor) };
+        (value, self.input_cursor, &mut *self.output, self.output_cursor)
     }
 
     /// Accepts a completed one-value write and advances both cursors.

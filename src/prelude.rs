@@ -23,6 +23,7 @@ pub use crate::{
     BufferedEncoder,
     ByteOrder,
     ByteOrderSpec,
+    CapacityError,
     Codec,
     CodecBufferedConverter,
     CodecBufferedDecoder,
