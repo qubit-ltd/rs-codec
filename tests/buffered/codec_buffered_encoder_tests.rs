@@ -129,6 +129,7 @@ fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
         Err(CapacityError::OutputLengthOverflow),
         encoder.max_output_len(usize::MAX),
     );
+    encoder.reset();
 }
 
 #[test]

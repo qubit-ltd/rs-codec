@@ -155,7 +155,6 @@ pub unsafe trait Codec<Value, Unit: Copy> {
 }
 
 /// Checks the public unit-bound invariant required by [`Codec`].
-#[inline(always)]
 pub(crate) fn debug_assert_unit_bounds<C, Value, Unit>(codec: &C)
 where
     C: Codec<Value, Unit>,

@@ -14,10 +14,10 @@ use core::marker::PhantomData;
 use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
     decode_action::DecodeAction,
+    decode_attempt::DecodeAttempt,
     decode_context::DecodeContext,
     decode_state::DecodeState,
     transcode_progress::TranscodeProgress,
-    transcode_status::TranscodeStatus,
 };
 use crate::{
     CapacityError,
@@ -31,7 +31,7 @@ use crate::{
 /// The engine owns the low-level codec and hook object. It keeps the common
 /// buffered decoding loop private: input-index validation, output-capacity
 /// checks, calls to [`Codec::decode_unchecked`], hook dispatch, and
-/// [`TranscodeStatus`] reporting. Incomplete input tails are left in the
+/// [`crate::TranscodeStatus`] reporting. Incomplete input tails are left in the
 /// caller-provided input slice; callers own input-buffer refill.
 ///
 /// Use this type to build a streaming decoder over a one-value [`Codec`]. The
@@ -101,7 +101,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     ///
     /// Returns a buffered decoder engine.
     #[must_use]
-    #[inline(always)]
     pub const fn new(codec: C, hooks: H) -> Self {
         Self {
             codec,
@@ -131,7 +130,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     }
 
     /// Lets the configured decode hooks classify a low-level decode error.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn handle_decode_error<Value>(
         &mut self,
         error: C::DecodeError,
@@ -156,7 +155,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
     pub fn max_output_len<Value>(&self, input_len: usize) -> Result<usize, CapacityError>
     where
         C: Codec<Value, Unit>,
@@ -173,7 +171,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     ///
     /// Returns the hook-provided final output bound.
     #[must_use]
-    #[inline(always)]
     pub fn max_finish_output_len<Value>(&self) -> usize
     where
         C: Codec<Value, Unit>,
@@ -184,7 +181,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     }
 
     /// Resets hook-owned state.
-    #[inline(always)]
     pub fn reset<Value>(&mut self)
     where
         C: Codec<Value, Unit>,
@@ -212,7 +208,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     ///
     /// Returns hook errors when `input_index` is outside `input`, or when a
     /// concrete policy hook rejects a value.
-    #[inline]
     pub fn transcode<Value>(
         &mut self,
         input: &[Unit],
@@ -274,7 +269,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    #[inline(always)]
     pub fn finish<Value>(
         &mut self,
         output: &mut [Value],
@@ -306,7 +300,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// # Errors
     ///
     /// Returns hook errors when the policy rejects the input.
-    #[inline]
     fn handle_decode_result<Value>(
         &mut self,
         state: &mut DecodeState<'_, Unit, Value>,
@@ -319,61 +312,15 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     {
         match result {
             Ok((value, consumed)) => {
-                if state.needs_output() {
-                    return Ok(Some(state.need_output_progress()));
-                }
-                state.emit(value, consumed);
-                Ok(None)
+                let input_index = state.input_cursor();
+                Ok(DecodeAttempt::decoded(value, consumed, input_index).apply_to_decode_state(state))
             }
             Err(error) => {
                 let context = state.context();
                 let action = self.handle_decode_error(error, context)?;
-                let status = self.apply_decode_action(state, action, context);
-                Ok(status.map(|status| state.status_progress(status)))
-            }
-        }
-    }
-
-    /// Applies a decode action selected by the hook policy.
-    ///
-    /// # Parameters
-    ///
-    /// - `state`: Mutable decode call state.
-    /// - `action`: Action selected by the hook policy.
-    /// - `context`: Decode attempt context visible to the hook.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(status)` when conversion must stop, or `None` when the main
-    /// loop should continue.
-    #[inline]
-    fn apply_decode_action<Value>(
-        &self,
-        state: &mut DecodeState<'_, Unit, Value>,
-        action: DecodeAction<Value>,
-        context: DecodeContext,
-    ) -> Option<TranscodeStatus> {
-        match action {
-            DecodeAction::NeedInput { required_total } => {
-                let additional = required_total.saturating_sub(context.available).max(1);
-                Some(TranscodeStatus::need_input(
-                    context.input_index,
-                    additional,
-                    context.available,
-                ))
-            }
-            DecodeAction::Skip { consumed } => {
-                let consumed = state.normalize_consumed(consumed);
-                state.skip(consumed);
-                None
-            }
-            DecodeAction::Emit { value, consumed } => {
-                if state.needs_output() {
-                    return Some(TranscodeStatus::need_output(context.output_index, 1, 0));
-                }
-                let consumed = state.normalize_consumed(consumed);
-                state.emit(value, consumed);
-                None
+                Ok(action
+                    .into_attempt(context.input_index, context.available)
+                    .apply_to_decode_state(state))
             }
         }
     }

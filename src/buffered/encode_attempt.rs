@@ -31,3 +31,40 @@ pub(super) enum EncodeAttempt<Value> {
         available: usize,
     },
 }
+
+impl<Value> EncodeAttempt<Value> {
+    /// Creates a successful encode attempt.
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Number of target units written.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode attempt that made output progress.
+    #[inline(always)]
+    pub(super) const fn written(written: usize) -> Self {
+        Self::Written { written }
+    }
+
+    /// Creates a missing-output encode attempt.
+    ///
+    /// # Parameters
+    ///
+    /// - `pending`: Decoded value that must remain retained.
+    /// - `required`: Required output capacity.
+    /// - `available`: Output capacity currently available.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode attempt containing the retained value and shortage.
+    #[inline]
+    pub(super) fn need_output(pending: PendingValue<Value>, required: usize, available: usize) -> Self {
+        debug_assert!(required > available, "need-output attempt requires missing capacity");
+        Self::NeedOutput {
+            pending,
+            additional: NonZeroUsize::new(required - available).expect("missing output is non-zero"),
+            available,
+        }
+    }
+}

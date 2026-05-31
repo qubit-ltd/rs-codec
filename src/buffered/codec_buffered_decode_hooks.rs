@@ -34,7 +34,6 @@ where
     type Error = CodecDecodeError<C::DecodeError>;
 
     /// Converts codec decode failures into policy-free buffered actions.
-    #[inline(always)]
     fn handle_decode_error(
         &mut self,
         _codec: &C,

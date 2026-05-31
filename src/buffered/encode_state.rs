@@ -41,7 +41,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns initialized encode state with cursors at the requested start
     /// positions.
-    #[inline(always)]
     pub(super) fn new(input: &'a [Value], input_index: usize, output: &'a mut [Unit], output_index: usize) -> Self {
         debug_assert!(input_index <= input.len(), "input index must be within the input slice");
 
@@ -115,7 +114,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns completed progress for the current cursors.
-    #[inline(always)]
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -124,7 +122,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns progress for a missing output capacity bound.
-    #[inline(always)]
     pub(super) fn need_output_progress(&self, required: usize) -> TranscodeProgress {
         let available = self.available_output();
         TranscodeProgress::need_output(

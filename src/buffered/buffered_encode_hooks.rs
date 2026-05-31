@@ -108,7 +108,7 @@ where
     /// Returns a conservative upper bound derived from the codec's
     /// [`Codec::max_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(codec.max_units_per_value().get())

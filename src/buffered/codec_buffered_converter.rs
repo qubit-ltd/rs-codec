@@ -70,7 +70,6 @@ where
     ///
     /// Returns a buffered converter adapter for the supplied codecs.
     #[must_use]
-    #[inline(always)]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
             engine: BufferedConvertEngine::new(decoder, encoder, CodecBufferedConvertHooks::new()),
@@ -92,25 +91,21 @@ where
     type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
 
     /// Returns an upper bound for target units produced from `input_len` units.
-    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len::<OutputUnit>(input_len)
     }
 
     /// Returns the maximum target units emitted by finishing internal state.
-    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_finish_output_len::<OutputUnit>()
     }
 
     /// Clears retained pending output.
-    #[inline(always)]
     fn reset(&mut self) {
         self.engine.reset::<OutputUnit>();
     }
 
     /// Converts source units into target units.
-    #[inline]
     fn transcode(
         &mut self,
         input: &[InputUnit],
@@ -123,7 +118,6 @@ where
     }
 
     /// Finishes internally retained output after EOF.
-    #[inline]
     fn finish(&mut self, output: &mut [OutputUnit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         self.engine.finish::<OutputUnit>(output, output_index)
     }

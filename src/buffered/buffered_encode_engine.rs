@@ -87,7 +87,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     ///
     /// Returns a buffered encoder engine.
     #[must_use]
-    #[inline(always)]
     pub const fn new(codec: C, hooks: H) -> Self {
         Self { codec, hooks }
     }
@@ -151,7 +150,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
     pub fn max_output_len<Value, Unit>(&self, input_len: usize) -> Result<usize, CapacityError>
     where
         C: Codec<Value, Unit>,
@@ -168,7 +166,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     ///
     /// Returns the hook-provided final output bound.
     #[must_use]
-    #[inline(always)]
     pub fn max_finish_output_len<Value, Unit>(&self) -> usize
     where
         C: Codec<Value, Unit>,
@@ -179,7 +176,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     }
 
     /// Resets hook-owned state.
-    #[inline(always)]
     pub fn reset<Value, Unit>(&mut self)
     where
         C: Codec<Value, Unit>,
@@ -210,7 +206,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     ///
     /// Returns hook errors when `input_index` is outside `input`, or when hook
     /// planning or writing rejects a value.
-    #[inline]
     pub fn transcode<Value, Unit>(
         &mut self,
         input: &[Value],
@@ -280,7 +275,6 @@ impl<C, H> BufferedEncodeEngine<C, H> {
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    #[inline(always)]
     pub fn finish<Value, Unit>(
         &mut self,
         output: &mut [Unit],

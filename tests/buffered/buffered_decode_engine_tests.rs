@@ -328,6 +328,43 @@ fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
 }
 
 #[test]
+fn test_buffered_decode_engine_default_finish_reports_output_index_beyond_buffer() {
+    let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, ReplacingHooks);
+    let mut output = [];
+
+    let progress = decoder
+        .finish::<u8>(&mut output, 1)
+        .expect("default finish should report out-of-range output index");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+}
+
+#[test]
+fn test_buffered_decode_hooks_default_finish_reports_output_index_beyond_buffer() {
+    let mut hooks = ReplacingHooks;
+    let mut output = [];
+
+    let progress = BufferedDecodeHooks::<PrefixCodec, u8, u8>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
+        .expect("default hook finish should report out-of-range output index");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+}
+
+#[test]
 fn test_buffered_decode_engine_leaves_incomplete_input_to_caller() {
     let mut decoder = BufferedDecodeEngine::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
@@ -412,6 +449,27 @@ fn test_buffered_decode_engine_allows_policy_emit_for_invalid_input() {
     assert_eq!(2, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([99, 1], output);
+}
+
+#[test]
+fn test_buffered_decode_engine_reports_need_output_before_policy_emit() {
+    let mut decoder = BufferedDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut output = [];
+
+    let progress = decoder
+        .transcode(&[0xff], 0, &mut output, 0)
+        .expect("replacement policy should stop before writing without output");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 0,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]

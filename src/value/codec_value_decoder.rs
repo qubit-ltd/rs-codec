@@ -49,7 +49,6 @@ impl<C, Value, Unit> CodecValueDecoder<C, Value, Unit> {
     ///
     /// Returns a value decoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
             codec,

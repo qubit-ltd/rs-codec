@@ -77,7 +77,6 @@ impl<E> CodecDecodeError<E> {
     ///
     /// Returns a codec decode error wrapper.
     #[must_use]
-    #[inline(always)]
     pub const fn decode(source: E, input_index: usize) -> Self {
         Self::Decode { source, input_index }
     }
@@ -94,7 +93,6 @@ impl<E> CodecDecodeError<E> {
     ///
     /// Returns an incomplete-input error.
     #[must_use]
-    #[inline(always)]
     pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
         Self::Incomplete {
             input_index,
@@ -114,7 +112,6 @@ impl<E> CodecDecodeError<E> {
     ///
     /// Returns a trailing-input error.
     #[must_use]
-    #[inline(always)]
     pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
         Self::TrailingInput { consumed, remaining }
     }
@@ -130,7 +127,6 @@ impl<E> CodecDecodeError<E> {
     ///
     /// Returns an invalid-input-index error.
     #[must_use]
-    #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
@@ -162,7 +158,6 @@ where
 
 impl<E, C> DecodeErrorFactory<C> for CodecDecodeError<E> {
     /// Creates an input-index error for the codec decoder engine.
-    #[inline(always)]
     fn invalid_input_index(_codec: &C, index: usize, input_len: usize) -> Self {
         Self::invalid_input_index(index, input_len)
     }

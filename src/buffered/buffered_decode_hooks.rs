@@ -96,7 +96,7 @@ where
     /// Returns a conservative upper bound derived from
     /// [`Codec::min_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len / codec.min_units_per_value().get())
     }

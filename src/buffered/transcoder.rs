@@ -168,7 +168,6 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows. Stateless transcoders default to `Ok(0)`.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)
     }
@@ -180,7 +179,6 @@ pub trait Transcoder<Input, Output> {
     /// Pending input, pending output, and completed-stream state must be
     /// discarded by stateful implementations. Stateless transcoders may keep
     /// the default no-op implementation.
-    #[inline(always)]
     fn reset(&mut self) {}
 
     /// Converts available input units into output units.
@@ -303,7 +301,6 @@ pub trait Transcoder<Input, Output> {
     ///
     /// Returns `Self::Error` if internal state cannot be finished according to
     /// the transcoder's policy.
-    #[inline(always)]
     fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
             return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));

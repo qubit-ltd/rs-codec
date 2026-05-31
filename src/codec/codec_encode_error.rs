@@ -53,7 +53,6 @@ impl<E> CodecEncodeError<E> {
     ///
     /// Returns a codec encode error wrapper.
     #[must_use]
-    #[inline(always)]
     pub const fn encode(source: E, input_index: usize) -> Self {
         Self::Encode { source, input_index }
     }
@@ -69,7 +68,6 @@ impl<E> CodecEncodeError<E> {
     ///
     /// Returns an invalid-input-index error.
     #[must_use]
-    #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
@@ -77,7 +75,6 @@ impl<E> CodecEncodeError<E> {
 
 impl<E, C> EncodeErrorFactory<C> for CodecEncodeError<E> {
     /// Creates an input-index error for the codec encoder engine.
-    #[inline(always)]
     fn invalid_input_index(_codec: &C, index: usize, input_len: usize) -> Self {
         Self::invalid_input_index(index, input_len)
     }

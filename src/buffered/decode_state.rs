@@ -14,7 +14,6 @@ use core::num::NonZeroUsize;
 use super::{
     decode_context::DecodeContext,
     transcode_progress::TranscodeProgress,
-    transcode_status::TranscodeStatus,
 };
 
 /// Mutable state for one buffered decode call.
@@ -50,7 +49,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns initialized decode state with cursors at the requested start
     /// positions.
-    #[inline(always)]
     pub(super) fn new(
         input: &'a [Unit],
         input_index: usize,
@@ -120,7 +118,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns a public decode context snapshot.
-    #[inline(always)]
     pub(super) fn context(&self) -> DecodeContext {
         DecodeContext::new(
             self.input_start,
@@ -160,27 +157,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         self.output_cursor += 1;
     }
 
-    /// Normalizes a policy-reported consumption count.
-    ///
-    /// # Parameters
-    ///
-    /// - `consumed`: Units requested by the concrete policy.
-    ///
-    /// # Returns
-    ///
-    /// Returns a count within the visible input range. When input is available,
-    /// the returned count is at least one so policy handling makes progress.
-    #[inline(always)]
-    pub(super) fn normalize_consumed(&self, consumed: usize) -> NonZeroUsize {
-        let available = self.available();
-        debug_assert!(available > 0, "decode action cannot consume empty input");
-        let consumed = consumed.min(available).max(1);
-        // SAFETY: The normalized count is clamped to at least one.
-        unsafe { NonZeroUsize::new_unchecked(consumed) }
-    }
-
     /// Returns completed progress for the current cursors.
-    #[inline(always)]
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -188,18 +165,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         )
     }
 
-    /// Returns progress for a stop status at the current cursors.
-    #[inline(always)]
-    pub(super) fn status_progress(&self, status: TranscodeStatus) -> TranscodeProgress {
-        TranscodeProgress::new(
-            status,
-            self.input_cursor - self.input_start,
-            self.output_cursor - self.output_start,
-        )
-    }
-
     /// Returns progress for a missing output slot.
-    #[inline(always)]
     pub(super) fn need_output_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_output(
@@ -212,13 +178,32 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns progress for a missing input unit.
-    #[inline(always)]
     pub(super) fn need_input_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_input(
             context.input_index,
             self.required_input(),
             context.available,
+            self.input_cursor - self.input_start,
+            self.output_cursor - self.output_start,
+        )
+    }
+
+    /// Returns progress for a policy-selected need-input stop.
+    ///
+    /// # Parameters
+    ///
+    /// - `additional`: Additional source units required to continue.
+    /// - `available`: Source units visible at the stop boundary.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress at the current decode cursor.
+    pub(super) fn need_input_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
+        TranscodeProgress::need_input(
+            self.input_cursor,
+            additional.get(),
+            available,
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,
         )

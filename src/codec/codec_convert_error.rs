@@ -51,7 +51,6 @@ impl<D, E> CodecConvertError<D, E> {
     ///
     /// Returns a decode-side conversion error.
     #[must_use]
-    #[inline(always)]
     pub const fn decode(source: CodecDecodeError<D>) -> Self {
         Self::Decode { source }
     }
@@ -66,7 +65,6 @@ impl<D, E> CodecConvertError<D, E> {
     ///
     /// Returns an encode-side conversion error.
     #[must_use]
-    #[inline(always)]
     pub const fn encode(source: E) -> Self {
         Self::Encode { source }
     }
@@ -74,7 +72,6 @@ impl<D, E> CodecConvertError<D, E> {
 
 impl<D, E, C> ConvertErrorFactory<C> for CodecConvertError<D, E> {
     /// Creates an input-index error for the codec converter engine.
-    #[inline(always)]
     fn invalid_input_index(_decoder: &C, index: usize, input_len: usize) -> Self {
         Self::decode(CodecDecodeError::invalid_input_index(index, input_len))
     }

@@ -51,7 +51,6 @@ impl<C, Unit> CodecBufferedDecoder<C, Unit> {
     ///
     /// Returns a buffered decoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
             engine: BufferedDecodeEngine::new(codec, CodecBufferedDecodeHooks),
@@ -68,25 +67,21 @@ where
     type Error = CodecDecodeError<C::DecodeError>;
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
-    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len::<Value>(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
-    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len::<Value>())
     }
 
     /// Resets hook-owned state.
-    #[inline(always)]
     fn reset(&mut self) {
         self.engine.reset::<Value>();
     }
 
     /// Decodes source units into logical values.
-    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[Unit],
@@ -98,7 +93,6 @@ where
     }
 
     /// Finishes internally retained output after EOF.
-    #[inline(always)]
     fn finish(&mut self, output: &mut [Value], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         self.engine.finish::<Value>(output, output_index)
     }

@@ -34,7 +34,6 @@ impl CodecBufferedConvertHooks {
     ///
     /// Returns stateless converter hooks.
     #[must_use]
-    #[inline(always)]
     pub(super) const fn new() -> Self {
         Self
     }
@@ -61,13 +60,11 @@ where
         CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>;
 
     /// Creates strict codec-backed decode hooks.
-    #[inline(always)]
     fn create_decode_hooks(&self, _decoder: &D, _encoder: &E) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
 
     /// Creates strict codec-backed encode hooks.
-    #[inline(always)]
     fn create_encode_hooks(&self, _decoder: &D, _encoder: &E) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
@@ -98,4 +95,8 @@ where
             }
         }
     }
+
+    /// Resets stateless codec-backed converter hooks.
+    #[inline(always)]
+    fn reset(&mut self) {}
 }

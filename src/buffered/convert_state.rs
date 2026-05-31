@@ -12,6 +12,7 @@
 use core::num::NonZeroUsize;
 
 use super::{
+    decode_attempt::DecodeAttempt,
     decode_context::DecodeContext,
     transcode_progress::TranscodeProgress,
 };
@@ -51,7 +52,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns initialized conversion state with cursors at the requested start
     /// positions.
     #[must_use]
-    #[inline(always)]
     pub(crate) fn new(input: &'a [Input], input_index: usize, output: &'a mut [Output], output_index: usize) -> Self {
         debug_assert!(input_index <= input.len(), "input index must be within the input slice");
         Self {
@@ -118,7 +118,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// Returns context values suitable for decode-error hook dispatch.
     #[must_use]
-    #[inline(always)]
     pub(crate) fn decode_context(&self) -> DecodeContext {
         DecodeContext::new(
             self.input_start,
@@ -175,9 +174,31 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         self.output_cursor - self.output_start
     }
 
-    /// Returns completed progress for the current cursors.
+    /// Returns a need-input decode attempt when fewer than `min_units` remain.
+    ///
+    /// # Parameters
+    ///
+    /// - `min_units`: Minimum source units required to attempt one decode.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some` when decoding must stop for more input, otherwise `None`.
     #[must_use]
     #[inline(always)]
+    pub(crate) fn need_input_for_min_units<Value>(&self, min_units: usize) -> Option<DecodeAttempt<Value>> {
+        let available = self.available_input();
+        if available < min_units {
+            Some(DecodeAttempt::need_input(
+                NonZeroUsize::new(min_units - available).expect("missing input is non-zero"),
+                available,
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// Returns completed progress for the current cursors.
+    #[must_use]
     pub(crate) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(self.read(), self.written())
     }
@@ -193,7 +214,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
     #[must_use]
-    #[inline(always)]
     pub(crate) fn need_input_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_input(
             self.input_cursor,
@@ -215,7 +235,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
     #[must_use]
-    #[inline(always)]
     pub(crate) fn need_output_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_output(
             self.output_cursor,

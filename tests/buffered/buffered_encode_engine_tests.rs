@@ -303,6 +303,43 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
 }
 
 #[test]
+fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer() {
+    let mut encoder = BufferedEncodeEngine::new(WideCodec, ExactWidthHooks);
+    let mut output = [];
+
+    let progress = encoder
+        .finish::<u8, u8>(&mut output, 1)
+        .expect("default finish should report out-of-range output index");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+}
+
+#[test]
+fn test_buffered_encode_hooks_default_finish_reports_output_index_beyond_buffer() {
+    let mut hooks = ExactWidthHooks;
+    let mut output = [];
+
+    let progress = BufferedEncodeHooks::<WideCodec, u8, u8>::finish(&mut hooks, &WideCodec, &mut output, 1)
+        .expect("default hook finish should report out-of-range output index");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: 1,
+            available: 0,
+        },
+        progress.status(),
+    );
+}
+
+#[test]
 fn test_buffered_encode_engine_uses_plan_capacity_instead_of_codec_max_width() {
     let mut encoder = BufferedEncodeEngine::new(WideCodec, ExactWidthHooks);
     let mut output = [0_u8; 1];
