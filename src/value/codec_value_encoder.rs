@@ -56,7 +56,6 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
             marker: PhantomData,
         }
     }
-
 }
 
 impl<C, Value, Unit> ValueEncoder<Value> for CodecValueEncoder<C, Value, Unit>
