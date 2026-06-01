@@ -22,8 +22,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `CodecValueEncoder`、`CodecValueDecoder`、`CodecBufferedEncoder`、
   `CodecBufferedDecoder` 和 `CodecBufferedConverter` adapter。
 - 用于下游带策略 encoder 复用公共 buffered encode 循环的
-  `BufferedEncodeEngine`、`BufferedEncodeHooks`、`EncodePlan` 和
-  `EncodeErrorFactory`。
+  `BufferedEncodeEngine`、`BufferedEncodeHooks` 和 `EncodePlan`。
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
   `BufferedDecodeEngine`、`BufferedDecodeHooks`、`DecodeAction` 和
   `DecodeContext`。
@@ -51,8 +50,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 ### 核心转换 Trait
 
 - **`Codec<Value, Unit>`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
-- **`EncodeErrorFactory<C>`**：为可复用 buffered encoder engine 构造 adapter
-  层非法输入下标错误。
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
   adapter 自己产生的 encode / decode / convert 错误，同时保留
   codec-specific failure。
@@ -79,7 +76,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`BufferedEncodeHooks<C, Value, Unit>`**：供带策略 codec-backed encoder
   共享公共循环时实现的 transcode/finalization 策略 hook trait。
 - **`EncodePlan<P>`**：单值写入计划，携带写入前必须保证的输出容量上界。
-- **`EncodeErrorFactory<C>`**：为 engine 检测出的 adapter 层错误构造具体错误对象。
 - **`CodecBufferedDecoder<C, Unit>`**：把 `Codec<Value, Unit>` 包装为无策略的
   严格 `BufferedDecoder<Unit, Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
   codec 返回的 decode error 会被直接包装返回。
@@ -178,7 +174,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `BufferedEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
 | `BufferedEncodeHooks<C, Value, Unit>` | 准备、写入、重置并完成 encoded output 收尾的 hook 契约 |
 | `EncodePlan<P>` | 已准备好的单值容量上界和实现自定义写入 payload |
-| `EncodeErrorFactory<C>` | engine 检测到非法输入下标时使用的错误构造契约 |
 
 ### Decoder Hooks 和 Engine
 

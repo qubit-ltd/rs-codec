@@ -9,7 +9,10 @@
  ******************************************************************************/
 //! Reusable buffered converter engine.
 
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    num::NonZeroUsize,
+};
 
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
@@ -21,7 +24,7 @@ use super::{
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     decode_step::DecodeStep,
-    encode_attempt::EncodeAttempt,
+    pending_encode_step::PendingEncodeStep,
     pending_value::PendingValue,
     transcode_progress::TranscodeProgress,
     transcode_status::TranscodeStatus,
@@ -116,19 +119,19 @@ impl<Value> PendingValueSlot<Value> {
         self.value.take()
     }
 
-    /// Applies an encode attempt to this slot and the current conversion state.
+    /// Applies a pending-value encode step to this slot and the current conversion state.
     #[inline(always)]
-    fn apply_encode_attempt<Input, Output>(
+    fn apply_pending_encode_step<Input, Output>(
         &mut self,
-        attempt: EncodeAttempt<Value>,
+        step: PendingEncodeStep<Value>,
         state: &mut ConvertState<'_, Input, Output>,
     ) -> Option<TranscodeProgress> {
-        match attempt {
-            EncodeAttempt::Written { written } => {
+        match step {
+            PendingEncodeStep::Written { written } => {
                 state.advance_output(written);
                 None
             }
-            EncodeAttempt::NeedOutput {
+            PendingEncodeStep::NeedOutput {
                 pending,
                 additional,
                 available,
@@ -435,7 +438,8 @@ where
         };
         let required = plan.max_output_units;
         if available < required {
-            return Ok(EncodeAttempt::need_output(pending, required, available));
+            let additional = NonZeroUsize::new(required - available).expect("missing output is non-zero");
+            return Ok(PendingEncodeStep::need_output(pending, additional, available));
         }
 
         let written = {
@@ -453,7 +457,7 @@ where
             written <= required,
             "BufferedConvertEngine encode hook wrote beyond its prepared capacity bound",
         );
-        Ok(EncodeAttempt::written(written))
+        Ok(PendingEncodeStep::written(written))
     }
 
     /// Finishes target-side hook-owned output.
@@ -806,11 +810,11 @@ where
         H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
         Output: Copy,
     {
-        let attempt = {
+        let step = {
             let mut target = TargetValueWriter::<D, E, H, Input, Value>::new(&mut self.encode_engine, &self.hooks);
             target.write_pending(pending, state)?
         };
-        Ok(self.pending.apply_encode_attempt(attempt, state))
+        Ok(self.pending.apply_pending_encode_step(step, state))
     }
 }
 

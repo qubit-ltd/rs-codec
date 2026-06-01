@@ -7,13 +7,13 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Result type for private encode attempts.
+//! Result type for private pending-value encode steps.
 
 use super::{
     convert_error_of::ConvertErrorOf,
-    encode_attempt::EncodeAttempt,
+    pending_encode_step::PendingEncodeStep,
 };
 
-/// Result type for private encode attempts.
+/// Result type for private pending-value encode steps.
 pub(super) type ConvertEncodeResult<D, E, H, Input, Value, Output> =
-    Result<EncodeAttempt<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;
+    Result<PendingEncodeStep<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;

@@ -59,7 +59,6 @@ pub use codec::{
     CodecDecodeError,
     CodecEncodeError,
     ConvertErrorFactory,
-    EncodeErrorFactory,
 };
 pub use value::{
     CodecValueDecoder,

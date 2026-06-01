@@ -11,8 +11,6 @@
 
 use thiserror::Error;
 
-use super::encode_error_factory::EncodeErrorFactory;
-
 /// Error reported by codec-backed buffered encoder adapters.
 ///
 /// The wrapped codec remains responsible for domain-specific encode failures.
@@ -70,12 +68,5 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
-    }
-}
-
-impl<E, C> EncodeErrorFactory<C> for CodecEncodeError<E> {
-    /// Creates an input-index error for the codec encoder engine.
-    fn invalid_input_index(_codec: &C, index: usize, input_len: usize) -> Self {
-        Self::invalid_input_index(index, input_len)
     }
 }

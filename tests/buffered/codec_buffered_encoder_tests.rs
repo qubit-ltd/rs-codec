@@ -191,6 +191,18 @@ fn test_codec_buffered_encoder_finish_reports_output_index_beyond_buffer() {
 }
 
 #[test]
+fn test_codec_buffered_encoder_reports_invalid_input_index() {
+    let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
+    let mut output = [];
+
+    let error = encoder
+        .transcode(&[3], 2, &mut output, 0)
+        .expect_err("invalid input index should fail");
+
+    assert_eq!(CodecEncodeError::invalid_input_index(2, 1), error);
+}
+
+#[test]
 fn test_codec_buffered_encoder_propagates_encode_error() {
     let mut encoder = CodecBufferedEncoder::new(RejectOddCodec);
     let mut output = [0_u8; 2];

@@ -26,7 +26,6 @@ use qubit_codec::prelude::{
     CodecValueDecoder,
     CodecValueEncoder,
     ConvertErrorFactory,
-    EncodeErrorFactory,
     EncodePlan,
     TranscodeProgress,
     TranscodeStatus,
@@ -139,12 +138,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
 
     let encode_error = CodecEncodeError::<core::convert::Infallible>::invalid_input_index(2, 1);
     assert!(matches!(encode_error, CodecEncodeError::InvalidInputIndex { .. }));
-
-    let factory_error =
-        <CodecEncodeError<core::convert::Infallible> as EncodeErrorFactory<EchoCodec>>::invalid_input_index(
-            &codec, 2, 1,
-        );
-    assert!(matches!(factory_error, CodecEncodeError::InvalidInputIndex { .. }));
 
     let convert_factory_error = <CodecConvertError<
         core::convert::Infallible,

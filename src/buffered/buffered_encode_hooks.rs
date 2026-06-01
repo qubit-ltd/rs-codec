@@ -16,7 +16,6 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    EncodeErrorFactory,
 };
 
 /// Policy hooks for [`crate::BufferedEncodeEngine`].
@@ -77,6 +76,15 @@ use crate::{
 ///         unsafe { codec.encode_unchecked(value, output, output_index) }
 ///             .map_err(|error| CodecEncodeError::encode(error, input_index))
 ///     }
+///
+///     fn invalid_input_index(
+///         &mut self,
+///         _codec: &C,
+///         index: usize,
+///         input_len: usize,
+///     ) -> Self::Error {
+///         CodecEncodeError::invalid_input_index(index, input_len)
+///     }
 /// }
 /// ```
 ///
@@ -91,7 +99,7 @@ where
     Unit: Copy,
 {
     /// Error type returned by the buffered encoder.
-    type Error: EncodeErrorFactory<C>;
+    type Error;
 
     /// Concrete payload stored in [`EncodePlan::payload`].
     type PlanPayload;
@@ -193,6 +201,23 @@ where
         output: &mut [Unit],
         output_index: usize,
     ) -> Result<usize, Self::Error>;
+
+    /// Builds an error for a caller-supplied input index outside the input slice.
+    ///
+    /// The engine calls this hook before it reads input. Keeping this
+    /// construction in the hook lets codec-backed adapters preserve their own
+    /// concrete error type without a separate public factory trait.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `index`: Invalid absolute input index supplied by the caller.
+    /// - `input_len`: Length of the input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific invalid-input-index error.
+    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output units.
     ///

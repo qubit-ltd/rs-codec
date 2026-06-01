@@ -14,7 +14,6 @@ use qubit_codec::{
     BufferedEncodeHooks,
     CapacityError,
     Codec,
-    EncodeErrorFactory,
     EncodePlan,
     TranscodeStatus,
 };
@@ -63,8 +62,8 @@ enum EngineError {
     Rejected { input_index: usize },
 }
 
-impl EncodeErrorFactory<WideCodec> for EngineError {
-    fn invalid_input_index(_codec: &WideCodec, index: usize, input_len: usize) -> Self {
+impl EngineError {
+    const fn invalid_input_index(index: usize, input_len: usize) -> Self {
         Self::InvalidInputIndex { index, input_len }
     }
 }
@@ -103,6 +102,10 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for ExactWidthHooks {
         }
         Ok(1)
     }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -132,6 +135,10 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for SkippingHooks {
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -160,6 +167,10 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for RejectingHooks {
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
         unreachable!("prepare_encode rejects every value")
+    }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 
@@ -198,6 +209,10 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
     ) -> Result<usize, Self::Error> {
         output[output_index] = *value;
         Ok(1)
+    }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -411,7 +426,7 @@ fn test_buffered_encode_engine_propagates_prepare_error_without_consuming_input(
 }
 
 #[test]
-fn test_buffered_encode_engine_uses_error_factory_for_invalid_input_index() {
+fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
     let mut encoder = BufferedEncodeEngine::new(WideCodec, ExactWidthHooks);
     let mut output = [];
 

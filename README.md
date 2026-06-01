@@ -22,9 +22,8 @@ This crate provides:
 - `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
   `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `BufferedEncodeEngine`, `BufferedEncodeHooks`, `EncodePlan`, and
-  `EncodeErrorFactory` for reusing the common buffered encoding loop in
-  policy-aware downstream encoders.
+- `BufferedEncodeEngine`, `BufferedEncodeHooks`, and `EncodePlan` for reusing
+  the common buffered encoding loop in policy-aware downstream encoders.
 - `BufferedDecodeEngine`, `BufferedDecodeHooks`, `DecodeAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
@@ -60,8 +59,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 - **`Codec<Value, Unit>`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
-- **`EncodeErrorFactory<C>`**: constructs adapter-level input-index errors for
-  reusable buffered encoder engines.
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors without hiding
   codec-specific failures.
@@ -93,8 +90,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   sharing the common loop.
 - **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
   required before a hook writes one value.
-- **`EncodeErrorFactory<C>`**: constructs adapter-level errors required by the
-  encoder engine without turning error creation into a policy hook.
 - **`CodecBufferedDecoder<C, Unit>`**: wraps a `Codec<Value, Unit>` as a
   strict `BufferedDecoder<Unit, Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
@@ -198,7 +193,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `BufferedEncodeHooks<C, Value, Unit>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
 | `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write payload |
-| `EncodeErrorFactory<C>` | Error construction contract used when the engine detects invalid input indices |
 
 ### Decoder Hooks And Engines
 

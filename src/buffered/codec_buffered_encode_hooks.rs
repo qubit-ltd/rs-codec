@@ -57,4 +57,10 @@ where
         unsafe { codec.encode_unchecked(input_value, output, output_index) }
             .map_err(|error| CodecEncodeError::encode(error, input_index))
     }
+
+    /// Creates an invalid input index error.
+    #[inline(always)]
+    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+        CodecEncodeError::invalid_input_index(index, input_len)
+    }
 }
