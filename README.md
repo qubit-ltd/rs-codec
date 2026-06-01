@@ -22,8 +22,9 @@ This crate provides:
 - `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
   `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `BufferedEncodeEngine`, `BufferedEncodeHooks`, and `EncodePlan` for reusing
-  the common buffered encoding loop in policy-aware downstream encoders.
+- `BufferedEncodeEngine`, `BufferedEncodeHooks`, `EncodePlan`, and
+  `EncodeContext` for reusing the common buffered encoding loop in policy-aware
+  downstream encoders.
 - `BufferedDecodeEngine`, `BufferedDecodeHooks`, `DecodeAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
@@ -90,6 +91,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   sharing the common loop.
 - **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
   required before a hook writes one value.
+- **`EncodeContext<'a, Value, Unit, P>`**: prepared write context passed to
+  encode hooks after the engine has verified output capacity.
 - **`CodecBufferedDecoder<C, Unit>`**: wraps a `Codec<Value, Unit>` as a
   strict `BufferedDecoder<Unit, Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
@@ -192,7 +195,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `BufferedEncodeHooks<C, Value, Unit>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
-| `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write payload |
+| `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write action |
+| `EncodeContext<'a, Value, Unit, P>` | Prepared input, plan action, output slice, and cursor passed to encode hooks |
 
 ### Decoder Hooks And Engines
 

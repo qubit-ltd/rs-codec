@@ -42,6 +42,7 @@ pub use buffered::{
     CodecBufferedEncoder,
     DecodeAction,
     DecodeContext,
+    EncodeContext,
     EncodePlan,
     TranscodeProgress,
     TranscodeStatus,

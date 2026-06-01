@@ -14,6 +14,7 @@ use qubit_codec::{
     BufferedEncodeHooks,
     CapacityError,
     Codec,
+    EncodeContext,
     EncodePlan,
     TranscodeStatus,
 };
@@ -73,32 +74,34 @@ struct ExactWidthHooks;
 
 impl BufferedEncodeHooks<WideCodec, u8, u8> for ExactWidthHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         _codec: &WideCodec,
         _value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(1, ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [u8],
-        output_index: usize,
+        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
+        let EncodeContext {
+            input_value,
+            output,
+            output_index,
+            ..
+        } = context;
         debug_assert!(output_index < output.len());
 
         // SAFETY: The engine checked the one-unit capacity requested by
         // `prepare_encode`.
         unsafe {
-            *output.as_mut_ptr().add(output_index) = value.wrapping_add(10);
+            *output.as_mut_ptr().add(output_index) = input_value.wrapping_add(10);
         }
         Ok(1)
     }
@@ -113,25 +116,21 @@ struct SkippingHooks;
 
 impl BufferedEncodeHooks<WideCodec, u8, u8> for SkippingHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         _codec: &WideCodec,
         _value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(0, ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        _value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        _output: &mut [u8],
-        _output_index: usize,
+        _context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
@@ -146,25 +145,21 @@ struct RejectingHooks;
 
 impl BufferedEncodeHooks<WideCodec, u8, u8> for RejectingHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         _codec: &WideCodec,
         _value: &u8,
         input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Err(EngineError::Rejected { input_index })
     }
 
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        _value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        _output: &mut [u8],
-        _output_index: usize,
+        _context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         unreachable!("prepare_encode rejects every value")
     }
@@ -187,27 +182,29 @@ impl Default for FinishHooks {
 
 impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         _codec: &WideCodec,
         _value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(1, ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [u8],
-        output_index: usize,
+        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
-        output[output_index] = *value;
+        let EncodeContext {
+            input_value,
+            output,
+            output_index,
+            ..
+        } = context;
+        output[output_index] = *input_value;
         Ok(1)
     }
 

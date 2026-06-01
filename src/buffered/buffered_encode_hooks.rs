@@ -12,6 +12,7 @@
 use core::num::NonZeroUsize;
 
 use super::{
+    encode_context::EncodeContext,
     encode_plan::EncodePlan,
     transcode_progress::TranscodeProgress,
 };
@@ -34,7 +35,7 @@ use crate::{
 ///
 /// The engine calls [`prepare_encode`](Self::prepare_encode) before each value
 /// is consumed. The returned [`EncodePlan`] states the required output capacity
-/// and may carry a payload computed by the hook. Only after that capacity is
+/// and may carry an action computed by the hook. Only after that capacity is
 /// available does the engine call [`write_encode`](Self::write_encode). This
 /// split lets the engine stop with [`crate::TranscodeStatus::NeedOutput`]
 /// without consuming the next input value.
@@ -45,7 +46,7 @@ use crate::{
 /// maximum width as the capacity plan.
 ///
 /// ```rust,ignore
-/// use qubit_codec::{BufferedEncodeHooks, Codec, CodecEncodeError, EncodePlan};
+/// use qubit_codec::{BufferedEncodeHooks, Codec, CodecEncodeError, EncodeContext, EncodePlan};
 ///
 /// struct StrictHooks;
 ///
@@ -55,7 +56,7 @@ use crate::{
 ///     Unit: Copy,
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
-///     type PlanPayload = ();
+///     type PlanAction = ();
 ///
 ///     fn prepare_encode(
 ///         &mut self,
@@ -69,14 +70,12 @@ use crate::{
 ///     unsafe fn write_encode(
 ///         &mut self,
 ///         codec: &C,
-///         value: &Value,
-///         input_index: usize,
-///         _payload: (),
-///         output: &mut [Unit],
-///         output_index: usize,
+///         context: EncodeContext<'_, Value, Unit, ()>,
 ///     ) -> Result<usize, Self::Error> {
-///         unsafe { codec.encode_unchecked(value, output, output_index) }
-///             .map_err(|error| CodecEncodeError::encode(error, input_index))
+///         unsafe {
+///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
+///         }
+///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
 ///
 ///     fn invalid_input_index(
@@ -103,8 +102,8 @@ where
     /// Error type returned by the buffered encoder.
     type Error;
 
-    /// Concrete payload stored in [`EncodePlan::payload`].
-    type PlanPayload;
+    /// Concrete action stored in [`EncodePlan::action`].
+    type PlanAction;
 
     /// Returns the maximum output units needed for `input_len` values.
     ///
@@ -148,7 +147,7 @@ where
     ///
     /// This method must not write output. It decides the output capacity bound
     /// needed before [`write_encode`](Self::write_encode) may be called and
-    /// returns an implementation-specific plan payload.
+    /// returns an implementation-specific plan action.
     ///
     /// # Parameters
     ///
@@ -169,18 +168,15 @@ where
         codec: &C,
         input_value: &Value,
         input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error>;
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error>;
 
     /// Writes one input value according to a previously prepared plan.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `input_value`: Input value being encoded.
-    /// - `input_index`: Absolute input index of `value`.
-    /// - `plan_payload`: Plan payload returned by [`prepare_encode`](Self::prepare_encode).
-    /// - `output`: Complete output unit slice visible to the encoder.
-    /// - `output_index`: Start position in `output` where writing begins.
+    /// - `context`: Prepared encode-write context containing the input value,
+    ///   input index, plan action, output slice, and output cursor.
     ///
     /// # Returns
     ///
@@ -193,15 +189,12 @@ where
     /// # Safety
     ///
     /// The caller must guarantee that at least the corresponding
-    /// [`EncodePlan::max_output_units`] units are writable from `output_index`.
+    /// [`EncodePlan::max_output_units`] units are writable from
+    /// [`EncodeContext::output_index`].
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        input_value: &Value,
-        input_index: usize,
-        plan_payload: Self::PlanPayload,
-        output: &mut [Unit],
-        output_index: usize,
+        context: EncodeContext<'_, Value, Unit, Self::PlanAction>,
     ) -> Result<usize, Self::Error>;
 
     /// Builds an error for a caller-supplied input index outside the input slice.

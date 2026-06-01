@@ -24,6 +24,7 @@ use super::{
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     decode_step::DecodeStep,
+    encode_context::EncodeContext,
     pending_encode_step::PendingEncodeStep,
     pending_value::PendingValue,
     transcode_progress::TranscodeProgress,
@@ -443,11 +444,15 @@ where
 
         let written = {
             let output = state.output_mut();
+            let context = EncodeContext {
+                input_value: pending.value(),
+                input_index,
+                plan_action: plan.action,
+                output,
+                output_index,
+            };
             // SAFETY: The capacity check above proves the prepared output bound.
-            match unsafe {
-                self.engine
-                    .write_prepared_value(pending.value(), input_index, plan, output, output_index)
-            } {
+            match unsafe { self.engine.write_prepared_value(context) } {
                 Ok(written) => written,
                 Err(error) => return Err(self.hooks.map_encode_error::<Output>(error)),
             }

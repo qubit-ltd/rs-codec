@@ -33,6 +33,7 @@ pub use crate::{
     CodecEncodeError,
     CodecValueDecoder,
     CodecValueEncoder,
+    EncodeContext,
     EncodePlan,
     LittleEndian,
     TranscodeProgress,

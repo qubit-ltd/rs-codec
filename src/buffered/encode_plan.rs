@@ -18,7 +18,7 @@
 ///
 /// # Type Parameters
 ///
-/// - `P`: Concrete payload interpreted by the encoder implementation.
+/// - `P`: Concrete action interpreted by the encoder implementation.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct EncodePlan<P> {
     /// Output units that must be writable before calling `write_encode`.
@@ -30,8 +30,8 @@ pub struct EncodePlan<P> {
     /// without producing output.
     pub max_output_units: usize,
 
-    /// Concrete write plan interpreted by the encoder implementation.
-    pub payload: P,
+    /// Concrete write action interpreted by the encoder implementation.
+    pub action: P,
 }
 
 impl<P> EncodePlan<P> {
@@ -40,18 +40,18 @@ impl<P> EncodePlan<P> {
     /// # Parameters
     ///
     /// - `max_output_units`: Output capacity required before writing.
-    /// - `payload`: Concrete plan payload for the encoder implementation.
+    /// - `action`: Concrete plan action for the encoder implementation.
     ///
     /// # Returns
     ///
     /// Returns an encoding plan carrying the supplied capacity bound and
-    /// payload.
+    /// action.
     #[must_use]
     #[inline(always)]
-    pub const fn new(max_output_units: usize, payload: P) -> Self {
+    pub const fn new(max_output_units: usize, action: P) -> Self {
         Self {
             max_output_units,
-            payload,
+            action,
         }
     }
 }

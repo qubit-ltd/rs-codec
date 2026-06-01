@@ -25,6 +25,7 @@ use qubit_codec::prelude::{
     CodecEncodeError,
     CodecValueDecoder,
     CodecValueEncoder,
+    EncodeContext,
     EncodePlan,
     TranscodeProgress,
     TranscodeStatus,
@@ -138,9 +139,19 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let encode_error = CodecEncodeError::<core::convert::Infallible>::invalid_input_index(2, 1);
     assert!(matches!(encode_error, CodecEncodeError::InvalidInputIndex { .. }));
 
-    let encode_plan = EncodePlan::new(3, "payload");
+    let mut output = [0_u8; 1];
+    let context = EncodeContext {
+        input_value: &1_u8,
+        input_index: 0,
+        plan_action: (),
+        output: &mut output,
+        output_index: 0,
+    };
+    assert_eq!(0, context.input_index);
+
+    let encode_plan = EncodePlan::new(3, "action");
     assert_eq!(3, encode_plan.max_output_units);
-    assert_eq!("payload", encode_plan.payload);
+    assert_eq!("action", encode_plan.action);
 
     let (decoded, consumed) = unsafe { codec.decode_unchecked(&[1], 0) }.expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));

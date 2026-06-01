@@ -13,6 +13,7 @@ use core::num::NonZeroUsize;
 
 use super::{
     buffered_encode_hooks::BufferedEncodeHooks,
+    encode_context::EncodeContext,
     encode_plan::EncodePlan,
     encode_state::EncodeState,
     transcode_progress::TranscodeProgress,
@@ -98,7 +99,7 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         &mut self,
         input_value: &Value,
         input_index: usize,
-    ) -> Result<EncodePlan<H::PlanPayload>, <H as BufferedEncodeHooks<C, Value, Unit>>::Error>
+    ) -> Result<EncodePlan<H::PlanAction>, <H as BufferedEncodeHooks<C, Value, Unit>>::Error>
     where
         C: Codec<Value, Unit>,
         H: BufferedEncodeHooks<C, Value, Unit>,
@@ -107,20 +108,16 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         self.hooks.prepare_encode(&self.codec, input_value, input_index)
     }
 
-    /// Writes one value using a previously prepared encode plan.
+    /// Writes one value using a previously prepared encode context.
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that `output` has at least
-    /// `plan.max_output_units` writable units from `output_index`.
+    /// The caller must guarantee that the context was built from an encode plan
+    /// whose output-capacity bound is writable from `context.output_index`.
     #[inline(always)]
     pub(crate) unsafe fn write_prepared_value<Value, Unit>(
         &mut self,
-        input_value: &Value,
-        input_index: usize,
-        plan: EncodePlan<H::PlanPayload>,
-        output: &mut [Unit],
-        output_index: usize,
+        context: EncodeContext<'_, Value, Unit, H::PlanAction>,
     ) -> Result<usize, <H as BufferedEncodeHooks<C, Value, Unit>>::Error>
     where
         C: Codec<Value, Unit>,
@@ -128,16 +125,7 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         Unit: Copy,
     {
         // SAFETY: Forwarded from this method's safety contract.
-        unsafe {
-            self.hooks.write_encode(
-                &self.codec,
-                input_value,
-                input_index,
-                plan.payload,
-                output,
-                output_index,
-            )
-        }
+        unsafe { self.hooks.write_encode(&self.codec, context) }
     }
 
     /// Returns the maximum output units needed for `input_len` values.
@@ -238,12 +226,11 @@ impl<C, H> BufferedEncodeEngine<C, H> {
                 return Ok(state.need_output_progress(max_output_units));
             }
 
-            // SAFETY: The same loop condition still proves current input
-            // availability; the output capacity is checked above.
-            let (input_value, input_cursor, output, output_cursor) = unsafe { state.write_parts_unchecked() };
             // SAFETY: The capacity check above guarantees the bound requested
-            // by the prepared plan.
-            let written = unsafe { self.write_prepared_value(input_value, input_cursor, plan, output, output_cursor) }?;
+            // by the prepared plan. The loop condition still proves current
+            // input availability.
+            let context = unsafe { state.encode_context_unchecked(plan.action) };
+            let written = unsafe { self.write_prepared_value(context) }?;
             debug_assert!(
                 written <= max_output_units,
                 "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",

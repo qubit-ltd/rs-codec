@@ -20,6 +20,7 @@ use qubit_codec::{
     Codec,
     DecodeAction,
     DecodeContext,
+    EncodeContext,
     EncodePlan,
     TranscodeProgress,
     TranscodeStatus,
@@ -164,26 +165,28 @@ struct StrictEncodeHooks;
 
 impl BufferedEncodeHooks<TargetCodec, u8, u8> for StrictEncodeHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         codec: &TargetCodec,
         _input_value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         codec: &TargetCodec,
-        input_value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [u8],
-        output_index: usize,
+        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
+        let EncodeContext {
+            input_value,
+            output,
+            output_index,
+            ..
+        } = context;
         // SAFETY: The engine checked the prepared output capacity.
         unsafe { codec.encode_unchecked(input_value, output, output_index) }
     }
@@ -599,26 +602,28 @@ impl Default for FinishEncodeHooks {
 
 impl BufferedEncodeHooks<TargetCodec, u8, u8> for FinishEncodeHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         codec: &TargetCodec,
         _input_value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         codec: &TargetCodec,
-        input_value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [u8],
-        output_index: usize,
+        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
+        let EncodeContext {
+            input_value,
+            output,
+            output_index,
+            ..
+        } = context;
         // SAFETY: The engine checked the prepared output capacity.
         unsafe { codec.encode_unchecked(input_value, output, output_index) }
     }
@@ -798,7 +803,7 @@ where
     Output: Copy,
 {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn max_output_len(&self, codec: &TargetCodec, input_len: usize) -> Result<usize, CapacityError> {
         if self.max_output_error {
@@ -819,7 +824,7 @@ where
         codec: &TargetCodec,
         _input_value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::PrepareError => Err(EngineError::Encode),
             ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::FinishError | ErrorPathEncodeMode::FinishNeedInput => {
@@ -831,11 +836,7 @@ where
     unsafe fn write_encode(
         &mut self,
         _codec: &TargetCodec,
-        _input_value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        _output: &mut [Output],
-        _output_index: usize,
+        _context: EncodeContext<'_, u8, Output, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
@@ -960,26 +961,28 @@ struct FactoryEncodeHooks {
 
 impl BufferedEncodeHooks<TargetCodec, u8, u8> for FactoryEncodeHooks {
     type Error = EngineError;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     fn prepare_encode(
         &mut self,
         codec: &TargetCodec,
         _input_value: &u8,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
     }
 
     unsafe fn write_encode(
         &mut self,
         _codec: &TargetCodec,
-        input_value: &u8,
-        _input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [u8],
-        output_index: usize,
+        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
+        let EncodeContext {
+            input_value,
+            output,
+            output_index,
+            ..
+        } = context;
         output[output_index] = input_value.wrapping_add(self.offset);
         Ok(1)
     }

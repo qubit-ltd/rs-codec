@@ -11,7 +11,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::transcode_progress::TranscodeProgress;
+use super::{
+    encode_context::EncodeContext,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Mutable state for one buffered encode call.
 pub(super) struct EncodeState<'a, Value, Unit> {
@@ -92,16 +95,22 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         self.available_output() >= required
     }
 
-    /// Returns write arguments for the current input value and output cursor.
+    /// Returns an encode context for the current input value and output cursor.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) unsafe fn write_parts_unchecked(&mut self) -> (&Value, usize, &mut [Unit], usize) {
+    pub(super) unsafe fn encode_context_unchecked<P>(&mut self, plan_action: P) -> EncodeContext<'_, Value, Unit, P> {
         // SAFETY: Guaranteed by the caller.
-        let value = unsafe { self.input.get_unchecked(self.input_cursor) };
-        (value, self.input_cursor, &mut *self.output, self.output_cursor)
+        let input_value = unsafe { self.input.get_unchecked(self.input_cursor) };
+        EncodeContext {
+            input_value,
+            input_index: self.input_cursor,
+            plan_action,
+            output: &mut *self.output,
+            output_index: self.output_cursor,
+        }
     }
 
     /// Accepts a completed one-value write and advances both cursors.

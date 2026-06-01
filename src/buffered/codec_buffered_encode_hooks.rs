@@ -11,6 +11,7 @@
 
 use super::{
     buffered_encode_hooks::BufferedEncodeHooks,
+    encode_context::EncodeContext,
     encode_plan::EncodePlan,
 };
 use crate::{
@@ -28,7 +29,7 @@ where
     Unit: Copy,
 {
     type Error = CodecEncodeError<C::EncodeError>;
-    type PlanPayload = ();
+    type PlanAction = ();
 
     /// Prepares a conservative one-value encoding plan.
     #[inline(always)]
@@ -37,7 +38,7 @@ where
         codec: &C,
         _input_value: &Value,
         _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanPayload>, Self::Error> {
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
     }
 
@@ -46,16 +47,12 @@ where
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        input_value: &Value,
-        input_index: usize,
-        _plan_payload: Self::PlanPayload,
-        output: &mut [Unit],
-        output_index: usize,
+        context: EncodeContext<'_, Value, Unit, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
-        unsafe { codec.encode_unchecked(input_value, output, output_index) }
-            .map_err(|error| CodecEncodeError::encode(error, input_index))
+        unsafe { codec.encode_unchecked(context.input_value, context.output, context.output_index) }
+            .map_err(|error| CodecEncodeError::encode(error, context.input_index))
     }
 
     /// Creates an invalid input index error.
