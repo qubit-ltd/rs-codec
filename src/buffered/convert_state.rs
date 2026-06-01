@@ -12,8 +12,8 @@
 use core::num::NonZeroUsize;
 
 use super::{
-    decode_attempt::DecodeAttempt,
     decode_context::DecodeContext,
+    decode_step::DecodeStep,
     transcode_progress::TranscodeProgress,
 };
 
@@ -185,10 +185,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns `Some` when decoding must stop for more input, otherwise `None`.
     #[must_use]
     #[inline(always)]
-    pub(crate) fn need_input_for_min_units<Value>(&self, min_units: usize) -> Option<DecodeAttempt<Value>> {
+    pub(crate) fn need_input_for_min_units<Value>(&self, min_units: usize) -> Option<DecodeStep<Value>> {
         let available = self.available_input();
         if available < min_units {
-            Some(DecodeAttempt::need_input(
+            Some(DecodeStep::need_input(
                 NonZeroUsize::new(min_units - available).expect("missing input is non-zero"),
                 available,
             ))

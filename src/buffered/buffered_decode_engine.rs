@@ -15,9 +15,9 @@ use core::num::NonZeroUsize;
 use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
     decode_action::DecodeAction,
-    decode_attempt::DecodeAttempt,
     decode_context::DecodeContext,
     decode_state::DecodeState,
+    decode_step::DecodeStep,
     transcode_progress::TranscodeProgress,
 };
 use crate::{
@@ -314,13 +314,13 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
         match result {
             Ok((value, consumed)) => {
                 let input_index = state.input_cursor();
-                Ok(DecodeAttempt::decoded(value, consumed, input_index).apply_to_decode_state(state))
+                Ok(DecodeStep::decoded(value, consumed, input_index).apply_to_decode_state(state))
             }
             Err(error) => {
                 let context = state.context();
                 let action = self.handle_decode_error(error, context)?;
                 Ok(action
-                    .into_attempt(context.input_index, context.available)
+                    .into_step(context.input_index, context.available)
                     .apply_to_decode_state(state))
             }
         }

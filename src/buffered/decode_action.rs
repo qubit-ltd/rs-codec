@@ -11,7 +11,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::decode_attempt::DecodeAttempt;
+use super::decode_step::DecodeStep;
 
 /// Action selected after a codec decode attempt fails during `transcode`.
 ///
@@ -29,7 +29,7 @@ pub enum DecodeAction<Value> {
     /// Consume invalid input without producing output.
     Skip {
         /// Source units to consume.
-        consumed: usize,
+        consumed: NonZeroUsize,
     },
 
     /// Produce one value and consume source units.
@@ -37,7 +37,7 @@ pub enum DecodeAction<Value> {
         /// Value to write to the output buffer.
         value: Value,
         /// Source units to consume.
-        consumed: usize,
+        consumed: NonZeroUsize,
     },
 }
 
@@ -53,14 +53,14 @@ impl<Value> DecodeAction<Value> {
     ///
     /// Returns the internal decode attempt consumed by buffered decode loops.
     #[must_use]
-    pub(super) fn into_attempt(self, input_index: usize, available: usize) -> DecodeAttempt<Value> {
+    pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
         match self {
             Self::NeedInput { required_total } => {
-                DecodeAttempt::need_input(Self::missing_input(required_total, available), available)
+                DecodeStep::need_input(Self::missing_input(required_total, available), available)
             }
-            Self::Skip { consumed } => DecodeAttempt::skipped(Self::normalize_consumed(consumed, available)),
+            Self::Skip { consumed } => DecodeStep::skipped(Self::bound_consumed(consumed, available)),
             Self::Emit { value, consumed } => {
-                DecodeAttempt::decoded(value, Self::normalize_consumed(consumed, available), input_index)
+                DecodeStep::decoded(value, Self::bound_consumed(consumed, available), input_index)
             }
         }
     }
@@ -83,7 +83,7 @@ impl<Value> DecodeAction<Value> {
         unsafe { NonZeroUsize::new_unchecked(additional) }
     }
 
-    /// Normalizes a policy-reported consumed source-unit count.
+    /// Bounds a policy-reported consumed source-unit count to available input.
     ///
     /// # Parameters
     ///
@@ -95,9 +95,9 @@ impl<Value> DecodeAction<Value> {
     /// Returns a non-zero count clamped to the currently available input.
     #[must_use]
     #[inline(always)]
-    fn normalize_consumed(consumed: usize, available: usize) -> NonZeroUsize {
+    fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
         debug_assert!(available > 0, "decode action cannot consume empty input");
-        let consumed = consumed.min(available).max(1);
+        let consumed = consumed.get().min(available).max(1);
         // SAFETY: The normalized count is clamped to at least one.
         unsafe { NonZeroUsize::new_unchecked(consumed) }
     }

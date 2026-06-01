@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Tests for the reusable buffered decoder engine.
 
+use core::num::NonZeroUsize;
+
 use qubit_codec::{
     BufferedDecodeEngine,
     BufferedDecodeHooks,
@@ -20,6 +22,10 @@ use qubit_codec::{
     DecodeFailure,
     TranscodeStatus,
 };
+
+fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
+    NonZeroUsize::new(consumed).expect("decode policy must consume at least one source unit")
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PrefixCodec;
@@ -116,7 +122,10 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for ReplacingHooks {
             PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
                 required_total: required,
             }),
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit { value: 99, consumed }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
+                value: 99,
+                consumed: non_zero_consumed(consumed),
+            }),
         }
     }
 }
@@ -137,7 +146,9 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for SkippingHooks {
             PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
                 required_total: required,
             }),
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip { consumed }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+                consumed: non_zero_consumed(consumed),
+            }),
         }
     }
 }
@@ -166,7 +177,9 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for FinishHooks {
             PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
                 required_total: required,
             }),
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip { consumed }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+                consumed: non_zero_consumed(consumed),
+            }),
         }
     }
 
@@ -254,7 +267,10 @@ impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
             PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
                 required_total: required,
             }),
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit { value: 99, consumed }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
+                value: 99,
+                consumed: non_zero_consumed(consumed),
+            }),
         }
     }
 }

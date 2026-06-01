@@ -37,6 +37,10 @@ struct TargetCodec;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ErrorSourceCodec;
 
+fn one_consumed() -> NonZeroUsize {
+    NonZeroUsize::MIN
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EngineError {
     InvalidInputIndex { index: usize, input_len: usize },
@@ -241,9 +245,14 @@ impl BufferedDecodeHooks<ErrorSourceCodec, u8, u8> for RepairDecodeHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match self.action {
-            RepairAction::Emit => Ok(DecodeAction::Emit { value: 42, consumed: 0 }),
+            RepairAction::Emit => Ok(DecodeAction::Emit {
+                value: 42,
+                consumed: one_consumed(),
+            }),
             RepairAction::NeedInput => Ok(DecodeAction::NeedInput { required_total: 3 }),
-            RepairAction::Skip => Ok(DecodeAction::Skip { consumed: 0 }),
+            RepairAction::Skip => Ok(DecodeAction::Skip {
+                consumed: one_consumed(),
+            }),
         }
     }
 }

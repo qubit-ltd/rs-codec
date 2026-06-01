@@ -18,9 +18,9 @@ use super::{
     transcode_progress::TranscodeProgress,
 };
 
-/// Result of one decode attempt in the converter loop.
+/// Result of one decode step in the converter loop.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) enum DecodeAttempt<Value> {
+pub(super) enum DecodeStep<Value> {
     /// A source value was decoded or emitted by policy.
     Decoded {
         /// Decoded logical value.
@@ -44,8 +44,8 @@ pub(super) enum DecodeAttempt<Value> {
     },
 }
 
-impl<Value> DecodeAttempt<Value> {
-    /// Creates a decoded-value attempt.
+impl<Value> DecodeStep<Value> {
+    /// Creates a decoded-value step.
     ///
     /// # Parameters
     ///
@@ -55,7 +55,7 @@ impl<Value> DecodeAttempt<Value> {
     ///
     /// # Returns
     ///
-    /// Returns a decoded attempt.
+    /// Returns a decoded step.
     #[inline(always)]
     pub(super) const fn decoded(value: Value, consumed: NonZeroUsize, input_index: usize) -> Self {
         Self::Decoded {
@@ -65,7 +65,7 @@ impl<Value> DecodeAttempt<Value> {
         }
     }
 
-    /// Creates a skipped-input attempt.
+    /// Creates a skipped-input step.
     ///
     /// # Parameters
     ///
@@ -73,13 +73,13 @@ impl<Value> DecodeAttempt<Value> {
     ///
     /// # Returns
     ///
-    /// Returns a skipped attempt.
+    /// Returns a skipped step.
     #[inline(always)]
     pub(super) const fn skipped(consumed: NonZeroUsize) -> Self {
         Self::Skipped { consumed }
     }
 
-    /// Creates a missing-input attempt.
+    /// Creates a missing-input step.
     ///
     /// # Parameters
     ///
@@ -88,13 +88,13 @@ impl<Value> DecodeAttempt<Value> {
     ///
     /// # Returns
     ///
-    /// Returns a need-input attempt.
+    /// Returns a need-input step.
     #[inline(always)]
     pub(super) const fn need_input(additional: NonZeroUsize, available: usize) -> Self {
         Self::NeedInput { additional, available }
     }
 
-    /// Applies this decode attempt to the current conversion state.
+    /// Applies this decode step to the current conversion state.
     ///
     /// # Parameters
     ///
@@ -129,7 +129,7 @@ impl<Value> DecodeAttempt<Value> {
         }
     }
 
-    /// Applies this decode attempt to the current decode state.
+    /// Applies this decode step to the current decode state.
     ///
     /// # Parameters
     ///

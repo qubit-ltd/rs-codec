@@ -64,6 +64,8 @@ use crate::{
 ///                 Ok(DecodeAction::NeedInput { required_total })
 ///             }
 ///             DecodeFailure::Invalid { consumed } => {
+///                 let consumed = core::num::NonZeroUsize::new(consumed)
+///                     .expect("invalid input consumes at least one unit");
 ///                 Ok(DecodeAction::Emit { value: b'?', consumed })
 ///             }
 ///         }

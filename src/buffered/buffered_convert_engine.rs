@@ -20,7 +20,7 @@ use super::{
     convert_encode_result::ConvertEncodeResult,
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
-    decode_attempt::DecodeAttempt,
+    decode_step::DecodeStep,
     encode_attempt::EncodeAttempt,
     pending_value::PendingValue,
     transcode_progress::TranscodeProgress,
@@ -204,7 +204,7 @@ where
                     consumed.get() <= available,
                     "Codec::decode_unchecked consumed beyond available input",
                 );
-                Ok(DecodeAttempt::decoded(value, consumed, input_index))
+                Ok(DecodeStep::decoded(value, consumed, input_index))
             }
             Err(error) => {
                 let context = state.decode_context();
@@ -212,7 +212,7 @@ where
                     Ok(action) => action,
                     Err(error) => return Err(self.hooks.map_decode_error::<Output>(error)),
                 };
-                Ok(action.into_attempt(context.input_index, context.available))
+                Ok(action.into_step(context.input_index, context.available))
             }
         }
     }
