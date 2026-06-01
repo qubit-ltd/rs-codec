@@ -121,7 +121,7 @@ fn test_codec_buffered_decoder_decodes_until_output_needs_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 2,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -188,7 +188,7 @@ fn test_codec_buffered_decoder_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -221,7 +221,7 @@ fn test_codec_buffered_decoder_finish_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -241,7 +241,7 @@ fn test_codec_buffered_decoder_finish_does_not_handle_input_tail() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 1,
         },
         progress.status(),

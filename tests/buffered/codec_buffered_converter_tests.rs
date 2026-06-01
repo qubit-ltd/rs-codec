@@ -165,7 +165,7 @@ fn test_codec_buffered_converter_converts_values_until_output_needs_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            additional: 2,
+            additional: super::nz(2),
             available: 0,
         },
         progress.status(),
@@ -246,7 +246,7 @@ fn test_codec_buffered_converter_reports_short_minimum_input_without_consuming_t
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 1,
         },
         progress.status(),
@@ -270,7 +270,7 @@ fn test_codec_buffered_converter_keeps_decoded_value_pending_when_output_is_shor
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 1,
         },
         progress.status(),
@@ -341,7 +341,7 @@ fn test_codec_buffered_converter_reports_invalid_indices() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 3,
-            additional: 2,
+            additional: super::nz(2),
             available: 0,
         },
         progress.status(),
@@ -392,7 +392,7 @@ fn test_codec_buffered_converter_finish_does_not_handle_input_tail() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 1,
         },
         progress.status(),

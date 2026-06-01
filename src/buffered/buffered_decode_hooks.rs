@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Policy hooks used by buffered decoder engines.
 
+use core::num::NonZeroUsize;
+
 use super::{
     decode_action::DecodeAction,
     decode_context::DecodeContext,
@@ -186,7 +188,7 @@ where
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }

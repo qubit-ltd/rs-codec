@@ -115,7 +115,7 @@ fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            additional: 2,
+            additional: super::nz(2),
             available: 0,
         },
         progress.status(),
@@ -159,7 +159,7 @@ fn test_codec_buffered_encoder_reports_partial_output_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 1,
         },
         progress.status(),
@@ -181,7 +181,7 @@ fn test_codec_buffered_encoder_finish_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),

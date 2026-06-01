@@ -241,7 +241,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
         Unit: Copy,
     {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
         self.hooks.finish(&self.codec, output, output_index)
     }

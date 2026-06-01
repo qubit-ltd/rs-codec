@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Mutable state for one buffered encode call.
 
+use core::num::NonZeroUsize;
+
 use super::transcode_progress::TranscodeProgress;
 
 /// Mutable state for one buffered encode call.
@@ -124,9 +126,11 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns progress for a missing output capacity bound.
     pub(super) fn need_output_progress(&self, required: usize) -> TranscodeProgress {
         let available = self.available_output();
+        debug_assert!(required > available, "need-output progress requires missing capacity");
+        let additional = NonZeroUsize::new(required - available).expect("missing output is non-zero");
         TranscodeProgress::need_output(
             self.output_cursor,
-            required.saturating_sub(available),
+            additional,
             available,
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,

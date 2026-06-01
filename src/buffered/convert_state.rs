@@ -215,13 +215,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
     #[must_use]
     pub(crate) fn need_input_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
-        TranscodeProgress::need_input(
-            self.input_cursor,
-            additional.get(),
-            available,
-            self.read(),
-            self.written(),
-        )
+        TranscodeProgress::need_input(self.input_cursor, additional, available, self.read(), self.written())
     }
 
     /// Returns progress for missing output.
@@ -236,12 +230,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
     #[must_use]
     pub(crate) fn need_output_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
-        TranscodeProgress::need_output(
-            self.output_cursor,
-            additional.get(),
-            available,
-            self.read(),
-            self.written(),
-        )
+        TranscodeProgress::need_output(self.output_cursor, additional, available, self.read(), self.written())
     }
 }

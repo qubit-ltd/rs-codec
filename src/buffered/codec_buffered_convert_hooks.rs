@@ -94,6 +94,17 @@ where
         }
     }
 
+    /// Creates an invalid source input index error.
+    #[inline(always)]
+    fn invalid_input_index<OutputUnit>(&self, _decoder: &D, index: usize, input_len: usize) -> Self::Error<OutputUnit>
+    where
+        E: Codec<Value, OutputUnit>,
+        OutputUnit: Copy,
+        CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>,
+    {
+        CodecConvertError::decode(CodecDecodeError::invalid_input_index(index, input_len))
+    }
+
     /// Resets stateless codec-backed converter hooks.
     #[inline(always)]
     fn reset(&mut self) {}

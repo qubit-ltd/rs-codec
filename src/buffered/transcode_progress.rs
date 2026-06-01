@@ -7,6 +7,8 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
+use core::num::NonZeroUsize;
+
 use super::TranscodeStatus;
 
 /// Counts how much work a [`crate::Transcoder`] completed before returning.
@@ -71,7 +73,7 @@ impl TranscodeProgress {
     #[inline(always)]
     pub const fn need_input(
         input_index: usize,
-        additional: usize,
+        additional: NonZeroUsize,
         available: usize,
         read: usize,
         written: usize,
@@ -100,7 +102,7 @@ impl TranscodeProgress {
     #[inline(always)]
     pub const fn need_output(
         output_index: usize,
-        additional: usize,
+        additional: NonZeroUsize,
         available: usize,
         read: usize,
         written: usize,
@@ -155,8 +157,8 @@ impl TranscodeProgress {
     pub const fn additional(self) -> usize {
         match self.status {
             TranscodeStatus::Complete => 0,
-            TranscodeStatus::NeedInput { additional, .. } => additional,
-            TranscodeStatus::NeedOutput { additional, .. } => additional,
+            TranscodeStatus::NeedInput { additional, .. } => additional.get(),
+            TranscodeStatus::NeedOutput { additional, .. } => additional.get(),
         }
     }
 

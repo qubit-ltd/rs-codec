@@ -7,6 +7,8 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
+use core::num::NonZeroUsize;
+
 use super::{
     capacity_error::CapacityError,
     transcode_progress::TranscodeProgress,
@@ -45,6 +47,7 @@ use super::{
 /// # Example: streaming byte-to-word decoder
 ///
 /// ```rust
+/// use core::num::NonZeroUsize;
 /// use qubit_codec::{Transcoder, TranscodeProgress, TranscodeStatus};
 ///
 /// #[derive(Default)]
@@ -70,7 +73,7 @@ use super::{
 ///             if output_index + written == output.len() {
 ///                 let status = TranscodeStatus::NeedOutput {
 ///                     output_index: output_index + written,
-///                     additional: 1,
+///                     additional: NonZeroUsize::MIN,
 ///                     available: 0,
 ///                 };
 ///                 return Ok(TranscodeProgress::new(status, read, written));
@@ -87,7 +90,7 @@ use super::{
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 additional: 2 - available,
+///                 additional: NonZeroUsize::new(2 - available).expect("missing input is non-zero"),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
@@ -102,7 +105,7 @@ use super::{
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedOutput {
 ///     output_index: 1,
-///     additional: 1,
+///     additional: NonZeroUsize::MIN,
 ///     available: 0,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -115,7 +118,7 @@ use super::{
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedInput {
 ///     input_index: 2,
-///     additional: 1,
+///     additional: NonZeroUsize::MIN,
 ///     available: 1,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -230,6 +233,7 @@ pub trait Transcoder<Input, Output> {
     /// # Example
     ///
     /// ```rust
+    /// use core::num::NonZeroUsize;
     /// use qubit_codec::{Transcoder, TranscodeStatus};
     ///
     /// #[derive(Default)]
@@ -261,7 +265,7 @@ pub trait Transcoder<Input, Output> {
     ///         } else {
     ///             let status = qubit_codec::TranscodeStatus::NeedOutput {
     ///                 output_index: output_index + written,
-    ///                 additional: 1,
+    ///                 additional: NonZeroUsize::MIN,
     ///                 available: output.len().saturating_sub(output_index + written),
     ///             };
     ///             Ok(qubit_codec::TranscodeProgress::new(
@@ -303,7 +307,7 @@ pub trait Transcoder<Input, Output> {
     /// the transcoder's policy.
     fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }

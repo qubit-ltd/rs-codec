@@ -7,6 +7,8 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
+use core::num::NonZeroUsize;
+
 /// Reports why a [`crate::Transcoder`] stopped converting input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscodeStatus {
@@ -27,7 +29,7 @@ pub enum TranscodeStatus {
         /// Absolute input index where input ended.
         input_index: usize,
         /// Number of additional input units required to continue.
-        additional: usize,
+        additional: NonZeroUsize,
         /// Number of input units currently available.
         available: usize,
     },
@@ -42,7 +44,7 @@ pub enum TranscodeStatus {
         /// Absolute output index where output ended.
         output_index: usize,
         /// Number of additional output units required to continue.
-        additional: usize,
+        additional: NonZeroUsize,
         /// Number of output units currently available.
         available: usize,
     },
@@ -62,7 +64,7 @@ impl TranscodeStatus {
     /// Returns a [`TranscodeStatus::NeedInput`] value.
     #[must_use]
     #[inline(always)]
-    pub const fn need_input(input_index: usize, additional: usize, available: usize) -> Self {
+    pub const fn need_input(input_index: usize, additional: NonZeroUsize, available: usize) -> Self {
         Self::NeedInput {
             input_index,
             additional,
@@ -83,7 +85,7 @@ impl TranscodeStatus {
     /// Returns a [`TranscodeStatus::NeedOutput`] value.
     #[must_use]
     #[inline(always)]
-    pub const fn need_output(output_index: usize, additional: usize, available: usize) -> Self {
+    pub const fn need_output(output_index: usize, additional: NonZeroUsize, available: usize) -> Self {
         Self::NeedOutput {
             output_index,
             additional,

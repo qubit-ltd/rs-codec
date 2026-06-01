@@ -233,7 +233,7 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
         if available == 0 {
             let status = TranscodeStatus::NeedOutput {
                 output_index,
-                additional: 1,
+                additional: super::nz(1),
                 available,
             };
             return Ok(qubit_codec::TranscodeProgress::new(status, 0, 0));
@@ -275,7 +275,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -308,7 +308,7 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -329,7 +329,7 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -347,7 +347,7 @@ fn test_buffered_encode_hooks_default_finish_reports_output_index_beyond_buffer(
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -366,7 +366,7 @@ fn test_buffered_encode_engine_uses_plan_capacity_instead_of_codec_max_width() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -403,7 +403,7 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 4,
+            additional: super::nz(4),
             available: 0,
         },
         progress.status(),

@@ -9,6 +9,8 @@
  ******************************************************************************/
 //! Reusable buffered encoder engine.
 
+use core::num::NonZeroUsize;
+
 use super::{
     buffered_encode_hooks::BufferedEncodeHooks,
     encode_plan::EncodePlan,
@@ -281,7 +283,7 @@ impl<C, H> BufferedEncodeEngine<C, H> {
         Unit: Copy,
     {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
         self.hooks.finish(&self.codec, output, output_index)
     }

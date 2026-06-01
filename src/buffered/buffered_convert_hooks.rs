@@ -15,10 +15,7 @@ use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
     buffered_encode_hooks::BufferedEncodeHooks,
 };
-use crate::{
-    Codec,
-    ConvertErrorFactory,
-};
+use crate::Codec;
 
 /// Policy hooks for [`crate::BufferedConvertEngine`].
 ///
@@ -52,7 +49,7 @@ where
         Output: Copy;
 
     /// Error type returned by the buffered converter.
-    type Error<Output>: ConvertErrorFactory<D>
+    type Error<Output>
     where
         E: Codec<Value, Output>,
         Output: Copy,
@@ -110,6 +107,27 @@ where
     ///
     /// Returns the converter-level error.
     fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
+    where
+        E: Codec<Value, Output>,
+        Output: Copy,
+        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>;
+
+    /// Builds an error for a caller-supplied source input index outside the input slice.
+    ///
+    /// The engine calls this hook before it reads source input. Keeping this
+    /// construction in the hook lets converter adapters preserve their concrete
+    /// error type without a separate public factory trait.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Source codec owned by the engine.
+    /// - `index`: Invalid absolute input index supplied by the caller.
+    /// - `input_len`: Length of the input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific invalid-input-index error.
+    fn invalid_input_index<Output>(&self, decoder: &D, index: usize, input_len: usize) -> Self::Error<Output>
     where
         E: Codec<Value, Output>,
         Output: Copy,

@@ -11,10 +11,7 @@
 
 use thiserror::Error;
 
-use super::{
-    codec_decode_error::CodecDecodeError,
-    convert_error_factory::ConvertErrorFactory,
-};
+use super::codec_decode_error::CodecDecodeError;
 
 /// Error reported by codec-backed buffered converters.
 ///
@@ -67,12 +64,5 @@ impl<D, E> CodecConvertError<D, E> {
     #[must_use]
     pub const fn encode(source: E) -> Self {
         Self::Encode { source }
-    }
-}
-
-impl<D, E, C> ConvertErrorFactory<C> for CodecConvertError<D, E> {
-    /// Creates an input-index error for the codec converter engine.
-    fn invalid_input_index(_decoder: &C, index: usize, input_len: usize) -> Self {
-        Self::decode(CodecDecodeError::invalid_input_index(index, input_len))
     }
 }

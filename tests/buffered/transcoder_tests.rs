@@ -34,7 +34,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
         } else {
             let status = TranscodeStatus::NeedOutput {
                 output_index: output_index + written,
-                additional: 1,
+                additional: super::nz(1),
                 available: output.len().saturating_sub(output_index + written),
             };
             Ok(TranscodeProgress::new(status, read, written))
@@ -79,7 +79,7 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
             if output_index + written == output.len() {
                 let status = TranscodeStatus::NeedOutput {
                     output_index: output_index + written,
-                    additional: suffix.len() - self.suffix_index,
+                    additional: super::nz(suffix.len() - self.suffix_index),
                     available: 0,
                 };
                 return Ok(TranscodeProgress::new(status, 0, written));
@@ -136,7 +136,7 @@ fn test_transcoder_default_finish_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),

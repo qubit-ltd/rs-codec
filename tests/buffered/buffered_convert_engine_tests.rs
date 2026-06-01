@@ -18,7 +18,6 @@ use qubit_codec::{
     BufferedEncodeHooks,
     CapacityError,
     Codec,
-    ConvertErrorFactory,
     DecodeAction,
     DecodeContext,
     EncodePlan,
@@ -137,24 +136,6 @@ unsafe impl Codec<u8, u8> for ErrorSourceCodec {
             *output.get_unchecked_mut(index) = *value;
         }
         Ok(1)
-    }
-}
-
-impl ConvertErrorFactory<SourceCodec> for EngineError {
-    fn invalid_input_index(_decoder: &SourceCodec, index: usize, input_len: usize) -> Self {
-        Self::invalid_input_index(index, input_len)
-    }
-}
-
-impl<E> ConvertErrorFactory<SourceCodec> for ConvertEngineError<E> {
-    fn invalid_input_index(_decoder: &SourceCodec, index: usize, input_len: usize) -> Self {
-        Self::Decode(EngineError::invalid_input_index(index, input_len))
-    }
-}
-
-impl<E> ConvertErrorFactory<ErrorSourceCodec> for ConvertEngineError<E> {
-    fn invalid_input_index(_decoder: &ErrorSourceCodec, index: usize, input_len: usize) -> Self {
-        Self::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
@@ -300,6 +281,20 @@ impl BufferedConvertHooks<ErrorSourceCodec, TargetCodec, u8, u8> for RepairHooks
     {
         ConvertEngineError::Encode(error)
     }
+
+    fn invalid_input_index<Output>(
+        &self,
+        _decoder: &ErrorSourceCodec,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
+    }
 }
 
 impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for CopyHooks {
@@ -341,6 +336,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for CopyHooks {
         StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
     {
         ConvertEngineError::Encode(error)
+    }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 
     fn reset(&mut self) {
@@ -386,13 +390,13 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for FinishDecodeHooks {
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
         }
         let Some(value) = self.value else {
             return Ok(TranscodeProgress::complete(0, 0));
         };
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
         }
         output[output_index] = value;
         self.value = None;
@@ -453,6 +457,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FinishHooks {
     {
         ConvertEngineError::Encode(error)
     }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -497,7 +510,7 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for BatchFinishDecodeHooks {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
         }
 
         output[output_index] = self.next;
@@ -509,7 +522,7 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for BatchFinishDecodeHooks {
             Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedOutput {
                     output_index: output_index + 1,
-                    additional: 1,
+                    additional: super::nz(1),
                     available: 0,
                 },
                 0,
@@ -561,6 +574,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for BatchFinishHooks
         StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
     {
         ConvertEngineError::Encode(error)
+    }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
@@ -620,7 +642,13 @@ impl BufferedEncodeHooks<TargetCodec, u8, u8> for FinishEncodeHooks {
         }
         let available = output.len().saturating_sub(output_index);
         if available == 0 {
-            return Ok(TranscodeProgress::need_output(output_index, 1, available, 0, 0));
+            return Ok(TranscodeProgress::need_output(
+                output_index,
+                super::nz(1),
+                available,
+                0,
+                0,
+            ));
         }
         output[output_index] = 0xee;
         self.pending = false;
@@ -671,6 +699,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FinishEncodeHook
     {
         ConvertEngineError::Encode(error)
     }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        FinishEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -717,13 +754,13 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for ErrorPathDecodeHooks {
         match self.finish {
             ErrorPathDecodeFinish::Normal => Ok(TranscodeProgress::complete(0, 0)),
             ErrorPathDecodeFinish::Error => Err(EngineError::Decode),
-            ErrorPathDecodeFinish::NeedInput => Ok(TranscodeProgress::need_input(0, 1, 0, 0, 0)),
+            ErrorPathDecodeFinish::NeedInput => Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 0)),
             ErrorPathDecodeFinish::NeedOutputWithoutValue => {
-                Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0))
+                Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0))
             }
             ErrorPathDecodeFinish::EmitNeedInput => {
                 output[output_index] = 0xab;
-                Ok(TranscodeProgress::need_input(0, 1, 0, 0, 1))
+                Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 1))
             }
         }
     }
@@ -815,7 +852,7 @@ where
     ) -> Result<TranscodeProgress, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::FinishError => Err(EngineError::Encode),
-            ErrorPathEncodeMode::FinishNeedInput => Ok(TranscodeProgress::need_input(0, 1, 0, 0, 0)),
+            ErrorPathEncodeMode::FinishNeedInput => Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 0)),
             ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => Ok(TranscodeProgress::complete(0, 0)),
         }
     }
@@ -878,6 +915,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for ErrorPathHooks {
         ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
     {
         ConvertEngineError::Encode(error)
+    }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
@@ -993,6 +1039,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FactoryHooks {
     {
         ConvertEngineError::Encode(error)
     }
+
+    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
+    where
+        TargetCodec: Codec<u8, Output>,
+        Output: Copy,
+        FactoryEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
+    {
+        ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
+    }
 }
 
 #[test]
@@ -1059,7 +1114,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1090,7 +1145,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1103,7 +1158,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1157,7 +1212,7 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 2,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1260,7 +1315,7 @@ fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1466,7 +1521,7 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: 2,
+            additional: super::nz(2),
             available: 1,
         },
         progress.status(),
@@ -1489,7 +1544,7 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1517,7 +1572,7 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1568,7 +1623,7 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),
@@ -1598,7 +1653,7 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: 1,
+            additional: super::nz(1),
             available: 0,
         },
         progress.status(),

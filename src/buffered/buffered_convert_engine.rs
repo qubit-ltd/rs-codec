@@ -32,7 +32,6 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    ConvertErrorFactory,
     codec::debug_assert_unit_bounds,
 };
 
@@ -594,11 +593,9 @@ where
         Output: Copy,
     {
         if input_index > input.len() {
-            return Err(<H::Error<Output> as ConvertErrorFactory<D>>::invalid_input_index(
-                &self.decode_engine.codec,
-                input_index,
-                input.len(),
-            ));
+            return Err(self
+                .hooks
+                .invalid_input_index::<Output>(&self.decode_engine.codec, input_index, input.len()));
         }
         debug_assert_unit_bounds::<D, Value, Input>(&self.decode_engine.codec);
         debug_assert_unit_bounds::<E, Value, Output>(&self.encode_engine.codec);
@@ -663,7 +660,7 @@ where
         debug_assert_unit_bounds::<D, Value, Input>(&self.decode_engine.codec);
         debug_assert_unit_bounds::<E, Value, Output>(&self.encode_engine.codec);
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, 1, 0, 0, 0));
+            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
 
         let empty_input: &[Input] = &[];

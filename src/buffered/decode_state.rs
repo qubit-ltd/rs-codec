@@ -113,8 +113,8 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
 
     /// Returns the additional input units required by the minimum decode width.
     #[inline(always)]
-    fn required_input(&self) -> usize {
-        self.min_units.get() - self.available()
+    fn required_input(&self) -> NonZeroUsize {
+        NonZeroUsize::new(self.min_units.get() - self.available()).expect("missing input is non-zero")
     }
 
     /// Returns a public decode context snapshot.
@@ -170,7 +170,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         let context = self.context();
         TranscodeProgress::need_output(
             context.output_index,
-            1,
+            NonZeroUsize::MIN,
             0,
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,
@@ -202,7 +202,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     pub(super) fn need_input_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_input(
             self.input_cursor,
-            additional.get(),
+            additional,
             available,
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,
