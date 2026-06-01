@@ -54,8 +54,90 @@ use crate::{
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use qubit_codec::{BufferedDecodeEngine, TranscodeStatus};
+/// ```rust
+/// use core::num::NonZeroUsize;
+/// use qubit_codec::{
+///     BufferedDecodeEngine,
+///     BufferedDecodeHooks,
+///     Codec,
+///     DecodeAction,
+///     DecodeContext,
+///     TranscodeStatus,
+/// };
+///
+/// #[derive(Clone, Copy)]
+/// struct ByteCodec;
+///
+/// #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// enum ByteDecodeError {
+///     Malformed { consumed: NonZeroUsize },
+/// }
+///
+/// unsafe impl Codec<u8, u8> for ByteCodec {
+///     type DecodeError = ByteDecodeError;
+///     type EncodeError = core::convert::Infallible;
+///
+///     fn min_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     fn max_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     unsafe fn decode_unchecked(
+///         &self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///         match input[index] {
+///             0xff => Err(ByteDecodeError::Malformed {
+///                 consumed: NonZeroUsize::MIN,
+///             }),
+///             value => Ok((value, NonZeroUsize::MIN)),
+///         }
+///     }
+///
+///     unsafe fn encode_unchecked(
+///         &self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<usize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
+///
+/// struct ReplacementHooks;
+///
+/// impl BufferedDecodeHooks<ByteCodec, u8, u8> for ReplacementHooks {
+///     type Error = ByteDecodeError;
+///
+///     fn handle_decode_error(
+///         &mut self,
+///         _codec: &ByteCodec,
+///         error: ByteDecodeError,
+///         _context: DecodeContext,
+///     ) -> Result<DecodeAction<u8>, Self::Error> {
+///         match error {
+///             ByteDecodeError::Malformed { consumed } => {
+///                 Ok(DecodeAction::Emit { value: b'?', consumed })
+///             }
+///         }
+///     }
+///
+///     fn invalid_input_index(
+///         &mut self,
+///         _codec: &ByteCodec,
+///         _index: usize,
+///         _input_len: usize,
+///     ) -> Self::Error {
+///         ByteDecodeError::Malformed {
+///             consumed: NonZeroUsize::MIN,
+///         }
+///     }
+/// }
 ///
 /// let mut engine = BufferedDecodeEngine::<_, _, u8>::new(ByteCodec, ReplacementHooks);
 /// let input = [b'a', 0xff, b'b'];
@@ -71,7 +153,7 @@ use crate::{
 ///         // Drain `output[..output_index]`, then resume with more output room.
 ///     }
 /// }
-/// # Ok::<(), MyError>(())
+/// # Ok::<(), ByteDecodeError>(())
 /// ```
 ///
 /// # Type Parameters

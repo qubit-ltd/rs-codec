@@ -45,8 +45,52 @@ use crate::{
 /// This hook writes each value with the wrapped codec and uses the codec's
 /// maximum width as the capacity plan.
 ///
-/// ```rust,ignore
-/// use qubit_codec::{BufferedEncodeHooks, Codec, CodecEncodeError, EncodeContext, EncodePlan};
+/// ```rust
+/// use core::{
+///     convert::Infallible,
+///     num::NonZeroUsize,
+/// };
+/// use qubit_codec::{
+///     BufferedEncodeHooks,
+///     Codec,
+///     CodecEncodeError,
+///     EncodeContext,
+///     EncodePlan,
+/// };
+///
+/// #[derive(Clone, Copy)]
+/// struct ByteCodec;
+///
+/// unsafe impl Codec<u8, u8> for ByteCodec {
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///
+///     fn min_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     fn max_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     unsafe fn decode_unchecked(
+///         &self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode_unchecked(
+///         &self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<usize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
 ///
 /// struct StrictHooks;
 ///

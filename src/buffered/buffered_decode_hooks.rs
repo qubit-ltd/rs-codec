@@ -43,10 +43,60 @@ use crate::{
 /// This hook maps incomplete codec errors to `NeedInput`, replaces malformed
 /// units with `b'?'`, and otherwise lets the engine keep decoding.
 ///
-/// ```rust,ignore
+/// ```rust
+/// use core::num::NonZeroUsize;
 /// use qubit_codec::{
-///     BufferedDecodeHooks, CodecDecodeError, DecodeAction, DecodeContext,
+///     BufferedDecodeHooks,
+///     Codec,
+///     CodecDecodeError,
+///     DecodeAction,
+///     DecodeContext,
 /// };
+///
+/// #[derive(Clone, Copy)]
+/// struct MyCodec;
+///
+/// #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// enum MyDecodeError {
+///     Incomplete { required_total: usize },
+///     Malformed { consumed: NonZeroUsize },
+/// }
+///
+/// unsafe impl Codec<u8, u8> for MyCodec {
+///     type DecodeError = MyDecodeError;
+///     type EncodeError = core::convert::Infallible;
+///
+///     fn min_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     fn max_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     unsafe fn decode_unchecked(
+///         &self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///         match input[index] {
+///             0xff => Err(MyDecodeError::Malformed {
+///                 consumed: NonZeroUsize::MIN,
+///             }),
+///             value => Ok((value, NonZeroUsize::MIN)),
+///         }
+///     }
+///
+///     unsafe fn encode_unchecked(
+///         &self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<usize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
 ///
 /// struct ReplacementHooks;
 ///
@@ -67,6 +117,15 @@ use crate::{
 ///                 Ok(DecodeAction::Emit { value: b'?', consumed })
 ///             }
 ///         }
+///     }
+///
+///     fn invalid_input_index(
+///         &mut self,
+///         _codec: &MyCodec,
+///         index: usize,
+///         input_len: usize,
+///     ) -> Self::Error {
+///         CodecDecodeError::invalid_input_index(index, input_len)
 ///     }
 /// }
 /// ```

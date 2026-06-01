@@ -46,8 +46,90 @@ use crate::{
 ///
 /// # Example
 ///
-/// ```rust,ignore
-/// use qubit_codec::{BufferedEncodeEngine, TranscodeStatus};
+/// ```rust
+/// use core::{
+///     convert::Infallible,
+///     num::NonZeroUsize,
+/// };
+/// use qubit_codec::{
+///     BufferedEncodeEngine,
+///     BufferedEncodeHooks,
+///     Codec,
+///     CodecEncodeError,
+///     EncodeContext,
+///     EncodePlan,
+///     TranscodeStatus,
+/// };
+///
+/// #[derive(Clone, Copy)]
+/// struct ByteCodec;
+///
+/// unsafe impl Codec<u8, u8> for ByteCodec {
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///
+///     fn min_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     fn max_units_per_value(&self) -> NonZeroUsize {
+///         NonZeroUsize::MIN
+///     }
+///
+///     unsafe fn decode_unchecked(
+///         &self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode_unchecked(
+///         &self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<usize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
+///
+/// struct StrictHooks;
+///
+/// impl BufferedEncodeHooks<ByteCodec, u8, u8> for StrictHooks {
+///     type Error = CodecEncodeError<Infallible>;
+///     type PlanAction = ();
+///
+///     fn prepare_encode(
+///         &mut self,
+///         codec: &ByteCodec,
+///         _value: &u8,
+///         _input_index: usize,
+///     ) -> Result<EncodePlan<()>, Self::Error> {
+///         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
+///     }
+///
+///     unsafe fn write_encode(
+///         &mut self,
+///         codec: &ByteCodec,
+///         context: EncodeContext<'_, u8, u8, ()>,
+///     ) -> Result<usize, Self::Error> {
+///         unsafe {
+///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
+///         }
+///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+///     }
+///
+///     fn invalid_input_index(
+///         &mut self,
+///         _codec: &ByteCodec,
+///         index: usize,
+///         input_len: usize,
+///     ) -> Self::Error {
+///         CodecEncodeError::invalid_input_index(index, input_len)
+///     }
+/// }
 ///
 /// let mut engine = BufferedEncodeEngine::new(ByteCodec, StrictHooks);
 /// let input = [1_u8, 2, 3];
@@ -55,14 +137,16 @@ use crate::{
 ///
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
-///     TranscodeStatus::Complete => {}
+///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
 ///     TranscodeStatus::NeedOutput { output_index, .. } => {
+///         assert_eq!(2, output_index);
+///         assert_eq!([1, 2], output);
 ///         // Write out `output[..output_index]`, then resume at
 ///         // `progress.read()` with fresh output capacity.
 ///     }
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),
 /// }
-/// # Ok::<(), MyError>(())
+/// # Ok::<(), CodecEncodeError<Infallible>>(())
 /// ```
 ///
 /// # Type Parameters
