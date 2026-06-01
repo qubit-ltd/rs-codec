@@ -67,9 +67,9 @@ where
     Output: Copy,
 {
     /// Source-side buffered decoder engine.
-    decode_engine: BufferedDecodeEngine<D, H::DecodeHooks, Input>,
+    decode_engine: BufferedDecodeEngine<D, H::DecodeHooks, Input, Value>,
     /// Target-side buffered encoder engine.
-    encode_engine: BufferedEncodeEngine<E, H::EncodeHooks>,
+    encode_engine: BufferedEncodeEngine<E, H::EncodeHooks, Value, Output>,
     /// Conversion-level policy hooks.
     hooks: H,
     /// Decoded value waiting for target output capacity.
@@ -146,8 +146,8 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
-        let decoded_values = self.decode_engine.max_output_len::<Value>(input_len)?;
-        let converted_units = self.encode_engine.max_output_len::<Value, Output>(decoded_values)?;
+        let decoded_values = self.decode_engine.max_output_len(input_len)?;
+        let converted_units = self.encode_engine.max_output_len(decoded_values)?;
         pending_units
             .checked_add(converted_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -157,11 +157,9 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
-        let decoder_finish_values = self.decode_engine.max_finish_output_len::<Value>();
-        let decoder_finish_units = self
-            .encode_engine
-            .max_output_len::<Value, Output>(decoder_finish_values)?;
-        let encoder_finish_units = self.encode_engine.max_finish_output_len::<Value, Output>();
+        let decoder_finish_values = self.decode_engine.max_finish_output_len();
+        let decoder_finish_units = self.encode_engine.max_output_len(decoder_finish_values)?;
+        let encoder_finish_units = self.encode_engine.max_finish_output_len();
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
@@ -300,16 +298,15 @@ where
     /// Resets hook-owned and component-owned state.
     pub fn reset(&mut self) {
         self.pending.clear();
-        self.decode_engine.reset::<Value>();
-        self.encode_engine.reset::<Value, Output>();
+        self.decode_engine.reset();
+        self.encode_engine.reset();
         self.hooks.reset();
     }
 
     /// Returns the output bound for the retained pending value.
     #[inline(always)]
     fn pending_output_len(&self) -> Result<usize, CapacityError> {
-        self.pending
-            .max_output_len::<E, H::EncodeHooks, Output>(&self.encode_engine)
+        self.pending.max_output_len(&self.encode_engine)
     }
 
     /// Writes a retained decoded value before new input is consumed.

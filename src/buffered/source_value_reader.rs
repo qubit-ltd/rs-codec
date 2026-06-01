@@ -30,7 +30,7 @@ where
     Output: Copy,
 {
     /// Source-side buffered decoder engine.
-    engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input>,
+    engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input, Value>,
     /// Conversion hooks used for error mapping.
     hooks: &'a H,
     /// Binds this helper to the target codec, value, and output unit types.
@@ -47,7 +47,10 @@ where
 {
     /// Creates a source-side reader.
     #[inline(always)]
-    pub(super) const fn new(engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input>, hooks: &'a H) -> Self {
+    pub(super) const fn new(
+        engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input, Value>,
+        hooks: &'a H,
+    ) -> Self {
         Self {
             engine,
             hooks,
@@ -101,7 +104,7 @@ where
         super::transcode_progress::TranscodeProgress,
         <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error,
     > {
-        match self.engine.finish::<Value>(decoded, 0) {
+        match self.engine.finish(decoded, 0) {
             Ok(finish) => Ok(finish),
             Err(error) => Err(self.hooks.map_decode_error(error)),
         }

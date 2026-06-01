@@ -33,13 +33,18 @@ use crate::{
 ///
 /// - `C`: Low-level codec used to decode values.
 /// - `Unit`: Encoded unit type accepted by the codec.
+/// - `Value`: Logical value produced by the decoder.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecBufferedDecoder<C, Unit> {
+pub struct CodecBufferedDecoder<C, Unit, Value> {
     /// Common buffered decoding engine.
-    engine: BufferedDecodeEngine<C, CodecBufferedDecodeHooks, Unit>,
+    engine: BufferedDecodeEngine<C, CodecBufferedDecodeHooks, Unit, Value>,
 }
 
-impl<C, Unit> CodecBufferedDecoder<C, Unit> {
+impl<C, Unit, Value> CodecBufferedDecoder<C, Unit, Value>
+where
+    C: Codec<Value, Unit>,
+    Unit: Copy,
+{
     /// Creates a buffered decoder backed by `codec`.
     ///
     /// # Parameters
@@ -57,7 +62,7 @@ impl<C, Unit> CodecBufferedDecoder<C, Unit> {
     }
 }
 
-impl<C, Value, Unit> Transcoder<Unit, Value> for CodecBufferedDecoder<C, Unit>
+impl<C, Unit, Value> Transcoder<Unit, Value> for CodecBufferedDecoder<C, Unit, Value>
 where
     C: Codec<Value, Unit>,
     Unit: Copy,
@@ -66,17 +71,17 @@ where
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        self.engine.max_output_len::<Value>(input_len)
+        self.engine.max_output_len(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_finish_output_len::<Value>())
+        Ok(self.engine.max_finish_output_len())
     }
 
     /// Resets hook-owned state.
     fn reset(&mut self) {
-        self.engine.reset::<Value>();
+        self.engine.reset();
     }
 
     /// Decodes source units into logical values.
@@ -87,16 +92,16 @@ where
         output: &mut [Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        self.engine.transcode::<Value>(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
     fn finish(&mut self, output: &mut [Value], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
-        self.engine.finish::<Value>(output, output_index)
+        self.engine.finish(output, output_index)
     }
 }
 
-impl<C, Value, Unit> BufferedDecoder<Unit, Value> for CodecBufferedDecoder<C, Unit>
+impl<C, Unit, Value> BufferedDecoder<Unit, Value> for CodecBufferedDecoder<C, Unit, Value>
 where
     C: Codec<Value, Unit>,
     Unit: Copy,

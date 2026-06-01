@@ -139,7 +139,7 @@ use crate::{
 ///     }
 /// }
 ///
-/// let mut engine = BufferedDecodeEngine::<_, _, u8>::new(ByteCodec, ReplacementHooks);
+/// let mut engine = BufferedDecodeEngine::<_, _, u8, u8>::new(ByteCodec, ReplacementHooks);
 /// let input = [b'a', 0xff, b'b'];
 /// let mut output = [0_u8; 3];
 ///
@@ -161,17 +161,23 @@ use crate::{
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
 /// - `Unit`: Encoded input unit type accepted by the engine.
+/// - `Value`: Logical value decoded by the engine.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BufferedDecodeEngine<C, H, Unit> {
+pub struct BufferedDecodeEngine<C, H, Unit, Value> {
     /// Low-level codec used for one-value decoding.
     pub(super) codec: C,
     /// Policy hooks used for decode failures.
     pub(super) hooks: H,
-    /// Binds the engine to the encoded input unit type.
-    marker: PhantomData<fn(Unit)>,
+    /// Binds the engine to the encoded input unit and decoded value types.
+    marker: PhantomData<fn(Unit) -> Value>,
 }
 
-impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
+impl<C, H, Unit, Value> BufferedDecodeEngine<C, H, Unit, Value>
+where
+    C: Codec<Value, Unit>,
+    H: BufferedDecodeHooks<C, Unit, Value>,
+    Unit: Copy,
+{
     /// Creates a buffered decoder engine.
     ///
     /// # Parameters
@@ -202,12 +208,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len<Value>(&self, input_len: usize) -> Result<usize, CapacityError>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
@@ -218,22 +219,12 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     ///
     /// Returns the hook-provided final output bound.
     #[must_use]
-    pub fn max_finish_output_len<Value>(&self) -> usize
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    pub fn max_finish_output_len(&self) -> usize {
         self.hooks.max_finish_output_len(&self.codec)
     }
 
     /// Resets hook-owned state.
-    pub fn reset<Value>(&mut self)
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    pub fn reset(&mut self) {
         self.hooks.reset(&self.codec);
     }
 
@@ -255,18 +246,13 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     ///
     /// Returns hook errors when `input_index` is outside `input`, or when a
     /// concrete policy hook rejects a value.
-    pub fn transcode<Value>(
+    pub fn transcode(
         &mut self,
         input: &[Unit],
         input_index: usize,
         output: &mut [Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    ) -> Result<TranscodeProgress, H::Error> {
         if input_index > input.len() {
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
@@ -312,16 +298,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    pub fn finish<Value>(
-        &mut self,
-        output: &mut [Value],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    pub fn finish(&mut self, output: &mut [Value], output_index: usize) -> Result<TranscodeProgress, H::Error> {
         if output_index > output.len() {
             return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
@@ -335,31 +312,22 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// The caller must guarantee that at least `codec.min_units_per_value()`
     /// units are readable from `input_index`.
     #[inline(always)]
-    pub(crate) unsafe fn decode_unchecked_at<Value>(
+    pub(crate) unsafe fn decode_unchecked_at(
         &self,
         input: &[Unit],
         input_index: usize,
-    ) -> Result<(Value, NonZeroUsize), C::DecodeError>
-    where
-        C: Codec<Value, Unit>,
-        Unit: Copy,
-    {
+    ) -> Result<(Value, NonZeroUsize), C::DecodeError> {
         // SAFETY: Forwarded from this method's safety contract.
         unsafe { self.codec.decode_unchecked(input, input_index) }
     }
 
     /// Lets the configured decode hooks classify a low-level decode error.
     #[inline]
-    pub(crate) fn handle_decode_error<Value>(
+    pub(crate) fn handle_decode_error(
         &mut self,
         error: C::DecodeError,
         context: DecodeContext,
-    ) -> Result<DecodeAction<Value>, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    ) -> Result<DecodeAction<Value>, H::Error> {
         self.hooks.handle_decode_error(&self.codec, error, context)
     }
 
@@ -378,16 +346,11 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     /// # Errors
     ///
     /// Returns hook errors when the policy rejects the input.
-    fn handle_decode_result<Value>(
+    fn handle_decode_result(
         &mut self,
         state: &mut DecodeState<'_, Unit, Value>,
         result: Result<(Value, NonZeroUsize), C::DecodeError>,
-    ) -> Result<Option<TranscodeProgress>, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
+    ) -> Result<Option<TranscodeProgress>, H::Error> {
         match result {
             Ok((value, consumed)) => {
                 let input_index = state.input_cursor();

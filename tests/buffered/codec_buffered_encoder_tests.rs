@@ -103,7 +103,7 @@ unsafe impl Codec<u8, u8> for RejectOddCodec {
 fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     fn assert_buffered_encoder<T: BufferedEncoder<u8, u8>>() {}
 
-    assert_buffered_encoder::<CodecBufferedEncoder<PairByteCodec>>();
+    assert_buffered_encoder::<CodecBufferedEncoder<PairByteCodec, u8, u8>>();
 
     let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
     let mut output = [0_u8; 4];

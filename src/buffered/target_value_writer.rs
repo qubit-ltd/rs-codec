@@ -35,7 +35,7 @@ where
     Output: Copy,
 {
     /// Target-side buffered encoder engine.
-    engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks>,
+    engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks, Value, Output>,
     /// Conversion hooks used for error mapping.
     hooks: &'a H,
     /// Binds this helper to the source codec, value, and output unit types.
@@ -52,7 +52,10 @@ where
 {
     /// Creates a target-side writer.
     #[inline(always)]
-    pub(super) const fn new(engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks>, hooks: &'a H) -> Self {
+    pub(super) const fn new(
+        engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks, Value, Output>,
+        hooks: &'a H,
+    ) -> Self {
         Self {
             engine,
             hooks,
@@ -70,7 +73,7 @@ where
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let available = state.available_output();
-        let plan = match self.engine.prepare_value::<Value, Output>(pending.value(), input_index) {
+        let plan = match self.engine.prepare_value(pending.value(), input_index) {
             Ok(plan) => plan,
             Err(error) => return Err(self.hooks.map_encode_error(error)),
         };
@@ -112,7 +115,7 @@ where
         super::transcode_progress::TranscodeProgress,
         <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error,
     > {
-        match self.engine.finish::<Value, Output>(output, output_index) {
+        match self.engine.finish(output, output_index) {
             Ok(finish) => Ok(finish),
             Err(error) => Err(self.hooks.map_encode_error(error)),
         }

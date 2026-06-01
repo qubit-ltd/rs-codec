@@ -41,7 +41,10 @@ where
 {
     /// Creates a source-side finish reader.
     #[inline(always)]
-    pub(super) const fn new(engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input>, hooks: &'a H) -> Self {
+    pub(super) const fn new(
+        engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input, Value>,
+        hooks: &'a H,
+    ) -> Self {
         Self {
             source: SourceValueReader::new(engine, hooks),
         }

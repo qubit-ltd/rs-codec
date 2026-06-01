@@ -109,11 +109,11 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec, u8, u8>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec, u8, u8>>();
-    _accept_codec_buffered_encoder::<CodecBufferedEncoder<EchoCodec>>();
-    _accept_codec_buffered_decoder::<CodecBufferedDecoder<EchoCodec, u8>>();
+    _accept_codec_buffered_encoder::<CodecBufferedEncoder<EchoCodec, u8, u8>>();
+    _accept_codec_buffered_decoder::<CodecBufferedDecoder<EchoCodec, u8, u8>>();
     _accept_codec_buffered_converter::<CodecBufferedConverter<EchoCodec, EchoCodec, u8, u8, u8>>();
-    _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, (), u8>>();
-    _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, ()>>();
+    _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, (), u8, u8>>();
+    _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, (), u8, u8>>();
     let codec = EchoCodec;
 
     let encoded = ValueEncoder::<str>::encode(&codec, "abc").expect("echo encode should be infallible");

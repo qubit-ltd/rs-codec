@@ -42,7 +42,7 @@ impl<Value> PendingValueSlot<Value> {
     #[inline(always)]
     pub(super) fn max_output_len<E, H, Output>(
         &self,
-        engine: &BufferedEncodeEngine<E, H>,
+        engine: &BufferedEncodeEngine<E, H, Value, Output>,
     ) -> Result<usize, CapacityError>
     where
         E: Codec<Value, Output>,
@@ -50,7 +50,7 @@ impl<Value> PendingValueSlot<Value> {
         Output: Copy,
     {
         if self.value.is_some() {
-            engine.max_output_len::<Value, Output>(1)
+            engine.max_output_len(1)
         } else {
             Ok(0)
         }

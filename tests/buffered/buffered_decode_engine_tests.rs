@@ -272,15 +272,15 @@ impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
 
 #[test]
 fn test_buffered_decode_engine_reports_finish_bounds() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, ReplacingHooks);
+    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
-    assert_eq!(Ok(3), decoder.max_output_len::<u8>(3));
-    assert_eq!(0, decoder.max_finish_output_len::<u8>());
+    assert_eq!(Ok(3), decoder.max_output_len(3));
+    assert_eq!(0, decoder.max_finish_output_len());
 
-    decoder.reset::<u8>();
+    decoder.reset();
     let progress = decoder
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("generic decoder finish is a no-op");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(0, progress.read());
@@ -289,13 +289,13 @@ fn test_buffered_decode_engine_reports_finish_bounds() {
 
 #[test]
 fn test_buffered_decode_engine_delegates_finish_to_hooks() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
-    assert_eq!(1, decoder.max_finish_output_len::<u8>());
+    assert_eq!(1, decoder.max_finish_output_len());
 
     let progress = decoder
-        .finish::<u8>(&mut [], 0)
+        .finish(&mut [], 0)
         .expect("hook should request output for pending finish output");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -305,25 +305,23 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
         },
         progress.status(),
     );
-    assert_eq!(1, decoder.max_finish_output_len::<u8>());
+    assert_eq!(1, decoder.max_finish_output_len());
 
-    let progress = decoder
-        .finish::<u8>(&mut output, 0)
-        .expect("hook should write final output");
+    let progress = decoder.finish(&mut output, 0).expect("hook should write final output");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(0, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([0xee], output);
-    assert_eq!(0, decoder.max_finish_output_len::<u8>());
+    assert_eq!(0, decoder.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, FinishHooks::default());
     let mut output = [];
 
     let progress = decoder
-        .finish::<u8>(&mut output, 1)
+        .finish(&mut output, 1)
         .expect("out-of-range finish output index should request capacity");
 
     assert_eq!(
@@ -340,11 +338,11 @@ fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
 
 #[test]
 fn test_buffered_decode_engine_default_finish_reports_output_index_beyond_buffer() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8>::new(PrefixCodec, ReplacingHooks);
+    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 
     let progress = decoder
-        .finish::<u8>(&mut output, 1)
+        .finish(&mut output, 1)
         .expect("default finish should report out-of-range output index");
 
     assert_eq!(

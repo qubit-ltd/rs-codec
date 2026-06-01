@@ -109,7 +109,7 @@ unsafe impl Codec<u8, u8> for FixedPairCodec {
 fn test_codec_buffered_decoder_decodes_until_output_needs_capacity() {
     fn assert_buffered_decoder<T: BufferedDecoder<u8, u8>>() {}
 
-    assert_buffered_decoder::<CodecBufferedDecoder<VariableByteCodec, u8>>();
+    assert_buffered_decoder::<CodecBufferedDecoder<VariableByteCodec, u8, u8>>();
 
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 2];
