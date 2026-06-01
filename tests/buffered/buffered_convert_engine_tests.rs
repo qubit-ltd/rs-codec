@@ -244,109 +244,58 @@ struct RepairHooks {
     action: RepairAction,
 }
 
-impl BufferedConvertHooks<ErrorSourceCodec, TargetCodec, u8, u8> for RepairHooks {
+impl BufferedConvertHooks<ErrorSourceCodec, TargetCodec, u8, u8, u8> for RepairHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = RepairDecodeHooks;
     type EncodeHooks = StrictEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &ErrorSourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &ErrorSourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         RepairDecodeHooks { action: self.action }
     }
 
-    fn create_encode_hooks(&self, _decoder: &ErrorSourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &ErrorSourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         StrictEncodeHooks
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(
-        &self,
-        _decoder: &ErrorSourceCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &ErrorSourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for CopyHooks {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for CopyHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = StrictDecodeHooks;
     type EncodeHooks = StrictEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         StrictDecodeHooks
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         StrictEncodeHooks
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 
@@ -418,55 +367,32 @@ impl Default for FinishHooks {
     }
 }
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FinishHooks {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for FinishHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = FinishDecodeHooks;
     type EncodeHooks = StrictEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         FinishDecodeHooks {
             value: Some(self.value),
         }
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         StrictEncodeHooks
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
@@ -538,53 +464,30 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for BatchFinishDecodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct BatchFinishHooks;
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for BatchFinishHooks {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for BatchFinishHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = BatchFinishDecodeHooks;
     type EncodeHooks = StrictEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         BatchFinishDecodeHooks::default()
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         StrictEncodeHooks
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        StrictEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
@@ -664,53 +567,30 @@ impl BufferedEncodeHooks<TargetCodec, u8, u8> for FinishEncodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FinishEncodeHooksOnly;
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FinishEncodeHooksOnly {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for FinishEncodeHooksOnly {
+    type DecodeError = EngineError;
     type DecodeHooks = StrictDecodeHooks;
     type EncodeHooks = FinishEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FinishEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         StrictDecodeHooks
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         FinishEncodeHooks::default()
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FinishEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FinishEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FinishEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
@@ -869,22 +749,14 @@ struct ErrorPathHooks {
     encode_mode: ErrorPathEncodeMode,
 }
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for ErrorPathHooks {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for ErrorPathHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = ErrorPathDecodeHooks;
     type EncodeHooks = ErrorPathEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         ErrorPathDecodeHooks {
             finish: self.decode_finish,
             finish_len: self.decode_finish_len,
@@ -892,7 +764,7 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for ErrorPathHooks {
         }
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         ErrorPathEncodeHooks {
             finish_len: self.encode_finish_len,
             max_output_error: self.encode_max_output_error,
@@ -900,30 +772,15 @@ impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for ErrorPathHooks {
         }
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        ErrorPathEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
@@ -998,91 +855,68 @@ struct FactoryHooks {
     encode_offset: u8,
 }
 
-impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8> for FactoryHooks {
+impl BufferedConvertHooks<SourceCodec, TargetCodec, u8, u8, u8> for FactoryHooks {
+    type DecodeError = EngineError;
     type DecodeHooks = FactoryDecodeHooks;
     type EncodeHooks = FactoryEncodeHooks;
-    type EncodeError<Output>
-        = EngineError
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy;
-    type Error<Output>
-        = ConvertEngineError<EngineError>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FactoryEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
 
-    fn create_decode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::DecodeHooks {
         FactoryDecodeHooks {
             marker: self.decode_marker,
         }
     }
 
-    fn create_encode_hooks(&self, _decoder: &SourceCodec, _encoder: &TargetCodec) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &SourceCodec, _encode_codec: &TargetCodec) -> Self::EncodeHooks {
         FactoryEncodeHooks {
             offset: self.encode_offset,
         }
     }
 
-    fn map_decode_error<Output>(&self, error: EngineError) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FactoryEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         ConvertEngineError::Decode(error)
     }
 
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FactoryEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
 
-    fn invalid_input_index<Output>(&self, _decoder: &SourceCodec, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        TargetCodec: Codec<u8, Output>,
-        Output: Copy,
-        FactoryEncodeHooks: BufferedEncodeHooks<TargetCodec, u8, Output, Error = Self::EncodeError<Output>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
         ConvertEngineError::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
 #[test]
 fn test_buffered_convert_engine_reports_bounds_and_resets() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
 
-    assert_eq!(Ok(3), engine.max_output_len::<u8>(3));
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(3), engine.max_output_len(3));
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 
-    engine.reset::<u8>();
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    engine.reset();
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_default_builds_engine() {
-    let mut engine = BufferedConvertEngine::<SourceCodec, TargetCodec, CopyHooks, u8, u8>::default();
+    let mut engine = BufferedConvertEngine::<SourceCodec, TargetCodec, CopyHooks, u8, u8, u8>::default();
     let mut output = [0_u8; 1];
 
     let progress = engine
-        .transcode::<u8>(&[8], 0, &mut output, 0)
+        .transcode(&[8], 0, &mut output, 0)
         .expect("default components should convert one value");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 1), (progress.read(), progress.written()));
     assert_eq!([9], output);
 
-    engine.reset::<u8>();
+    engine.reset();
 }
 
 #[test]
 fn test_buffered_convert_engine_new_uses_convert_hook_factories() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         FactoryHooks {
@@ -1091,27 +925,27 @@ fn test_buffered_convert_engine_new_uses_convert_hook_factories() {
         },
     );
 
-    assert_eq!(Ok(11), engine.max_output_len::<u8>(1));
+    assert_eq!(Ok(11), engine.max_output_len(1));
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut output, 0)
+        .transcode(&[1], 0, &mut output, 0)
         .expect("factory-created encode hooks should convert the value");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 1), (progress.read(), progress.written()));
     assert_eq!([9], output);
 
-    engine.reset::<u8>();
+    engine.reset();
 }
 
 #[test]
 fn test_buffered_convert_engine_owns_pending_value_between_calls() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut empty_output = [0_u8; 0];
 
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut empty_output, 0)
+        .transcode(&[1], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded value when output is empty");
 
     assert_eq!(
@@ -1123,27 +957,27 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
         progress.status(),
     );
     assert_eq!((1, 0), (progress.read(), progress.written()));
-    assert_eq!(Ok(2), engine.max_output_len::<u8>(1));
-    assert_eq!(Ok(1), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(2), engine.max_output_len(1));
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
     let progress = engine
-        .transcode::<u8>(&[9], 0, &mut output, 0)
+        .transcode(&[9], 0, &mut output, 0)
         .expect("conversion should drain pending before reading new input");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 2), (progress.read(), progress.written()));
     assert_eq!([2, 10], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut empty_output = [0_u8; 0];
 
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut empty_output, 0)
+        .transcode(&[1], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded value when output is empty");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1156,7 +990,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!((1, 0), (progress.read(), progress.written()));
 
     let progress = engine
-        .transcode::<u8>(&[9], 0, &mut empty_output, 0)
+        .transcode(&[9], 0, &mut empty_output, 0)
         .expect("conversion should report pending output before reading new input");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1167,11 +1001,11 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
         progress.status(),
     );
     assert_eq!((0, 0), (progress.read(), progress.written()));
-    assert_eq!(Ok(2), engine.max_output_len::<u8>(1));
+    assert_eq!(Ok(2), engine.max_output_len(1));
 
     let mut output = [0_u8; 2];
     let progress = engine
-        .transcode::<u8>(&[9], 0, &mut output, 0)
+        .transcode(&[9], 0, &mut output, 0)
         .expect("conversion should keep pending value after repeated output starvation");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 2), (progress.read(), progress.written()));
@@ -1180,16 +1014,16 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
 
 #[test]
 fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode::<u8>(&[12], 0, &mut empty_output, 0)
+        .transcode(&[12], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded value before encoding");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
 
     let mut output = [0_u8; 1];
     let error = engine
-        .transcode::<u8>(&[1], 0, &mut output, 0)
+        .transcode(&[1], 0, &mut output, 0)
         .expect_err("pending encode error should be mapped before new input is consumed");
 
     assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
@@ -1198,11 +1032,11 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
 
 #[test]
 fn test_buffered_convert_engine_reports_invalid_indices() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut output = [0_u8; 1];
 
     let error = engine
-        .transcode::<u8>(&[1], 2, &mut output, 0)
+        .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
     assert_eq!(
         ConvertEngineError::Decode(EngineError::InvalidInputIndex { index: 2, input_len: 1 }),
@@ -1210,7 +1044,7 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
     );
 
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut output, 2)
+        .transcode(&[1], 0, &mut output, 2)
         .expect("invalid output index is reported as NeedOutput");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1224,7 +1058,7 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
 
 #[test]
 fn test_buffered_convert_engine_reports_capacity_errors() {
-    let engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1232,9 +1066,9 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
             ..ErrorPathHooks::default()
         },
     );
-    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_output_len::<u8>(1));
+    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_output_len(1));
 
-    let engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1243,12 +1077,9 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
             ..ErrorPathHooks::default()
         },
     );
-    assert_eq!(
-        Err(CapacityError::OutputLengthOverflow),
-        engine.max_finish_output_len::<u8>()
-    );
+    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_finish_output_len());
 
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1258,16 +1089,13 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     );
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut empty_output, 0)
+        .transcode(&[1], 0, &mut empty_output, 0)
         .expect("conversion should retain pending value");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
-    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_output_len::<u8>(0));
-    assert_eq!(
-        Err(CapacityError::OutputLengthOverflow),
-        engine.max_finish_output_len::<u8>()
-    );
+    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_output_len(0));
+    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_finish_output_len());
 
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1276,18 +1104,15 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
         },
     );
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut empty_output, 0)
+        .transcode(&[1], 0, &mut empty_output, 0)
         .expect("conversion should retain pending value");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
-    assert_eq!(
-        Err(CapacityError::OutputLengthOverflow),
-        engine.max_finish_output_len::<u8>()
-    );
+    assert_eq!(Err(CapacityError::OutputLengthOverflow), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_maps_prepare_encode_error() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1299,7 +1124,7 @@ fn test_buffered_convert_engine_maps_prepare_encode_error() {
     let mut output = [0_u8; 1];
 
     let error = engine
-        .transcode::<u8>(&[1], 0, &mut output, 0)
+        .transcode(&[1], 0, &mut output, 0)
         .expect_err("prepare encode error should be mapped through convert hooks");
 
     assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
@@ -1308,11 +1133,11 @@ fn test_buffered_convert_engine_maps_prepare_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut output = [];
 
     let progress = engine
-        .finish::<u8>(&mut output, 1)
+        .finish(&mut output, 1)
         .expect("out-of-range finish output index should request capacity");
 
     assert_eq!(
@@ -1327,7 +1152,7 @@ fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_decode_error() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1339,7 +1164,7 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
     let mut output = [0_u8; 1];
 
     let error = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect_err("decode finish error should be mapped through convert hooks");
 
     assert_eq!(ConvertEngineError::Decode(EngineError::Decode), error);
@@ -1348,7 +1173,7 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_encode_error() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1360,7 +1185,7 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
     let mut output = [0_u8; 1];
 
     let error = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect_err("encode finish error should be mapped through convert hooks");
 
     assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
@@ -1369,16 +1194,16 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode::<u8>(&[12], 0, &mut empty_output, 0)
+        .transcode(&[12], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded value before encoding");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
 
     let mut output = [0_u8; 1];
     let error = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect_err("finish should map pending encode error");
 
     assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
@@ -1387,11 +1212,12 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks { value: 13 });
+    let mut engine =
+        BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks { value: 13 });
     let mut output = [0_u8; 1];
 
     let error = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect_err("finish should map encode errors for decoder-emitted values");
 
     assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
@@ -1401,7 +1227,7 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
 #[test]
 #[should_panic(expected = "buffered decode engine finish cannot request source input")]
 fn test_buffered_convert_engine_rejects_decode_finish_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1412,13 +1238,13 @@ fn test_buffered_convert_engine_rejects_decode_finish_need_input() {
     );
     let mut output = [0_u8; 1];
 
-    let _ = engine.finish::<u8>(&mut output, 0);
+    let _ = engine.finish(&mut output, 0);
 }
 
 #[test]
 #[should_panic(expected = "decode finish hook must emit progress before requesting more decoded output")]
 fn test_buffered_convert_engine_rejects_decode_finish_need_output_without_value() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1429,13 +1255,13 @@ fn test_buffered_convert_engine_rejects_decode_finish_need_output_without_value(
     );
     let mut output = [0_u8; 1];
 
-    let _ = engine.finish::<u8>(&mut output, 0);
+    let _ = engine.finish(&mut output, 0);
 }
 
 #[test]
 #[should_panic(expected = "buffered decode engine finish cannot request source input")]
 fn test_buffered_convert_engine_rejects_decode_finish_emit_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1446,13 +1272,13 @@ fn test_buffered_convert_engine_rejects_decode_finish_emit_need_input() {
     );
     let mut output = [0_u8; 1];
 
-    let _ = engine.finish::<u8>(&mut output, 0);
+    let _ = engine.finish(&mut output, 0);
 }
 
 #[test]
 #[should_panic(expected = "buffered encode engine cannot request source input")]
 fn test_buffered_convert_engine_rejects_encode_finish_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         SourceCodec,
         TargetCodec,
         ErrorPathHooks {
@@ -1463,12 +1289,12 @@ fn test_buffered_convert_engine_rejects_encode_finish_need_input() {
     );
     let mut output = [0_u8; 1];
 
-    let _ = engine.finish::<u8>(&mut output, 0);
+    let _ = engine.finish(&mut output, 0);
 }
 
 #[test]
 fn test_buffered_convert_engine_applies_decode_policy_skip() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         ErrorSourceCodec,
         TargetCodec,
         RepairHooks {
@@ -1478,7 +1304,7 @@ fn test_buffered_convert_engine_applies_decode_policy_skip() {
     let mut output = [0_u8; 1];
 
     let progress = engine
-        .transcode::<u8>(&[1, 2], 0, &mut output, 0)
+        .transcode(&[1, 2], 0, &mut output, 0)
         .expect("skip policy should consume invalid source units");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
@@ -1488,7 +1314,7 @@ fn test_buffered_convert_engine_applies_decode_policy_skip() {
 
 #[test]
 fn test_buffered_convert_engine_applies_decode_policy_emit() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         ErrorSourceCodec,
         TargetCodec,
         RepairHooks {
@@ -1498,7 +1324,7 @@ fn test_buffered_convert_engine_applies_decode_policy_emit() {
     let mut output = [0_u8; 2];
 
     let progress = engine
-        .transcode::<u8>(&[1, 2], 0, &mut output, 0)
+        .transcode(&[1, 2], 0, &mut output, 0)
         .expect("emit policy should replace invalid source units");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
@@ -1508,7 +1334,7 @@ fn test_buffered_convert_engine_applies_decode_policy_emit() {
 
 #[test]
 fn test_buffered_convert_engine_applies_decode_policy_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(
         ErrorSourceCodec,
         TargetCodec,
         RepairHooks {
@@ -1518,7 +1344,7 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
     let mut output = [0_u8; 1];
 
     let progress = engine
-        .transcode::<u8>(&[1], 0, &mut output, 0)
+        .transcode(&[1], 0, &mut output, 0)
         .expect("need-input policy should stop without consuming input");
 
     assert_eq!(
@@ -1534,15 +1360,15 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_pending_value() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode::<u8>(&[4], 0, &mut empty_output, 0)
+        .transcode(&[4], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded value");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
 
     let progress = engine
-        .finish::<u8>(&mut empty_output, 0)
+        .finish(&mut empty_output, 0)
         .expect("finish should keep pending value when output is empty");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1556,7 +1382,7 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("finish should write pending value");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((0, 1), (progress.read(), progress.written()));
@@ -1565,12 +1391,13 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
 
 #[test]
 fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks::default());
-    assert_eq!(Ok(1), engine.max_finish_output_len::<u8>());
+    let mut engine =
+        BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks::default());
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .finish::<u8>(&mut empty_output, 0)
+        .finish(&mut empty_output, 0)
         .expect("finish should retain decoder finish value when target output is empty");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1581,47 +1408,48 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
         progress.status(),
     );
     assert_eq!((0, 0), (progress.read(), progress.written()));
-    assert_eq!(Ok(1), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("finish should encode decoder finish value");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((0, 1), (progress.read(), progress.written()));
     assert_eq!([40], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, BatchFinishHooks);
-    assert_eq!(Ok(2), engine.max_finish_output_len::<u8>());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, BatchFinishHooks);
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("finish should keep draining decoder finish batches");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((0, 2), (progress.read(), progress.written()));
     assert_eq!([50, 51], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_output() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks::default());
+    let mut engine =
+        BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, FinishHooks::default());
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode::<u8>(&[4], 0, &mut empty_output, 0)
+        .transcode(&[4], 0, &mut empty_output, 0)
         .expect("conversion should retain decoded input value");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
-    assert_eq!(Ok(2), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("finish should write pending input value first");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1633,11 +1461,11 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     );
     assert_eq!((0, 1), (progress.read(), progress.written()));
     assert_eq!([5], output);
-    assert_eq!(Ok(1), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("finish should then write decoder finish value");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((0, 1), (progress.read(), progress.written()));
@@ -1646,12 +1474,12 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
 
 #[test]
 fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
-    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8>::new(SourceCodec, TargetCodec, FinishEncodeHooksOnly);
-    assert_eq!(Ok(1), engine.max_finish_output_len::<u8>());
+    let mut engine = BufferedConvertEngine::<_, _, _, u8, u8, u8>::new(SourceCodec, TargetCodec, FinishEncodeHooksOnly);
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
     let progress = engine
-        .finish::<u8>(&mut empty_output, 0)
+        .finish(&mut empty_output, 0)
         .expect("target finish hook should request output capacity");
     assert_eq!(
         TranscodeStatus::NeedOutput {
@@ -1664,10 +1492,10 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
 
     let mut output = [0_u8; 1];
     let progress = engine
-        .finish::<u8>(&mut output, 0)
+        .finish(&mut output, 0)
         .expect("target finish hook should write final output");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((0, 1), (progress.read(), progress.written()));
     assert_eq!([0xee], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len::<u8>());
+    assert_eq!(Ok(0), engine.max_finish_output_len());
 }

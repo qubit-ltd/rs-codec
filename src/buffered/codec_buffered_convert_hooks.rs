@@ -11,7 +11,6 @@
 
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
-    buffered_encode_hooks::BufferedEncodeHooks,
     codec_buffered_decode_hooks::CodecBufferedDecodeHooks,
     codec_buffered_encode_hooks::CodecBufferedEncodeHooks,
 };
@@ -38,54 +37,39 @@ impl CodecBufferedConvertHooks {
     }
 }
 
-impl<D, E, Value, InputUnit> BufferedConvertHooks<D, E, InputUnit, Value> for CodecBufferedConvertHooks
+impl<D, E, Value, InputUnit, OutputUnit> BufferedConvertHooks<D, E, InputUnit, Value, OutputUnit>
+    for CodecBufferedConvertHooks
 where
     D: Codec<Value, InputUnit>,
+    E: Codec<Value, OutputUnit>,
     InputUnit: Copy,
+    OutputUnit: Copy,
 {
+    type DecodeError = CodecDecodeError<D::DecodeError>;
     type DecodeHooks = CodecBufferedDecodeHooks;
+    type EncodeError = CodecEncodeError<E::EncodeError>;
     type EncodeHooks = CodecBufferedEncodeHooks;
-    type EncodeError<OutputUnit>
-        = CodecEncodeError<E::EncodeError>
-    where
-        E: Codec<Value, OutputUnit>,
-        OutputUnit: Copy;
-    type Error<OutputUnit>
-        = CodecConvertError<D::DecodeError, E::EncodeError>
-    where
-        E: Codec<Value, OutputUnit>,
-        OutputUnit: Copy,
-        CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>;
+    type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
 
     /// Creates strict codec-backed decode hooks.
-    fn create_decode_hooks(&self, _decoder: &D, _encoder: &E) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
 
     /// Creates strict codec-backed encode hooks.
-    fn create_encode_hooks(&self, _decoder: &D, _encoder: &E) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
 
     /// Maps decoder errors into converter decode errors.
     #[inline(always)]
-    fn map_decode_error<OutputUnit>(&self, error: CodecDecodeError<D::DecodeError>) -> Self::Error<OutputUnit>
-    where
-        E: Codec<Value, OutputUnit>,
-        OutputUnit: Copy,
-        CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>,
-    {
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         CodecConvertError::decode(error)
     }
 
     /// Maps encoder errors into converter encode errors.
     #[inline(always)]
-    fn map_encode_error<OutputUnit>(&self, error: Self::EncodeError<OutputUnit>) -> Self::Error<OutputUnit>
-    where
-        E: Codec<Value, OutputUnit>,
-        OutputUnit: Copy,
-        CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>,
-    {
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         match error {
             CodecEncodeError::Encode { source, .. } => CodecConvertError::encode(source),
             CodecEncodeError::InvalidInputIndex { .. } => {
@@ -96,12 +80,7 @@ where
 
     /// Creates an invalid source input index error.
     #[inline(always)]
-    fn invalid_input_index<OutputUnit>(&self, _decoder: &D, index: usize, input_len: usize) -> Self::Error<OutputUnit>
-    where
-        E: Codec<Value, OutputUnit>,
-        OutputUnit: Copy,
-        CodecBufferedEncodeHooks: BufferedEncodeHooks<E, Value, OutputUnit, Error = Self::EncodeError<OutputUnit>>,
-    {
+    fn invalid_input_index(&self, _decode_codec: &D, index: usize, input_len: usize) -> Self::Error {
         CodecConvertError::decode(CodecDecodeError::invalid_input_index(index, input_len))
     }
 

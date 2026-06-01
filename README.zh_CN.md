@@ -87,8 +87,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`BufferedDecodeHooks<C, Unit, Value>`**：供带策略 codec-backed decoder
   共享公共 decode 循环时实现的策略 hook trait。
 - **`DecodeAction<Value>`**：decoder engine hook 在 transcode 阶段返回的策略动作。
-- **`CodecBufferedConverter<D, E, Value, InputUnit>`**：组合一个解码 codec 和一个编码
-  codec，形成无策略的 `BufferedConverter`。
+- **`CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>`**：组合一个解码
+  codec 和一个编码 codec，形成无策略的 `BufferedConverter`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -168,7 +168,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecValueDecoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把恰好一个借用 `[Unit]` slice 解码成 `Value` |
 | `CodecBufferedEncoder<C>` | 通过 `C: Codec<Value, Unit>` 把 `Value` slice 编码进调用方提供的 `Unit` 缓冲区 |
 | `CodecBufferedDecoder<C, Unit>` | 通过 `C: Codec<Value, Unit>` 严格地把 `Unit` slice 解码进调用方提供的 `Value` 缓冲区 |
-| `CodecBufferedConverter<D, E, Value, InputUnit>` | 先用 `D: Codec<Value, InputUnit>` 解码 source unit，再用 `E: Codec<Value, OutputUnit>` 编码 target unit |
+| `CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>` | 先用 `D: Codec<Value, InputUnit>` 解码 source unit，再用 `E: Codec<Value, OutputUnit>` 编码 target unit |
 
 ### Encoder Hooks 和 Engine
 

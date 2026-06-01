@@ -39,22 +39,27 @@ use crate::{
 /// - `E`: Low-level codec used to encode target units.
 /// - `Value`: Logical value decoded by `D` and encoded by `E`.
 /// - `InputUnit`: Encoded source unit type accepted by `D`.
+/// - `OutputUnit`: Encoded target unit type produced by `E`.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecBufferedConverter<D, E, Value, InputUnit>
+pub struct CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
 where
     D: Codec<Value, InputUnit>,
+    E: Codec<Value, OutputUnit>,
     InputUnit: Copy,
+    OutputUnit: Copy,
 {
     /// Common buffered converter engine.
-    engine: BufferedConvertEngine<D, E, CodecBufferedConvertHooks, InputUnit, Value>,
-    /// Binds the adapter to one decoded logical value and source unit type.
-    marker: PhantomData<fn(Value, InputUnit)>,
+    engine: BufferedConvertEngine<D, E, CodecBufferedConvertHooks, InputUnit, Value, OutputUnit>,
+    /// Binds the adapter to one decoded logical value and source/target unit type.
+    marker: PhantomData<fn(Value, InputUnit, OutputUnit)>,
 }
 
-impl<D, E, Value, InputUnit> CodecBufferedConverter<D, E, Value, InputUnit>
+impl<D, E, Value, InputUnit, OutputUnit> CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
 where
     D: Codec<Value, InputUnit>,
+    E: Codec<Value, OutputUnit>,
     InputUnit: Copy,
+    OutputUnit: Copy,
 {
     /// Creates a buffered converter backed by decoder and encoder codecs.
     ///
@@ -76,7 +81,7 @@ where
 }
 
 impl<D, E, Value, InputUnit, OutputUnit> Transcoder<InputUnit, OutputUnit>
-    for CodecBufferedConverter<D, E, Value, InputUnit>
+    for CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
 where
     D: Codec<Value, InputUnit>,
     E: Codec<Value, OutputUnit>,
@@ -88,17 +93,17 @@ where
 
     /// Returns an upper bound for target units produced from `input_len` units.
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        self.engine.max_output_len::<OutputUnit>(input_len)
+        self.engine.max_output_len(input_len)
     }
 
     /// Returns the maximum target units emitted by finishing internal state.
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        self.engine.max_finish_output_len::<OutputUnit>()
+        self.engine.max_finish_output_len()
     }
 
     /// Clears retained pending output.
     fn reset(&mut self) {
-        self.engine.reset::<OutputUnit>();
+        self.engine.reset();
     }
 
     /// Converts source units into target units.
@@ -109,18 +114,17 @@ where
         output: &mut [OutputUnit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        self.engine
-            .transcode::<OutputUnit>(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
     fn finish(&mut self, output: &mut [OutputUnit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
-        self.engine.finish::<OutputUnit>(output, output_index)
+        self.engine.finish(output, output_index)
     }
 }
 
 impl<D, E, Value, InputUnit, OutputUnit> BufferedConverter<InputUnit, OutputUnit>
-    for CodecBufferedConverter<D, E, Value, InputUnit>
+    for CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
 where
     D: Codec<Value, InputUnit>,
     E: Codec<Value, OutputUnit>,

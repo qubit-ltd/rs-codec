@@ -13,4 +13,4 @@ use super::buffered_convert_hooks::BufferedConvertHooks;
 
 /// Converter error type selected by hooks for one target output unit type.
 pub(super) type ConvertErrorOf<D, E, H, Input, Value, Output> =
-    <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>;
+    <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error;

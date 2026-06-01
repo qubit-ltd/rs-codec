@@ -12,7 +12,6 @@
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
-    buffered_encode_hooks::BufferedEncodeHooks,
     convert_decode_finish_result::ConvertDecodeFinishResult,
     decode_finish_step::DecodeFinishStep,
     source_value_reader::SourceValueReader,
@@ -20,21 +19,25 @@ use super::{
 use crate::Codec;
 
 /// Source-side finish reader used by the converter finalization path.
-pub(super) struct SourceFinishReader<'a, D, E, H, Input, Value>
+pub(super) struct SourceFinishReader<'a, D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Source-side reader used for finish hook dispatch.
-    source: SourceValueReader<'a, D, E, H, Input, Value>,
+    source: SourceValueReader<'a, D, E, H, Input, Value, Output>,
 }
 
-impl<'a, D, E, H, Input, Value> SourceFinishReader<'a, D, E, H, Input, Value>
+impl<'a, D, E, H, Input, Value, Output> SourceFinishReader<'a, D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Creates a source-side finish reader.
     #[inline(always)]
@@ -55,15 +58,12 @@ where
     ///
     /// Returns mapped decode errors produced by source-side finish hooks.
     #[inline]
-    pub(super) fn read_next<Output>(&mut self) -> ConvertDecodeFinishResult<D, E, H, Input, Value, Output>
+    pub(super) fn read_next(&mut self) -> ConvertDecodeFinishResult<D, E, H, Input, Value, Output>
     where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
         Value: Default,
-        Output: Copy,
     {
         let mut decoded: [Value; 1] = core::array::from_fn(|_| Value::default());
-        let finish = self.source.finish_one::<Output>(&mut decoded)?;
+        let finish = self.source.finish_one(&mut decoded)?;
         Ok(DecodeFinishStep::from_progress(finish, decoded))
     }
 }

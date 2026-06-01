@@ -16,4 +16,4 @@ use super::{
 
 /// Result type for source-side finish steps.
 pub(super) type ConvertDecodeFinishResult<D, E, H, Input, Value, Output> =
-    Result<DecodeFinishStep<Value>, <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>>;
+    Result<DecodeFinishStep<Value>, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error>;

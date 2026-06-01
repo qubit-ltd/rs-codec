@@ -14,7 +14,6 @@ use core::marker::PhantomData;
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
-    buffered_encode_hooks::BufferedEncodeHooks,
     convert_decode_attempt_result::ConvertDecodeAttemptResult,
     convert_state::ConvertState,
     decode_step::DecodeStep,
@@ -22,25 +21,29 @@ use super::{
 use crate::Codec;
 
 /// Source-side reader object used by the converter coordinator.
-pub(super) struct SourceValueReader<'a, D, E, H, Input, Value>
+pub(super) struct SourceValueReader<'a, D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Source-side buffered decoder engine.
     engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input>,
     /// Conversion hooks used for error mapping.
     hooks: &'a H,
-    /// Binds this helper to the target codec and value types.
-    marker: PhantomData<fn(E, Value)>,
+    /// Binds this helper to the target codec, value, and output unit types.
+    marker: PhantomData<fn(E, Value, Output)>,
 }
 
-impl<'a, D, E, H, Input, Value> SourceValueReader<'a, D, E, H, Input, Value>
+impl<'a, D, E, H, Input, Value, Output> SourceValueReader<'a, D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Creates a source-side reader.
     #[inline(always)]
@@ -54,15 +57,10 @@ where
 
     /// Reads the next source value or source-side stop condition.
     #[inline(always)]
-    pub(super) fn read_next<Output>(
+    pub(super) fn read_next(
         &mut self,
         state: &ConvertState<'_, Input, Output>,
-    ) -> ConvertDecodeAttemptResult<D, E, H, Input, Value, Output>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    ) -> ConvertDecodeAttemptResult<D, E, H, Input, Value, Output> {
         let available = state.available_input();
         let min_units = self.engine.codec.min_units_per_value().get();
         if let Some(attempt) = state.need_input_for_min_units(min_units) {
@@ -87,7 +85,7 @@ where
                 let context = state.decode_context();
                 let action = match self.engine.handle_decode_error(error, context) {
                     Ok(action) => action,
-                    Err(error) => return Err(self.hooks.map_decode_error::<Output>(error)),
+                    Err(error) => return Err(self.hooks.map_decode_error(error)),
                 };
                 Ok(action.into_step(context.input_index, context.available))
             }
@@ -96,21 +94,16 @@ where
 
     /// Lets source-side finish hooks emit at most one final value.
     #[inline]
-    pub(super) fn finish_one<Output>(
+    pub(super) fn finish_one(
         &mut self,
         decoded: &mut [Value; 1],
     ) -> Result<
         super::transcode_progress::TranscodeProgress,
-        <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>,
-    >
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+        <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error,
+    > {
         match self.engine.finish::<Value>(decoded, 0) {
             Ok(finish) => Ok(finish),
-            Err(error) => Err(self.hooks.map_decode_error::<Output>(error)),
+            Err(error) => Err(self.hooks.map_decode_error(error)),
         }
     }
 }

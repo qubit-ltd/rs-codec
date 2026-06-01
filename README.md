@@ -103,8 +103,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   sharing the common decode loop.
 - **`DecodeAction<Value>`**: hook return value used by decoder engines for
   transcode-stage policy decisions.
-- **`CodecBufferedConverter<D, E, Value, InputUnit>`**: composes a decoding codec
-  and an encoding codec as a policy-free `BufferedConverter`.
+- **`CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>`**: composes a
+  decoding codec and an encoding codec as a policy-free `BufferedConverter`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -187,7 +187,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecValueDecoder<C, Value, Unit>` | Decode exactly one borrowed `[Unit]` slice into `Value` by using `C: Codec<Value, Unit>` |
 | `CodecBufferedEncoder<C>` | Encode `Value` slices into caller-provided `Unit` buffers by using `C: Codec<Value, Unit>` |
 | `CodecBufferedDecoder<C, Unit>` | Strictly decode `Unit` slices into caller-provided `Value` buffers by using `C: Codec<Value, Unit>` |
-| `CodecBufferedConverter<D, E, Value, InputUnit>` | Decode source units with `D: Codec<Value, InputUnit>` and encode target units with `E: Codec<Value, OutputUnit>` |
+| `CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>` | Decode source units with `D: Codec<Value, InputUnit>` and encode target units with `E: Codec<Value, OutputUnit>` |
 
 ### Encoder Hooks And Engines
 

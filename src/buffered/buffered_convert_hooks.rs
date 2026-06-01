@@ -27,57 +27,56 @@ use crate::Codec;
 ///
 /// # Type Parameters
 ///
-/// - `D`: Source-side codec owned by the converter engine.
-/// - `E`: Target-side codec owned by the converter engine.
+/// - `D`: Source-side decode codec owned by the converter engine.
+/// - `E`: Target-side encode codec owned by the converter engine.
 /// - `Input`: Source unit type.
 /// - `Value`: Logical value decoded from `Input` and encoded into target units.
-pub trait BufferedConvertHooks<D, E, Input, Value>
+/// - `Output`: Target unit type produced by `E`.
+pub trait BufferedConvertHooks<D, E, Input, Value, Output>
 where
     D: Codec<Value, Input>,
+    E: Codec<Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
-    /// Decode policy hooks used by the internal buffered decoder.
-    type DecodeHooks: BufferedDecodeHooks<D, Input, Value>;
+    /// Error type returned by the buffered converter.
+    type Error;
 
-    /// Encode policy hooks used by the internal buffered encoder.
-    type EncodeHooks;
+    /// Error type returned by the selected decode hooks.
+    type DecodeError;
 
     /// Error type returned by the selected encode hooks.
-    type EncodeError<Output>
-    where
-        E: Codec<Value, Output>,
-        Output: Copy;
+    type EncodeError;
 
-    /// Error type returned by the buffered converter.
-    type Error<Output>
-    where
-        E: Codec<Value, Output>,
-        Output: Copy,
-        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>;
+    /// Decode policy hooks used by the internal buffered decoder.
+    type DecodeHooks: BufferedDecodeHooks<D, Input, Value, Error = Self::DecodeError>;
+
+    /// Encode policy hooks used by the internal buffered encoder.
+    type EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError>;
 
     /// Creates decode policy hooks for the internal buffered decoder.
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Source codec owned by the converter engine.
-    /// - `encoder`: Target codec owned by the converter engine.
+    /// - `decode_codec`: Source codec owned by the converter engine.
+    /// - `encode_codec`: Target codec owned by the converter engine.
     ///
     /// # Returns
     ///
     /// Returns the decode hooks used by the internal buffered decoder.
-    fn create_decode_hooks(&self, decoder: &D, encoder: &E) -> Self::DecodeHooks;
+    fn create_decode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::DecodeHooks;
 
     /// Creates encode policy hooks for the internal buffered encoder.
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Source codec owned by the converter engine.
-    /// - `encoder`: Target codec owned by the converter engine.
+    /// - `decode_codec`: Source codec owned by the converter engine.
+    /// - `encode_codec`: Target codec owned by the converter engine.
     ///
     /// # Returns
     ///
     /// Returns the encode hooks used by the internal buffered encoder.
-    fn create_encode_hooks(&self, decoder: &D, encoder: &E) -> Self::EncodeHooks;
+    fn create_encode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::EncodeHooks;
 
     /// Maps a decode-engine error into the converter error type.
     ///
@@ -88,14 +87,7 @@ where
     /// # Returns
     ///
     /// Returns the converter-level error.
-    fn map_decode_error<Output>(
-        &self,
-        error: <Self::DecodeHooks as BufferedDecodeHooks<D, Input, Value>>::Error,
-    ) -> Self::Error<Output>
-    where
-        E: Codec<Value, Output>,
-        Output: Copy,
-        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>;
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error;
 
     /// Maps an encode-engine error into the converter error type.
     ///
@@ -106,11 +98,7 @@ where
     /// # Returns
     ///
     /// Returns the converter-level error.
-    fn map_encode_error<Output>(&self, error: Self::EncodeError<Output>) -> Self::Error<Output>
-    where
-        E: Codec<Value, Output>,
-        Output: Copy,
-        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>;
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
 
     /// Builds an error for a caller-supplied source input index outside the input slice.
     ///
@@ -120,18 +108,14 @@ where
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Source codec owned by the engine.
+    /// - `decode_codec`: Source codec owned by the engine.
     /// - `index`: Invalid absolute input index supplied by the caller.
     /// - `input_len`: Length of the input slice.
     ///
     /// # Returns
     ///
     /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index<Output>(&self, decoder: &D, index: usize, input_len: usize) -> Self::Error<Output>
-    where
-        E: Codec<Value, Output>,
-        Output: Copy,
-        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>;
+    fn invalid_input_index(&self, decode_codec: &D, index: usize, input_len: usize) -> Self::Error;
 
     /// Returns the additional output units requested when `output_index` is invalid.
     ///
@@ -139,21 +123,16 @@ where
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Source codec owned by the engine.
-    /// - `encoder`: Target codec owned by the engine.
+    /// - `decode_codec`: Source codec owned by the engine.
+    /// - `encode_codec`: Target codec owned by the engine.
     ///
     /// # Returns
     ///
     /// Returns at least one additional output unit.
     #[must_use]
     #[inline(always)]
-    fn invalid_output_additional<Output>(&self, _decoder: &D, encoder: &E) -> NonZeroUsize
-    where
-        E: Codec<Value, Output>,
-        Output: Copy,
-        Self::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError<Output>>,
-    {
-        encoder.max_units_per_value()
+    fn invalid_output_additional(&self, _decode_codec: &D, encode_codec: &E) -> NonZeroUsize {
+        encode_codec.max_units_per_value()
     }
 
     /// Resets conversion-level hook-owned state.

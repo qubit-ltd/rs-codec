@@ -18,7 +18,6 @@ use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
     buffered_encode_engine::BufferedEncodeEngine,
-    buffered_encode_hooks::BufferedEncodeHooks,
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     decode_finish_step::DecodeFinishStep,
@@ -57,12 +56,15 @@ use crate::{
 /// - `H`: Conversion-level policy hooks.
 /// - `Input`: Source unit type.
 /// - `Value`: Logical value decoded by `D` and encoded by `E`.
+/// - `Output`: Target unit type produced by `E`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct BufferedConvertEngine<D, E, H, Input, Value>
+pub struct BufferedConvertEngine<D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Source-side buffered decoder engine.
     decode_engine: BufferedDecodeEngine<D, H::DecodeHooks, Input>,
@@ -72,15 +74,17 @@ where
     hooks: H,
     /// Decoded value waiting for target output capacity.
     pending: PendingValueSlot<Value>,
-    /// Binds the engine to one decoded logical value type.
-    marker: PhantomData<fn(Value)>,
+    /// Binds the engine to one decoded logical value and target unit type.
+    marker: PhantomData<fn(Value, Output)>,
 }
 
-impl<D, E, H, Input, Value> BufferedConvertEngine<D, E, H, Input, Value>
+impl<D, E, H, Input, Value, Output> BufferedConvertEngine<D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input>,
-    H: BufferedConvertHooks<D, E, Input, Value>,
+    E: Codec<Value, Output>,
+    H: BufferedConvertHooks<D, E, Input, Value, Output>,
     Input: Copy,
+    Output: Copy,
 {
     /// Creates a buffered converter engine.
     ///
@@ -124,15 +128,24 @@ where
         }
     }
 
+    /// Returns the source-side decode codec.
+    #[must_use]
+    #[inline(always)]
+    fn decode_codec(&self) -> &D {
+        &self.decode_engine.codec
+    }
+
+    /// Returns the target-side encode codec.
+    #[must_use]
+    #[inline(always)]
+    fn encode_codec(&self) -> &E {
+        &self.encode_engine.codec
+    }
+
     /// Returns an upper bound for target units produced from `input_len` units.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len<Output>(&self, input_len: usize) -> Result<usize, CapacityError>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
-        let pending_units = self.pending_output_len::<Output>()?;
+    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        let pending_units = self.pending_output_len()?;
         let decoded_values = self.decode_engine.max_output_len::<Value>(input_len)?;
         let converted_units = self.encode_engine.max_output_len::<Value, Output>(decoded_values)?;
         pending_units
@@ -142,13 +155,8 @@ where
 
     /// Returns the maximum target units emitted by finishing retained state.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_finish_output_len<Output>(&self) -> Result<usize, CapacityError>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
-        let pending_units = self.pending_output_len::<Output>()?;
+    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len::<Value>();
         let decoder_finish_units = self
             .encode_engine
@@ -178,31 +186,26 @@ where
     /// # Errors
     ///
     /// Returns hook errors when indices are invalid or concrete conversion fails.
-    pub fn transcode<Output>(
+    pub fn transcode(
         &mut self,
         input: &[Input],
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error> {
         if input_index > input.len() {
             return Err(self
                 .hooks
-                .invalid_input_index::<Output>(&self.decode_engine.codec, input_index, input.len()));
+                .invalid_input_index(self.decode_codec(), input_index, input.len()));
         }
-        debug_assert_unit_bounds::<D, Value, Input>(&self.decode_engine.codec);
-        debug_assert_unit_bounds::<E, Value, Output>(&self.encode_engine.codec);
+        debug_assert_unit_bounds::<D, Value, Input>(self.decode_codec());
+        debug_assert_unit_bounds::<E, Value, Output>(self.encode_codec());
 
         let mut state = ConvertState::new(input, input_index, output, output_index);
         if !state.output_cursor_in_bounds() {
             let additional = self
                 .hooks
-                .invalid_output_additional::<Output>(&self.decode_engine.codec, &self.encode_engine.codec);
+                .invalid_output_additional(self.decode_codec(), self.encode_codec());
             return Ok(state.need_output_progress(additional, 0));
         }
 
@@ -244,19 +247,16 @@ where
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    pub fn finish<Output>(
+    pub fn finish(
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>>
+    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error>
     where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
         Value: Default,
-        Output: Copy,
     {
-        debug_assert_unit_bounds::<D, Value, Input>(&self.decode_engine.codec);
-        debug_assert_unit_bounds::<E, Value, Output>(&self.encode_engine.codec);
+        debug_assert_unit_bounds::<D, Value, Input>(self.decode_codec());
+        debug_assert_unit_bounds::<E, Value, Output>(self.encode_codec());
         if output_index > output.len() {
             return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
@@ -273,8 +273,9 @@ where
 
         let output_cursor = state.output_cursor();
         let finish = {
-            let mut target = TargetValueWriter::<D, E, H, Input, Value>::new(&mut self.encode_engine, &self.hooks);
-            target.finish::<Output>(state.output_mut(), output_cursor)?
+            let mut target =
+                TargetValueWriter::<D, E, H, Input, Value, Output>::new(&mut self.encode_engine, &self.hooks);
+            target.finish(state.output_mut(), output_cursor)?
         };
         state.advance_output(finish.written());
         match finish.status() {
@@ -297,12 +298,7 @@ where
     }
 
     /// Resets hook-owned and component-owned state.
-    pub fn reset<Output>(&mut self)
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    pub fn reset(&mut self) {
         self.pending.clear();
         self.decode_engine.reset::<Value>();
         self.encode_engine.reset::<Value, Output>();
@@ -311,27 +307,17 @@ where
 
     /// Returns the output bound for the retained pending value.
     #[inline(always)]
-    fn pending_output_len<Output>(&self) -> Result<usize, CapacityError>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    fn pending_output_len(&self) -> Result<usize, CapacityError> {
         self.pending
             .max_output_len::<E, H::EncodeHooks, Output>(&self.encode_engine)
     }
 
     /// Writes a retained decoded value before new input is consumed.
     #[inline(always)]
-    fn drain_pending<Output>(
+    fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, Input, Output>,
-    ) -> ConvertStepResult<D, E, H, Input, Value, Output>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    ) -> ConvertStepResult<D, E, H, Input, Value, Output> {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
@@ -340,38 +326,32 @@ where
 
     /// Converts one value from the current state cursors.
     #[inline(always)]
-    fn convert_next<Output>(
+    fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, Input, Output>,
-    ) -> ConvertStepResult<D, E, H, Input, Value, Output>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    ) -> ConvertStepResult<D, E, H, Input, Value, Output> {
         let attempt = {
-            let mut source = SourceValueReader::<D, E, H, Input, Value>::new(&mut self.decode_engine, &self.hooks);
-            source.read_next::<Output>(state)?
+            let mut source =
+                SourceValueReader::<D, E, H, Input, Value, Output>::new(&mut self.decode_engine, &self.hooks);
+            source.read_next(state)?
         };
         attempt.apply_to_convert_state(state, |pending, state| self.encode_pending(pending, state))
     }
 
     /// Finishes source-side decode hooks and encodes emitted final values.
     #[inline]
-    fn finish_decoder<Output>(
+    fn finish_decoder(
         &mut self,
         state: &mut ConvertState<'_, Input, Output>,
     ) -> ConvertStepResult<D, E, H, Input, Value, Output>
     where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
         Value: Default,
-        Output: Copy,
     {
         loop {
             let step = {
-                let mut source = SourceFinishReader::<D, E, H, Input, Value>::new(&mut self.decode_engine, &self.hooks);
-                source.read_next::<Output>()?
+                let mut source =
+                    SourceFinishReader::<D, E, H, Input, Value, Output>::new(&mut self.decode_engine, &self.hooks);
+                source.read_next()?
             };
 
             match step {
@@ -386,7 +366,7 @@ where
                 }
                 #[cfg(not(debug_assertions))]
                 DecodeFinishStep::NeedOutputWithoutValue => {
-                    let additional = self.encode_engine.codec.max_units_per_value();
+                    let additional = self.encode_codec().max_units_per_value();
                     return Ok(Some(state.need_output_progress(additional, state.available_output())));
                 }
             }
@@ -395,30 +375,27 @@ where
 
     /// Encodes one pending value and applies output/pending state changes.
     #[inline(always)]
-    fn encode_pending<Output>(
+    fn encode_pending(
         &mut self,
         pending: PendingValue<Value>,
         state: &mut ConvertState<'_, Input, Output>,
-    ) -> ConvertStepResult<D, E, H, Input, Value, Output>
-    where
-        E: Codec<Value, Output>,
-        H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
-        Output: Copy,
-    {
+    ) -> ConvertStepResult<D, E, H, Input, Value, Output> {
         let step = {
-            let mut target = TargetValueWriter::<D, E, H, Input, Value>::new(&mut self.encode_engine, &self.hooks);
+            let mut target =
+                TargetValueWriter::<D, E, H, Input, Value, Output>::new(&mut self.encode_engine, &self.hooks);
             target.write_pending(pending, state)?
         };
         Ok(self.pending.apply_pending_encode_step(step, state))
     }
 }
 
-impl<D, E, H, Input, Value> Default for BufferedConvertEngine<D, E, H, Input, Value>
+impl<D, E, H, Input, Value, Output> Default for BufferedConvertEngine<D, E, H, Input, Value, Output>
 where
     D: Codec<Value, Input> + Default,
-    E: Default,
-    H: BufferedConvertHooks<D, E, Input, Value> + Default,
+    E: Codec<Value, Output> + Default,
+    H: BufferedConvertHooks<D, E, Input, Value, Output> + Default,
     Input: Copy,
+    Output: Copy,
 {
     /// Creates a default buffered converter engine.
     fn default() -> Self {
