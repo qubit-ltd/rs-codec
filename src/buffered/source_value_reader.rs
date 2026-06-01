@@ -99,7 +99,10 @@ where
     pub(super) fn finish_one<Output>(
         &mut self,
         decoded: &mut [Value; 1],
-    ) -> Result<super::transcode_progress::TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>>
+    ) -> Result<
+        super::transcode_progress::TranscodeProgress,
+        <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>,
+    >
     where
         E: Codec<Value, Output>,
         H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,

@@ -17,7 +17,10 @@ use super::{
     pending_value::PendingValue,
     transcode_progress::TranscodeProgress,
 };
-use crate::{CapacityError, Codec};
+use crate::{
+    CapacityError,
+    Codec,
+};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -37,7 +40,10 @@ impl<Value> PendingValueSlot<Value> {
     /// Returns the target-output bound for the retained value.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub(super) fn max_output_len<E, H, Output>(&self, engine: &BufferedEncodeEngine<E, H>) -> Result<usize, CapacityError>
+    pub(super) fn max_output_len<E, H, Output>(
+        &self,
+        engine: &BufferedEncodeEngine<E, H>,
+    ) -> Result<usize, CapacityError>
     where
         E: Codec<Value, Output>,
         H: BufferedEncodeHooks<E, Value, Output>,

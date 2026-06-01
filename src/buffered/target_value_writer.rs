@@ -9,7 +9,10 @@
  ******************************************************************************/
 //! Target-side writer object used by the converter coordinator.
 
-use core::{marker::PhantomData, num::NonZeroUsize};
+use core::{
+    marker::PhantomData,
+    num::NonZeroUsize,
+};
 
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
@@ -107,7 +110,10 @@ where
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<super::transcode_progress::TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>>
+    ) -> Result<
+        super::transcode_progress::TranscodeProgress,
+        <H as BufferedConvertHooks<D, E, Input, Value>>::Error<Output>,
+    >
     where
         E: Codec<Value, Output>,
         H::EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = H::EncodeError<Output>>,
