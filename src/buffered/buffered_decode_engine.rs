@@ -10,6 +10,7 @@
 //! Reusable buffered decoder engine.
 
 use core::marker::PhantomData;
+use core::num::NonZeroUsize;
 
 use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
@@ -107,41 +108,6 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
             hooks,
             marker: PhantomData,
         }
-    }
-
-    /// Decodes one value at a caller-proven readable input cursor.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that at least `codec.min_units_per_value()`
-    /// units are readable from `input_index`.
-    #[inline(always)]
-    pub(crate) unsafe fn decode_unchecked_at<Value>(
-        &self,
-        input: &[Unit],
-        input_index: usize,
-    ) -> Result<(Value, core::num::NonZeroUsize), C::DecodeError>
-    where
-        C: Codec<Value, Unit>,
-        Unit: Copy,
-    {
-        // SAFETY: Forwarded from this method's safety contract.
-        unsafe { self.codec.decode_unchecked(input, input_index) }
-    }
-
-    /// Lets the configured decode hooks classify a low-level decode error.
-    #[inline]
-    pub(crate) fn handle_decode_error<Value>(
-        &mut self,
-        error: C::DecodeError,
-        context: DecodeContext,
-    ) -> Result<DecodeAction<Value>, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
-    where
-        C: Codec<Value, Unit>,
-        H: BufferedDecodeHooks<C, Unit, Value>,
-        Unit: Copy,
-    {
-        self.hooks.handle_decode_error(&self.codec, error, context)
     }
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
@@ -285,6 +251,41 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
         self.hooks.finish(&self.codec, output, output_index)
     }
 
+    /// Decodes one value at a caller-proven readable input cursor.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that at least `codec.min_units_per_value()`
+    /// units are readable from `input_index`.
+    #[inline(always)]
+    pub(crate) unsafe fn decode_unchecked_at<Value>(
+        &self,
+        input: &[Unit],
+        input_index: usize,
+    ) -> Result<(Value, NonZeroUsize), C::DecodeError>
+    where
+        C: Codec<Value, Unit>,
+        Unit: Copy,
+    {
+        // SAFETY: Forwarded from this method's safety contract.
+        unsafe { self.codec.decode_unchecked(input, input_index) }
+    }
+
+    /// Lets the configured decode hooks classify a low-level decode error.
+    #[inline]
+    pub(crate) fn handle_decode_error<Value>(
+        &mut self,
+        error: C::DecodeError,
+        context: DecodeContext,
+    ) -> Result<DecodeAction<Value>, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
+    where
+        C: Codec<Value, Unit>,
+        H: BufferedDecodeHooks<C, Unit, Value>,
+        Unit: Copy,
+    {
+        self.hooks.handle_decode_error(&self.codec, error, context)
+    }
+
     /// Handles one low-level decode result and updates the decode state.
     ///
     /// # Parameters
@@ -303,7 +304,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
     fn handle_decode_result<Value>(
         &mut self,
         state: &mut DecodeState<'_, Unit, Value>,
-        result: Result<(Value, core::num::NonZeroUsize), C::DecodeError>,
+        result: Result<(Value, NonZeroUsize), C::DecodeError>,
     ) -> Result<Option<TranscodeProgress>, <H as BufferedDecodeHooks<C, Unit, Value>>::Error>
     where
         C: Codec<Value, Unit>,
