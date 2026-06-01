@@ -23,7 +23,6 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    DecodeErrorFactory,
     codec::debug_assert_unit_bounds,
 };
 
@@ -187,11 +186,7 @@ impl<C, H, Unit> BufferedDecodeEngine<C, H, Unit> {
         Unit: Copy,
     {
         if input_index > input.len() {
-            return Err(<H::Error as DecodeErrorFactory<C>>::invalid_input_index(
-                &self.codec,
-                input_index,
-                input.len(),
-            ));
+            return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
         debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
         let min_units = self.codec.min_units_per_value();

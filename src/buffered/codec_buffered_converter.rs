@@ -22,7 +22,6 @@ use crate::{
     CapacityError,
     Codec,
     CodecConvertError,
-    DecodeErrorInfo,
 };
 
 /// Converts source units to target units through a decoded value by using codecs.
@@ -44,7 +43,6 @@ use crate::{
 pub struct CodecBufferedConverter<D, E, Value, InputUnit>
 where
     D: Codec<Value, InputUnit>,
-    D::DecodeError: DecodeErrorInfo,
     InputUnit: Copy,
 {
     /// Common buffered converter engine.
@@ -56,7 +54,6 @@ where
 impl<D, E, Value, InputUnit> CodecBufferedConverter<D, E, Value, InputUnit>
 where
     D: Codec<Value, InputUnit>,
-    D::DecodeError: DecodeErrorInfo,
     InputUnit: Copy,
 {
     /// Creates a buffered converter backed by decoder and encoder codecs.
@@ -82,7 +79,6 @@ impl<D, E, Value, InputUnit, OutputUnit> Transcoder<InputUnit, OutputUnit>
     for CodecBufferedConverter<D, E, Value, InputUnit>
 where
     D: Codec<Value, InputUnit>,
-    D::DecodeError: DecodeErrorInfo,
     E: Codec<Value, OutputUnit>,
     Value: Default,
     InputUnit: Copy,
@@ -127,7 +123,6 @@ impl<D, E, Value, InputUnit, OutputUnit> BufferedConverter<InputUnit, OutputUnit
     for CodecBufferedConverter<D, E, Value, InputUnit>
 where
     D: Codec<Value, InputUnit>,
-    D::DecodeError: DecodeErrorInfo,
     E: Codec<Value, OutputUnit>,
     Value: Default,
     InputUnit: Copy,

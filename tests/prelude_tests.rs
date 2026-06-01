@@ -26,9 +26,6 @@ use qubit_codec::prelude::{
     CodecValueDecoder,
     CodecValueEncoder,
     ConvertErrorFactory,
-    DecodeErrorFactory,
-    DecodeErrorInfo,
-    DecodeFailure,
     EncodeErrorFactory,
     EncodePlan,
     TranscodeProgress,
@@ -127,19 +124,14 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let progress = TranscodeProgress::complete(1, 2);
     assert_eq!(TranscodeStatus::Complete, progress.status());
 
-    let failure = DecodeFailure::Invalid { consumed: 1 };
-    assert_eq!(Some(1), failure.invalid_consumed());
-
     let decode_error = CodecDecodeError::<core::convert::Infallible>::incomplete(0, 2, 1);
-    assert_eq!(Some((2, 1)), decode_error.failure().incomplete());
-
-    let decode_factory_error =
-        <CodecDecodeError<core::convert::Infallible> as DecodeErrorFactory<EchoCodec>>::invalid_input_index(
-            &codec, 2, 1,
-        );
     assert!(matches!(
-        decode_factory_error,
-        CodecDecodeError::InvalidInputIndex { .. }
+        decode_error,
+        CodecDecodeError::Incomplete {
+            input_index: 0,
+            required_total: 2,
+            available: 1,
+        }
     ));
 
     let convert_error = CodecConvertError::<core::convert::Infallible, core::convert::Infallible>::decode(decode_error);
@@ -168,9 +160,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let encode_plan = EncodePlan::new(3, "payload");
     assert_eq!(3, encode_plan.max_output_units);
     assert_eq!("payload", encode_plan.payload);
-
-    fn _accept_decode_error_info<T: DecodeErrorInfo>() {}
-    _accept_decode_error_info::<core::convert::Infallible>();
 
     let (decoded, consumed) = unsafe { codec.decode_unchecked(&[1], 0) }.expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));

@@ -18,8 +18,7 @@ implementations.
 
 This crate provides:
 
-- `Codec<Value, Unit>` plus `DecodeFailure` / `DecodeErrorInfo` for low-level
-  single-value buffer codecs and buffered-error control flow.
+- `Codec<Value, Unit>` for low-level single-value buffer codecs.
 - `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
   `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
   codec-backed value and buffered conversion.
@@ -27,8 +26,8 @@ This crate provides:
   `EncodeErrorFactory` for reusing the common buffered encoding loop in
   policy-aware downstream encoders.
 - `BufferedDecodeEngine`, `BufferedDecodeHooks`, `DecodeAction`, and
-  `DecodeErrorFactory` for reusing the common buffered decoding loop in
-  policy-aware downstream decoders.
+  `DecodeContext` for reusing the common buffered decoding loop in policy-aware
+  downstream decoders.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for caller-managed logical-stream
   conversion.
@@ -61,10 +60,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 - **`Codec<Value, Unit>`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
-- **`DecodeFailure` / `DecodeErrorInfo`**: expose the minimal incomplete-vs-invalid
-  view of codec-specific decode errors for buffered adapters.
-- **`DecodeErrorFactory<C>` / `EncodeErrorFactory<C>`**: construct
-  adapter-level input-index errors for reusable buffered engines.
+- **`EncodeErrorFactory<C>`**: constructs adapter-level input-index errors for
+  reusable buffered encoder engines.
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors without hiding
   codec-specific failures.
@@ -99,8 +96,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`EncodeErrorFactory<C>`**: constructs adapter-level errors required by the
   encoder engine without turning error creation into a policy hook.
 - **`CodecBufferedDecoder<C, Unit>`**: wraps a `Codec<Value, Unit>` as a
-  policy-free `BufferedDecoder<Unit, Value>` that leaves incomplete tails in the
-  caller's input buffer.
+  strict `BufferedDecoder<Unit, Value>` that leaves engine-detected incomplete
+  tails in the caller's input buffer and wraps codec-reported decode errors.
 - **`BufferedDecodeEngine<C, H, Unit>`**: reusable engine that owns a codec,
   policy hooks, and the common decode loop.
 - **`BufferedDecodeHooks<C, Unit, Value>`**: policy hook trait used by
@@ -180,9 +177,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `DecodeFailure` | Generic incomplete-or-invalid view of a codec-specific decode error |
-| `DecodeErrorInfo` | Trait implemented by decode errors that expose `DecodeFailure` metadata |
-| `DecodeErrorFactory<C>` | Error construction contract used when decoder engines detect invalid input indices |
 | `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid input indices |
 | `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid indices, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode and encode failures |
@@ -194,7 +188,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecValueEncoder<C, Value, Unit>` | Allocate owned `Vec<Unit>` output for one borrowed `Value` by using `C: Codec<Value, Unit>` without requiring `Value: Clone` |
 | `CodecValueDecoder<C, Value, Unit>` | Decode exactly one borrowed `[Unit]` slice into `Value` by using `C: Codec<Value, Unit>` |
 | `CodecBufferedEncoder<C>` | Encode `Value` slices into caller-provided `Unit` buffers by using `C: Codec<Value, Unit>` |
-| `CodecBufferedDecoder<C, Unit>` | Decode `Unit` slices into caller-provided `Value` buffers by using `C: Codec<Value, Unit>` and `DecodeErrorInfo` |
+| `CodecBufferedDecoder<C, Unit>` | Strictly decode `Unit` slices into caller-provided `Value` buffers by using `C: Codec<Value, Unit>` |
 | `CodecBufferedConverter<D, E, Value, InputUnit>` | Decode source units with `D: Codec<Value, InputUnit>` and encode target units with `E: Codec<Value, OutputUnit>` |
 
 ### Encoder Hooks And Engines
@@ -214,7 +208,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `BufferedDecodeHooks<C, Unit, Value>` | Hook contract for malformed/incomplete decode policy |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
-| `DecodeErrorFactory<C>` | Error construction contract used when the engine detects invalid input indices |
 
 ### `Transcoder` Operations
 

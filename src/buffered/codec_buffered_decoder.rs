@@ -20,7 +20,6 @@ use crate::{
     CapacityError,
     Codec,
     CodecDecodeError,
-    DecodeErrorInfo,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a [`Codec`].
@@ -61,7 +60,6 @@ impl<C, Unit> CodecBufferedDecoder<C, Unit> {
 impl<C, Value, Unit> Transcoder<Unit, Value> for CodecBufferedDecoder<C, Unit>
 where
     C: Codec<Value, Unit>,
-    C::DecodeError: DecodeErrorInfo,
     Unit: Copy,
 {
     type Error = CodecDecodeError<C::DecodeError>;
@@ -101,7 +99,6 @@ where
 impl<C, Value, Unit> BufferedDecoder<Unit, Value> for CodecBufferedDecoder<C, Unit>
 where
     C: Codec<Value, Unit>,
-    C::DecodeError: DecodeErrorInfo,
     Unit: Copy,
 {
 }

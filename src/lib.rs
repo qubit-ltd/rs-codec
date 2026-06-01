@@ -59,9 +59,6 @@ pub use codec::{
     CodecDecodeError,
     CodecEncodeError,
     ConvertErrorFactory,
-    DecodeErrorFactory,
-    DecodeErrorInfo,
-    DecodeFailure,
     EncodeErrorFactory,
 };
 pub use value::{

@@ -16,8 +16,6 @@ use qubit_codec::{
     CodecBufferedConverter,
     CodecConvertError,
     CodecDecodeError,
-    DecodeErrorInfo,
-    DecodeFailure,
     TranscodeStatus,
     Transcoder,
 };
@@ -145,18 +143,6 @@ enum TestDecodeError {
     Invalid { consumed: usize },
 }
 
-impl DecodeErrorInfo for TestDecodeError {
-    fn failure(&self) -> DecodeFailure {
-        match self {
-            Self::Incomplete { required, available } => DecodeFailure::Incomplete {
-                required_total: *required,
-                available: *available,
-            },
-            Self::Invalid { consumed } => DecodeFailure::Invalid { consumed: *consumed },
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
 
@@ -215,26 +201,28 @@ fn test_codec_buffered_converter_reports_bounds_and_finishes_noop() {
 }
 
 #[test]
-fn test_codec_buffered_converter_leaves_incomplete_input_to_caller() {
+fn test_codec_buffered_converter_wraps_variable_width_incomplete_decode_error() {
     let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8>::new(
         VariableByteDecoder,
         PairByteEncoder,
     );
     let mut output = [0_u8; 2];
 
-    let progress = converter
+    let error = converter
         .transcode(&[0x80], 0, &mut output, 0)
-        .expect("partial value should request input");
+        .expect_err("strict converter should not classify decoder errors");
     assert_eq!(
-        TranscodeStatus::NeedInput {
-            input_index: 0,
-            additional: 1,
-            available: 1,
+        CodecConvertError::Decode {
+            source: CodecDecodeError::Decode {
+                source: TestDecodeError::Incomplete {
+                    required: 2,
+                    available: 1,
+                },
+                input_index: 0,
+            },
         },
-        progress.status(),
+        error,
     );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
 
     let progress = converter
         .transcode(&[0x80, 9], 0, &mut output, 0)
@@ -394,14 +382,12 @@ fn test_codec_buffered_converter_wraps_decode_and_encode_errors() {
 
 #[test]
 fn test_codec_buffered_converter_finish_does_not_handle_input_tail() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<MinTwoDecoder, PairByteEncoder, u8, u8>::new(MinTwoDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let progress = converter
-        .transcode(&[0x80], 0, &mut output, 0)
+        .transcode(&[7], 0, &mut output, 0)
         .expect("partial value should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {

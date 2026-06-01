@@ -21,7 +21,6 @@ use qubit_codec::{
     ConvertErrorFactory,
     DecodeAction,
     DecodeContext,
-    DecodeErrorFactory,
     EncodeErrorFactory,
     EncodePlan,
     TranscodeProgress,
@@ -46,6 +45,12 @@ enum EngineError {
     InvalidInputIndex { index: usize, input_len: usize },
     Decode,
     Encode,
+}
+
+impl EngineError {
+    fn invalid_input_index(index: usize, input_len: usize) -> Self {
+        Self::InvalidInputIndex { index, input_len }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,31 +143,19 @@ unsafe impl Codec<u8, u8> for ErrorSourceCodec {
 
 impl ConvertErrorFactory<SourceCodec> for EngineError {
     fn invalid_input_index(_decoder: &SourceCodec, index: usize, input_len: usize) -> Self {
-        Self::InvalidInputIndex { index, input_len }
+        Self::invalid_input_index(index, input_len)
     }
 }
 
 impl<E> ConvertErrorFactory<SourceCodec> for ConvertEngineError<E> {
     fn invalid_input_index(_decoder: &SourceCodec, index: usize, input_len: usize) -> Self {
-        Self::Decode(EngineError::InvalidInputIndex { index, input_len })
+        Self::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
 impl<E> ConvertErrorFactory<ErrorSourceCodec> for ConvertEngineError<E> {
     fn invalid_input_index(_decoder: &ErrorSourceCodec, index: usize, input_len: usize) -> Self {
-        Self::Decode(EngineError::InvalidInputIndex { index, input_len })
-    }
-}
-
-impl DecodeErrorFactory<SourceCodec> for EngineError {
-    fn invalid_input_index(_decoder: &SourceCodec, index: usize, input_len: usize) -> Self {
-        Self::InvalidInputIndex { index, input_len }
-    }
-}
-
-impl DecodeErrorFactory<ErrorSourceCodec> for EngineError {
-    fn invalid_input_index(_decoder: &ErrorSourceCodec, index: usize, input_len: usize) -> Self {
-        Self::InvalidInputIndex { index, input_len }
+        Self::Decode(EngineError::invalid_input_index(index, input_len))
     }
 }
 
@@ -185,6 +178,10 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for StrictDecodeHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {}
+    }
+
+    fn invalid_input_index(&mut self, _codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 
@@ -254,6 +251,10 @@ impl BufferedDecodeHooks<ErrorSourceCodec, u8, u8> for RepairDecodeHooks {
                 consumed: one_consumed(),
             }),
         }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &ErrorSourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 
@@ -377,6 +378,10 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for FinishDecodeHooks {
         match error {}
     }
 
+    fn invalid_input_index(&mut self, _codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
     fn finish(
         &mut self,
         _codec: &SourceCodec,
@@ -479,6 +484,10 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for BatchFinishDecodeHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {}
+    }
+
+    fn invalid_input_index(&mut self, _codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 
     fn finish(
@@ -694,6 +703,10 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for ErrorPathDecodeHooks {
         match error {}
     }
 
+    fn invalid_input_index(&mut self, _codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
     fn finish(
         &mut self,
         _codec: &SourceCodec,
@@ -882,6 +895,10 @@ impl BufferedDecodeHooks<SourceCodec, u8, u8> for FactoryDecodeHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {}
+    }
+
+    fn invalid_input_index(&mut self, _codec: &SourceCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 

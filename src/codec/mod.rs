@@ -7,7 +7,7 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Low-level codec contracts and decode failure metadata.
+//! Low-level codec contracts and adapter error types.
 
 #[allow(clippy::module_inception)]
 mod codec;
@@ -15,9 +15,6 @@ mod codec_convert_error;
 mod codec_decode_error;
 mod codec_encode_error;
 mod convert_error_factory;
-mod decode_error_factory;
-mod decode_error_info;
-mod decode_failure;
 mod encode_error_factory;
 
 pub use codec::Codec;
@@ -26,7 +23,4 @@ pub use codec_convert_error::CodecConvertError;
 pub use codec_decode_error::CodecDecodeError;
 pub use codec_encode_error::CodecEncodeError;
 pub use convert_error_factory::ConvertErrorFactory;
-pub use decode_error_factory::DecodeErrorFactory;
-pub use decode_error_info::DecodeErrorInfo;
-pub use decode_failure::DecodeFailure;
 pub use encode_error_factory::EncodeErrorFactory;

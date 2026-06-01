@@ -17,8 +17,6 @@ use super::{
 use crate::{
     Codec,
     CodecDecodeError,
-    DecodeErrorInfo,
-    DecodeFailure,
 };
 
 /// Policy hooks for [`super::CodecBufferedDecoder`].
@@ -28,21 +26,22 @@ pub(super) struct CodecBufferedDecodeHooks;
 impl<C, Unit, Value> BufferedDecodeHooks<C, Unit, Value> for CodecBufferedDecodeHooks
 where
     C: Codec<Value, Unit>,
-    C::DecodeError: DecodeErrorInfo,
     Unit: Copy,
 {
     type Error = CodecDecodeError<C::DecodeError>;
 
-    /// Converts codec decode failures into policy-free buffered actions.
+    /// Converts codec decode failures into strict buffered decode errors.
     fn handle_decode_error(
         &mut self,
         _codec: &C,
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<Value>, Self::Error> {
-        match error.failure() {
-            DecodeFailure::Incomplete { required_total, .. } => Ok(DecodeAction::NeedInput { required_total }),
-            DecodeFailure::Invalid { .. } => Err(CodecDecodeError::decode(error, context.input_index)),
-        }
+        Err(CodecDecodeError::decode(error, context.input_index))
+    }
+
+    /// Creates an invalid input index error.
+    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+        CodecDecodeError::invalid_input_index(index, input_len)
     }
 }

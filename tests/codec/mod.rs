@@ -7,10 +7,8 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Tests for low-level codec contracts and failure metadata.
+//! Tests for low-level codec contracts and adapter errors.
 
 mod codec_convert_error_tests;
 mod codec_decode_error_tests;
 mod codec_tests;
-mod decode_error_info_tests;
-mod decode_failure_tests;

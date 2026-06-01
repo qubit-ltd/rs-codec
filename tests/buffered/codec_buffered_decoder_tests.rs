@@ -14,8 +14,6 @@ use qubit_codec::{
     Codec,
     CodecBufferedDecoder,
     CodecDecodeError,
-    DecodeErrorInfo,
-    DecodeFailure,
     TranscodeStatus,
     Transcoder,
 };
@@ -71,15 +69,39 @@ enum TestDecodeError {
     Invalid { consumed: usize },
 }
 
-impl DecodeErrorInfo for TestDecodeError {
-    fn failure(&self) -> DecodeFailure {
-        match self {
-            Self::Incomplete { required, available } => DecodeFailure::Incomplete {
-                required_total: *required,
-                available: *available,
-            },
-            Self::Invalid { consumed } => DecodeFailure::Invalid { consumed: *consumed },
-        }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FixedPairCodec;
+
+unsafe impl Codec<u8, u8> for FixedPairCodec {
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index + 1 < input.len());
+
+        Ok((
+            input[index].wrapping_add(input[index + 1]),
+            core::num::NonZeroUsize::new(2).expect("literal is non-zero"),
+        ))
+    }
+
+    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = *value;
+        Ok(1)
     }
 }
 
@@ -127,23 +149,23 @@ fn test_codec_buffered_decoder_reports_bounds_and_resets_state() {
 }
 
 #[test]
-fn test_codec_buffered_decoder_leaves_incomplete_input_to_caller() {
+fn test_codec_buffered_decoder_wraps_variable_width_incomplete_codec_error() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 1];
 
-    let progress = decoder
+    let error = decoder
         .transcode(&[0x80], 0, &mut output, 0)
-        .expect("partial input should request more input");
+        .expect_err("strict adapter should not classify codec errors");
     assert_eq!(
-        TranscodeStatus::NeedInput {
+        CodecDecodeError::Decode {
+            source: TestDecodeError::Incomplete {
+                required: 2,
+                available: 1,
+            },
             input_index: 0,
-            additional: 1,
-            available: 1,
         },
-        progress.status(),
+        error,
     );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
 
     let progress = decoder
         .transcode(&[0x80, 9], 0, &mut output, 0)
@@ -176,6 +198,18 @@ fn test_codec_buffered_decoder_reports_output_index_beyond_buffer() {
 }
 
 #[test]
+fn test_codec_buffered_decoder_reports_input_index_beyond_buffer() {
+    let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
+    let mut output = [0_u8; 1];
+
+    let error = decoder
+        .transcode(&[1], 2, &mut output, 0)
+        .expect_err("out-of-range input index should fail");
+
+    assert_eq!(CodecDecodeError::InvalidInputIndex { index: 2, len: 1 }, error);
+}
+
+#[test]
 fn test_codec_buffered_decoder_finish_reports_output_index_beyond_buffer() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [];
@@ -198,11 +232,11 @@ fn test_codec_buffered_decoder_finish_reports_output_index_beyond_buffer() {
 
 #[test]
 fn test_codec_buffered_decoder_finish_does_not_handle_input_tail() {
-    let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
+    let mut decoder = CodecBufferedDecoder::new(FixedPairCodec);
     let mut output = [0_u8; 1];
 
     let progress = decoder
-        .transcode(&[0x80], 0, &mut output, 0)
+        .transcode(&[7], 0, &mut output, 0)
         .expect("partial input should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {

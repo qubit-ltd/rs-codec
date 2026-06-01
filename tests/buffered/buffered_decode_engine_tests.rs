@@ -17,9 +17,6 @@ use qubit_codec::{
     Codec,
     DecodeAction,
     DecodeContext,
-    DecodeErrorFactory,
-    DecodeErrorInfo,
-    DecodeFailure,
     TranscodeStatus,
 };
 
@@ -34,18 +31,6 @@ struct PrefixCodec;
 enum PrefixDecodeError {
     Incomplete { required: usize, available: usize },
     Invalid { consumed: usize },
-}
-
-impl DecodeErrorInfo for PrefixDecodeError {
-    fn failure(&self) -> DecodeFailure {
-        match *self {
-            Self::Incomplete { required, available } => DecodeFailure::Incomplete {
-                required_total: required,
-                available,
-            },
-            Self::Invalid { consumed } => DecodeFailure::Invalid { consumed },
-        }
-    }
 }
 
 unsafe impl Codec<u8, u8> for PrefixCodec {
@@ -100,8 +85,8 @@ enum EngineError {
     InvalidInputIndex { index: usize, input_len: usize },
 }
 
-impl DecodeErrorFactory<PrefixCodec> for EngineError {
-    fn invalid_input_index(_codec: &PrefixCodec, index: usize, input_len: usize) -> Self {
+impl EngineError {
+    fn invalid_input_index(index: usize, input_len: usize) -> Self {
         Self::InvalidInputIndex { index, input_len }
     }
 }
@@ -128,6 +113,10 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for ReplacingHooks {
             }),
         }
     }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -150,6 +139,10 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for SkippingHooks {
                 consumed: non_zero_consumed(consumed),
             }),
         }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 
@@ -181,6 +174,10 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for FinishHooks {
                 consumed: non_zero_consumed(consumed),
             }),
         }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 
     fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
@@ -248,12 +245,6 @@ unsafe impl Codec<u8, u8> for MinTwoCodec {
     }
 }
 
-impl DecodeErrorFactory<MinTwoCodec> for EngineError {
-    fn invalid_input_index(_codec: &MinTwoCodec, index: usize, input_len: usize) -> Self {
-        Self::InvalidInputIndex { index, input_len }
-    }
-}
-
 impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
     type Error = EngineError;
 
@@ -272,6 +263,10 @@ impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
                 consumed: non_zero_consumed(consumed),
             }),
         }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &MinTwoCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
     }
 }
 
@@ -538,7 +533,7 @@ fn test_buffered_decode_engine_reports_output_bounds_without_consuming_input() {
 }
 
 #[test]
-fn test_buffered_decode_engine_uses_error_factory_for_invalid_input_index() {
+fn test_buffered_decode_engine_uses_hooks_for_invalid_input_index() {
     let mut decoder = BufferedDecodeEngine::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 

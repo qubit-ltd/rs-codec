@@ -13,8 +13,6 @@ use qubit_codec::{
     Codec,
     CodecDecodeError,
     CodecValueDecoder,
-    DecodeErrorInfo,
-    DecodeFailure,
     ValueDecoder,
 };
 
@@ -99,14 +97,6 @@ unsafe impl Codec<u8, u8> for FixedPairCodec {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
     Invalid { consumed: usize },
-}
-
-impl DecodeErrorInfo for TestDecodeError {
-    fn failure(&self) -> DecodeFailure {
-        match self {
-            Self::Invalid { consumed } => DecodeFailure::Invalid { consumed: *consumed },
-        }
-    }
 }
 
 #[test]

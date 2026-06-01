@@ -11,12 +11,6 @@
 
 use thiserror::Error;
 
-use super::{
-    decode_error_factory::DecodeErrorFactory,
-    decode_error_info::DecodeErrorInfo,
-    decode_failure::DecodeFailure,
-};
-
 /// Error reported by codec-backed value and buffered decoder adapters.
 ///
 /// The wrapped codec remains responsible for domain-specific decode failures.
@@ -129,36 +123,5 @@ impl<E> CodecDecodeError<E> {
     #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
-    }
-}
-
-impl<E> DecodeErrorInfo for CodecDecodeError<E>
-where
-    E: DecodeErrorInfo,
-{
-    /// Returns buffered-decode metadata for this adapter error.
-    fn failure(&self) -> DecodeFailure {
-        match self {
-            Self::Decode { source, .. } => source.failure(),
-            Self::Incomplete {
-                required_total,
-                available,
-                ..
-            } => DecodeFailure::Incomplete {
-                required_total: *required_total,
-                available: *available,
-            },
-            Self::TrailingInput { consumed, remaining } => DecodeFailure::Invalid {
-                consumed: consumed.saturating_add(*remaining),
-            },
-            Self::InvalidInputIndex { .. } => DecodeFailure::Invalid { consumed: 0 },
-        }
-    }
-}
-
-impl<E, C> DecodeErrorFactory<C> for CodecDecodeError<E> {
-    /// Creates an input-index error for the codec decoder engine.
-    fn invalid_input_index(_codec: &C, index: usize, input_len: usize) -> Self {
-        Self::invalid_input_index(index, input_len)
     }
 }

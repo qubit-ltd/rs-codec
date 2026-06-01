@@ -17,8 +17,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 本库提供：
 
-- 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait，以及面向
-  buffered 错误控制流的 `DecodeFailure` / `DecodeErrorInfo`。
+- 用于底层单值缓冲区编码解码的 `Codec<Value, Unit>` trait。
 - 基于给定 `Codec` 显式适配 value 与 buffered 转换的
   `CodecValueEncoder`、`CodecValueDecoder`、`CodecBufferedEncoder`、
   `CodecBufferedDecoder` 和 `CodecBufferedConverter` adapter。
@@ -27,7 +26,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `EncodeErrorFactory`。
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
   `BufferedDecodeEngine`、`BufferedDecodeHooks`、`DecodeAction` 和
-  `DecodeErrorFactory`。
+  `DecodeContext`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus`。
 - 用于表达 transcoder 语义方向的 `BufferedEncoder`、`BufferedDecoder` 和
@@ -52,10 +51,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 ### 核心转换 Trait
 
 - **`Codec<Value, Unit>`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
-- **`DecodeFailure` / `DecodeErrorInfo`**：把 codec-specific decode error 暴露为
-  incomplete-vs-invalid 的最小控制流视图，供 buffered adapter 使用。
-- **`DecodeErrorFactory<C>` / `EncodeErrorFactory<C>`**：为可复用 buffered engine 构造
-  adapter 层非法输入下标错误。
+- **`EncodeErrorFactory<C>`**：为可复用 buffered encoder engine 构造 adapter
+  层非法输入下标错误。
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
   adapter 自己产生的 encode / decode / convert 错误，同时保留
   codec-specific failure。
@@ -84,7 +81,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`EncodePlan<P>`**：单值写入计划，携带写入前必须保证的输出容量上界。
 - **`EncodeErrorFactory<C>`**：为 engine 检测出的 adapter 层错误构造具体错误对象。
 - **`CodecBufferedDecoder<C, Unit>`**：把 `Codec<Value, Unit>` 包装为无策略的
-  `BufferedDecoder<Unit, Value>`，不完整尾部保留在调用方输入缓冲区中。
+  严格 `BufferedDecoder<Unit, Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
+  codec 返回的 decode error 会被直接包装返回。
 - **`BufferedDecodeEngine<C, H, Unit>`**：持有 codec 与策略 hooks，并运行公共
   decode 循环的可复用 engine。
 - **`BufferedDecodeHooks<C, Unit, Value>`**：供带策略 codec-backed decoder
@@ -159,9 +157,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `DecodeFailure` | codec-specific decode error 的通用 incomplete-or-invalid 视图 |
-| `DecodeErrorInfo` | 由 decode error 实现，用于暴露 `DecodeFailure` 元信息 |
-| `DecodeErrorFactory<C>` | decoder engine 检测到非法输入下标时使用的错误构造契约 |
 | `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法输入下标 |
 | `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法下标或尾随输入 |
 | `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 和 encode 失败 |
@@ -173,7 +168,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecValueEncoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把一个借用 `Value` 编码成自有 `Vec<Unit>`，不要求 `Value: Clone` |
 | `CodecValueDecoder<C, Value, Unit>` | 通过 `C: Codec<Value, Unit>` 把恰好一个借用 `[Unit]` slice 解码成 `Value` |
 | `CodecBufferedEncoder<C>` | 通过 `C: Codec<Value, Unit>` 把 `Value` slice 编码进调用方提供的 `Unit` 缓冲区 |
-| `CodecBufferedDecoder<C, Unit>` | 通过 `C: Codec<Value, Unit>` 和 `DecodeErrorInfo` 把 `Unit` slice 解码进调用方提供的 `Value` 缓冲区 |
+| `CodecBufferedDecoder<C, Unit>` | 通过 `C: Codec<Value, Unit>` 严格地把 `Unit` slice 解码进调用方提供的 `Value` 缓冲区 |
 | `CodecBufferedConverter<D, E, Value, InputUnit>` | 先用 `D: Codec<Value, InputUnit>` 解码 source unit，再用 `E: Codec<Value, OutputUnit>` 编码 target unit |
 
 ### Encoder Hooks 和 Engine
@@ -193,7 +188,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `BufferedDecodeHooks<C, Unit, Value>` | malformed/incomplete decode 策略 hook 契约 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeAction<Value>` | transcode 阶段的策略动作：需要输入、跳过输入或输出一个值 |
-| `DecodeErrorFactory<C>` | engine 检测到非法输入下标时使用的错误构造契约 |
 
 ### `Transcoder` 操作
 

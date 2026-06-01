@@ -20,7 +20,6 @@ use crate::{
     CodecConvertError,
     CodecDecodeError,
     CodecEncodeError,
-    DecodeErrorInfo,
 };
 
 /// Policy hooks for [`super::CodecBufferedConverter`].
@@ -42,7 +41,6 @@ impl CodecBufferedConvertHooks {
 impl<D, E, Value, InputUnit> BufferedConvertHooks<D, E, InputUnit, Value> for CodecBufferedConvertHooks
 where
     D: Codec<Value, InputUnit>,
-    D::DecodeError: DecodeErrorInfo,
     InputUnit: Copy,
 {
     type DecodeHooks = CodecBufferedDecodeHooks;

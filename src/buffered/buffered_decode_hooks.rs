@@ -17,7 +17,6 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    DecodeErrorFactory,
 };
 
 /// Policy hooks for [`crate::BufferedDecodeEngine`].
@@ -45,7 +44,6 @@ use crate::{
 /// ```rust,ignore
 /// use qubit_codec::{
 ///     BufferedDecodeHooks, CodecDecodeError, DecodeAction, DecodeContext,
-///     DecodeErrorInfo, DecodeFailure,
 /// };
 ///
 /// struct ReplacementHooks;
@@ -59,13 +57,11 @@ use crate::{
 ///         error: MyDecodeError,
 ///         _context: DecodeContext,
 ///     ) -> Result<DecodeAction<u8>, Self::Error> {
-///         match error.failure() {
-///             DecodeFailure::Incomplete { required_total, .. } => {
+///         match error {
+///             MyDecodeError::Incomplete { required_total } => {
 ///                 Ok(DecodeAction::NeedInput { required_total })
 ///             }
-///             DecodeFailure::Invalid { consumed } => {
-///                 let consumed = core::num::NonZeroUsize::new(consumed)
-///                     .expect("invalid input consumes at least one unit");
+///             MyDecodeError::Malformed { consumed } => {
 ///                 Ok(DecodeAction::Emit { value: b'?', consumed })
 ///             }
 ///         }
@@ -84,7 +80,7 @@ where
     Unit: Copy,
 {
     /// Error type returned by the buffered decoder.
-    type Error: DecodeErrorFactory<C>;
+    type Error;
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
     ///
@@ -143,6 +139,23 @@ where
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<Value>, Self::Error>;
+
+    /// Creates an error for a caller-supplied input index outside the input slice.
+    ///
+    /// The generic engine detects this before invoking the codec. The hook owns
+    /// the concrete decoder error type, so it also owns the adapter-level error
+    /// construction.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `index`: Invalid input index supplied by the caller.
+    /// - `input_len`: Length of the input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific error representing `index > input_len`.
+    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///
