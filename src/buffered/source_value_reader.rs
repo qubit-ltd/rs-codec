@@ -15,6 +15,7 @@ use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
     convert_decode_attempt_result::ConvertDecodeAttemptResult,
+    convert_error_of::ConvertProgressResult,
     convert_state::ConvertState,
     decode_step::DecodeStep,
 };
@@ -100,10 +101,7 @@ where
     pub(super) fn finish_one(
         &mut self,
         decoded: &mut [Value; 1],
-    ) -> Result<
-        super::transcode_progress::TranscodeProgress,
-        <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error,
-    > {
+    ) -> ConvertProgressResult<D, E, H, Input, Value, Output> {
         match self.engine.finish(decoded, 0) {
             Ok(finish) => Ok(finish),
             Err(error) => Err(self.hooks.map_decode_error(error)),

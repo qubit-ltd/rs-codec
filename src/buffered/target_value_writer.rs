@@ -18,6 +18,7 @@ use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_encode_engine::BufferedEncodeEngine,
     convert_encode_result::ConvertEncodeResult,
+    convert_error_of::ConvertProgressResult,
     convert_state::ConvertState,
     encode_context::EncodeContext,
     pending_encode_step::PendingEncodeStep,
@@ -111,10 +112,7 @@ where
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<
-        super::transcode_progress::TranscodeProgress,
-        <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error,
-    > {
+    ) -> ConvertProgressResult<D, E, H, Input, Value, Output> {
         match self.engine.finish(output, output_index) {
             Ok(finish) => Ok(finish),
             Err(error) => Err(self.hooks.map_encode_error(error)),

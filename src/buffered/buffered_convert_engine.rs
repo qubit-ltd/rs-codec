@@ -18,6 +18,7 @@ use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
     buffered_encode_engine::BufferedEncodeEngine,
+    convert_error_of::ConvertProgressResult,
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     decode_finish_step::DecodeFinishStep,
@@ -34,6 +35,25 @@ use crate::{
     Codec,
     codec::debug_assert_unit_bounds,
 };
+
+/// Internal helper types bound to one buffered converter engine.
+trait BufferedConvertEngineTypes<'a> {
+    /// Source-side reader type.
+    type SourceValueReader;
+    /// Source-side finish reader type.
+    type SourceFinishReader;
+    /// Target-side writer type.
+    type TargetValueWriter;
+}
+
+/// Source-side reader type for one buffered converter engine.
+type SourceValueReaderOf<'a, Engine> = <Engine as BufferedConvertEngineTypes<'a>>::SourceValueReader;
+
+/// Source-side finish reader type for one buffered converter engine.
+type SourceFinishReaderOf<'a, Engine> = <Engine as BufferedConvertEngineTypes<'a>>::SourceFinishReader;
+
+/// Target-side writer type for one buffered converter engine.
+type TargetValueWriterOf<'a, Engine> = <Engine as BufferedConvertEngineTypes<'a>>::TargetValueWriter;
 
 /// Reusable buffered conversion engine.
 ///
@@ -76,6 +96,23 @@ where
     pending: PendingValueSlot<Value>,
     /// Binds the engine to one decoded logical value and target unit type.
     marker: PhantomData<fn(Value, Output)>,
+}
+
+impl<'a, D, E, H, Input, Value, Output> BufferedConvertEngineTypes<'a>
+    for BufferedConvertEngine<D, E, H, Input, Value, Output>
+where
+    D: Codec<Value, Input> + 'a,
+    E: Codec<Value, Output> + 'a,
+    H: BufferedConvertHooks<D, E, Input, Value, Output> + 'a,
+    H::DecodeHooks: 'a,
+    H::EncodeHooks: 'a,
+    Input: Copy + 'a,
+    Value: 'a,
+    Output: Copy + 'a,
+{
+    type SourceFinishReader = SourceFinishReader<'a, D, E, H, Input, Value, Output>;
+    type SourceValueReader = SourceValueReader<'a, D, E, H, Input, Value, Output>;
+    type TargetValueWriter = TargetValueWriter<'a, D, E, H, Input, Value, Output>;
 }
 
 impl<D, E, H, Input, Value, Output> BufferedConvertEngine<D, E, H, Input, Value, Output>
@@ -190,7 +227,7 @@ where
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error> {
+    ) -> ConvertProgressResult<D, E, H, Input, Value, Output> {
         if input_index > input.len() {
             return Err(self
                 .hooks
@@ -249,7 +286,7 @@ where
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error>
+    ) -> ConvertProgressResult<D, E, H, Input, Value, Output>
     where
         Value: Default,
     {
@@ -271,8 +308,7 @@ where
 
         let output_cursor = state.output_cursor();
         let finish = {
-            let mut target =
-                TargetValueWriter::<D, E, H, Input, Value, Output>::new(&mut self.encode_engine, &self.hooks);
+            let mut target = self.target_value_writer();
             target.finish(state.output_mut(), output_cursor)?
         };
         state.advance_output(finish.written());
@@ -309,6 +345,24 @@ where
         self.pending.max_output_len(&self.encode_engine)
     }
 
+    /// Creates a source-side value reader bound to this engine.
+    #[inline(always)]
+    fn source_value_reader<'a>(&'a mut self) -> SourceValueReaderOf<'a, Self> {
+        SourceValueReader::new(&mut self.decode_engine, &self.hooks)
+    }
+
+    /// Creates a source-side finish reader bound to this engine.
+    #[inline(always)]
+    fn source_finish_reader<'a>(&'a mut self) -> SourceFinishReaderOf<'a, Self> {
+        SourceFinishReader::new(&mut self.decode_engine, &self.hooks)
+    }
+
+    /// Creates a target-side writer bound to this engine.
+    #[inline(always)]
+    fn target_value_writer<'a>(&'a mut self) -> TargetValueWriterOf<'a, Self> {
+        TargetValueWriter::new(&mut self.encode_engine, &self.hooks)
+    }
+
     /// Writes a retained decoded value before new input is consumed.
     #[inline(always)]
     fn drain_pending(
@@ -328,8 +382,7 @@ where
         state: &mut ConvertState<'_, Input, Output>,
     ) -> ConvertStepResult<D, E, H, Input, Value, Output> {
         let attempt = {
-            let mut source =
-                SourceValueReader::<D, E, H, Input, Value, Output>::new(&mut self.decode_engine, &self.hooks);
+            let mut source = self.source_value_reader();
             source.read_next(state)?
         };
         attempt.apply_to_convert_state(state, |pending, state| self.encode_pending(pending, state))
@@ -346,8 +399,7 @@ where
     {
         loop {
             let step = {
-                let mut source =
-                    SourceFinishReader::<D, E, H, Input, Value, Output>::new(&mut self.decode_engine, &self.hooks);
+                let mut source = self.source_finish_reader();
                 source.read_next()?
             };
 
@@ -378,8 +430,7 @@ where
         state: &mut ConvertState<'_, Input, Output>,
     ) -> ConvertStepResult<D, E, H, Input, Value, Output> {
         let step = {
-            let mut target =
-                TargetValueWriter::<D, E, H, Input, Value, Output>::new(&mut self.encode_engine, &self.hooks);
+            let mut target = self.target_value_writer();
             target.write_pending(pending, state)?
         };
         Ok(self.pending.apply_pending_encode_step(step, state))

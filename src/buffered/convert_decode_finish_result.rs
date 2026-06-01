@@ -10,10 +10,10 @@
 //! Result type for source-side finish steps.
 
 use super::{
-    buffered_convert_hooks::BufferedConvertHooks,
+    convert_error_of::ConvertErrorOf,
     decode_finish_step::DecodeFinishStep,
 };
 
 /// Result type for source-side finish steps.
 pub(super) type ConvertDecodeFinishResult<D, E, H, Input, Value, Output> =
-    Result<DecodeFinishStep<Value>, <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error>;
+    Result<DecodeFinishStep<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;
