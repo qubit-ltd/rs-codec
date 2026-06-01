@@ -18,9 +18,9 @@
 ///
 /// # Type Parameters
 ///
-/// - `P`: Concrete action interpreted by the encoder implementation.
+/// - `A`: Concrete action interpreted by the encoder implementation.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EncodePlan<P> {
+pub struct EncodePlan<A> {
     /// Output units that must be writable before calling `write_encode`.
     ///
     /// Default codec-backed encoders usually use
@@ -31,10 +31,10 @@ pub struct EncodePlan<P> {
     pub max_output_units: usize,
 
     /// Concrete write action interpreted by the encoder implementation.
-    pub action: P,
+    pub action: A,
 }
 
-impl<P> EncodePlan<P> {
+impl<A> EncodePlan<A> {
     /// Creates an encoding plan.
     ///
     /// # Parameters
@@ -48,7 +48,7 @@ impl<P> EncodePlan<P> {
     /// action.
     #[must_use]
     #[inline(always)]
-    pub const fn new(max_output_units: usize, action: P) -> Self {
+    pub const fn new(max_output_units: usize, action: A) -> Self {
         Self {
             max_output_units,
             action,
