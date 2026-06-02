@@ -11,10 +11,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    encode_context::EncodeContext,
-    transcode_progress::TranscodeProgress,
-};
+use super::transcode_progress::TranscodeProgress;
 
 /// Mutable state for one buffered encode call.
 pub(super) struct EncodeState<'a, Value, Unit> {
@@ -69,16 +66,16 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         self.input_cursor < self.input.len()
     }
 
-    /// Returns the current input value and its absolute index.
+    /// Returns the current input value, input index, output slice, and output index.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) unsafe fn current_input_unchecked(&self) -> (&Value, usize) {
+    pub(super) unsafe fn current_encode_parts_unchecked(&mut self) -> (&Value, usize, &mut [Unit], usize) {
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { self.input.get_unchecked(self.input_cursor) };
-        (value, self.input_cursor)
+        (value, self.input_cursor, &mut *self.output, self.output_cursor)
     }
 
     /// Returns whether the output cursor is within the visible output slice.
@@ -99,58 +96,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     #[inline(always)]
     fn available_output(&self) -> usize {
         self.output.len().saturating_sub(self.output_cursor)
-    }
-
-    /// Returns whether the current output has the requested capacity.
-    ///
-    /// # Parameters
-    ///
-    /// - `required`: Minimum writable output units required.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when writable capacity is at least `required`.
-    #[inline(always)]
-    pub(super) fn has_output_for(&self, required: usize) -> bool {
-        self.available_output() >= required
-    }
-
-    /// Returns an encode context for the current input value and output cursor.
-    ///
-    /// The returned context carries:
-    ///
-    /// - the current input value reference,
-    /// - the absolute input index,
-    /// - a prepared plan action payload,
-    /// - mutable output slice and current output index.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `P`: Plan action type produced by [`crate::BufferedEncodeHooks::prepare_encode`].
-    ///
-    /// # Parameters
-    ///
-    /// - `plan_action`: Action associated with the current input value.
-    ///
-    /// # Returns
-    ///
-    /// Returns an [`EncodeContext`] tied to the current input position and
-    /// output cursor.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that `self.has_input()` returned `true`.
-    #[inline(always)]
-    pub(super) unsafe fn encode_context_unchecked<P>(&mut self, plan_action: P) -> EncodeContext<'_, Value, Unit, P> {
-        // SAFETY: Guaranteed by the caller.
-        let input_value = unsafe { self.input.get_unchecked(self.input_cursor) };
-        EncodeContext {
-            input_value,
-            input_index: self.input_cursor,
-            plan_action,
-            output: &mut *self.output,
-            output_index: self.output_cursor,
-        }
     }
 
     /// Accepts a completed one-value write and advances both cursors.
@@ -198,6 +143,20 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         let available = self.available_output();
         debug_assert!(required > available, "need-output progress requires missing capacity");
         let additional = NonZeroUsize::new(required - available).expect("missing output is non-zero");
+        self.need_output_progress_with(additional, available)
+    }
+
+    /// Returns progress for a known missing output capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `additional`: Additional output units required before encoding can continue.
+    /// - `available`: Output units currently writable at the stop boundary.
+    ///
+    /// # Returns
+    ///
+    /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
+    pub(super) fn need_output_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_output(
             self.output_cursor,
             additional,

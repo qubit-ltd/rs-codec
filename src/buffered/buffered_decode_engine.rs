@@ -257,22 +257,15 @@ where
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
         debug_assert_unit_bounds::<C>(&self.codec);
-        let min_units = self.codec.min_units_per_value();
-        let mut state = DecodeState::new(input, input_index, output, output_index, min_units);
+        let mut state = DecodeState::new(input, input_index, output, output_index);
         if !state.output_cursor_in_bounds() {
             return Ok(state.need_output_progress());
         }
 
         while state.has_input() {
-            if state.needs_input() {
-                return Ok(state.need_input_progress());
-            }
-
-            // SAFETY: `needs_input()` returned false, so the state has at
-            // least `min_units_per_value()` units available from the current
-            // cursor.
-            let result = unsafe { self.decode_unchecked_at(state.input(), state.input_cursor()) };
-            if let Some(progress) = self.handle_decode_result(&mut state, result)? {
+            let context = state.context();
+            let step = self.decode_step(state.input(), context)?;
+            if let Some(progress) = step.apply_to_decode_state(&mut state) {
                 return Ok(progress);
             }
         }
@@ -344,37 +337,71 @@ where
         self.hooks.handle_decode_error(&self.codec, error, context)
     }
 
-    /// Handles one low-level decode result and updates the decode state.
+    /// Decodes one source value attempt into a normalized decode step.
     ///
     /// # Parameters
     ///
-    /// - `state`: Mutable decode call state.
+    /// - `input`: Complete input unit slice visible to the caller.
+    /// - `context`: Decode context describing the current source and output cursors.
+    ///
+    /// # Returns
+    ///
+    /// Returns one internal decode step, including successful decode, policy
+    /// skip/emit, or need-input state.
+    ///
+    /// # Errors
+    ///
+    /// Returns hook errors when the decode policy rejects the input.
+    #[inline(always)]
+    pub(super) fn decode_step(
+        &mut self,
+        input: &[C::Unit],
+        context: DecodeContext,
+    ) -> Result<DecodeStep<C::Value>, H::Error> {
+        let min_units = self.codec.min_units_per_value().get();
+        if context.available < min_units {
+            let additional = NonZeroUsize::new(min_units - context.available).expect("missing input is non-zero");
+            return Ok(DecodeStep::need_input(additional, context.available));
+        }
+
+        // SAFETY: The context reports at least `min_units_per_value()` source
+        // units available from `context.input_index`.
+        let result = unsafe { self.decode_unchecked_at(input, context.input_index) };
+        self.handle_decode_result(context, result)
+    }
+
+    /// Handles one low-level decode result and returns a normalized decode step.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Decode context used by policy hooks.
     /// - `result`: Low-level codec decode result.
     ///
     /// # Returns
     ///
-    /// Returns `Some(progress)` when the caller must stop transcoding, or `None`
-    /// when the main loop should continue.
+    /// Returns the normalized decode step selected by codec success or policy
+    /// hooks.
     ///
     /// # Errors
     ///
     /// Returns hook errors when the policy rejects the input.
+    #[inline(always)]
     fn handle_decode_result(
         &mut self,
-        state: &mut DecodeState<'_, C::Unit, C::Value>,
+        context: DecodeContext,
         result: Result<(C::Value, NonZeroUsize), C::DecodeError>,
-    ) -> Result<Option<TranscodeProgress>, H::Error> {
+    ) -> Result<DecodeStep<C::Value>, H::Error> {
         match result {
             Ok((value, consumed)) => {
-                let input_index = state.input_cursor();
-                Ok(DecodeStep::decoded(value, consumed, input_index).apply_to_decode_state(state))
+                debug_assert!(
+                    consumed.get() <= context.available,
+                    "Codec::decode_unchecked consumed beyond available input",
+                );
+                Ok(DecodeStep::decoded(value, consumed, context.input_index))
             }
             Err(error) => {
-                let context = state.context();
                 let action = self.handle_decode_error(error, context)?;
-                Ok(action
-                    .into_step(context.input_index, context.available)
-                    .apply_to_decode_state(state))
+                Ok(action.into_step(context.input_index, context.available))
             }
         }
     }

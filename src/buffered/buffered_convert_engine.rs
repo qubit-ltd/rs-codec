@@ -19,11 +19,10 @@ use super::{
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     decode_finish_step::DecodeFinishStep,
+    encode_step::EncodeStep,
+    pending_encode_step::PendingEncodeStep,
     pending_value::PendingValue,
     pending_value_slot::PendingValueSlot,
-    source_finish_reader::SourceFinishReader,
-    source_value_reader::SourceValueReader,
-    target_value_writer::TargetValueWriter,
     transcode_progress::TranscodeProgress,
     transcode_status::TranscodeStatus,
 };
@@ -288,10 +287,10 @@ where
         }
 
         let output_cursor = state.output_cursor();
-        let finish = {
-            let mut target = self.target_value_writer();
-            target.finish(state.output_mut(), output_cursor)?
-        };
+        let finish = self
+            .encode_engine
+            .finish(state.output_mut(), output_cursor)
+            .map_err(|error| self.hooks.map_encode_error(error))?;
         state.advance_output(finish.written());
         match finish.status() {
             TranscodeStatus::Complete => Ok(state.complete_progress()),
@@ -334,24 +333,6 @@ where
         self.pending.max_output_len(&self.encode_engine)
     }
 
-    /// Creates a source-side value reader bound to this engine.
-    #[inline(always)]
-    fn source_value_reader<'a>(&'a mut self) -> SourceValueReader<'a, D, E, H> {
-        SourceValueReader::new(&mut self.decode_engine, &self.hooks)
-    }
-
-    /// Creates a source-side finish reader bound to this engine.
-    #[inline(always)]
-    fn source_finish_reader<'a>(&'a mut self) -> SourceFinishReader<'a, D, E, H> {
-        SourceFinishReader::new(&mut self.decode_engine, &self.hooks)
-    }
-
-    /// Creates a target-side writer bound to this engine.
-    #[inline(always)]
-    fn target_value_writer<'a>(&'a mut self) -> TargetValueWriter<'a, D, E, H> {
-        TargetValueWriter::new(&mut self.encode_engine, &self.hooks)
-    }
-
     /// Writes a retained decoded value before new input is consumed.
     #[inline(always)]
     fn drain_pending(&mut self, state: &mut ConvertState<'_, D::Unit, E::Unit>) -> ConvertStepResult<D, E, H> {
@@ -364,10 +345,10 @@ where
     /// Converts one value from the current state cursors.
     #[inline(always)]
     fn convert_next(&mut self, state: &mut ConvertState<'_, D::Unit, E::Unit>) -> ConvertStepResult<D, E, H> {
-        let attempt = {
-            let mut source = self.source_value_reader();
-            source.read_next(state)?
-        };
+        let attempt = self
+            .decode_engine
+            .decode_step(state.input(), state.decode_context())
+            .map_err(|error| self.hooks.map_decode_error(error))?;
         attempt.apply_to_convert_state(state, |pending, state| self.encode_pending(pending, state))
     }
 
@@ -378,12 +359,14 @@ where
         D::Value: Default,
     {
         loop {
-            // Finish output is read through the same source-side abstraction as
-            // normal decode output, but without consuming new input units.
-            let step = {
-                let mut source = self.source_finish_reader();
-                source.read_next()?
-            };
+            // Source finish is drained one value at a time through the shared
+            // decode engine, then each value is encoded by the target engine.
+            let mut decoded: [D::Value; 1] = core::array::from_fn(|_| D::Value::default());
+            let finish = self
+                .decode_engine
+                .finish(&mut decoded, 0)
+                .map_err(|error| self.hooks.map_decode_error(error))?;
+            let step = DecodeFinishStep::from_progress(finish, decoded);
 
             match step {
                 DecodeFinishStep::Complete => return Ok(None),
@@ -413,9 +396,17 @@ where
         pending: PendingValue<D::Value>,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
     ) -> ConvertStepResult<D, E, H> {
-        let step = {
-            let mut target = self.target_value_writer();
-            target.write_pending(pending, state)?
+        let input_index = pending.input_index();
+        let output_index = state.output_cursor();
+        let step = self
+            .encode_engine
+            .encode_value_step(pending.value(), input_index, state.output_mut(), output_index)
+            .map_err(|error| self.hooks.map_encode_error(error))?;
+        let step = match step {
+            EncodeStep::Written { written } => PendingEncodeStep::written(written),
+            EncodeStep::NeedOutput { additional, available } => {
+                PendingEncodeStep::need_output(pending, additional, available)
+            }
         };
         Ok(self.pending.apply_pending_encode_step(step, state))
     }

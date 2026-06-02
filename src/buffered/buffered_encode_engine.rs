@@ -16,6 +16,7 @@ use super::{
     encode_context::EncodeContext,
     encode_plan::EncodePlan,
     encode_state::EncodeState,
+    encode_step::EncodeStep,
     transcode_progress::TranscodeProgress,
 };
 use crate::{
@@ -309,23 +310,11 @@ where
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
-            let (input_value, input_cursor) = unsafe { state.current_input_unchecked() };
-            let plan = self.prepare_value(input_value, input_cursor)?;
-            let max_output_units = plan.max_output_units;
-            if !state.has_output_for(max_output_units) {
-                return Ok(state.need_output_progress(max_output_units));
+            let (input_value, input_cursor, output, output_cursor) = unsafe { state.current_encode_parts_unchecked() };
+            let step = self.encode_value_step(input_value, input_cursor, output, output_cursor)?;
+            if let Some(progress) = step.apply_to_encode_state(&mut state) {
+                return Ok(progress);
             }
-
-            // SAFETY: The capacity check above guarantees the bound requested
-            // by the prepared plan. The loop condition still proves current
-            // input availability.
-            let context = unsafe { state.encode_context_unchecked(plan.action) };
-            let written = unsafe { self.write_prepared_value(context) }?;
-            debug_assert!(
-                written <= max_output_units,
-                "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",
-            );
-            state.accept_written_value(written);
         }
 
         Ok(state.complete_progress())
@@ -354,5 +343,58 @@ where
             return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
         self.hooks.finish(&self.codec, output, output_index)
+    }
+
+    /// Encodes one value into the provided output slice.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_value`: Logical value to encode.
+    /// - `input_index`: Absolute input value index used for hook context.
+    /// - `output`: Complete output unit slice visible to the caller.
+    /// - `output_index`: Absolute output unit index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode step describing either written output or missing output
+    /// capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns hook errors when planning or writing rejects the value.
+    #[inline(always)]
+    pub(super) fn encode_value_step(
+        &mut self,
+        input_value: &C::Value,
+        input_index: usize,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<EncodeStep, H::Error> {
+        debug_assert!(
+            output_index <= output.len(),
+            "output index must be within the output slice"
+        );
+        let plan = self.prepare_value(input_value, input_index)?;
+        let max_output_units = plan.max_output_units;
+        let available = output.len().saturating_sub(output_index);
+        if available < max_output_units {
+            return Ok(EncodeStep::need_output(max_output_units, available));
+        }
+
+        let context = EncodeContext {
+            input_value,
+            input_index,
+            plan_action: plan.action,
+            output,
+            output_index,
+        };
+        // SAFETY: The capacity check above guarantees the bound requested by
+        // the prepared plan.
+        let written = unsafe { self.write_prepared_value(context) }?;
+        debug_assert!(
+            written <= max_output_units,
+            "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",
+        );
+        Ok(EncodeStep::written(written))
     }
 }

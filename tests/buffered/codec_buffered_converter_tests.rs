@@ -20,7 +20,15 @@ use qubit_codec::{
     Transcoder,
 };
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{
+        Hash,
+        Hasher,
+    },
+};
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct VariableByteDecoder;
 
 unsafe impl Codec for VariableByteDecoder {
@@ -67,7 +75,7 @@ unsafe impl Codec for VariableByteDecoder {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct PairByteEncoder;
 
 unsafe impl Codec for PairByteEncoder {
@@ -151,6 +159,21 @@ enum TestDecodeError {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
+
+#[test]
+fn test_codec_buffered_converter_supports_standard_traits() {
+    let converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::default();
+    let cloned = converter.clone();
+
+    assert_eq!(converter, cloned);
+    assert_eq!(format!("{converter:?}"), format!("{cloned:?}"));
+
+    let mut converter_hash = DefaultHasher::new();
+    converter.hash(&mut converter_hash);
+    let mut cloned_hash = DefaultHasher::new();
+    cloned.hash(&mut cloned_hash);
+    assert_eq!(converter_hash.finish(), cloned_hash.finish());
+}
 
 #[test]
 fn test_codec_buffered_converter_converts_values_until_output_needs_capacity() {

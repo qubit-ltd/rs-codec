@@ -13,7 +13,6 @@ use core::num::NonZeroUsize;
 
 use super::{
     decode_context::DecodeContext,
-    decode_step::DecodeStep,
     transcode_progress::TranscodeProgress,
 };
 
@@ -88,17 +87,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[inline(always)]
     pub(crate) fn output_mut(&mut self) -> &mut [Output] {
         self.output
-    }
-
-    /// Returns the current input cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns current input cursor.
-    #[must_use]
-    #[inline(always)]
-    pub(crate) const fn input_cursor(&self) -> usize {
-        self.input_cursor
     }
 
     /// Returns the current output cursor.
@@ -217,36 +205,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[inline(always)]
     pub(crate) const fn written(&self) -> usize {
         self.output_cursor - self.output_start
-    }
-
-    /// Returns a need-input decode attempt when fewer than `min_units` remain.
-    ///
-    /// # Parameters
-    ///
-    /// - `min_units`: Minimum source units required to attempt one decode.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `Value`: Logical decoded value type returned in the request for input.
-    ///
-    /// # Returns
-    ///
-    /// Returns:
-    /// - `Some(DecodeStep::NeedInput(...))` when available input is below
-    ///   `min_units`;
-    /// - `None` when enough input is already available.
-    #[must_use]
-    #[inline(always)]
-    pub(crate) fn need_input_for_min_units<Value>(&self, min_units: usize) -> Option<DecodeStep<Value>> {
-        let available = self.available_input();
-        if available < min_units {
-            Some(DecodeStep::need_input(
-                NonZeroUsize::new(min_units - available).expect("missing input is non-zero"),
-                available,
-            ))
-        } else {
-            None
-        }
     }
 
     /// Returns completed progress for the current cursors.

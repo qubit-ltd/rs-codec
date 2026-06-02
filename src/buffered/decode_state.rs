@@ -26,8 +26,6 @@ pub(super) struct DecodeState<'a, Unit, Value> {
     output: &'a mut [Value],
     /// Absolute output index where this call starts.
     output_start: usize,
-    /// Minimum input units required to attempt one decode.
-    min_units: NonZeroUsize,
     /// Absolute source index for the next decode attempt.
     input_cursor: usize,
     /// Absolute output index for the next emitted value.
@@ -43,19 +41,12 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// - `input_index`: Absolute source index where decoding starts.
     /// - `output`: Complete output value slice visible to the decoder.
     /// - `output_index`: Absolute output index where writing starts.
-    /// - `min_units`: Minimum input units required to attempt one decode.
     ///
     /// # Returns
     ///
     /// Returns initialized decode state with cursors at the requested start
     /// positions.
-    pub(super) fn new(
-        input: &'a [Unit],
-        input_index: usize,
-        output: &'a mut [Value],
-        output_index: usize,
-        min_units: NonZeroUsize,
-    ) -> Self {
+    pub(super) fn new(input: &'a [Unit], input_index: usize, output: &'a mut [Value], output_index: usize) -> Self {
         debug_assert!(input_index <= input.len(), "input index must be within the input slice");
 
         Self {
@@ -63,7 +54,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             input_start: input_index,
             output,
             output_start: output_index,
-            min_units,
             input_cursor: input_index,
             output_cursor: output_index,
         }
@@ -77,16 +67,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     #[inline(always)]
     pub(super) fn input(&self) -> &[Unit] {
         self.input
-    }
-
-    /// Returns the current input cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns current input cursor.
-    #[inline(always)]
-    pub(super) fn input_cursor(&self) -> usize {
-        self.input_cursor
     }
 
     /// Returns whether there is still input to decode.
@@ -123,22 +103,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     #[inline(always)]
     fn available(&self) -> usize {
         self.input.len() - self.input_cursor
-    }
-
-    /// Returns whether more input is required before decoding can continue.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when available input is below `min_units`.
-    #[inline(always)]
-    pub(super) fn needs_input(&self) -> bool {
-        self.available() < self.min_units.get()
-    }
-
-    /// Returns the additional input units required by the minimum decode width.
-    #[inline(always)]
-    fn required_input(&self) -> NonZeroUsize {
-        NonZeroUsize::new(self.min_units.get() - self.available()).expect("missing input is non-zero")
     }
 
     /// Returns a public decode context snapshot.
@@ -225,22 +189,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             context.output_index,
             NonZeroUsize::MIN,
             0,
-            self.input_cursor - self.input_start,
-            self.output_cursor - self.output_start,
-        )
-    }
-
-    /// Returns progress for a missing input unit.
-    ///
-    /// # Returns
-    ///
-    /// Returns progress with [`TranscodeStatus::NeedInput`].
-    pub(super) fn need_input_progress(&self) -> TranscodeProgress {
-        let context = self.context();
-        TranscodeProgress::need_input(
-            context.input_index,
-            self.required_input(),
-            context.available,
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,
         )
