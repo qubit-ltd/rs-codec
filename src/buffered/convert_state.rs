@@ -65,6 +65,15 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns the complete input slice.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Input`: Source unit type visible to conversion.
+    /// - `Output`: Target unit type visible to conversion.
+    ///
+    /// # Returns
+    ///
+    /// Returns the full input slice.
     #[must_use]
     #[inline(always)]
     pub(crate) fn input(&self) -> &[Input] {
@@ -72,12 +81,20 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns the complete output slice mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns the full mutable output slice.
     #[inline(always)]
     pub(crate) fn output_mut(&mut self) -> &mut [Output] {
         self.output
     }
 
     /// Returns the current input cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns current input cursor.
     #[must_use]
     #[inline(always)]
     pub(crate) const fn input_cursor(&self) -> usize {
@@ -85,6 +102,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns the current output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns current output cursor.
     #[must_use]
     #[inline(always)]
     pub(crate) const fn output_cursor(&self) -> usize {
@@ -92,6 +113,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns whether there is still input to convert.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when more input units remain.
     #[must_use]
     #[inline(always)]
     pub(crate) fn has_input(&self) -> bool {
@@ -99,6 +124,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns input units visible from the current input cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns remaining input units visible from `input_cursor`.
     #[must_use]
     #[inline(always)]
     pub(crate) fn available_input(&self) -> usize {
@@ -106,6 +135,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns writable output units visible from the current output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns remaining writable output capacity from `output_cursor`.
     #[must_use]
     #[inline(always)]
     pub(crate) fn available_output(&self) -> usize {
@@ -129,6 +162,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns whether the output cursor is within the visible output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when `output_cursor` is at most `output.len()`.
     #[must_use]
     #[inline(always)]
     pub(crate) fn output_cursor_in_bounds(&self) -> bool {
@@ -161,6 +198,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns input units consumed since this call started.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed input units relative to `input_start`.
     #[must_use]
     #[inline(always)]
     pub(crate) const fn read(&self) -> usize {
@@ -168,6 +209,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns output units written since this call started.
+    ///
+    /// # Returns
+    ///
+    /// Returns written output units relative to `output_start`.
     #[must_use]
     #[inline(always)]
     pub(crate) const fn written(&self) -> usize {
@@ -180,9 +225,16 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// - `min_units`: Minimum source units required to attempt one decode.
     ///
+    /// # Type Parameters
+    ///
+    /// - `Value`: Logical decoded value type returned in the request for input.
+    ///
     /// # Returns
     ///
-    /// Returns `Some` when decoding must stop for more input, otherwise `None`.
+    /// Returns:
+    /// - `Some(DecodeStep::NeedInput(...))` when available input is below
+    ///   `min_units`;
+    /// - `None` when enough input is already available.
     #[must_use]
     #[inline(always)]
     pub(crate) fn need_input_for_min_units<Value>(&self, min_units: usize) -> Option<DecodeStep<Value>> {
@@ -198,6 +250,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     }
 
     /// Returns completed progress for the current cursors.
+    ///
+    /// # Returns
+    ///
+    /// Returns [`TranscodeProgress::complete`]-style state.
     #[must_use]
     pub(crate) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(self.read(), self.written())

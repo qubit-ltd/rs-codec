@@ -96,13 +96,32 @@ impl<Value> DecodeStep<Value> {
 
     /// Applies this decode step to the current conversion state.
     ///
+    /// For each variant:
+    ///
+    /// - `Decoded`: advances input cursor and passes the decoded value into the
+    ///   converter encode path.
+    /// - `Skipped`: only advances input cursor.
+    /// - `NeedInput`: returns [`TranscodeProgress`] requesting additional input.
+    ///
     /// # Parameters
     ///
     /// - `state`: Current conversion-call state.
+    /// - `encode`: Callback to emit a decoded value into the shared convert
+    ///   state.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Input`: Input-unit type stored in the active [`ConvertState`].
+    /// - `Output`: Output-unit type stored in the active [`ConvertState`].
+    /// - `Error`: Error type produced by the encode callback.
+    /// - `F`: Callback type that consumes a decoded value and updates state.
     ///
     /// # Returns
     ///
-    /// Returns the public stop progress, if conversion must stop.
+    /// Returns:
+    /// - `Ok(Some(progress))` when conversion must stop,
+    /// - `Ok(None)` when conversion can continue, or
+    /// - `Err(error)` when emitting the decoded value fails.
     #[inline(always)]
     pub(super) fn apply_to_convert_state<Input, Output, Error, F>(
         self,
@@ -135,9 +154,14 @@ impl<Value> DecodeStep<Value> {
     ///
     /// - `state`: Current decode-call state.
     ///
+    /// # Type Parameters
+    ///
+    /// - `Unit`: Decode input-unit type represented by this [`DecodeState`].
+    ///
     /// # Returns
     ///
-    /// Returns public stop progress when decoding must stop.
+    /// Returns optional public stop progress when decoding cannot continue in this
+    /// call.
     #[must_use]
     #[inline(always)]
     pub(super) fn apply_to_decode_state<Unit>(

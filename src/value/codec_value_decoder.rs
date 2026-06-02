@@ -9,8 +9,6 @@
  ******************************************************************************/
 //! Value decoder adapter backed by a low-level codec.
 
-use core::marker::PhantomData;
-
 use super::ValueDecoder;
 use crate::{
     Codec,
@@ -28,17 +26,13 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
-/// - `Value`: Logical value type produced by the codec.
-/// - `Unit`: Encoded unit type accepted by the codec.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecValueDecoder<C, Value, Unit> {
+pub struct CodecValueDecoder<C> {
     /// Low-level codec used for one-value decoding.
     codec: C,
-    /// Binds the adapter to one codec value/unit contract.
-    marker: PhantomData<fn(Unit) -> Value>,
 }
 
-impl<C, Value, Unit> CodecValueDecoder<C, Value, Unit> {
+impl<C> CodecValueDecoder<C> {
     /// Creates a decoder backed by `codec`.
     ///
     /// # Parameters
@@ -50,19 +44,15 @@ impl<C, Value, Unit> CodecValueDecoder<C, Value, Unit> {
     /// Returns a value decoder adapter for the supplied codec.
     #[must_use]
     pub const fn new(codec: C) -> Self {
-        Self {
-            codec,
-            marker: PhantomData,
-        }
+        Self { codec }
     }
 }
 
-impl<C, Value, Unit> ValueDecoder<[Unit]> for CodecValueDecoder<C, Value, Unit>
+impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
-    type Output = Value;
+    type Output = C::Value;
     type Error = CodecDecodeError<C::DecodeError>;
 
     /// Decodes exactly one encoded value from `input`.
@@ -82,8 +72,8 @@ where
     /// [`CodecDecodeError::Decode`] when the wrapped codec rejects the input.
     /// Returns [`CodecDecodeError::TrailingInput`] when a value is decoded but
     /// extra input remains.
-    fn decode(&self, input: &[Unit]) -> Result<Self::Output, Self::Error> {
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+    fn decode(&self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+        debug_assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
             return Err(CodecDecodeError::incomplete(0, min_units, input.len()));

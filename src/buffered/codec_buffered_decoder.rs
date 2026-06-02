@@ -32,18 +32,15 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode values.
-/// - `Unit`: Encoded unit type accepted by the codec.
-/// - `Value`: Logical value produced by the decoder.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecBufferedDecoder<C, Unit, Value> {
+pub struct CodecBufferedDecoder<C> {
     /// Common buffered decoding engine.
-    engine: BufferedDecodeEngine<C, CodecBufferedDecodeHooks, Unit, Value>,
+    engine: BufferedDecodeEngine<C, CodecBufferedDecodeHooks>,
 }
 
-impl<C, Unit, Value> CodecBufferedDecoder<C, Unit, Value>
+impl<C> CodecBufferedDecoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     /// Creates a buffered decoder backed by `codec`.
     ///
@@ -62,48 +59,86 @@ where
     }
 }
 
-impl<C, Unit, Value> Transcoder<Unit, Value> for CodecBufferedDecoder<C, Unit, Value>
+impl<C> Transcoder<C::Unit, C::Value> for CodecBufferedDecoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     type Error = CodecDecodeError<C::DecodeError>;
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Source units the caller plans to decode.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound for decoded values.
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of values that may still be emitted by finishing state.
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
     }
 
     /// Resets hook-owned state.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     fn reset(&mut self) {
         self.engine.reset();
     }
 
     /// Decodes source units into logical values.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Source unit slice.
+    /// - `input_index`: Absolute source index where decoding starts.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: Absolute output value index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for consumed and written counters.
+    ///
+    /// # Errors
+    ///
+    /// Returns a decode error if conversion fails under hook policy.
     fn transcode(
         &mut self,
-        input: &[Unit],
+        input: &[C::Unit],
         input_index: usize,
-        output: &mut [Value],
+        output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
-    fn finish(&mut self, output: &mut [Value], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination value slice for final retained values.
+    /// - `output_index`: Absolute output value index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for finalized output.
+    ///
+    /// # Errors
+    ///
+    /// Returns a decode error if finalization cannot complete.
+    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C, Unit, Value> BufferedDecoder<Unit, Value> for CodecBufferedDecoder<C, Unit, Value>
-where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
-{
-}
+impl<C> BufferedDecoder<C::Unit, C::Value> for CodecBufferedDecoder<C> where C: Codec {}

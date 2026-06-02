@@ -18,7 +18,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
 
-unsafe impl Codec<u8, u8> for PairByteCodec {
+unsafe impl Codec for PairByteCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
@@ -57,7 +59,9 @@ unsafe impl Codec<u8, u8> for PairByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
-unsafe impl Codec<u8, u8> for RejectOddCodec {
+unsafe impl Codec for RejectOddCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
@@ -103,7 +107,9 @@ struct NonCloneValue {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct NonCloneValueCodec;
 
-unsafe impl Codec<NonCloneValue, u8> for NonCloneValueCodec {
+unsafe impl Codec for NonCloneValueCodec {
+    type Value = NonCloneValue;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
@@ -145,7 +151,7 @@ unsafe impl Codec<NonCloneValue, u8> for NonCloneValueCodec {
 
 #[test]
 fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
-    let encoder = CodecValueEncoder::<PairByteCodec, u8, u8>::new(PairByteCodec);
+    let encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
 
     let output = ValueEncoder::<u8>::encode(&encoder, &7).expect("encoding should be infallible");
 
@@ -154,7 +160,7 @@ fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
 
 #[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
-    let encoder = CodecValueEncoder::<NonCloneValueCodec, NonCloneValue, u8>::new(NonCloneValueCodec);
+    let encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
 
     let output = ValueEncoder::<NonCloneValue>::encode(&encoder, &NonCloneValue { value: 11 })
         .expect("encoding should not require cloning the value");
@@ -164,7 +170,7 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 
 #[test]
 fn test_codec_value_encoder_propagates_encode_error() {
-    let encoder = CodecValueEncoder::<RejectOddCodec, u8, u8>::new(RejectOddCodec);
+    let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
     let error = ValueEncoder::<u8>::encode(&encoder, &7).expect_err("odd value should be rejected");
 

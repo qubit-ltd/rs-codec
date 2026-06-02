@@ -14,7 +14,9 @@ use qubit_codec::Codec;
 #[derive(Default)]
 struct ByteIncrementCodec;
 
-unsafe impl Codec<u8, u8> for ByteIncrementCodec {
+unsafe impl Codec for ByteIncrementCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 

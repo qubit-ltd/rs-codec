@@ -22,7 +22,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct WideCodec;
 
-unsafe impl Codec<u8, u8> for WideCodec {
+unsafe impl Codec for WideCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
@@ -72,7 +74,7 @@ impl EngineError {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ExactWidthHooks;
 
-impl BufferedEncodeHooks<WideCodec, u8, u8> for ExactWidthHooks {
+impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
     type Error = EngineError;
     type PlanAction = ();
 
@@ -114,7 +116,7 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for ExactWidthHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SkippingHooks;
 
-impl BufferedEncodeHooks<WideCodec, u8, u8> for SkippingHooks {
+impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
     type Error = EngineError;
     type PlanAction = ();
 
@@ -143,7 +145,7 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for SkippingHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectingHooks;
 
-impl BufferedEncodeHooks<WideCodec, u8, u8> for RejectingHooks {
+impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
     type Error = EngineError;
     type PlanAction = ();
 
@@ -180,7 +182,7 @@ impl Default for FinishHooks {
     }
 }
 
-impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
+impl BufferedEncodeHooks<WideCodec> for FinishHooks {
     type Error = EngineError;
     type PlanAction = ();
 
@@ -248,7 +250,7 @@ impl BufferedEncodeHooks<WideCodec, u8, u8> for FinishHooks {
 
 #[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
-    let mut encoder = BufferedEncodeEngine::<_, _, u8, u8>::new(WideCodec, ExactWidthHooks);
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
 
     assert_eq!(Ok(8), encoder.max_output_len(2));
     assert_eq!(0, encoder.max_finish_output_len());
@@ -261,7 +263,7 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
 
 #[test]
 fn test_buffered_encode_engine_delegates_finish_to_hooks() {
-    let mut encoder = BufferedEncodeEngine::<_, _, u8, u8>::new(WideCodec, FinishHooks::default());
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
     assert_eq!(1, encoder.max_finish_output_len());
@@ -286,14 +288,14 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     assert_eq!([0xee], output);
     assert_eq!(0, encoder.max_finish_output_len());
 
-    let mut encoder = BufferedEncodeEngine::<_, _, u8, u8>::new(WideCodec, FinishHooks::default());
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     encoder.reset();
     assert_eq!(0, encoder.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
-    let mut encoder = BufferedEncodeEngine::<_, _, u8, u8>::new(WideCodec, FinishHooks::default());
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [];
 
     let progress = encoder
@@ -314,7 +316,7 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
 
 #[test]
 fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer() {
-    let mut encoder = BufferedEncodeEngine::<_, _, u8, u8>::new(WideCodec, ExactWidthHooks);
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
     let mut output = [];
 
     let progress = encoder
@@ -336,7 +338,7 @@ fn test_buffered_encode_hooks_default_finish_reports_output_index_beyond_buffer(
     let mut hooks = ExactWidthHooks;
     let mut output = [];
 
-    let progress = BufferedEncodeHooks::<WideCodec, u8, u8>::finish(&mut hooks, &WideCodec, &mut output, 1)
+    let progress = BufferedEncodeHooks::<WideCodec>::finish(&mut hooks, &WideCodec, &mut output, 1)
         .expect("default hook finish should report out-of-range output index");
 
     assert_eq!(

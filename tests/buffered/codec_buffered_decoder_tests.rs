@@ -21,7 +21,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableByteCodec;
 
-unsafe impl Codec<u8, u8> for VariableByteCodec {
+unsafe impl Codec for VariableByteCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -72,7 +74,9 @@ enum TestDecodeError {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FixedPairCodec;
 
-unsafe impl Codec<u8, u8> for FixedPairCodec {
+unsafe impl Codec for FixedPairCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
@@ -109,7 +113,7 @@ unsafe impl Codec<u8, u8> for FixedPairCodec {
 fn test_codec_buffered_decoder_decodes_until_output_needs_capacity() {
     fn assert_buffered_decoder<T: BufferedDecoder<u8, u8>>() {}
 
-    assert_buffered_decoder::<CodecBufferedDecoder<VariableByteCodec, u8, u8>>();
+    assert_buffered_decoder::<CodecBufferedDecoder<VariableByteCodec>>();
 
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 2];

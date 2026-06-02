@@ -15,9 +15,25 @@ use super::{
 };
 
 /// Converter error type selected by hooks for one target output unit type.
-pub(super) type ConvertErrorOf<D, E, H, Input, Value, Output> =
-    <H as BufferedConvertHooks<D, E, Input, Value, Output>>::Error;
+///
+/// # Type Parameters
+///
+/// - `D`: Source codec type.
+/// - `E`: Target codec type.
+/// - `H`: Converter hook type exposing `Error`.
+pub(super) type ConvertErrorOf<D, E, H> = <H as BufferedConvertHooks<D, E>>::Error;
 
 /// Converter progress result type selected by hooks for one target output unit type.
-pub(super) type ConvertProgressResult<D, E, H, Input, Value, Output> =
-    Result<TranscodeProgress, ConvertErrorOf<D, E, H, Input, Value, Output>>;
+///
+/// # Type Parameters
+///
+/// - `D`: Source codec type.
+/// - `E`: Target codec type.
+/// - `H`: Converter hook type exposing `Error`.
+///
+/// # Returns
+///
+/// Returns a [`Result`] carrying:
+/// - `Ok(progress)` when a conversion step advances or completes without error, or
+/// - `Err(error)` when conversion cannot continue.
+pub(super) type ConvertProgressResult<D, E, H> = Result<TranscodeProgress, ConvertErrorOf<D, E, H>>;

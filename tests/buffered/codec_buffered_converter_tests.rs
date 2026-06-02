@@ -23,7 +23,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableByteDecoder;
 
-unsafe impl Codec<u8, u8> for VariableByteDecoder {
+unsafe impl Codec for VariableByteDecoder {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -68,7 +70,9 @@ unsafe impl Codec<u8, u8> for VariableByteDecoder {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteEncoder;
 
-unsafe impl Codec<u8, u8> for PairByteEncoder {
+unsafe impl Codec for PairByteEncoder {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = TestEncodeError;
 
@@ -105,7 +109,9 @@ unsafe impl Codec<u8, u8> for PairByteEncoder {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MinTwoDecoder;
 
-unsafe impl Codec<u8, u8> for MinTwoDecoder {
+unsafe impl Codec for MinTwoDecoder {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -150,12 +156,10 @@ struct TestEncodeError;
 fn test_codec_buffered_converter_converts_values_until_output_needs_capacity() {
     fn assert_buffered_converter<T: BufferedConverter<u8, u8>>() {}
 
-    assert_buffered_converter::<CodecBufferedConverter<VariableByteDecoder, PairByteEncoder, u8, u8, u8>>();
+    assert_buffered_converter::<CodecBufferedConverter<VariableByteDecoder, PairByteEncoder>>();
 
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 4];
 
     let progress = converter
@@ -178,10 +182,8 @@ fn test_codec_buffered_converter_converts_values_until_output_needs_capacity() {
 
 #[test]
 fn test_codec_buffered_converter_reports_bounds_and_finishes_noop() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(6), converter.max_output_len(3));
@@ -202,10 +204,8 @@ fn test_codec_buffered_converter_reports_bounds_and_finishes_noop() {
 
 #[test]
 fn test_codec_buffered_converter_wraps_variable_width_incomplete_decode_error() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -235,8 +235,7 @@ fn test_codec_buffered_converter_wraps_variable_width_incomplete_decode_error() 
 
 #[test]
 fn test_codec_buffered_converter_reports_short_minimum_input_without_consuming_tail() {
-    let mut converter =
-        CodecBufferedConverter::<MinTwoDecoder, PairByteEncoder, u8, u8, u8>::new(MinTwoDecoder, PairByteEncoder);
+    let mut converter = CodecBufferedConverter::<MinTwoDecoder, PairByteEncoder>::new(MinTwoDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -257,10 +256,8 @@ fn test_codec_buffered_converter_reports_short_minimum_input_without_consuming_t
 
 #[test]
 fn test_codec_buffered_converter_keeps_decoded_value_pending_when_output_is_short() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 1];
 
     let progress = converter
@@ -293,10 +290,8 @@ fn test_codec_buffered_converter_keeps_decoded_value_pending_when_output_is_shor
 
 #[test]
 fn test_codec_buffered_converter_finish_drains_pending_decoded_value() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut short_output = [0_u8; 1];
 
     let progress = converter
@@ -319,10 +314,8 @@ fn test_codec_buffered_converter_finish_drains_pending_decoded_value() {
 
 #[test]
 fn test_codec_buffered_converter_reports_invalid_indices() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -350,10 +343,8 @@ fn test_codec_buffered_converter_reports_invalid_indices() {
 
 #[test]
 fn test_codec_buffered_converter_wraps_decode_and_encode_errors() {
-    let mut converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder, u8, u8, u8>::new(
-        VariableByteDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -382,8 +373,7 @@ fn test_codec_buffered_converter_wraps_decode_and_encode_errors() {
 
 #[test]
 fn test_codec_buffered_converter_finish_does_not_handle_input_tail() {
-    let mut converter =
-        CodecBufferedConverter::<MinTwoDecoder, PairByteEncoder, u8, u8, u8>::new(MinTwoDecoder, PairByteEncoder);
+    let mut converter = CodecBufferedConverter::<MinTwoDecoder, PairByteEncoder>::new(MinTwoDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let progress = converter

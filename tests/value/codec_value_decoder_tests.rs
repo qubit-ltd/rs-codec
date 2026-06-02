@@ -19,7 +19,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
 
-unsafe impl Codec<u8, u8> for SingleByteCodec {
+unsafe impl Codec for SingleByteCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -61,7 +63,9 @@ unsafe impl Codec<u8, u8> for SingleByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FixedPairCodec;
 
-unsafe impl Codec<u8, u8> for FixedPairCodec {
+unsafe impl Codec for FixedPairCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -101,7 +105,7 @@ enum TestDecodeError {
 
 #[test]
 fn test_codec_value_decoder_decodes_exactly_one_value() {
-    let decoder = CodecValueDecoder::<SingleByteCodec, u8, u8>::new(SingleByteCodec);
+    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
     let output = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect("single byte should decode");
 
@@ -110,7 +114,7 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
 
 #[test]
 fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
-    let decoder = CodecValueDecoder::<FixedPairCodec, u8, u8>::new(FixedPairCodec);
+    let decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect_err("one byte is incomplete");
 
@@ -126,7 +130,7 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
 
 #[test]
 fn test_codec_value_decoder_rejects_trailing_input() {
-    let decoder = CodecValueDecoder::<SingleByteCodec, u8, u8>::new(SingleByteCodec);
+    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&decoder, &[7, 8]).expect_err("trailing input should fail");
 
@@ -141,7 +145,7 @@ fn test_codec_value_decoder_rejects_trailing_input() {
 
 #[test]
 fn test_codec_value_decoder_wraps_codec_decode_error() {
-    let decoder = CodecValueDecoder::<SingleByteCodec, u8, u8>::new(SingleByteCodec);
+    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&decoder, &[0xff]).expect_err("0xff should fail");
 

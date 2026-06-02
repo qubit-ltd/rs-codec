@@ -15,5 +15,17 @@ use super::{
 };
 
 /// Result type for private pending-value encode steps.
-pub(super) type ConvertEncodeResult<D, E, H, Input, Value, Output> =
-    Result<PendingEncodeStep<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;
+///
+/// # Type Parameters
+///
+/// - `D`: Source codec.
+/// - `E`: Target codec.
+/// - `H`: Converter hook set.
+///
+/// # Returns
+///
+/// Returns:
+/// - `Ok(PendingEncodeStep<D::Value>)` when pending write handling proceeds,
+/// - `Err(...)` for mapped converter-level encode errors.
+pub(super) type ConvertEncodeResult<D, E, H> =
+    Result<PendingEncodeStep<<D as crate::Codec>::Value>, ConvertErrorOf<D, E, H>>;

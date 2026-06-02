@@ -37,13 +37,10 @@ impl CodecBufferedConvertHooks {
     }
 }
 
-impl<D, E, Value, InputUnit, OutputUnit> BufferedConvertHooks<D, E, InputUnit, Value, OutputUnit>
-    for CodecBufferedConvertHooks
+impl<D, E> BufferedConvertHooks<D, E> for CodecBufferedConvertHooks
 where
-    D: Codec<Value, InputUnit>,
-    E: Codec<Value, OutputUnit>,
-    InputUnit: Copy,
-    OutputUnit: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
 {
     type DecodeError = CodecDecodeError<D::DecodeError>;
     type DecodeHooks = CodecBufferedDecodeHooks;
@@ -52,22 +49,56 @@ where
     type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
 
     /// Creates strict codec-backed decode hooks.
+    ///
+    /// # Parameters
+    ///
+    /// - `_decode_codec`: Source codec for reference only.
+    /// - `_encode_codec`: Target codec for reference only.
+    ///
+    /// # Returns
+    ///
+    /// Returns decode hooks that map decode failures directly to codec decode errors.
     fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
 
     /// Creates strict codec-backed encode hooks.
+    ///
+    /// # Parameters
+    ///
+    /// - `_decode_codec`: Source codec for reference only.
+    /// - `_encode_codec`: Target codec for reference only.
+    ///
+    /// # Returns
+    ///
+    /// Returns encode hooks that map encode failures directly to codec encode errors.
     fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
 
     /// Maps decoder errors into converter decode errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Decode-side error from the source codec layer.
+    ///
+    /// # Returns
+    ///
+    /// Returns a converter-level decode error.
     #[inline(always)]
     fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
         CodecConvertError::decode(error)
     }
 
     /// Maps encoder errors into converter encode errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Encode-side error from the target codec layer.
+    ///
+    /// # Returns
+    ///
+    /// Returns a converter-level encode error.
     #[inline(always)]
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         match error {
@@ -79,12 +110,30 @@ where
     }
 
     /// Creates an invalid source input index error.
+    ///
+    /// # Parameters
+    ///
+    /// - `_decode_codec`: Source codec for which the caller-supplied index is invalid.
+    /// - `index`: Invalid source input index.
+    /// - `input_len`: Length of the source input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns a converter-level error describing the invalid source index.
     #[inline(always)]
     fn invalid_input_index(&self, _decode_codec: &D, index: usize, input_len: usize) -> Self::Error {
         CodecConvertError::decode(CodecDecodeError::invalid_input_index(index, input_len))
     }
 
     /// Resets stateless codec-backed converter hooks.
+    ///
+    /// # Parameters
+    ///
+    /// - `self`: Converter hooks instance.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     #[inline(always)]
     fn reset(&mut self) {}
 }

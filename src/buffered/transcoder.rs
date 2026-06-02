@@ -182,6 +182,10 @@ pub trait Transcoder<Input, Output> {
     /// Pending input, pending output, and completed-stream state must be
     /// discarded by stateful implementations. Stateless transcoders may keep
     /// the default no-op implementation.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     fn reset(&mut self) {}
 
     /// Converts available input units into output units.

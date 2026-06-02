@@ -23,31 +23,53 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub(super) struct CodecBufferedEncodeHooks;
 
-impl<C, Value, Unit> BufferedEncodeHooks<C, Value, Unit> for CodecBufferedEncodeHooks
+impl<C> BufferedEncodeHooks<C> for CodecBufferedEncodeHooks
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
     type PlanAction = ();
 
     /// Prepares a conservative one-value encoding plan.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec for width calculation.
+    /// - `_input_value`: Input value to be encoded.
+    /// - `_input_index`: Absolute index of the input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`EncodePlan`] whose action is defaulted to unit.
     #[inline(always)]
     fn prepare_encode(
         &mut self,
         codec: &C,
-        _input_value: &Value,
+        _input_value: &C::Value,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
     }
 
     /// Writes one value by delegating to the wrapped codec.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec used for actual writing.
+    /// - `context`: Encode context with prepared action and output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec encode error when the codec fails.
     #[inline(always)]
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        context: EncodeContext<'_, Value, Unit, Self::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit, Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
@@ -56,6 +78,16 @@ where
     }
 
     /// Creates an invalid input index error.
+    ///
+    /// # Parameters
+    ///
+    /// - `_codec`: Low-level codec for context only.
+    /// - `index`: Invalid absolute input index.
+    /// - `input_len`: Length of the input value slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode invalid-input-index error.
     #[inline(always)]
     fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
         CodecEncodeError::invalid_input_index(index, input_len)

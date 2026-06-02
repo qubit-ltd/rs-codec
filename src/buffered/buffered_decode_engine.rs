@@ -9,7 +9,6 @@
  ******************************************************************************/
 //! Reusable buffered decoder engine.
 
-use core::marker::PhantomData;
 use core::num::NonZeroUsize;
 
 use super::{
@@ -73,7 +72,9 @@ use crate::{
 ///     Malformed { consumed: NonZeroUsize },
 /// }
 ///
-/// unsafe impl Codec<u8, u8> for ByteCodec {
+/// unsafe impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
 ///     type DecodeError = ByteDecodeError;
 ///     type EncodeError = core::convert::Infallible;
 ///
@@ -111,7 +112,7 @@ use crate::{
 ///
 /// struct ReplacementHooks;
 ///
-/// impl BufferedDecodeHooks<ByteCodec, u8, u8> for ReplacementHooks {
+/// impl BufferedDecodeHooks<ByteCodec> for ReplacementHooks {
 ///     type Error = ByteDecodeError;
 ///
 ///     fn handle_decode_error(
@@ -139,7 +140,7 @@ use crate::{
 ///     }
 /// }
 ///
-/// let mut engine = BufferedDecodeEngine::<_, _, u8, u8>::new(ByteCodec, ReplacementHooks);
+/// let mut engine = BufferedDecodeEngine::<_, _>::new(ByteCodec, ReplacementHooks);
 /// let input = [b'a', 0xff, b'b'];
 /// let mut output = [0_u8; 3];
 ///
@@ -160,23 +161,18 @@ use crate::{
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-/// - `Unit`: Encoded input unit type accepted by the engine.
-/// - `Value`: Logical value decoded by the engine.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BufferedDecodeEngine<C, H, Unit, Value> {
+pub struct BufferedDecodeEngine<C, H> {
     /// Low-level codec used for one-value decoding.
     pub(super) codec: C,
     /// Policy hooks used for decode failures.
     pub(super) hooks: H,
-    /// Binds the engine to the encoded input unit and decoded value types.
-    marker: PhantomData<fn(Unit) -> Value>,
 }
 
-impl<C, H, Unit, Value> BufferedDecodeEngine<C, H, Unit, Value>
+impl<C, H> BufferedDecodeEngine<C, H>
 where
-    C: Codec<Value, Unit>,
-    H: BufferedDecodeHooks<C, Unit, Value>,
-    Unit: Copy,
+    C: Codec,
+    H: BufferedDecodeHooks<C>,
 {
     /// Creates a buffered decoder engine.
     ///
@@ -190,11 +186,7 @@ where
     /// Returns a buffered decoder engine.
     #[must_use]
     pub const fn new(codec: C, hooks: H) -> Self {
-        Self {
-            codec,
-            hooks,
-            marker: PhantomData,
-        }
+        Self { codec, hooks }
     }
 
     /// Returns an upper bound for decoded values produced from `input_len` units.
@@ -209,7 +201,7 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+        debug_assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -224,6 +216,14 @@ where
     }
 
     /// Resets hook-owned state.
+    ///
+    /// # Parameters
+    ///
+    /// - `self`: Decoder instance whose hook state is reset.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     pub fn reset(&mut self) {
         self.hooks.reset(&self.codec);
     }
@@ -248,15 +248,15 @@ where
     /// concrete policy hook rejects a value.
     pub fn transcode(
         &mut self,
-        input: &[Unit],
+        input: &[C::Unit],
         input_index: usize,
-        output: &mut [Value],
+        output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, H::Error> {
         if input_index > input.len() {
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+        debug_assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value();
         let mut state = DecodeState::new(input, input_index, output, output_index, min_units);
         if !state.output_cursor_in_bounds() {
@@ -298,7 +298,7 @@ where
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    pub fn finish(&mut self, output: &mut [Value], output_index: usize) -> Result<TranscodeProgress, H::Error> {
+    pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<TranscodeProgress, H::Error> {
         if output_index > output.len() {
             return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }
@@ -314,20 +314,33 @@ where
     #[inline(always)]
     pub(crate) unsafe fn decode_unchecked_at(
         &self,
-        input: &[Unit],
+        input: &[C::Unit],
         input_index: usize,
-    ) -> Result<(Value, NonZeroUsize), C::DecodeError> {
+    ) -> Result<(C::Value, NonZeroUsize), C::DecodeError> {
         // SAFETY: Forwarded from this method's safety contract.
         unsafe { self.codec.decode_unchecked(input, input_index) }
     }
 
     /// Lets the configured decode hooks classify a low-level decode error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Decode error returned by [`Codec::decode_unchecked`].
+    /// - `context`: Decode context used by policy hooks.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded action chosen by policy hooks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a hook-level error when the decode policy rejects the value.
     #[inline]
     pub(crate) fn handle_decode_error(
         &mut self,
         error: C::DecodeError,
         context: DecodeContext,
-    ) -> Result<DecodeAction<Value>, H::Error> {
+    ) -> Result<DecodeAction<C::Value>, H::Error> {
         self.hooks.handle_decode_error(&self.codec, error, context)
     }
 
@@ -348,8 +361,8 @@ where
     /// Returns hook errors when the policy rejects the input.
     fn handle_decode_result(
         &mut self,
-        state: &mut DecodeState<'_, Unit, Value>,
-        result: Result<(Value, NonZeroUsize), C::DecodeError>,
+        state: &mut DecodeState<'_, C::Unit, C::Value>,
+        result: Result<(C::Value, NonZeroUsize), C::DecodeError>,
     ) -> Result<Option<TranscodeProgress>, H::Error> {
         match result {
             Ok((value, consumed)) => {

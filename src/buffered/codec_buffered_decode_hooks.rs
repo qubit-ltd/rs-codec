@@ -23,24 +23,43 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub(super) struct CodecBufferedDecodeHooks;
 
-impl<C, Unit, Value> BufferedDecodeHooks<C, Unit, Value> for CodecBufferedDecodeHooks
+impl<C> BufferedDecodeHooks<C> for CodecBufferedDecodeHooks
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     type Error = CodecDecodeError<C::DecodeError>;
 
     /// Converts codec decode failures into strict buffered decode errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `_codec`: Low-level codec instance.
+    /// - `error`: Decode error produced by the low-level codec.
+    /// - `context`: Decoding context carrying input position.
+    ///
+    /// # Returns
+    ///
+    /// Returns a convert status action wrapped as `CodecDecodeError`.
     fn handle_decode_error(
         &mut self,
         _codec: &C,
         error: C::DecodeError,
         context: DecodeContext,
-    ) -> Result<DecodeAction<Value>, Self::Error> {
+    ) -> Result<DecodeAction<C::Value>, Self::Error> {
         Err(CodecDecodeError::decode(error, context.input_index))
     }
 
     /// Creates an invalid input index error.
+    ///
+    /// # Parameters
+    ///
+    /// - `_codec`: Low-level codec instance.
+    /// - `index`: Invalid absolute input index.
+    /// - `input_len`: Input slice length.
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec decode error describing the invalid index.
     fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
         CodecDecodeError::invalid_input_index(index, input_len)
     }

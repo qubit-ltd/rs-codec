@@ -19,38 +19,54 @@ use super::{
 use crate::Codec;
 
 /// Source-side finish reader used by the converter finalization path.
-pub(super) struct SourceFinishReader<'a, D, E, H, Input, Value, Output>
+pub(super) struct SourceFinishReader<'a, D, E, H>
 where
-    D: Codec<Value, Input>,
-    E: Codec<Value, Output>,
-    H: BufferedConvertHooks<D, E, Input, Value, Output>,
-    Input: Copy,
-    Output: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    H: BufferedConvertHooks<D, E>,
 {
     /// Source-side reader used for finish hook dispatch.
-    source: SourceValueReader<'a, D, E, H, Input, Value, Output>,
+    source: SourceValueReader<'a, D, E, H>,
 }
 
-impl<'a, D, E, H, Input, Value, Output> SourceFinishReader<'a, D, E, H, Input, Value, Output>
+impl<'a, D, E, H> SourceFinishReader<'a, D, E, H>
 where
-    D: Codec<Value, Input>,
-    E: Codec<Value, Output>,
-    H: BufferedConvertHooks<D, E, Input, Value, Output>,
-    Input: Copy,
-    Output: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    H: BufferedConvertHooks<D, E>,
 {
     /// Creates a source-side finish reader.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Source codec used by the buffered decode engine.
+    /// - `E`: Target codec used by the converter; `E::Value` must equal
+    ///   `D::Value`.
+    /// - `H`: Converter-level hook aggregator.
+    ///
+    /// # Parameters
+    ///
+    /// - `engine`: Mutable reference to the shared source decode engine.
+    /// - `hooks`: Converter hooks used to map decode errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns a source-side finish reader bound to the provided engine.
     #[inline(always)]
-    pub(super) const fn new(
-        engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks, Input, Value>,
-        hooks: &'a H,
-    ) -> Self {
+    pub(super) const fn new(engine: &'a mut BufferedDecodeEngine<D, H::DecodeHooks>, hooks: &'a H) -> Self {
         Self {
             source: SourceValueReader::new(engine, hooks),
         }
     }
 
     /// Reads the next source-side finish step.
+    ///
+    /// This call always enters finish-mode (`D::Value: Default`) and asks source
+    /// decoding to emit at most one trailing value.
+    ///
+    /// # Parameters
+    ///
+    /// - This method has no explicit parameters.
     ///
     /// # Returns
     ///
@@ -60,12 +76,17 @@ where
     /// # Errors
     ///
     /// Returns mapped decode errors produced by source-side finish hooks.
+    ///
+    /// # Notes
+    ///
+    /// This method requires `D::Value: Default` so it can allocate a one-value
+    /// scratch slot for the trailing decoded result.
     #[inline]
-    pub(super) fn read_next(&mut self) -> ConvertDecodeFinishResult<D, E, H, Input, Value, Output>
+    pub(super) fn read_next(&mut self) -> ConvertDecodeFinishResult<D, E, H>
     where
-        Value: Default,
+        D::Value: Default,
     {
-        let mut decoded: [Value; 1] = core::array::from_fn(|_| Value::default());
+        let mut decoded: [D::Value; 1] = core::array::from_fn(|_| D::Value::default());
         let finish = self.source.finish_one(&mut decoded)?;
         Ok(DecodeFinishStep::from_progress(finish, decoded))
     }

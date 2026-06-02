@@ -38,16 +38,25 @@ impl<Value> PendingValueSlot<Value> {
     }
 
     /// Returns the target-output bound for the retained value.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `E`: Encoder codec type used to query output bounds.
+    /// - `H`: Encoder hook type used by the encoder engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `engine`: Target encode engine for one-value output bound query.
+    ///
+    /// # Returns
+    ///
+    /// Returns the output unit bound contributed by the retained value.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub(super) fn max_output_len<E, H, Output>(
-        &self,
-        engine: &BufferedEncodeEngine<E, H, Value, Output>,
-    ) -> Result<usize, CapacityError>
+    pub(super) fn max_output_len<E, H>(&self, engine: &BufferedEncodeEngine<E, H>) -> Result<usize, CapacityError>
     where
-        E: Codec<Value, Output>,
-        H: BufferedEncodeHooks<E, Value, Output>,
-        Output: Copy,
+        E: Codec<Value = Value>,
+        H: BufferedEncodeHooks<E>,
     {
         if self.value.is_some() {
             engine.max_output_len(1)
@@ -57,18 +66,42 @@ impl<Value> PendingValueSlot<Value> {
     }
 
     /// Removes any retained decoded value.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     #[inline(always)]
     pub(super) fn clear(&mut self) {
         self.value = None;
     }
 
     /// Takes the retained decoded value, if any.
+    ///
+    /// # Returns
+    ///
+    /// Returns the retained value when present, otherwise `None`.
     #[inline(always)]
     pub(super) fn take(&mut self) -> Option<PendingValue<Value>> {
         self.value.take()
     }
 
     /// Applies a pending-value encode step to this slot and the current conversion state.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Input`: Converter input-unit type carried by conversion state.
+    /// - `Output`: Converter output-unit type carried by conversion state.
+    ///
+    /// # Parameters
+    ///
+    /// - `step`: Pending encode step produced by encoding attempts.
+    /// - `state`: Shared conversion state updated by the step result.
+    ///
+    /// # Returns
+    ///
+    /// Returns:
+    /// - `None` when output has been produced immediately.
+    /// - `Some(progress)` when output progress should stop for missing capacity.
     #[inline(always)]
     pub(super) fn apply_pending_encode_step<Input, Output>(
         &mut self,

@@ -9,7 +9,6 @@
  ******************************************************************************/
 //! Reusable buffered encoder engine.
 
-use core::marker::PhantomData;
 use core::num::NonZeroUsize;
 
 use super::{
@@ -65,7 +64,9 @@ use crate::{
 /// #[derive(Clone, Copy)]
 /// struct ByteCodec;
 ///
-/// unsafe impl Codec<u8, u8> for ByteCodec {
+/// unsafe impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
@@ -98,7 +99,7 @@ use crate::{
 ///
 /// struct StrictHooks;
 ///
-/// impl BufferedEncodeHooks<ByteCodec, u8, u8> for StrictHooks {
+/// impl BufferedEncodeHooks<ByteCodec> for StrictHooks {
 ///     type Error = CodecEncodeError<Infallible>;
 ///     type PlanAction = ();
 ///
@@ -154,23 +155,18 @@ use crate::{
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-/// - `Value`: Logical value encoded by the engine.
-/// - `Unit`: Output unit type produced by the engine.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BufferedEncodeEngine<C, H, Value, Unit> {
+pub struct BufferedEncodeEngine<C, H> {
     /// Low-level codec used for one-value encoding.
     pub(super) codec: C,
     /// Policy hooks used for planning and writing values.
     pub(super) hooks: H,
-    /// Binds the engine to the input value and output unit types.
-    marker: PhantomData<fn(Value) -> Unit>,
 }
 
-impl<C, H, Value, Unit> BufferedEncodeEngine<C, H, Value, Unit>
+impl<C, H> BufferedEncodeEngine<C, H>
 where
-    C: Codec<Value, Unit>,
-    H: BufferedEncodeHooks<C, Value, Unit>,
-    Unit: Copy,
+    C: Codec,
+    H: BufferedEncodeHooks<C>,
 {
     /// Creates a buffered encoder engine.
     ///
@@ -184,18 +180,23 @@ where
     /// Returns a buffered encoder engine.
     #[must_use]
     pub const fn new(codec: C, hooks: H) -> Self {
-        Self {
-            codec,
-            hooks,
-            marker: PhantomData,
-        }
+        Self { codec, hooks }
     }
 
     /// Prepares one value for writing through the configured encode hooks.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_value`: Input value to be planned.
+    /// - `input_index`: Absolute input value index at which this value is located.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode plan containing the maximum planned output width and action.
     #[inline(always)]
     pub(crate) fn prepare_value(
         &mut self,
-        input_value: &Value,
+        input_value: &C::Value,
         input_index: usize,
     ) -> Result<EncodePlan<H::PlanAction>, H::Error> {
         self.hooks.prepare_encode(&self.codec, input_value, input_index)
@@ -207,16 +208,29 @@ where
     ///
     /// The caller must guarantee that the context was built from an encode plan
     /// whose output-capacity bound is writable from `context.output_index`.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Context containing prepared plan, input index, and output.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of output units written, which must not exceed the
+    /// prepared capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns `H::Error` when hook-specific writing fails.
     #[inline(always)]
     pub(crate) unsafe fn write_prepared_value(
         &mut self,
-        context: EncodeContext<'_, Value, Unit, H::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit, H::PlanAction>,
     ) -> Result<usize, H::Error> {
         // SAFETY: Forwarded from this method's safety contract.
         unsafe { self.hooks.write_encode(&self.codec, context) }
     }
 
-    /// Returns the maximum output units needed for `input_len` values.
+    /// Returns a conservative upper bound for output units needed for `input_len` values.
     ///
     /// # Parameters
     ///
@@ -228,7 +242,7 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+        debug_assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -243,6 +257,14 @@ where
     }
 
     /// Resets hook-owned state.
+    ///
+    /// # Parameters
+    ///
+    /// - `self`: Encoder instance whose hook state is reset.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     pub fn reset(&mut self) {
         self.hooks.reset(&self.codec);
     }
@@ -270,15 +292,15 @@ where
     /// planning or writing rejects a value.
     pub fn transcode(
         &mut self,
-        input: &[Value],
+        input: &[C::Value],
         input_index: usize,
-        output: &mut [Unit],
+        output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, H::Error> {
         if input_index > input.len() {
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
+        debug_assert_unit_bounds::<C>(&self.codec);
         let mut state = EncodeState::new(input, input_index, output, output_index);
         if !state.output_cursor_in_bounds() {
             return Ok(state.need_output_progress(self.codec.max_units_per_value().get()));
@@ -327,7 +349,7 @@ where
     /// # Errors
     ///
     /// Returns hook errors when finalization fails.
-    pub fn finish(&mut self, output: &mut [Unit], output_index: usize) -> Result<TranscodeProgress, H::Error> {
+    pub fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<TranscodeProgress, H::Error> {
         if output_index > output.len() {
             return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
         }

@@ -9,10 +9,7 @@
  ******************************************************************************/
 //! Target-side writer object used by the converter coordinator.
 
-use core::{
-    marker::PhantomData,
-    num::NonZeroUsize,
-};
+use core::num::NonZeroUsize;
 
 use super::{
     buffered_convert_hooks::BufferedConvertHooks,
@@ -27,50 +24,67 @@ use super::{
 use crate::Codec;
 
 /// Target-side writer object used by the converter coordinator.
-pub(super) struct TargetValueWriter<'a, D, E, H, Input, Value, Output>
+pub(super) struct TargetValueWriter<'a, D, E, H>
 where
-    D: Codec<Value, Input>,
-    E: Codec<Value, Output>,
-    H: BufferedConvertHooks<D, E, Input, Value, Output>,
-    Input: Copy,
-    Output: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    H: BufferedConvertHooks<D, E>,
 {
     /// Target-side buffered encoder engine.
-    engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks, Value, Output>,
+    engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks>,
     /// Conversion hooks used for error mapping.
     hooks: &'a H,
-    /// Binds this helper to the source codec, value, and output unit types.
-    marker: PhantomData<fn(D, Input, Value, Output)>,
 }
 
-impl<'a, D, E, H, Input, Value, Output> TargetValueWriter<'a, D, E, H, Input, Value, Output>
+impl<'a, D, E, H> TargetValueWriter<'a, D, E, H>
 where
-    D: Codec<Value, Input>,
-    E: Codec<Value, Output>,
-    H: BufferedConvertHooks<D, E, Input, Value, Output>,
-    Input: Copy,
-    Output: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    H: BufferedConvertHooks<D, E>,
 {
     /// Creates a target-side writer.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Source codec used by the converter.
+    /// - `E`: Target codec used by the converter.
+    /// - `H`: Converter-level hook aggregator.
+    ///
+    /// # Parameters
+    ///
+    /// - `engine`: Mutable reference to the shared target encode engine.
+    /// - `hooks`: Converter hooks used to map encode errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns a target-side writer bound to the provided engine.
     #[inline(always)]
-    pub(super) const fn new(
-        engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks, Value, Output>,
-        hooks: &'a H,
-    ) -> Self {
-        Self {
-            engine,
-            hooks,
-            marker: PhantomData,
-        }
+    pub(super) const fn new(engine: &'a mut BufferedEncodeEngine<E, H::EncodeHooks>, hooks: &'a H) -> Self {
+        Self { engine, hooks }
     }
 
     /// Encodes one pending source value at the current output cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `pending`: Decoded source value waiting for target encoding.
+    /// - `state`: Current conversion state exposing output cursor and capacity.
+    ///
+    /// # Returns
+    ///
+    /// - Returns `Ok(PendingEncodeStep::written)` when the value is fully encoded.
+    /// - Returns `Ok(PendingEncodeStep::need_output)` when output capacity is
+    ///   insufficient and more output units are required.
+    ///
+    /// # Errors
+    ///
+    /// Returns converter-level errors when source plan or encode preparation fails.
     #[inline(always)]
     pub(super) fn write_pending(
         &mut self,
-        pending: PendingValue<Value>,
-        state: &mut ConvertState<'_, Input, Output>,
-    ) -> ConvertEncodeResult<D, E, H, Input, Value, Output> {
+        pending: PendingValue<D::Value>,
+        state: &mut ConvertState<'_, D::Unit, E::Unit>,
+    ) -> ConvertEncodeResult<D, E, H> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let available = state.available_output();
@@ -107,12 +121,21 @@ where
     }
 
     /// Finishes target-side hook-owned output.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Complete output unit slice visible to the encoder.
+    /// - `output_index`: Absolute output index where final output starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns finalization [`TranscodeProgress`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter-level error when target finalize hooks fail.
     #[inline]
-    pub(super) fn finish(
-        &mut self,
-        output: &mut [Output],
-        output_index: usize,
-    ) -> ConvertProgressResult<D, E, H, Input, Value, Output> {
+    pub(super) fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> ConvertProgressResult<D, E, H> {
         match self.engine.finish(output, output_index) {
             Ok(finish) => Ok(finish),
             Err(error) => Err(self.hooks.map_encode_error(error)),

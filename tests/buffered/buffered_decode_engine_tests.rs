@@ -33,7 +33,9 @@ enum PrefixDecodeError {
     Invalid { consumed: usize },
 }
 
-unsafe impl Codec<u8, u8> for PrefixCodec {
+unsafe impl Codec for PrefixCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -94,7 +96,7 @@ impl EngineError {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct ReplacingHooks;
 
-impl BufferedDecodeHooks<PrefixCodec, u8, u8> for ReplacingHooks {
+impl BufferedDecodeHooks<PrefixCodec> for ReplacingHooks {
     type Error = EngineError;
 
     fn handle_decode_error(
@@ -122,7 +124,7 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for ReplacingHooks {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct SkippingHooks;
 
-impl BufferedDecodeHooks<PrefixCodec, u8, u8> for SkippingHooks {
+impl BufferedDecodeHooks<PrefixCodec> for SkippingHooks {
     type Error = EngineError;
 
     fn handle_decode_error(
@@ -157,7 +159,7 @@ impl Default for FinishHooks {
     }
 }
 
-impl BufferedDecodeHooks<PrefixCodec, u8, u8> for FinishHooks {
+impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
     type Error = EngineError;
 
     fn handle_decode_error(
@@ -213,7 +215,9 @@ impl BufferedDecodeHooks<PrefixCodec, u8, u8> for FinishHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MinTwoCodec;
 
-unsafe impl Codec<u8, u8> for MinTwoCodec {
+unsafe impl Codec for MinTwoCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
 
@@ -245,7 +249,7 @@ unsafe impl Codec<u8, u8> for MinTwoCodec {
     }
 }
 
-impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
+impl BufferedDecodeHooks<MinTwoCodec> for ReplacingHooks {
     type Error = EngineError;
 
     fn handle_decode_error(
@@ -272,7 +276,7 @@ impl BufferedDecodeHooks<MinTwoCodec, u8, u8> for ReplacingHooks {
 
 #[test]
 fn test_buffered_decode_engine_reports_finish_bounds() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, ReplacingHooks);
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(3), decoder.max_output_len(3));
@@ -289,7 +293,7 @@ fn test_buffered_decode_engine_reports_finish_bounds() {
 
 #[test]
 fn test_buffered_decode_engine_delegates_finish_to_hooks() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
     assert_eq!(1, decoder.max_finish_output_len());
@@ -317,7 +321,7 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
 
 #[test]
 fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [];
 
     let progress = decoder
@@ -338,7 +342,7 @@ fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
 
 #[test]
 fn test_buffered_decode_engine_default_finish_reports_output_index_beyond_buffer() {
-    let mut decoder = BufferedDecodeEngine::<_, _, u8, u8>::new(PrefixCodec, ReplacingHooks);
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 
     let progress = decoder
@@ -360,7 +364,7 @@ fn test_buffered_decode_hooks_default_finish_reports_output_index_beyond_buffer(
     let mut hooks = ReplacingHooks;
     let mut output = [];
 
-    let progress = BufferedDecodeHooks::<PrefixCodec, u8, u8>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
+    let progress = BufferedDecodeHooks::<PrefixCodec>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
         .expect("default hook finish should report out-of-range output index");
 
     assert_eq!(

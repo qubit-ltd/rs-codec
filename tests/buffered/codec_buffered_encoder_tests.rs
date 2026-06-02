@@ -22,7 +22,9 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
 
-unsafe impl Codec<u8, u8> for PairByteCodec {
+unsafe impl Codec for PairByteCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
@@ -61,7 +63,9 @@ unsafe impl Codec<u8, u8> for PairByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
-unsafe impl Codec<u8, u8> for RejectOddCodec {
+unsafe impl Codec for RejectOddCodec {
+    type Value = u8;
+    type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
@@ -103,7 +107,7 @@ unsafe impl Codec<u8, u8> for RejectOddCodec {
 fn test_codec_buffered_encoder_encodes_until_output_needs_more_capacity() {
     fn assert_buffered_encoder<T: BufferedEncoder<u8, u8>>() {}
 
-    assert_buffered_encoder::<CodecBufferedEncoder<PairByteCodec, u8, u8>>();
+    assert_buffered_encoder::<CodecBufferedEncoder<PairByteCodec>>();
 
     let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
     let mut output = [0_u8; 4];

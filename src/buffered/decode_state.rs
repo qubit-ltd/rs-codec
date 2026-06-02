@@ -70,30 +70,50 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns the complete input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the full input slice visible to this decode call.
     #[inline(always)]
     pub(super) fn input(&self) -> &[Unit] {
         self.input
     }
 
     /// Returns the current input cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns current input cursor.
     #[inline(always)]
     pub(super) fn input_cursor(&self) -> usize {
         self.input_cursor
     }
 
     /// Returns whether there is still input to decode.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when there are input units remaining.
     #[inline(always)]
     pub(super) fn has_input(&self) -> bool {
         self.input_cursor < self.input.len()
     }
 
     /// Returns whether the output cursor is within the visible output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when `output_cursor` is at most `output.len()`.
     #[inline(always)]
     pub(super) fn output_cursor_in_bounds(&self) -> bool {
         self.output_cursor <= self.output.len()
     }
 
     /// Returns whether the output slice has no slot for the next value.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when no output slot remains for the next value.
     #[inline(always)]
     pub(super) fn needs_output(&self) -> bool {
         self.output_cursor == self.output.len()
@@ -106,6 +126,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns whether more input is required before decoding can continue.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when available input is below `min_units`.
     #[inline(always)]
     pub(super) fn needs_input(&self) -> bool {
         self.available() < self.min_units.get()
@@ -118,6 +142,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns a public decode context snapshot.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current [`DecodeContext`].
     pub(super) fn context(&self) -> DecodeContext {
         DecodeContext::new(
             self.input_start,
@@ -129,6 +157,14 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Advances the input cursor without emitting output.
+    ///
+    /// # Parameters
+    ///
+    /// - `consumed`: Input units consumed by the current operation.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     #[inline(always)]
     pub(super) fn skip(&mut self, consumed: NonZeroUsize) {
         let consumed = consumed.get();
@@ -140,6 +176,15 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Emits a decoded value and advances both cursors.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Decoded value to write to output.
+    /// - `consumed`: Input units consumed by this decode step.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     #[inline(always)]
     pub(super) fn emit(&mut self, value: Value, consumed: NonZeroUsize) {
         let consumed = consumed.get();
@@ -158,6 +203,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns completed progress for the current cursors.
+    ///
+    /// # Returns
+    ///
+    /// Returns a completed [`TranscodeProgress`].
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -166,6 +215,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns progress for a missing output slot.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress with [`TranscodeStatus::NeedOutput`].
     pub(super) fn need_output_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_output(
@@ -178,6 +231,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     }
 
     /// Returns progress for a missing input unit.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress with [`TranscodeStatus::NeedInput`].
     pub(super) fn need_input_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_input(

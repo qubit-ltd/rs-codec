@@ -62,7 +62,9 @@ use crate::{
 ///     Malformed { consumed: NonZeroUsize },
 /// }
 ///
-/// unsafe impl Codec<u8, u8> for MyCodec {
+/// unsafe impl Codec for MyCodec {
+///     type Value = u8;
+///     type Unit = u8;
 ///     type DecodeError = MyDecodeError;
 ///     type EncodeError = core::convert::Infallible;
 ///
@@ -100,7 +102,7 @@ use crate::{
 ///
 /// struct ReplacementHooks;
 ///
-/// impl BufferedDecodeHooks<MyCodec, u8, u8> for ReplacementHooks {
+/// impl BufferedDecodeHooks<MyCodec> for ReplacementHooks {
 ///     type Error = CodecDecodeError<MyDecodeError>;
 ///
 ///     fn handle_decode_error(
@@ -133,12 +135,9 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec owned by the engine.
-/// - `Unit`: Encoded input unit type.
-/// - `Value`: Decoded output value type.
-pub trait BufferedDecodeHooks<C, Unit, Value>
+pub trait BufferedDecodeHooks<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     /// Error type returned by the buffered decoder.
     type Error;
@@ -199,7 +198,7 @@ where
         codec: &C,
         error: C::DecodeError,
         context: DecodeContext,
-    ) -> Result<DecodeAction<Value>, Self::Error>;
+    ) -> Result<DecodeAction<C::Value>, Self::Error>;
 
     /// Creates an error for a caller-supplied input index outside the input slice.
     ///
@@ -243,7 +242,7 @@ where
     fn finish(
         &mut self,
         _codec: &C,
-        output: &mut [Value],
+        output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {

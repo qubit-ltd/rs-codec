@@ -29,7 +29,7 @@ use core::num::NonZeroUsize;
 /// bound callers normally use to prove that unchecked writes stay inside the
 /// provided output buffer.
 ///
-/// # Type Parameters
+/// # Associated Types
 ///
 /// - `Value`: Logical value decoded from or encoded into the buffer. This may be
 ///   a scalar such as `u64`, a `char`, or a fixed quantum such as `[u8; 3]`.
@@ -49,7 +49,13 @@ use core::num::NonZeroUsize;
 /// [`max_units_per_value`](Self::max_units_per_value). Both bounds are non-zero
 /// by type, and `max_units_per_value` must be a valid upper bound for one
 /// complete encoded value or codec quantum.
-pub unsafe trait Codec<Value, Unit: Copy> {
+pub unsafe trait Codec {
+    /// Logical value decoded from or encoded into the buffer.
+    type Value;
+
+    /// Buffer unit used by the encoded representation.
+    type Unit: Copy;
+
     /// Error reported when decoding malformed units.
     type DecodeError;
 
@@ -120,8 +126,11 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// than the available input. The return type guarantees that successful
     /// decoding always consumes at least one unit. Implementations should use
     /// `debug_assert!` to state these unchecked entry-point assumptions.
-    unsafe fn decode_unchecked(&self, input: &[Unit], index: usize)
-    -> Result<(Value, NonZeroUsize), Self::DecodeError>;
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[Self::Unit],
+        index: usize,
+    ) -> Result<(Self::Value, NonZeroUsize), Self::DecodeError>;
 
     /// Encodes one borrowed value into `output` starting at `index`.
     ///
@@ -148,17 +157,24 @@ pub unsafe trait Codec<Value, Unit: Copy> {
     /// `index`.
     unsafe fn encode_unchecked(
         &self,
-        value: &Value,
-        output: &mut [Unit],
+        value: &Self::Value,
+        output: &mut [Self::Unit],
         index: usize,
     ) -> Result<usize, Self::EncodeError>;
 }
 
 /// Checks the public unit-bound invariant required by [`Codec`].
-pub(crate) fn debug_assert_unit_bounds<C, Value, Unit>(codec: &C)
+///
+/// # Type Parameters
+///
+/// - `C`: Codec implementation to validate.
+///
+/// # Returns
+///
+/// Returns unit `()`.
+pub(crate) fn debug_assert_unit_bounds<C>(codec: &C)
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     #[cfg(debug_assertions)]
     {

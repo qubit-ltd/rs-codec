@@ -9,7 +9,13 @@
  ******************************************************************************/
 //! Buffered converter adapter backed by two low-level codecs.
 
-use core::marker::PhantomData;
+use core::{
+    fmt,
+    hash::{
+        Hash,
+        Hasher,
+    },
+};
 
 use super::{
     BufferedConvertEngine,
@@ -37,29 +43,125 @@ use crate::{
 ///
 /// - `D`: Low-level codec used to decode source units.
 /// - `E`: Low-level codec used to encode target units.
-/// - `Value`: Logical value decoded by `D` and encoded by `E`.
-/// - `InputUnit`: Encoded source unit type accepted by `D`.
-/// - `OutputUnit`: Encoded target unit type produced by `E`.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
+pub struct CodecBufferedConverter<D, E>
 where
-    D: Codec<Value, InputUnit>,
-    E: Codec<Value, OutputUnit>,
-    InputUnit: Copy,
-    OutputUnit: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: BufferedConvertEngine<D, E, CodecBufferedConvertHooks, InputUnit, Value, OutputUnit>,
-    /// Binds the adapter to one decoded logical value and source/target unit type.
-    marker: PhantomData<fn(Value, InputUnit, OutputUnit)>,
+    engine: BufferedConvertEngine<D, E, CodecBufferedConvertHooks>,
 }
 
-impl<D, E, Value, InputUnit, OutputUnit> CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
+impl<D, E> Clone for CodecBufferedConverter<D, E>
 where
-    D: Codec<Value, InputUnit>,
-    E: Codec<Value, OutputUnit>,
-    InputUnit: Copy,
-    OutputUnit: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: Clone,
+{
+    /// Clones the wrapped converter engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns a cloned converter adapter sharing the same inner engine state.
+    fn clone(&self) -> Self {
+        Self {
+            engine: self.engine.clone(),
+        }
+    }
+}
+
+impl<D, E> fmt::Debug for CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: fmt::Debug,
+{
+    /// Formats the wrapped converter engine for debugging.
+    ///
+    /// # Parameters
+    ///
+    /// - `f`: Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// Returns `fmt::Result` from the formatter.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CodecBufferedConverter")
+            .field("engine", &self.engine)
+            .finish()
+    }
+}
+
+impl<D, E> Default for CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: Default,
+{
+    /// Creates a default codec-backed buffered converter.
+    ///
+    /// # Returns
+    ///
+    /// Returns a converter with default codecs and hooks.
+    fn default() -> Self {
+        Self {
+            engine: BufferedConvertEngine::default(),
+        }
+    }
+}
+
+impl<D, E> Eq for CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: Eq,
+{
+}
+
+impl<D, E> Hash for CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: Hash,
+{
+    /// Hashes the wrapped converter engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Output hash state.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
+    fn hash<S: Hasher>(&self, state: &mut S) {
+        self.engine.hash(state);
+    }
+}
+
+impl<D, E> PartialEq for CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    BufferedConvertEngine<D, E, CodecBufferedConvertHooks>: PartialEq,
+{
+    /// Compares the wrapped converter engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `other`: Another converter to compare with.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the wrapped engines are equal.
+    fn eq(&self, other: &Self) -> bool {
+        self.engine == other.engine
+    }
+}
+
+impl<D, E> CodecBufferedConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
 {
     /// Creates a buffered converter backed by decoder and encoder codecs.
     ///
@@ -75,61 +177,99 @@ where
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
             engine: BufferedConvertEngine::new(decoder, encoder, CodecBufferedConvertHooks::new()),
-            marker: PhantomData,
         }
     }
 }
 
-impl<D, E, Value, InputUnit, OutputUnit> Transcoder<InputUnit, OutputUnit>
-    for CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
+impl<D, E> Transcoder<D::Unit, E::Unit> for CodecBufferedConverter<D, E>
 where
-    D: Codec<Value, InputUnit>,
-    E: Codec<Value, OutputUnit>,
-    Value: Default,
-    InputUnit: Copy,
-    OutputUnit: Copy,
+    D: Codec,
+    D::Value: Default,
+    E: Codec<Value = D::Value>,
 {
     type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
 
     /// Returns an upper bound for target units produced from `input_len` units.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Source units the caller plans to convert.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound for produced target units.
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
     /// Returns the maximum target units emitted by finishing internal state.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound for remaining converter-final output.
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_finish_output_len()
     }
 
     /// Clears retained pending output.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     fn reset(&mut self) {
         self.engine.reset();
     }
 
     /// Converts source units into target units.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Source unit slice.
+    /// - `input_index`: Absolute source index where conversion starts.
+    /// - `output`: Target unit slice.
+    /// - `output_index`: Absolute target index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for consumed/produced counters and stop reason.
+    ///
+    /// # Errors
+    ///
+    /// Returns converter error when source index is invalid or decoding/encoding
+    /// fails under current policy.
     fn transcode(
         &mut self,
-        input: &[InputUnit],
+        input: &[D::Unit],
         input_index: usize,
-        output: &mut [OutputUnit],
+        output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
-    fn finish(&mut self, output: &mut [OutputUnit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Target unit slice for finalization output.
+    /// - `output_index`: Absolute target output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for final emissions.
+    ///
+    /// # Errors
+    ///
+    /// Returns converter error for pending output that cannot be finalized.
+    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<D, E, Value, InputUnit, OutputUnit> BufferedConverter<InputUnit, OutputUnit>
-    for CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>
+impl<D, E> BufferedConverter<D::Unit, E::Unit> for CodecBufferedConverter<D, E>
 where
-    D: Codec<Value, InputUnit>,
-    E: Codec<Value, OutputUnit>,
-    Value: Default,
-    InputUnit: Copy,
-    OutputUnit: Copy,
+    D: Codec,
+    D::Value: Default,
+    E: Codec<Value = D::Value>,
 {
 }

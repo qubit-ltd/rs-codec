@@ -9,8 +9,6 @@
  ******************************************************************************/
 //! Value encoder adapter backed by a low-level codec.
 
-use core::marker::PhantomData;
-
 use super::ValueEncoder;
 use crate::{
     Codec,
@@ -28,17 +26,13 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode one value.
-/// - `Value`: Logical value type accepted by the codec.
-/// - `Unit`: Encoded unit type produced by the codec.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecValueEncoder<C, Value, Unit> {
+pub struct CodecValueEncoder<C> {
     /// Low-level codec used for one-value encoding.
     codec: C,
-    /// Binds the adapter to one codec value/unit contract.
-    marker: PhantomData<fn(Value) -> Unit>,
 }
 
-impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
+impl<C> CodecValueEncoder<C> {
     /// Creates an encoder backed by `codec`.
     ///
     /// # Parameters
@@ -50,19 +44,16 @@ impl<C, Value, Unit> CodecValueEncoder<C, Value, Unit> {
     /// Returns a value encoder adapter for the supplied codec.
     #[must_use]
     pub const fn new(codec: C) -> Self {
-        Self {
-            codec,
-            marker: PhantomData,
-        }
+        Self { codec }
     }
 }
 
-impl<C, Value, Unit> ValueEncoder<Value> for CodecValueEncoder<C, Value, Unit>
+impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy + Default,
+    C: Codec,
+    C::Unit: Default,
 {
-    type Output = Vec<Unit>;
+    type Output = Vec<C::Unit>;
     type Error = C::EncodeError;
 
     /// Encodes one borrowed value into owned units.
@@ -79,9 +70,9 @@ where
     ///
     /// Returns the wrapped codec's encode error when `input` cannot be
     /// represented.
-    fn encode(&self, input: &Value) -> Result<Self::Output, Self::Error> {
-        debug_assert_unit_bounds::<C, Value, Unit>(&self.codec);
-        let mut output = vec![Unit::default(); self.codec.max_units_per_value().get()];
+    fn encode(&self, input: &C::Value) -> Result<Self::Output, Self::Error> {
+        debug_assert_unit_bounds::<C>(&self.codec);
+        let mut output = vec![C::Unit::default(); self.codec.max_units_per_value().get()];
         // SAFETY: The output buffer is allocated to the codec's declared maximum
         // width, which is the safety precondition for one-value encoding.
         let written = unsafe { self.codec.encode_unchecked(input, &mut output, 0) }?;

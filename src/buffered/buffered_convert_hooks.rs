@@ -29,15 +29,10 @@ use crate::Codec;
 ///
 /// - `D`: Source-side decode codec owned by the converter engine.
 /// - `E`: Target-side encode codec owned by the converter engine.
-/// - `Input`: Source unit type.
-/// - `Value`: Logical value decoded from `Input` and encoded into target units.
-/// - `Output`: Target unit type produced by `E`.
-pub trait BufferedConvertHooks<D, E, Input, Value, Output>
+pub trait BufferedConvertHooks<D, E>
 where
-    D: Codec<Value, Input>,
-    E: Codec<Value, Output>,
-    Input: Copy,
-    Output: Copy,
+    D: Codec,
+    E: Codec<Value = D::Value>,
 {
     /// Error type returned by the buffered converter.
     type Error;
@@ -49,10 +44,10 @@ where
     type EncodeError;
 
     /// Decode policy hooks used by the internal buffered decoder.
-    type DecodeHooks: BufferedDecodeHooks<D, Input, Value, Error = Self::DecodeError>;
+    type DecodeHooks: BufferedDecodeHooks<D, Error = Self::DecodeError>;
 
     /// Encode policy hooks used by the internal buffered encoder.
-    type EncodeHooks: BufferedEncodeHooks<E, Value, Output, Error = Self::EncodeError>;
+    type EncodeHooks: BufferedEncodeHooks<E, Error = Self::EncodeError>;
 
     /// Creates decode policy hooks for the internal buffered decoder.
     ///

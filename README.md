@@ -18,7 +18,7 @@ implementations.
 
 This crate provides:
 
-- `Codec<Value, Unit>` for low-level single-value buffer codecs.
+- `Codec` for low-level single-value buffer codecs.
 - `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
   `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
   codec-backed value and buffered conversion.
@@ -58,7 +58,7 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 ### Core Conversion Traits
 
-- **`Codec<Value, Unit>`**: encodes and decodes one value or codec quantum
+- **`Codec`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors without hiding
@@ -66,10 +66,10 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
-- **`CodecValueEncoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
-  `ValueEncoder<Value>` that returns owned `Vec<Unit>` output.
-- **`CodecValueDecoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
-  `ValueDecoder<[Unit]>` that accepts exactly one encoded value.
+- **`CodecValueEncoder<C>`**: wraps a `Codec` as a
+  `ValueEncoder<C::Value>` that returns owned `Vec<C::Unit>` output.
+- **`CodecValueDecoder<C>`**: wraps a `Codec` as a
+  `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
 
 ### Buffer Transcoder Primitives
 
@@ -82,28 +82,28 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   buffered decoding.
 - **`BufferedConverter<InputUnit, OutputUnit>`**: semantic `Transcoder` bound for
   unit-to-unit buffered conversion.
-- **`CodecBufferedEncoder<C, Value, Unit>`**: wraps a `Codec<Value, Unit>` as a
-  `BufferedEncoder<Value, Unit>` over caller-provided output buffers.
-- **`BufferedEncodeEngine<C, H, Value, Unit>`**: reusable engine that owns a
+- **`CodecBufferedEncoder<C>`**: wraps a `Codec` as a
+  `BufferedEncoder<C::Value, C::Unit>` over caller-provided output buffers.
+- **`BufferedEncodeEngine<C, H>`**: reusable engine that owns a
   codec plus policy hooks and runs the common buffered encoding loop.
-- **`BufferedEncodeHooks<C, Value, Unit>`**: policy hook trait used by
+- **`BufferedEncodeHooks<C>`**: policy hook trait used by
   codec-backed encoders that need custom transcode/finalization behavior while
   sharing the common loop.
 - **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
   required before a hook writes one value.
 - **`EncodeContext<'a, Value, Unit, P>`**: prepared write context passed to
   encode hooks after the engine has verified output capacity.
-- **`CodecBufferedDecoder<C, Unit, Value>`**: wraps a `Codec<Value, Unit>` as a
-  strict `BufferedDecoder<Unit, Value>` that leaves engine-detected incomplete
+- **`CodecBufferedDecoder<C>`**: wraps a `Codec` as a
+  strict `BufferedDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
-- **`BufferedDecodeEngine<C, H, Unit, Value>`**: reusable engine that owns a
+- **`BufferedDecodeEngine<C, H>`**: reusable engine that owns a
   codec, policy hooks, and the common decode loop.
-- **`BufferedDecodeHooks<C, Unit, Value>`**: policy hook trait used by
+- **`BufferedDecodeHooks<C>`**: policy hook trait used by
   codec-backed decoders that need custom malformed/incomplete behavior while
   sharing the common decode loop.
 - **`DecodeAction<Value>`**: hook return value used by decoder engines for
   transcode-stage policy decisions.
-- **`CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>`**: composes a
+- **`CodecBufferedConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `BufferedConverter`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
@@ -166,7 +166,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Trait | Purpose | Typical Implementor |
 |-------|---------|---------------------|
-| `Codec<Value, Unit>` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
+| `Codec` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
 | `ValueEncoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 | `ValueDecoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 | `BufferedEncoder<Value, Unit>` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
@@ -183,18 +183,18 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `CodecValueEncoder<C, Value, Unit>` | Allocate owned `Vec<Unit>` output for one borrowed `Value` by using `C: Codec<Value, Unit>` without requiring `Value: Clone` |
-| `CodecValueDecoder<C, Value, Unit>` | Decode exactly one borrowed `[Unit]` slice into `Value` by using `C: Codec<Value, Unit>` |
-| `CodecBufferedEncoder<C, Value, Unit>` | Encode `Value` slices into caller-provided `Unit` buffers by using `C: Codec<Value, Unit>` |
-| `CodecBufferedDecoder<C, Unit, Value>` | Strictly decode `Unit` slices into caller-provided `Value` buffers by using `C: Codec<Value, Unit>` |
-| `CodecBufferedConverter<D, E, Value, InputUnit, OutputUnit>` | Decode source units with `D: Codec<Value, InputUnit>` and encode target units with `E: Codec<Value, OutputUnit>` |
+| `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
+| `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
+| `CodecBufferedEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
+| `CodecBufferedDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
+| `CodecBufferedConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
 
 ### Encoder Hooks And Engines
 
 | Type | Purpose |
 |------|---------|
-| `BufferedEncodeEngine<C, H, Value, Unit>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `BufferedEncodeHooks<C, Value, Unit>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
+| `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
+| `BufferedEncodeHooks<C>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
 | `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write action |
 | `EncodeContext<'a, Value, Unit, P>` | Prepared input, plan action, output slice, and cursor passed to encode hooks |
 
@@ -202,8 +202,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `BufferedDecodeEngine<C, H, Unit, Value>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
-| `BufferedDecodeHooks<C, Unit, Value>` | Hook contract for malformed/incomplete decode policy |
+| `BufferedDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
+| `BufferedDecodeHooks<C>` | Hook contract for malformed/incomplete decode policy |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
 

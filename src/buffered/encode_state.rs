@@ -60,6 +60,10 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns whether there is still input to encode.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when more input values remain.
     #[inline(always)]
     pub(super) fn has_input(&self) -> bool {
         self.input_cursor < self.input.len()
@@ -78,24 +82,60 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns whether the output cursor is within the visible output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when `output_cursor` is at most `output.len()`.
     #[inline(always)]
     pub(super) fn output_cursor_in_bounds(&self) -> bool {
         self.output_cursor <= self.output.len()
     }
 
     /// Returns the number of writable output units from the current cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns writable output capacity from the current output cursor.
     #[inline(always)]
     fn available_output(&self) -> usize {
         self.output.len().saturating_sub(self.output_cursor)
     }
 
     /// Returns whether the current output has the requested capacity.
+    ///
+    /// # Parameters
+    ///
+    /// - `required`: Minimum writable output units required.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when writable capacity is at least `required`.
     #[inline(always)]
     pub(super) fn has_output_for(&self, required: usize) -> bool {
         self.available_output() >= required
     }
 
     /// Returns an encode context for the current input value and output cursor.
+    ///
+    /// The returned context carries:
+    ///
+    /// - the current input value reference,
+    /// - the absolute input index,
+    /// - a prepared plan action payload,
+    /// - mutable output slice and current output index.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `P`: Plan action type produced by [`crate::BufferedEncodeHooks::prepare_encode`].
+    ///
+    /// # Parameters
+    ///
+    /// - `plan_action`: Action associated with the current input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`EncodeContext`] tied to the current input position and
+    /// output cursor.
     ///
     /// # Safety
     ///
@@ -114,6 +154,14 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Accepts a completed one-value write and advances both cursors.
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Output units written by the last encode call.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
     pub(super) fn accept_written_value(&mut self, written: usize) {
         debug_assert!(
@@ -125,6 +173,11 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns completed progress for the current cursors.
+    ///
+    /// # Returns
+    ///
+    /// Returns a completed [`TranscodeProgress`] with consumed input and output
+    /// counters.
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -133,6 +186,14 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     }
 
     /// Returns progress for a missing output capacity bound.
+    ///
+    /// # Parameters
+    ///
+    /// - `required`: Output units required before the current value can be encoded.
+    ///
+    /// # Returns
+    ///
+    /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
     pub(super) fn need_output_progress(&self, required: usize) -> TranscodeProgress {
         let available = self.available_output();
         debug_assert!(required > available, "need-output progress requires missing capacity");

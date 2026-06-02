@@ -15,5 +15,17 @@ use super::{
 };
 
 /// Result type for source-side finish steps.
-pub(super) type ConvertDecodeFinishResult<D, E, H, Input, Value, Output> =
-    Result<DecodeFinishStep<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;
+///
+/// # Type Parameters
+///
+/// - `D`: Source codec.
+/// - `E`: Target codec.
+/// - `H`: Converter hook set.
+///
+/// # Returns
+///
+/// Returns:
+/// - `Ok(DecodeFinishStep<D::Value>)` for mapped finish behavior,
+/// - `Err(...)` for mapped converter-level decode errors.
+pub(super) type ConvertDecodeFinishResult<D, E, H> =
+    Result<DecodeFinishStep<<D as crate::Codec>::Value>, ConvertErrorOf<D, E, H>>;

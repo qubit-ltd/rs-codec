@@ -15,5 +15,17 @@ use super::{
 };
 
 /// Result type for private decode steps.
-pub(super) type ConvertDecodeAttemptResult<D, E, H, Input, Value, Output> =
-    Result<DecodeStep<Value>, ConvertErrorOf<D, E, H, Input, Value, Output>>;
+///
+/// # Type Parameters
+///
+/// - `D`: Source codec.
+/// - `E`: Target codec.
+/// - `H`: Converter hook set.
+///
+/// # Returns
+///
+/// Returns:
+/// - `Ok(DecodeStep<D::Value>)` for one source decode attempt,
+/// - `Err(...)` for mapped converter-level decode errors.
+pub(super) type ConvertDecodeAttemptResult<D, E, H> =
+    Result<DecodeStep<<D as crate::Codec>::Value>, ConvertErrorOf<D, E, H>>;

@@ -33,18 +33,15 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode values.
-/// - `Value`: Logical value accepted by the encoder.
-/// - `Unit`: Encoded output unit type produced by the codec.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct CodecBufferedEncoder<C, Value, Unit> {
+pub struct CodecBufferedEncoder<C> {
     /// Common buffered encoding engine.
-    engine: BufferedEncodeEngine<C, CodecBufferedEncodeHooks, Value, Unit>,
+    engine: BufferedEncodeEngine<C, CodecBufferedEncodeHooks>,
 }
 
-impl<C, Value, Unit> CodecBufferedEncoder<C, Value, Unit>
+impl<C> CodecBufferedEncoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     /// Creates a buffered encoder backed by `codec`.
     ///
@@ -63,48 +60,86 @@ where
     }
 }
 
-impl<C, Value, Unit> Transcoder<Value, Unit> for CodecBufferedEncoder<C, Value, Unit>
+impl<C> Transcoder<C::Value, C::Unit> for CodecBufferedEncoder<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
 
     /// Returns the maximum number of output units needed for `input_len` values.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Logical input values the caller plans to encode.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound for output units.
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
     /// Returns the maximum units emitted by finishing internal state.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of units that may be emitted by finishing state.
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
     }
 
     /// Resets hook-owned state.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
     fn reset(&mut self) {
         self.engine.reset();
     }
 
     /// Encodes values into the supplied output buffer.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Input value slice.
+    /// - `input_index`: Absolute input index where encoding starts.
+    /// - `output`: Destination unit slice.
+    /// - `output_index`: Absolute output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for consumed input and produced output units.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encode error if encoding cannot continue under current policy.
     fn transcode(
         &mut self,
-        input: &[Value],
+        input: &[C::Value],
         input_index: usize,
-        output: &mut [Unit],
+        output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
-    fn finish(&mut self, output: &mut [Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination unit slice for finalization output.
+    /// - `output_index`: Absolute output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress for finalized emissions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an encode error if retained output cannot be fully emitted.
+    fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C, Value, Unit> BufferedEncoder<Value, Unit> for CodecBufferedEncoder<C, Value, Unit>
-where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
-{
-}
+impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where C: Codec {}

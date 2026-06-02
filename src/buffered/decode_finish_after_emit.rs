@@ -42,6 +42,10 @@ impl DecodeFinishAfterEmit {
     }
 
     /// Returns whether no more source-side finish values are expected.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when decoding should stop finalizing.
     #[must_use]
     #[inline(always)]
     pub(super) const fn is_complete(self) -> bool {

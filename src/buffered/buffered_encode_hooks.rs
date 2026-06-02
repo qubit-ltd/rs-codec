@@ -61,7 +61,9 @@ use crate::{
 /// #[derive(Clone, Copy)]
 /// struct ByteCodec;
 ///
-/// unsafe impl Codec<u8, u8> for ByteCodec {
+/// unsafe impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
@@ -94,10 +96,9 @@ use crate::{
 ///
 /// struct StrictHooks;
 ///
-/// impl<C, Value, Unit> BufferedEncodeHooks<C, Value, Unit> for StrictHooks
+/// impl<C> BufferedEncodeHooks<C> for StrictHooks
 /// where
-///     C: Codec<Value, Unit>,
-///     Unit: Copy,
+///     C: Codec,
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
 ///     type PlanAction = ();
@@ -105,7 +106,7 @@ use crate::{
 ///     fn prepare_encode(
 ///         &mut self,
 ///         codec: &C,
-///         _value: &Value,
+///         _value: &C::Value,
 ///         _input_index: usize,
 ///     ) -> Result<EncodePlan<()>, Self::Error> {
 ///         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
@@ -114,7 +115,7 @@ use crate::{
 ///     unsafe fn write_encode(
 ///         &mut self,
 ///         codec: &C,
-///         context: EncodeContext<'_, Value, Unit, ()>,
+///         context: EncodeContext<'_, C::Value, C::Unit, ()>,
 ///     ) -> Result<usize, Self::Error> {
 ///         unsafe {
 ///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
@@ -136,12 +137,9 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec owned by the engine.
-/// - `Value`: Logical input value type.
-/// - `Unit`: Encoded output unit type.
-pub trait BufferedEncodeHooks<C, Value, Unit>
+pub trait BufferedEncodeHooks<C>
 where
-    C: Codec<Value, Unit>,
-    Unit: Copy,
+    C: Codec,
 {
     /// Error type returned by the buffered encoder.
     type Error;
@@ -210,7 +208,7 @@ where
     fn prepare_encode(
         &mut self,
         codec: &C,
-        input_value: &Value,
+        input_value: &C::Value,
         input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error>;
 
@@ -238,7 +236,7 @@ where
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        context: EncodeContext<'_, Value, Unit, Self::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit, Self::PlanAction>,
     ) -> Result<usize, Self::Error>;
 
     /// Builds an error for a caller-supplied input index outside the input slice.
@@ -283,7 +281,7 @@ where
     fn finish(
         &mut self,
         _codec: &C,
-        output: &mut [Unit],
+        output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         if output_index > output.len() {

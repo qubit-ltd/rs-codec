@@ -167,6 +167,9 @@ impl TranscodeProgress {
     /// - For [`TranscodeStatus::NeedInput`], returns `input_index`.
     /// - For [`TranscodeStatus::NeedOutput`], returns `output_index`.
     /// - For [`TranscodeStatus::Complete`], returns `None`.
+    /// # Returns
+    ///
+    /// Returns the boundary index for non-complete status values.
     #[must_use]
     #[inline(always)]
     pub const fn index(self) -> Option<usize> {
