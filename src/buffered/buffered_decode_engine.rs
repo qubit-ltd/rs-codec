@@ -17,6 +17,7 @@ use super::{
     decode_context::DecodeContext,
     decode_state::DecodeState,
     decode_step::DecodeStep,
+    finish_error::FinishError,
     transcode_progress::TranscodeProgress,
 };
 use crate::{
@@ -185,6 +186,7 @@ where
     ///
     /// Returns a buffered decoder engine.
     #[must_use]
+    #[inline(always)]
     pub const fn new(codec: C, hooks: H) -> Self {
         Self { codec, hooks }
     }
@@ -200,6 +202,7 @@ where
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         debug_assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
@@ -211,6 +214,7 @@ where
     ///
     /// Returns the hook-provided final output bound.
     #[must_use]
+    #[inline(always)]
     pub fn max_finish_output_len(&self) -> usize {
         self.hooks.max_finish_output_len(&self.codec)
     }
@@ -224,6 +228,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.hooks.reset(&self.codec);
     }
@@ -277,7 +282,8 @@ where
     ///
     /// The engine owns no final output state itself. Hook implementations may
     /// finish their own retained state and emit final output after the caller
-    /// has handled any incomplete input tail.
+    /// has handled any incomplete input tail. The caller must provide enough
+    /// output capacity for [`BufferedDecodeEngine::max_finish_output_len`].
     ///
     /// # Parameters
     ///
@@ -286,16 +292,24 @@ where
     ///
     /// # Returns
     ///
-    /// Returns hook-provided finalization progress.
+    /// Returns the number of values written by finalization.
     ///
     /// # Errors
     ///
-    /// Returns hook errors when finalization fails.
-    pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<TranscodeProgress, H::Error> {
-        if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
-        }
-        self.hooks.finish(&self.codec, output, output_index)
+    /// Returns [`FinishError`] when the caller provides invalid or insufficient
+    /// output capacity, or when hook finalization fails.
+    pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, FinishError<H::Error>> {
+        let required = self.max_finish_output_len();
+        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        let written = self
+            .hooks
+            .finish(&self.codec, output, output_index)
+            .map_err(FinishError::source)?;
+        debug_assert!(
+            written <= required,
+            "BufferedDecodeEngine hook wrote beyond its finish bound",
+        );
+        Ok(written)
     }
 
     /// Decodes one value at a caller-proven readable input cursor.
@@ -328,7 +342,7 @@ where
     /// # Errors
     ///
     /// Returns a hook-level error when the decode policy rejects the value.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn handle_decode_error(
         &mut self,
         error: C::DecodeError,
@@ -352,7 +366,7 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the decode policy rejects the input.
-    #[inline(always)]
+    #[inline]
     pub(super) fn decode_step(
         &mut self,
         input: &[C::Unit],
@@ -385,7 +399,7 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the policy rejects the input.
-    #[inline(always)]
+    #[inline]
     fn handle_decode_result(
         &mut self,
         context: DecodeContext,

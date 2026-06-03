@@ -40,6 +40,7 @@ where
     /// # Returns
     ///
     /// Returns a convert status action wrapped as `CodecDecodeError`.
+    #[inline(always)]
     fn handle_decode_error(
         &mut self,
         _codec: &C,
@@ -60,6 +61,7 @@ where
     /// # Returns
     ///
     /// Returns a codec decode error describing the invalid index.
+    #[inline(always)]
     fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
         CodecDecodeError::invalid_input_index(index, input_len)
     }

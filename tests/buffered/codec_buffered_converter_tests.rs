@@ -217,12 +217,10 @@ fn test_codec_buffered_converter_reports_bounds_and_finishes_noop() {
     );
 
     converter.reset();
-    let finish = converter
+    let written = converter
         .finish(&mut output, 0)
         .expect("codec converter has no finish output");
-    assert_eq!(TranscodeStatus::Complete, finish.status());
-    assert_eq!(0, finish.read());
-    assert_eq!(0, finish.written());
+    assert_eq!(0, written);
 }
 
 #[test]
@@ -325,13 +323,11 @@ fn test_codec_buffered_converter_finish_drains_pending_decoded_value() {
     assert_eq!(0, progress.written());
 
     let mut output = [0_u8; 2];
-    let finish = converter
+    let written = converter
         .finish(&mut output, 0)
         .expect("finish should write the retained decoded value");
 
-    assert_eq!(TranscodeStatus::Complete, finish.status());
-    assert_eq!(0, finish.read());
-    assert_eq!(2, finish.written());
+    assert_eq!(2, written);
     assert_eq!([7, 8], output);
 }
 
@@ -411,11 +407,9 @@ fn test_codec_buffered_converter_finish_does_not_handle_input_tail() {
         progress.status(),
     );
 
-    let finish = converter
+    let written = converter
         .finish(&mut output, 0)
         .expect("codec converter has no finish output");
 
-    assert_eq!(TranscodeStatus::Complete, finish.status());
-    assert_eq!(0, finish.read());
-    assert_eq!(0, finish.written());
+    assert_eq!(0, written);
 }

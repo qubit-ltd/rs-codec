@@ -20,6 +20,7 @@ use core::{
 use super::{
     BufferedConvertEngine,
     BufferedConverter,
+    FinishError,
     TranscodeProgress,
     Transcoder,
     codec_buffered_convert_hooks::CodecBufferedConvertHooks,
@@ -63,6 +64,7 @@ where
     /// # Returns
     ///
     /// Returns a cloned converter adapter sharing the same inner engine state.
+    #[inline(always)]
     fn clone(&self) -> Self {
         Self {
             engine: self.engine.clone(),
@@ -103,6 +105,7 @@ where
     /// # Returns
     ///
     /// Returns a converter with default codecs and hooks.
+    #[inline(always)]
     fn default() -> Self {
         Self {
             engine: BufferedConvertEngine::default(),
@@ -133,6 +136,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     fn hash<S: Hasher>(&self, state: &mut S) {
         self.engine.hash(state);
     }
@@ -153,6 +157,7 @@ where
     /// # Returns
     ///
     /// Returns `true` when the wrapped engines are equal.
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.engine == other.engine
     }
@@ -174,6 +179,7 @@ where
     ///
     /// Returns a buffered converter adapter for the supplied codecs.
     #[must_use]
+    #[inline(always)]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
             engine: BufferedConvertEngine::new(decoder, encoder, CodecBufferedConvertHooks::new()),
@@ -198,6 +204,7 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for produced target units.
+    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
@@ -207,6 +214,7 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for remaining converter-final output.
+    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_finish_output_len()
     }
@@ -216,6 +224,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     fn reset(&mut self) {
         self.engine.reset();
     }
@@ -237,6 +246,7 @@ where
     ///
     /// Returns converter error when source index is invalid or decoding/encoding
     /// fails under current policy.
+    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -256,12 +266,13 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress for final emissions.
+    /// Returns the number of target units written by finalization.
     ///
     /// # Errors
     ///
-    /// Returns converter error for pending output that cannot be finalized.
-    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    /// Returns a finish error for pending output that cannot be finalized.
+    #[inline(always)]
+    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }

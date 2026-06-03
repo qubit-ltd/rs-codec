@@ -7,10 +7,9 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-use core::num::NonZeroUsize;
-
 use super::{
     capacity_error::CapacityError,
+    finish_error::FinishError,
     transcode_progress::TranscodeProgress,
 };
 
@@ -26,16 +25,14 @@ use super::{
 /// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
 ///    the caller-owned input buffer.
 /// 4. Call [`Transcoder::finish`] after the caller knows no more input remains
-///    and has handled any incomplete tail.
-/// 5. Continue calling [`Transcoder::finish`] while it reports
-///    [`crate::TranscodeStatus::NeedOutput`].
-/// 6. After [`Transcoder::finish`] reports [`crate::TranscodeStatus::Complete`],
-///    call [`Transcoder::reset`] before starting another logical stream with the
-///    same instance.
+///    and has handled any incomplete tail. Size this final output with
+///    [`Transcoder::max_finish_output_len`].
+/// 5. After [`Transcoder::finish`] succeeds, call [`Transcoder::reset`] before
+///    starting another logical stream with the same instance.
 ///
 /// The method is suitable for:
 /// - pull-style consumers that call conversion repeatedly as buffers arrive;
-/// - bounded output sinks that need `NeedOutput` progress when capacity is hit;
+/// - bounded output sinks that use `NeedOutput` progress during `transcode`;
 /// - stateless and stateful codecs that all return progress-oriented stopping
 ///   reasons.
 ///
@@ -171,6 +168,7 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows. Stateless transcoders default to `Ok(0)`.
     #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)
     }
@@ -186,6 +184,7 @@ pub trait Transcoder<Input, Output> {
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     fn reset(&mut self) {}
 
     /// Converts available input units into output units.
@@ -221,18 +220,16 @@ pub trait Transcoder<Input, Output> {
 
     /// Finishes internally retained output after all input has been supplied.
     ///
-    /// `transcode` handles ordinary input consumption. `finish` is called only
+    /// `transcode` handles ordinary input consumption. `finish` is called once
     /// after the caller knows no more input remains and has handled any
-    /// incomplete input tail reported by `transcode`. It is responsible for
-    /// emitting final output derived from the transcoder's internal state, such
-    /// as reset bytes, checksums, digests, or trailers. If the provided output
-    /// buffer is too small, `finish` returns
-    /// [`crate::TranscodeStatus::NeedOutput`] and may be called again with more
-    /// output capacity.
+    /// incomplete input tail reported by `transcode`. It emits final output
+    /// derived from internal state, such as reset bytes, checksums, digests, or
+    /// trailers. The caller must provide enough output capacity for
+    /// [`Transcoder::max_finish_output_len`].
     ///
-    /// After `finish` returns [`crate::TranscodeStatus::Complete`], the logical
-    /// stream is closed. Portable callers should call [`Transcoder::reset`]
-    /// before passing input for another logical stream to the same instance.
+    /// After `finish` succeeds, the logical stream is closed. Portable callers
+    /// should call [`Transcoder::reset`] before passing input for another
+    /// logical stream to the same instance.
     ///
     /// # Example
     ///
@@ -288,10 +285,10 @@ pub trait Transcoder<Input, Output> {
     ///     .expect("writer consumes one unit");
     /// assert_eq!(TranscodeStatus::Complete, progress.status());
     ///
-    /// let finish = transcoder
+    /// let written = transcoder
     ///     .finish(&mut output, 1)
     ///     .expect("finish does not emit final state for no-op transcoders");
-    /// assert_eq!(TranscodeStatus::Complete, finish.status());
+    /// assert_eq!(0, written);
     /// ```
     ///
     /// # Parameters
@@ -301,18 +298,19 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Returns
     ///
-    /// Returns progress for units written during finalization. The `read` counter
-    /// is normally zero because no new input is supplied to `finish`. Stateless
-    /// transcoders return a completed progress value with zero counters.
+    /// Returns the number of units written during finalization. Stateless
+    /// transcoders return `0`.
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` if internal state cannot be finished according to
-    /// the transcoder's policy.
-    fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    /// Returns [`FinishError`] when `output_index` is invalid, when output
+    /// capacity is insufficient, or when internal state cannot be finished
+    /// according to the transcoder's policy.
+    #[inline]
+    fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
         if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
+            return Err(FinishError::invalid_output_index(output_index, output.len()));
         }
-        Ok(TranscodeProgress::complete(0, 0))
+        Ok(0)
     }
 }

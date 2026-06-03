@@ -147,6 +147,39 @@ impl TranscodeProgress {
         self.written
     }
 
+    /// Rebases `read` and `written` onto `self` while preserving its stop reason.
+    ///
+    /// Nested engines report progress scoped to one sub-step. Callers that
+    /// orchestrate several sub-steps must replace those counters with totals
+    /// relative to the outer call while keeping boundary fields from the
+    /// sub-step status.
+    ///
+    /// # Parameters
+    ///
+    /// - `read`: Input units consumed relative to the outer call's input index.
+    /// - `written`: Output units written relative to the outer call's output index.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress with the same status as `self` and the supplied counters.
+    #[must_use]
+    #[inline(always)]
+    pub const fn with_counters(self, read: usize, written: usize) -> Self {
+        match self.status {
+            TranscodeStatus::Complete => Self::complete(read, written),
+            TranscodeStatus::NeedInput {
+                input_index,
+                additional,
+                available,
+            } => Self::need_input(input_index, additional, available, read, written),
+            TranscodeStatus::NeedOutput {
+                output_index,
+                additional,
+                available,
+            } => Self::need_output(output_index, additional, available, read, written),
+        }
+    }
+
     /// Returns the additional unit count required by the reported status.
     ///
     /// # Returns

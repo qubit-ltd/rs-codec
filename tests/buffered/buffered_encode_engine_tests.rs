@@ -16,6 +16,7 @@ use qubit_codec::{
     Codec,
     EncodeContext,
     EncodePlan,
+    FinishError,
     TranscodeStatus,
 };
 
@@ -90,7 +91,8 @@ impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         let EncodeContext {
             input_value,
@@ -132,7 +134,8 @@ impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        _context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        _context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
@@ -161,7 +164,8 @@ impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        _context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        _context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         unreachable!("prepare_encode rejects every value")
     }
@@ -198,7 +202,8 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &WideCodec,
-        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         let EncodeContext {
             input_value,
@@ -218,29 +223,14 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
         usize::from(self.pending_suffix)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &WideCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<qubit_codec::TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &WideCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         if !self.pending_suffix {
-            return Ok(qubit_codec::TranscodeProgress::complete(0, 0));
-        }
-
-        let available = output.len().saturating_sub(output_index);
-        if available == 0 {
-            let status = TranscodeStatus::NeedOutput {
-                output_index,
-                additional: super::nz(1),
-                available,
-            };
-            return Ok(qubit_codec::TranscodeProgress::new(status, 0, 0));
+            return Ok(0);
         }
 
         output[output_index] = 0xee;
         self.pending_suffix = false;
-        Ok(qubit_codec::TranscodeProgress::complete(0, 1))
+        Ok(1)
     }
 
     fn reset(&mut self, _codec: &WideCodec) {
@@ -268,23 +258,21 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
 
     assert_eq!(1, encoder.max_finish_output_len());
 
-    let progress = encoder
+    let error = encoder
         .finish(&mut [], 0)
-        .expect("hook should request output for pending finish output");
+        .expect_err("finish should reject insufficient output before calling hooks");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
+        FinishError::InsufficientOutput {
             output_index: 0,
-            additional: super::nz(1),
+            required: 1,
             available: 0,
         },
-        progress.status(),
+        error,
     );
     assert_eq!(1, encoder.max_finish_output_len());
 
-    let progress = encoder.finish(&mut output, 0).expect("hook should write final output");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(1, progress.written());
+    let written = encoder.finish(&mut output, 0).expect("hook should write final output");
+    assert_eq!(1, written);
     assert_eq!([0xee], output);
     assert_eq!(0, encoder.max_finish_output_len());
 
@@ -298,20 +286,11 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
     let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [];
 
-    let progress = encoder
+    let error = encoder
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
@@ -319,36 +298,22 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
     let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
     let mut output = [];
 
-    let progress = encoder
+    let error = encoder
         .finish(&mut output, 1)
-        .expect("default finish should report out-of-range output index");
+        .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
-fn test_buffered_encode_hooks_default_finish_reports_output_index_beyond_buffer() {
+fn test_buffered_encode_hooks_default_finish_is_noop() {
     let mut hooks = ExactWidthHooks;
     let mut output = [];
 
-    let progress = BufferedEncodeHooks::<WideCodec>::finish(&mut hooks, &WideCodec, &mut output, 1)
-        .expect("default hook finish should report out-of-range output index");
+    let written = BufferedEncodeHooks::<WideCodec>::finish(&mut hooks, &WideCodec, &mut output, 1)
+        .expect("default hook finish should be a no-op");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
+    assert_eq!(0, written);
 }
 
 #[test]

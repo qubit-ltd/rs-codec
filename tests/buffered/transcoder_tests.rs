@@ -1,5 +1,6 @@
 use qubit_codec::{
     CapacityError,
+    FinishError,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -72,23 +73,17 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
         CopyTranscoder.transcode(input, input_index, output, output_index)
     }
 
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
         let suffix = *b"!\n";
+        let required = suffix.len() - self.suffix_index;
+        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
         let mut written = 0;
         while self.suffix_index < suffix.len() {
-            if output_index + written == output.len() {
-                let status = TranscodeStatus::NeedOutput {
-                    output_index: output_index + written,
-                    additional: super::nz(suffix.len() - self.suffix_index),
-                    available: 0,
-                };
-                return Ok(TranscodeProgress::new(status, 0, written));
-            }
             output[output_index + written] = suffix[self.suffix_index];
             self.suffix_index += 1;
             written += 1;
         }
-        Ok(TranscodeProgress::complete(0, written))
+        Ok(written)
     }
 }
 
@@ -116,11 +111,9 @@ fn test_transcoder_default_reset_and_finish_are_noops() {
     assert_eq!(Ok(0), transcoder.max_finish_output_len());
 
     Transcoder::<u8, u8>::reset(&mut transcoder);
-    let progress = transcoder.finish(&mut output, 0).expect("finish is noop");
+    let written = transcoder.finish(&mut output, 0).expect("finish is noop");
 
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(0, written);
     assert_eq!([0], output);
 }
 
@@ -129,47 +122,42 @@ fn test_transcoder_default_finish_reports_output_index_beyond_buffer() {
     let mut transcoder = CopyTranscoder;
     let mut output = [];
 
-    let progress = transcoder
+    let error = transcoder
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
-fn test_transcoder_finish_can_report_bounded_pending_output() {
+fn test_transcoder_finish_requires_one_shot_output_capacity() {
     let mut transcoder = FinishingTranscoder::default();
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
-    let progress = transcoder
+    let error = transcoder
         .finish(&mut output, 0)
-        .expect("finish writes suffix until output fills");
+        .expect_err("finish should reject partial output capacity");
 
-    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
-    assert_eq!(0, progress.read());
-    assert_eq!(1, progress.written());
-    assert_eq!([b'!'], output);
-    assert_eq!(Ok(1), transcoder.max_finish_output_len());
+    assert_eq!(
+        FinishError::InsufficientOutput {
+            output_index: 0,
+            required: 2,
+            available: 1,
+        },
+        error,
+    );
+    assert_eq!([0], output);
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
-    let progress = transcoder
+    let mut output = [0_u8; 2];
+    let written = transcoder
         .finish(&mut output, 0)
-        .expect("second finish call completes suffix");
+        .expect("finish should write the whole suffix once capacity is available");
 
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(1, progress.written());
-    assert_eq!([b'\n'], output);
+    assert_eq!(2, written);
+    assert_eq!(*b"!\n", output);
     assert_eq!(Ok(0), transcoder.max_finish_output_len());
 
     transcoder.reset();

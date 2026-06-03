@@ -14,6 +14,7 @@ use qubit_codec::{
     Codec,
     CodecBufferedDecoder,
     CodecDecodeError,
+    FinishError,
     TranscodeStatus,
     Transcoder,
 };
@@ -144,12 +145,10 @@ fn test_codec_buffered_decoder_reports_bounds_and_resets_state() {
     assert_eq!(Ok(0), decoder.max_finish_output_len());
 
     decoder.reset();
-    let finish = decoder
+    let written = decoder
         .finish(&mut output, 0)
         .expect("codec decoder has no finish output");
-    assert_eq!(TranscodeStatus::Complete, finish.status());
-    assert_eq!(0, finish.read());
-    assert_eq!(0, finish.written());
+    assert_eq!(0, written);
 }
 
 #[test]
@@ -218,20 +217,11 @@ fn test_codec_buffered_decoder_finish_reports_output_index_beyond_buffer() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [];
 
-    let progress = decoder
+    let error = decoder
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
@@ -251,13 +241,11 @@ fn test_codec_buffered_decoder_finish_does_not_handle_input_tail() {
         progress.status(),
     );
 
-    let finish = decoder
+    let written = decoder
         .finish(&mut output, 0)
         .expect("codec decoder has no finish output");
 
-    assert_eq!(TranscodeStatus::Complete, finish.status());
-    assert_eq!(0, finish.read());
-    assert_eq!(0, finish.written());
+    assert_eq!(0, written);
 }
 
 #[test]

@@ -17,6 +17,7 @@ use qubit_codec::{
     Codec,
     DecodeAction,
     DecodeContext,
+    FinishError,
     TranscodeStatus,
 };
 
@@ -186,29 +187,14 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
         usize::from(self.pending_suffix)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &PrefixCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<qubit_codec::TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &PrefixCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         if !self.pending_suffix {
-            return Ok(qubit_codec::TranscodeProgress::complete(0, 0));
-        }
-
-        let available = output.len().saturating_sub(output_index);
-        if available == 0 {
-            let status = TranscodeStatus::NeedOutput {
-                output_index,
-                additional: super::nz(1),
-                available,
-            };
-            return Ok(qubit_codec::TranscodeProgress::new(status, 0, 0));
+            return Ok(0);
         }
 
         output[output_index] = 0xee;
         self.pending_suffix = false;
-        Ok(qubit_codec::TranscodeProgress::complete(0, 1))
+        Ok(1)
     }
 }
 
@@ -283,12 +269,10 @@ fn test_buffered_decode_engine_reports_finish_bounds() {
     assert_eq!(0, decoder.max_finish_output_len());
 
     decoder.reset();
-    let progress = decoder
+    let written = decoder
         .finish(&mut output, 0)
         .expect("generic decoder finish is a no-op");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(0, written);
 }
 
 #[test]
@@ -298,23 +282,21 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
 
     assert_eq!(1, decoder.max_finish_output_len());
 
-    let progress = decoder
+    let error = decoder
         .finish(&mut [], 0)
-        .expect("hook should request output for pending finish output");
+        .expect_err("finish should reject insufficient output before calling hooks");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
+        FinishError::InsufficientOutput {
             output_index: 0,
-            additional: super::nz(1),
+            required: 1,
             available: 0,
         },
-        progress.status(),
+        error,
     );
     assert_eq!(1, decoder.max_finish_output_len());
 
-    let progress = decoder.finish(&mut output, 0).expect("hook should write final output");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!(0, progress.read());
-    assert_eq!(1, progress.written());
+    let written = decoder.finish(&mut output, 0).expect("hook should write final output");
+    assert_eq!(1, written);
     assert_eq!([0xee], output);
     assert_eq!(0, decoder.max_finish_output_len());
 }
@@ -324,20 +306,11 @@ fn test_buffered_decode_engine_finish_reports_output_index_beyond_buffer() {
     let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [];
 
-    let progress = decoder
+    let error = decoder
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error,);
 }
 
 #[test]
@@ -345,36 +318,22 @@ fn test_buffered_decode_engine_default_finish_reports_output_index_beyond_buffer
     let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 
-    let progress = decoder
+    let error = decoder
         .finish(&mut output, 1)
-        .expect("default finish should report out-of-range output index");
+        .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
-fn test_buffered_decode_hooks_default_finish_reports_output_index_beyond_buffer() {
+fn test_buffered_decode_hooks_default_finish_is_noop() {
     let mut hooks = ReplacingHooks;
     let mut output = [];
 
-    let progress = BufferedDecodeHooks::<PrefixCodec>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
-        .expect("default hook finish should report out-of-range output index");
+    let written = BufferedDecodeHooks::<PrefixCodec>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
+        .expect("default hook finish should be a no-op");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
+    assert_eq!(0, written);
 }
 
 #[test]

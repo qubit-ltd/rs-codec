@@ -52,7 +52,7 @@ impl<Value> PendingValueSlot<Value> {
     ///
     /// Returns the output unit bound contributed by the retained value.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     pub(super) fn max_output_len<E, H>(&self, engine: &BufferedEncodeEngine<E, H>) -> Result<usize, CapacityError>
     where
         E: Codec<Value = Value>,
@@ -102,7 +102,7 @@ impl<Value> PendingValueSlot<Value> {
     /// Returns:
     /// - `None` when output has been produced immediately.
     /// - `Some(progress)` when output progress should stop for missing capacity.
-    #[inline(always)]
+    #[inline]
     pub(super) fn apply_pending_encode_step<Input, Output>(
         &mut self,
         step: PendingEncodeStep<Value>,

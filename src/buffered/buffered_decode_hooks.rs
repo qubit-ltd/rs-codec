@@ -9,12 +9,9 @@
  ******************************************************************************/
 //! Policy hooks used by buffered decoder engines.
 
-use core::num::NonZeroUsize;
-
 use super::{
     decode_action::DecodeAction,
     decode_context::DecodeContext,
-    transcode_progress::TranscodeProgress,
 };
 use crate::{
     CapacityError,
@@ -221,9 +218,9 @@ where
     ///
     /// The default implementation is a no-op for stateless decode hooks.
     /// Stateful hooks may emit final values such as checksums, reset markers, or
-    /// other trailer data. If `output` does not provide enough capacity, return
-    /// [`crate::TranscodeStatus::NeedOutput`] and keep the unwritten state for a
-    /// later `finish` call.
+    /// other trailer data. The caller must provide at least
+    /// [`BufferedDecodeHooks::max_finish_output_len`] writable slots from
+    /// `output_index`.
     ///
     /// # Parameters
     ///
@@ -233,22 +230,14 @@ where
     ///
     /// # Returns
     ///
-    /// Returns progress for values written by finalization.
+    /// Returns the number of values written by finalization.
     ///
     /// # Errors
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
-    #[inline(always)]
-    fn finish(
-        &mut self,
-        _codec: &C,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
-        }
-        Ok(TranscodeProgress::complete(0, 0))
+    #[inline]
+    fn finish(&mut self, _codec: &C, _output: &mut [C::Value], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
     }
 
     /// Resets hook-owned policy state.

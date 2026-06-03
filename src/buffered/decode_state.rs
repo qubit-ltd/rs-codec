@@ -46,6 +46,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns initialized decode state with cursors at the requested start
     /// positions.
+    #[inline(always)]
     pub(super) fn new(input: &'a [Unit], input_index: usize, output: &'a mut [Value], output_index: usize) -> Self {
         debug_assert!(input_index <= input.len(), "input index must be within the input slice");
 
@@ -110,6 +111,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// # Returns
     ///
     /// Returns the current [`DecodeContext`].
+    #[inline(always)]
     pub(super) fn context(&self) -> DecodeContext {
         DecodeContext::new(
             self.input_start,
@@ -171,6 +173,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// # Returns
     ///
     /// Returns a completed [`TranscodeProgress`].
+    #[inline(always)]
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -183,6 +186,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// # Returns
     ///
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
+    #[inline(always)]
     pub(super) fn need_output_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_output(
@@ -204,6 +208,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// # Returns
     ///
     /// Returns progress at the current decode cursor.
+    #[inline(always)]
     pub(super) fn need_input_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_input(
             self.input_cursor,

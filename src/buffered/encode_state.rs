@@ -11,7 +11,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::transcode_progress::TranscodeProgress;
+use super::{
+    encode_context::EncodeContext,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Mutable state for one buffered encode call.
 pub(super) struct EncodeState<'a, Value, Unit> {
@@ -43,6 +46,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns initialized encode state with cursors at the requested start
     /// positions.
+    #[inline(always)]
     pub(super) fn new(input: &'a [Value], input_index: usize, output: &'a mut [Unit], output_index: usize) -> Self {
         debug_assert!(input_index <= input.len(), "input index must be within the input slice");
 
@@ -66,16 +70,21 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         self.input_cursor < self.input.len()
     }
 
-    /// Returns the current input value, input index, output slice, and output index.
+    /// Returns an encode context at the current cursors.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) unsafe fn current_encode_parts_unchecked(&mut self) -> (&Value, usize, &mut [Unit], usize) {
+    pub(super) unsafe fn context_unchecked(&mut self) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { self.input.get_unchecked(self.input_cursor) };
-        (value, self.input_cursor, &mut *self.output, self.output_cursor)
+        EncodeContext {
+            input_value: value,
+            input_index: self.input_cursor,
+            output: &mut *self.output,
+            output_index: self.output_cursor,
+        }
     }
 
     /// Returns whether the output cursor is within the visible output slice.
@@ -123,6 +132,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns a completed [`TranscodeProgress`] with consumed input and output
     /// counters.
+    #[inline(always)]
     pub(super) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(
             self.input_cursor - self.input_start,
@@ -139,6 +149,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
+    #[inline(always)]
     pub(super) fn need_output_progress(&self, required: usize) -> TranscodeProgress {
         let available = self.available_output();
         debug_assert!(required > available, "need-output progress requires missing capacity");
@@ -156,6 +167,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
+    #[inline(always)]
     pub(super) fn need_output_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
         TranscodeProgress::need_output(
             self.output_cursor,

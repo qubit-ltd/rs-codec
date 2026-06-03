@@ -15,6 +15,7 @@ use qubit_codec::{
     Codec,
     CodecBufferedEncoder,
     CodecEncodeError,
+    FinishError,
     TranscodeStatus,
     Transcoder,
 };
@@ -178,20 +179,11 @@ fn test_codec_buffered_encoder_finish_reports_output_index_beyond_buffer() {
     let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
     let mut output = [];
 
-    let progress = encoder
+    let error = encoder
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]

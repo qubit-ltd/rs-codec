@@ -69,7 +69,8 @@ where
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        context: EncodeContext<'_, C::Value, C::Unit, Self::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.

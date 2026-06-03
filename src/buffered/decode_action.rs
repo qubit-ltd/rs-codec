@@ -53,6 +53,7 @@ impl<Value> DecodeAction<Value> {
     ///
     /// Returns the internal decode attempt consumed by buffered decode loops.
     #[must_use]
+    #[inline]
     pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
         match self {
             Self::NeedInput { required_total } => {

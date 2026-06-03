@@ -9,12 +9,9 @@
  ******************************************************************************/
 //! Policy hooks used by buffered encoder engines.
 
-use core::num::NonZeroUsize;
-
 use super::{
     encode_context::EncodeContext,
     encode_plan::EncodePlan,
-    transcode_progress::TranscodeProgress,
 };
 use crate::{
     CapacityError,
@@ -36,8 +33,9 @@ use crate::{
 /// The engine calls [`prepare_encode`](Self::prepare_encode) before each value
 /// is consumed. The returned [`EncodePlan`] states the required output capacity
 /// and may carry an action computed by the hook. Only after that capacity is
-/// available does the engine call [`write_encode`](Self::write_encode). This
-/// split lets the engine stop with [`crate::TranscodeStatus::NeedOutput`]
+/// available does the engine call [`write_encode`](Self::write_encode) with the
+/// same cursor context and the prepared plan. This split lets the engine stop
+/// with [`crate::TranscodeStatus::NeedOutput`]
 /// without consuming the next input value.
 ///
 /// # Example
@@ -115,7 +113,8 @@ use crate::{
 ///     unsafe fn write_encode(
 ///         &mut self,
 ///         codec: &C,
-///         context: EncodeContext<'_, C::Value, C::Unit, ()>,
+///         context: EncodeContext<'_, C::Value, C::Unit>,
+///         _plan: EncodePlan<()>,
 ///     ) -> Result<usize, Self::Error> {
 ///         unsafe {
 ///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
@@ -214,11 +213,19 @@ where
 
     /// Writes one input value according to a previously prepared plan.
     ///
+    /// This method is called only after the engine has verified that
+    /// [`EncodePlan::max_output_units`] units from `plan` are writable from
+    /// [`EncodeContext::output_index`]. Implementations may rely on that
+    /// capacity guarantee and do not need to report output starvation here. If
+    /// a value needs more output than the plan declared, fix
+    /// [`prepare_encode`](Self::prepare_encode) to return a larger bound.
+    ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `context`: Prepared encode-write context containing the input value,
-    ///   input index, plan action, output slice, and output cursor.
+    /// - `context`: Encode-write context containing the input value, input
+    ///   index, output slice, and output cursor.
+    /// - `plan`: Prepared plan returned by [`prepare_encode`](Self::prepare_encode).
     ///
     /// # Returns
     ///
@@ -226,17 +233,20 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when writing fails under the hook policy.
+    /// Returns `Self::Error` when writing fails under the hook policy. Output
+    /// capacity exhaustion is handled before this method is called and should
+    /// not be reported as a write error.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that at least the corresponding
     /// [`EncodePlan::max_output_units`] units are writable from
-    /// [`EncodeContext::output_index`].
+    /// [`EncodeContext::output_index`] in [`EncodeContext::output`].
     unsafe fn write_encode(
         &mut self,
         codec: &C,
-        context: EncodeContext<'_, C::Value, C::Unit, Self::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+        plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error>;
 
     /// Builds an error for a caller-supplied input index outside the input slice.
@@ -260,9 +270,9 @@ where
     ///
     /// The default implementation is a no-op for stateless encode hooks.
     /// Stateful hooks may emit final units such as reset sequences, checksums, or
-    /// trailers. If `output` does not provide enough capacity, return
-    /// [`crate::TranscodeStatus::NeedOutput`] and keep the unwritten state for a
-    /// later `finish` call.
+    /// trailers. The caller must provide at least
+    /// [`BufferedEncodeHooks::max_finish_output_len`] writable units from
+    /// `output_index`.
     ///
     /// # Parameters
     ///
@@ -272,22 +282,14 @@ where
     ///
     /// # Returns
     ///
-    /// Returns progress for units written by finalization.
+    /// Returns the number of units written by finalization.
     ///
     /// # Errors
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
-    #[inline(always)]
-    fn finish(
-        &mut self,
-        _codec: &C,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
-        }
-        Ok(TranscodeProgress::complete(0, 0))
+    #[inline]
+    fn finish(&mut self, _codec: &C, _output: &mut [C::Unit], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
     }
 
     /// Resets hook-owned policy state.

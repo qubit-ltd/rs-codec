@@ -27,6 +27,7 @@ use qubit_codec::prelude::{
     CodecValueEncoder,
     EncodeContext,
     EncodePlan,
+    FinishError,
     TranscodeProgress,
     TranscodeStatus,
     ValueDecoder,
@@ -124,6 +125,10 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
 
     let progress = TranscodeProgress::complete(1, 2);
     assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(
+        FinishError::<core::convert::Infallible>::InvalidOutputIndex { index: 1, len: 0 },
+        FinishError::invalid_output_index(1, 0),
+    );
 
     let decode_error = CodecDecodeError::<core::convert::Infallible>::incomplete(0, 2, 1);
     assert!(matches!(
@@ -145,11 +150,11 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let context = EncodeContext {
         input_value: &1_u8,
         input_index: 0,
-        plan_action: (),
         output: &mut output,
         output_index: 0,
     };
     assert_eq!(0, context.input_index);
+    assert_eq!(1, context.available_output());
 
     let encode_plan = EncodePlan::new(3, "action");
     assert_eq!(3, encode_plan.max_output_units);

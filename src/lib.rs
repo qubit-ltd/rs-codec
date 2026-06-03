@@ -44,6 +44,7 @@ pub use buffered::{
     DecodeContext,
     EncodeContext,
     EncodePlan,
+    FinishError,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,

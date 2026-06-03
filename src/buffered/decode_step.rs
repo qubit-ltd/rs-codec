@@ -122,7 +122,7 @@ impl<Value> DecodeStep<Value> {
     /// - `Ok(Some(progress))` when conversion must stop,
     /// - `Ok(None)` when conversion can continue, or
     /// - `Err(error)` when emitting the decoded value fails.
-    #[inline(always)]
+    #[inline]
     pub(super) fn apply_to_convert_state<Input, Output, Error, F>(
         self,
         state: &mut ConvertState<'_, Input, Output>,
@@ -163,7 +163,7 @@ impl<Value> DecodeStep<Value> {
     /// Returns optional public stop progress when decoding cannot continue in this
     /// call.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(super) fn apply_to_decode_state<Unit>(
         self,
         state: &mut DecodeState<'_, Unit, Value>,

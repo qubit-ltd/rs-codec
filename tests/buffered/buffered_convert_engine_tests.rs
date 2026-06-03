@@ -22,7 +22,7 @@ use qubit_codec::{
     DecodeContext,
     EncodeContext,
     EncodePlan,
-    TranscodeProgress,
+    FinishError,
     TranscodeStatus,
 };
 
@@ -185,7 +185,8 @@ impl BufferedEncodeHooks<TargetCodec> for StrictEncodeHooks {
     unsafe fn write_encode(
         &mut self,
         codec: &TargetCodec,
-        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         let EncodeContext {
             input_value,
@@ -341,24 +342,13 @@ impl BufferedDecodeHooks<SourceCodec> for FinishDecodeHooks {
         EngineError::invalid_input_index(index, input_len)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &SourceCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
-        }
+    fn finish(&mut self, _codec: &SourceCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         let Some(value) = self.value else {
-            return Ok(TranscodeProgress::complete(0, 0));
+            return Ok(0);
         };
-        if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
-        }
         output[output_index] = value;
         self.value = None;
-        Ok(TranscodeProgress::complete(0, 1))
+        Ok(1)
     }
 }
 
@@ -435,35 +425,19 @@ impl BufferedDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
         EngineError::invalid_input_index(index, input_len)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &SourceCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &SourceCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         if self.remaining == 0 {
-            return Ok(TranscodeProgress::complete(0, 0));
-        }
-        if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0));
+            return Ok(0);
         }
 
-        output[output_index] = self.next;
-        self.next = self.next.wrapping_add(1);
-        self.remaining -= 1;
-        if self.remaining == 0 {
-            Ok(TranscodeProgress::complete(0, 1))
-        } else {
-            Ok(TranscodeProgress::new(
-                TranscodeStatus::NeedOutput {
-                    output_index: output_index + 1,
-                    additional: super::nz(1),
-                    available: 0,
-                },
-                0,
-                1,
-            ))
+        let mut written = 0;
+        while self.remaining > 0 {
+            output[output_index + written] = self.next;
+            self.next = self.next.wrapping_add(1);
+            self.remaining -= 1;
+            written += 1;
         }
+        Ok(written)
     }
 }
 
@@ -525,7 +499,8 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
     unsafe fn write_encode(
         &mut self,
         codec: &TargetCodec,
-        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         let EncodeContext {
             input_value,
@@ -545,28 +520,13 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
         usize::from(self.pending)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &TargetCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &TargetCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         if !self.pending {
-            return Ok(TranscodeProgress::complete(0, 0));
-        }
-        let available = output.len().saturating_sub(output_index);
-        if available == 0 {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                super::nz(1),
-                available,
-                0,
-                0,
-            ));
+            return Ok(0);
         }
         output[output_index] = 0xee;
         self.pending = false;
-        Ok(TranscodeProgress::complete(0, 1))
+        Ok(1)
     }
 }
 
@@ -636,23 +596,10 @@ impl BufferedDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
         EngineError::invalid_input_index(index, input_len)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &SourceCodec,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &SourceCodec, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         match self.finish {
-            ErrorPathDecodeFinish::Normal => Ok(TranscodeProgress::complete(0, 0)),
+            ErrorPathDecodeFinish::Normal => Ok(0),
             ErrorPathDecodeFinish::Error => Err(EngineError::Decode),
-            ErrorPathDecodeFinish::NeedInput => Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 0)),
-            ErrorPathDecodeFinish::NeedOutputWithoutValue => {
-                Ok(TranscodeProgress::need_output(output_index, super::nz(1), 0, 0, 0))
-            }
-            ErrorPathDecodeFinish::EmitNeedInput => {
-                output[output_index] = 0xab;
-                Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 1))
-            }
         }
     }
 }
@@ -662,9 +609,6 @@ enum ErrorPathDecodeFinish {
     #[default]
     Normal,
     Error,
-    NeedInput,
-    NeedOutputWithoutValue,
-    EmitNeedInput,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
@@ -673,7 +617,6 @@ enum ErrorPathEncodeMode {
     Normal,
     PrepareError,
     FinishError,
-    FinishNeedInput,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -709,7 +652,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::PrepareError => Err(EngineError::Encode),
-            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::FinishError | ErrorPathEncodeMode::FinishNeedInput => {
+            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::FinishError => {
                 Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
             }
         }
@@ -718,7 +661,8 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &TargetCodec,
-        _context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        _context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
@@ -727,16 +671,10 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         EngineError::invalid_input_index(index, input_len)
     }
 
-    fn finish(
-        &mut self,
-        _codec: &TargetCodec,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    fn finish(&mut self, _codec: &TargetCodec, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::FinishError => Err(EngineError::Encode),
-            ErrorPathEncodeMode::FinishNeedInput => Ok(TranscodeProgress::need_input(0, super::nz(1), 0, 0, 0)),
-            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => Ok(TranscodeProgress::complete(0, 0)),
+            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => Ok(0),
         }
     }
 }
@@ -834,7 +772,8 @@ impl BufferedEncodeHooks<TargetCodec> for FactoryEncodeHooks {
     unsafe fn write_encode(
         &mut self,
         _codec: &TargetCodec,
-        context: EncodeContext<'_, u8, u8, Self::PlanAction>,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         let EncodeContext {
             input_value,
@@ -1138,18 +1077,11 @@ fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
     let mut engine = BufferedConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
     let mut output = [];
 
-    let progress = engine
+    let error = engine
         .finish(&mut output, 1)
-        .expect("out-of-range finish output index should request capacity");
+        .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
+    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
 }
 
 #[test]
@@ -1169,7 +1101,12 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
         .finish(&mut output, 0)
         .expect_err("decode finish error should be mapped through convert hooks");
 
-    assert_eq!(ConvertEngineError::Decode(EngineError::Decode), error);
+    assert_eq!(
+        FinishError::Source {
+            source: ConvertEngineError::Decode(EngineError::Decode),
+        },
+        error
+    );
     assert_eq!([0], output);
 }
 
@@ -1190,7 +1127,12 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
         .finish(&mut output, 0)
         .expect_err("encode finish error should be mapped through convert hooks");
 
-    assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
+    assert_eq!(
+        FinishError::Source {
+            source: ConvertEngineError::Encode(EngineError::Encode),
+        },
+        error
+    );
     assert_eq!([0], output);
 }
 
@@ -1208,7 +1150,12 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
         .finish(&mut output, 0)
         .expect_err("finish should map pending encode error");
 
-    assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
+    assert_eq!(
+        FinishError::Source {
+            source: ConvertEngineError::Encode(EngineError::Encode),
+        },
+        error
+    );
     assert_eq!([0], output);
 }
 
@@ -1221,76 +1168,13 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
         .finish(&mut output, 0)
         .expect_err("finish should map encode errors for decoder-emitted values");
 
-    assert_eq!(ConvertEngineError::Encode(EngineError::Encode), error);
+    assert_eq!(
+        FinishError::Source {
+            source: ConvertEngineError::Encode(EngineError::Encode),
+        },
+        error
+    );
     assert_eq!([0], output);
-}
-
-#[test]
-#[should_panic(expected = "buffered decode engine finish cannot request source input")]
-fn test_buffered_convert_engine_rejects_decode_finish_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _>::new(
-        SourceCodec,
-        TargetCodec,
-        ErrorPathHooks {
-            decode_finish: ErrorPathDecodeFinish::NeedInput,
-            encode_mode: ErrorPathEncodeMode::Normal,
-            ..ErrorPathHooks::default()
-        },
-    );
-    let mut output = [0_u8; 1];
-
-    let _ = engine.finish(&mut output, 0);
-}
-
-#[test]
-#[should_panic(expected = "decode finish hook must emit progress before requesting more decoded output")]
-fn test_buffered_convert_engine_rejects_decode_finish_need_output_without_value() {
-    let mut engine = BufferedConvertEngine::<_, _, _>::new(
-        SourceCodec,
-        TargetCodec,
-        ErrorPathHooks {
-            decode_finish: ErrorPathDecodeFinish::NeedOutputWithoutValue,
-            encode_mode: ErrorPathEncodeMode::Normal,
-            ..ErrorPathHooks::default()
-        },
-    );
-    let mut output = [0_u8; 1];
-
-    let _ = engine.finish(&mut output, 0);
-}
-
-#[test]
-#[should_panic(expected = "buffered decode engine finish cannot request source input")]
-fn test_buffered_convert_engine_rejects_decode_finish_emit_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _>::new(
-        SourceCodec,
-        TargetCodec,
-        ErrorPathHooks {
-            decode_finish: ErrorPathDecodeFinish::EmitNeedInput,
-            encode_mode: ErrorPathEncodeMode::Normal,
-            ..ErrorPathHooks::default()
-        },
-    );
-    let mut output = [0_u8; 1];
-
-    let _ = engine.finish(&mut output, 0);
-}
-
-#[test]
-#[should_panic(expected = "buffered encode engine cannot request source input")]
-fn test_buffered_convert_engine_rejects_encode_finish_need_input() {
-    let mut engine = BufferedConvertEngine::<_, _, _>::new(
-        SourceCodec,
-        TargetCodec,
-        ErrorPathHooks {
-            decode_finish: ErrorPathDecodeFinish::Normal,
-            encode_mode: ErrorPathEncodeMode::FinishNeedInput,
-            ..ErrorPathHooks::default()
-        },
-    );
-    let mut output = [0_u8; 1];
-
-    let _ = engine.finish(&mut output, 0);
 }
 
 #[test]
@@ -1368,25 +1252,24 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
         .expect("conversion should retain decoded value");
     assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
 
-    let progress = engine
+    let error = engine
         .finish(&mut empty_output, 0)
-        .expect("finish should keep pending value when output is empty");
+        .expect_err("finish should reject insufficient output before draining pending value");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
+        FinishError::InsufficientOutput {
             output_index: 0,
-            additional: super::nz(1),
+            required: 1,
             available: 0,
         },
-        progress.status(),
+        error,
     );
-    assert_eq!((0, 0), (progress.read(), progress.written()));
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
-    let progress = engine
+    let written = engine
         .finish(&mut output, 0)
         .expect("finish should write pending value");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!((0, 1), (progress.read(), progress.written()));
+    assert_eq!(1, written);
     assert_eq!([5], output);
 }
 
@@ -1396,26 +1279,24 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
-    let progress = engine
+    let error = engine
         .finish(&mut empty_output, 0)
-        .expect("finish should retain decoder finish value when target output is empty");
+        .expect_err("finish should reject insufficient output before decoder finish");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
+        FinishError::InsufficientOutput {
             output_index: 0,
-            additional: super::nz(1),
+            required: 1,
             available: 0,
         },
-        progress.status(),
+        error,
     );
-    assert_eq!((0, 0), (progress.read(), progress.written()));
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
-    let progress = engine
+    let written = engine
         .finish(&mut output, 0)
         .expect("finish should encode decoder finish value");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!((0, 1), (progress.read(), progress.written()));
+    assert_eq!(1, written);
     assert_eq!([40], output);
     assert_eq!(Ok(0), engine.max_finish_output_len());
 }
@@ -1426,12 +1307,11 @@ fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
-    let progress = engine
+    let written = engine
         .finish(&mut output, 0)
         .expect("finish should keep draining decoder finish batches");
 
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!((0, 2), (progress.read(), progress.written()));
+    assert_eq!(2, written);
     assert_eq!([50, 51], output);
     assert_eq!(Ok(0), engine.max_finish_output_len());
 }
@@ -1447,28 +1327,26 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
-    let progress = engine
+    let error = engine
         .finish(&mut output, 0)
-        .expect("finish should write pending input value first");
+        .expect_err("finish should reject partial one-shot output");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
+        FinishError::InsufficientOutput {
+            output_index: 0,
+            required: 2,
+            available: 1,
         },
-        progress.status(),
+        error,
     );
-    assert_eq!((0, 1), (progress.read(), progress.written()));
-    assert_eq!([5], output);
-    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!([0], output);
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
-    let mut output = [0_u8; 1];
-    let progress = engine
+    let mut output = [0_u8; 2];
+    let written = engine
         .finish(&mut output, 0)
-        .expect("finish should then write decoder finish value");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!((0, 1), (progress.read(), progress.written()));
-    assert_eq!([40], output);
+        .expect("finish should write pending input value before decoder finish value");
+    assert_eq!(2, written);
+    assert_eq!([5, 40], output);
 }
 
 #[test]
@@ -1477,24 +1355,23 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
-    let progress = engine
+    let error = engine
         .finish(&mut empty_output, 0)
-        .expect("target finish hook should request output capacity");
+        .expect_err("target finish hook should require one-shot output capacity");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
+        FinishError::InsufficientOutput {
             output_index: 0,
-            additional: super::nz(1),
+            required: 1,
             available: 0,
         },
-        progress.status(),
+        error,
     );
 
     let mut output = [0_u8; 1];
-    let progress = engine
+    let written = engine
         .finish(&mut output, 0)
         .expect("target finish hook should write final output");
-    assert_eq!(TranscodeStatus::Complete, progress.status());
-    assert_eq!((0, 1), (progress.read(), progress.written()));
+    assert_eq!(1, written);
     assert_eq!([0xee], output);
     assert_eq!(Ok(0), engine.max_finish_output_len());
 }

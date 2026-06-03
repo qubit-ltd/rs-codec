@@ -73,8 +73,8 @@ impl EncodeStep {
     /// # Returns
     ///
     /// Returns stop progress when more output is required, otherwise `None`.
-    #[inline(always)]
-    pub(super) fn apply_to_encode_state<Value, Unit>(
+    #[inline]
+    pub(super) fn apply_to_state<Value, Unit>(
         self,
         state: &mut EncodeState<'_, Value, Unit>,
     ) -> Option<TranscodeProgress> {

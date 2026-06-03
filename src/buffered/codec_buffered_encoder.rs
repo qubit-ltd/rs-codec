@@ -11,6 +11,7 @@
 
 use super::{
     BufferedEncoder,
+    FinishError,
     TranscodeProgress,
     Transcoder,
     buffered_encode_engine::BufferedEncodeEngine,
@@ -53,6 +54,7 @@ where
     ///
     /// Returns a buffered encoder adapter for the supplied codec.
     #[must_use]
+    #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
             engine: BufferedEncodeEngine::new(codec, CodecBufferedEncodeHooks),
@@ -75,6 +77,7 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for output units.
+    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
@@ -84,6 +87,7 @@ where
     /// # Returns
     ///
     /// Returns the number of units that may be emitted by finishing state.
+    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
     }
@@ -93,6 +97,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     fn reset(&mut self) {
         self.engine.reset();
     }
@@ -113,6 +118,7 @@ where
     /// # Errors
     ///
     /// Returns an encode error if encoding cannot continue under current policy.
+    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[C::Value],
@@ -132,12 +138,13 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress for finalized emissions.
+    /// Returns the number of units written by finalization.
     ///
     /// # Errors
     ///
-    /// Returns an encode error if retained output cannot be fully emitted.
-    fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    /// Returns a finish error if retained output cannot be fully emitted.
+    #[inline(always)]
+    fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }

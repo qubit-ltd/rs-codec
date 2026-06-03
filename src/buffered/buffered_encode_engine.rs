@@ -9,14 +9,13 @@
  ******************************************************************************/
 //! Reusable buffered encoder engine.
 
-use core::num::NonZeroUsize;
-
 use super::{
     buffered_encode_hooks::BufferedEncodeHooks,
     encode_context::EncodeContext,
     encode_plan::EncodePlan,
     encode_state::EncodeState,
     encode_step::EncodeStep,
+    finish_error::FinishError,
     transcode_progress::TranscodeProgress,
 };
 use crate::{
@@ -116,7 +115,8 @@ use crate::{
 ///     unsafe fn write_encode(
 ///         &mut self,
 ///         codec: &ByteCodec,
-///         context: EncodeContext<'_, u8, u8, ()>,
+///         context: EncodeContext<'_, u8, u8>,
+///         _plan: EncodePlan<()>,
 ///     ) -> Result<usize, Self::Error> {
 ///         unsafe {
 ///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
@@ -180,6 +180,7 @@ where
     ///
     /// Returns a buffered encoder engine.
     #[must_use]
+    #[inline(always)]
     pub const fn new(codec: C, hooks: H) -> Self {
         Self { codec, hooks }
     }
@@ -213,6 +214,7 @@ where
     /// # Parameters
     ///
     /// - `context`: Context containing prepared plan, input index, and output.
+    /// - `plan`: Prepared encode plan that selected the write action.
     ///
     /// # Returns
     ///
@@ -225,10 +227,11 @@ where
     #[inline(always)]
     pub(crate) unsafe fn write_prepared_value(
         &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit, H::PlanAction>,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+        plan: EncodePlan<H::PlanAction>,
     ) -> Result<usize, H::Error> {
         // SAFETY: Forwarded from this method's safety contract.
-        unsafe { self.hooks.write_encode(&self.codec, context) }
+        unsafe { self.hooks.write_encode(&self.codec, context, plan) }
     }
 
     /// Returns a conservative upper bound for output units needed for `input_len` values.
@@ -242,6 +245,7 @@ where
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         debug_assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
@@ -253,6 +257,7 @@ where
     ///
     /// Returns the hook-provided final output bound.
     #[must_use]
+    #[inline(always)]
     pub fn max_finish_output_len(&self) -> usize {
         self.hooks.max_finish_output_len(&self.codec)
     }
@@ -266,6 +271,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     pub fn reset(&mut self) {
         self.hooks.reset(&self.codec);
     }
@@ -310,9 +316,9 @@ where
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
-            let (input_value, input_cursor, output, output_cursor) = unsafe { state.current_encode_parts_unchecked() };
-            let step = self.encode_value_step(input_value, input_cursor, output, output_cursor)?;
-            if let Some(progress) = step.apply_to_encode_state(&mut state) {
+            let context = unsafe { state.context_unchecked() };
+            let step = self.encode_step(context)?;
+            if let Some(progress) = step.apply_to_state(&mut state) {
                 return Ok(progress);
             }
         }
@@ -324,7 +330,8 @@ where
     ///
     /// The engine owns no final output state itself. Hook implementations may
     /// finish their own retained state and emit final output after the caller has
-    /// supplied all input values.
+    /// supplied all input values. The caller must provide enough output capacity
+    /// for [`BufferedEncodeEngine::max_finish_output_len`].
     ///
     /// # Parameters
     ///
@@ -333,26 +340,31 @@ where
     ///
     /// # Returns
     ///
-    /// Returns hook-provided finalization progress.
+    /// Returns the number of units written by finalization.
     ///
     /// # Errors
     ///
-    /// Returns hook errors when finalization fails.
-    pub fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<TranscodeProgress, H::Error> {
-        if output_index > output.len() {
-            return Ok(TranscodeProgress::need_output(output_index, NonZeroUsize::MIN, 0, 0, 0));
-        }
-        self.hooks.finish(&self.codec, output, output_index)
+    /// Returns [`FinishError`] when the caller provides invalid or insufficient
+    /// output capacity, or when hook finalization fails.
+    pub fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, FinishError<H::Error>> {
+        let required = self.max_finish_output_len();
+        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        let written = self
+            .hooks
+            .finish(&self.codec, output, output_index)
+            .map_err(FinishError::source)?;
+        debug_assert!(
+            written <= required,
+            "BufferedEncodeEngine hook wrote beyond its finish bound",
+        );
+        Ok(written)
     }
 
-    /// Encodes one value into the provided output slice.
+    /// Encodes one value attempt into a normalized encode step.
     ///
     /// # Parameters
     ///
-    /// - `input_value`: Logical value to encode.
-    /// - `input_index`: Absolute input value index used for hook context.
-    /// - `output`: Complete output unit slice visible to the caller.
-    /// - `output_index`: Absolute output unit index where writing starts.
+    /// - `context`: Current value, absolute input index, and target output cursor.
     ///
     /// # Returns
     ///
@@ -362,35 +374,21 @@ where
     /// # Errors
     ///
     /// Returns hook errors when planning or writing rejects the value.
-    #[inline(always)]
-    pub(super) fn encode_value_step(
+    #[inline]
+    pub(super) fn encode_step(
         &mut self,
-        input_value: &C::Value,
-        input_index: usize,
-        output: &mut [C::Unit],
-        output_index: usize,
+        context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeStep, H::Error> {
-        debug_assert!(
-            output_index <= output.len(),
-            "output index must be within the output slice"
-        );
-        let plan = self.prepare_value(input_value, input_index)?;
+        let plan = self.prepare_value(context.input_value, context.input_index)?;
         let max_output_units = plan.max_output_units;
-        let available = output.len().saturating_sub(output_index);
+        let available = context.available_output();
         if available < max_output_units {
             return Ok(EncodeStep::need_output(max_output_units, available));
         }
 
-        let context = EncodeContext {
-            input_value,
-            input_index,
-            plan_action: plan.action,
-            output,
-            output_index,
-        };
         // SAFETY: The capacity check above guarantees the bound requested by
         // the prepared plan.
-        let written = unsafe { self.write_prepared_value(context) }?;
+        let written = unsafe { self.write_prepared_value(context, plan) }?;
         debug_assert!(
             written <= max_output_units,
             "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",

@@ -11,6 +11,7 @@
 
 use super::{
     BufferedDecoder,
+    FinishError,
     TranscodeProgress,
     Transcoder,
     buffered_decode_engine::BufferedDecodeEngine,
@@ -52,6 +53,7 @@ where
     ///
     /// Returns a buffered decoder adapter for the supplied codec.
     #[must_use]
+    #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
             engine: BufferedDecodeEngine::new(codec, CodecBufferedDecodeHooks),
@@ -74,6 +76,7 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for decoded values.
+    #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
@@ -83,6 +86,7 @@ where
     /// # Returns
     ///
     /// Returns the number of values that may still be emitted by finishing state.
+    #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
     }
@@ -92,6 +96,7 @@ where
     /// # Returns
     ///
     /// Returns unit `()`.
+    #[inline(always)]
     fn reset(&mut self) {
         self.engine.reset();
     }
@@ -112,6 +117,7 @@ where
     /// # Errors
     ///
     /// Returns a decode error if conversion fails under hook policy.
+    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -131,12 +137,13 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress for finalized output.
+    /// Returns the number of values written by finalization.
     ///
     /// # Errors
     ///
-    /// Returns a decode error if finalization cannot complete.
-    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<TranscodeProgress, Self::Error> {
+    /// Returns a finish error if finalization cannot complete.
+    #[inline(always)]
+    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }

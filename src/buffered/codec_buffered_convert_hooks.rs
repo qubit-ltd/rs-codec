@@ -32,6 +32,7 @@ impl CodecBufferedConvertHooks {
     ///
     /// Returns stateless converter hooks.
     #[must_use]
+    #[inline(always)]
     pub(super) const fn new() -> Self {
         Self
     }
@@ -58,6 +59,7 @@ where
     /// # Returns
     ///
     /// Returns decode hooks that map decode failures directly to codec decode errors.
+    #[inline(always)]
     fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
@@ -72,6 +74,7 @@ where
     /// # Returns
     ///
     /// Returns encode hooks that map encode failures directly to codec encode errors.
+    #[inline(always)]
     fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
@@ -99,7 +102,7 @@ where
     /// # Returns
     ///
     /// Returns a converter-level encode error.
-    #[inline(always)]
+    #[inline]
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         match error {
             CodecEncodeError::Encode { source, .. } => CodecConvertError::encode(source),
