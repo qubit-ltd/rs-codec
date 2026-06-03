@@ -198,6 +198,119 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InvalidDecodeActionKind {
+    NeedInput,
+    Skip,
+    Emit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct InvalidDecodeActionHooks {
+    kind: InvalidDecodeActionKind,
+}
+
+impl BufferedDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
+    type Error = EngineError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &PrefixCodec,
+        _error: PrefixDecodeError,
+        context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match self.kind {
+            InvalidDecodeActionKind::NeedInput => Ok(DecodeAction::NeedInput {
+                required_total: context.available,
+            }),
+            InvalidDecodeActionKind::Skip => Ok(DecodeAction::Skip {
+                consumed: non_zero_consumed(context.available + 1),
+            }),
+            InvalidDecodeActionKind::Emit => Ok(DecodeAction::Emit {
+                value: 77,
+                consumed: non_zero_consumed(context.available + 1),
+            }),
+        }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverwritingFinishHooks;
+
+impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
+    type Error = EngineError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &PrefixCodec,
+        error: PrefixDecodeError,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match error {
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+                consumed: non_zero_consumed(consumed),
+            }),
+        }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
+        1
+    }
+
+    fn finish(&mut self, _codec: &PrefixCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xee;
+        output[output_index + 1] = 0xdd;
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverreportingFinishHooks;
+
+impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
+    type Error = EngineError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &PrefixCodec,
+        error: PrefixDecodeError,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match error {
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+                consumed: non_zero_consumed(consumed),
+            }),
+        }
+    }
+
+    fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
+        1
+    }
+
+    fn finish(&mut self, _codec: &PrefixCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xee;
+        Ok(2)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MinTwoCodec;
 
@@ -299,6 +412,24 @@ fn test_buffered_decode_engine_delegates_finish_to_hooks() {
     assert_eq!(1, written);
     assert_eq!([0xee], output);
     assert_eq!(0, decoder.max_finish_output_len());
+}
+
+#[test]
+#[should_panic]
+fn test_buffered_decode_engine_finish_passes_bounded_output_to_hooks() {
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, OverwritingFinishHooks);
+    let mut output = [0_u8; 2];
+
+    let _ = decoder.finish(&mut output, 0);
+}
+
+#[test]
+#[should_panic(expected = "BufferedDecodeEngine hook wrote beyond its finish bound")]
+fn test_buffered_decode_engine_finish_panics_when_hook_overreports_bound() {
+    let mut decoder = BufferedDecodeEngine::<_, _>::new(PrefixCodec, OverreportingFinishHooks);
+    let mut output = [0_u8; 2];
+
+    let _ = decoder.finish(&mut output, 0);
 }
 
 #[test]
@@ -457,6 +588,48 @@ fn test_buffered_decode_engine_allows_policy_skip_for_invalid_input() {
     assert_eq!(2, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([1], output);
+}
+
+#[test]
+#[should_panic(expected = "DecodeAction::NeedInput required_total must exceed available input")]
+fn test_buffered_decode_engine_panics_on_invalid_need_input_action() {
+    let mut decoder = BufferedDecodeEngine::new(
+        PrefixCodec,
+        InvalidDecodeActionHooks {
+            kind: InvalidDecodeActionKind::NeedInput,
+        },
+    );
+    let mut output = [0_u8; 1];
+
+    let _ = decoder.transcode(&[0xfe], 0, &mut output, 0);
+}
+
+#[test]
+#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
+fn test_buffered_decode_engine_panics_on_invalid_skip_action() {
+    let mut decoder = BufferedDecodeEngine::new(
+        PrefixCodec,
+        InvalidDecodeActionHooks {
+            kind: InvalidDecodeActionKind::Skip,
+        },
+    );
+    let mut output = [0_u8; 1];
+
+    let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
+}
+
+#[test]
+#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
+fn test_buffered_decode_engine_panics_on_invalid_emit_action() {
+    let mut decoder = BufferedDecodeEngine::new(
+        PrefixCodec,
+        InvalidDecodeActionHooks {
+            kind: InvalidDecodeActionKind::Emit,
+        },
+    );
+    let mut output = [0_u8; 1];
+
+    let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
 }
 
 #[test]

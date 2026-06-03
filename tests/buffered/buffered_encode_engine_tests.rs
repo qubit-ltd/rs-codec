@@ -238,6 +238,87 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverwritingFinishHooks;
+
+impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
+    type Error = EngineError;
+    type PlanAction = ();
+
+    fn prepare_encode(
+        &mut self,
+        _codec: &WideCodec,
+        _value: &u8,
+        _input_index: usize,
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
+        Ok(EncodePlan::new(1, ()))
+    }
+
+    unsafe fn write_encode(
+        &mut self,
+        _codec: &WideCodec,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
+    ) -> Result<usize, Self::Error> {
+        context.output[context.output_index] = *context.input_value;
+        Ok(1)
+    }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
+        1
+    }
+
+    fn finish(&mut self, _codec: &WideCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xee;
+        output[output_index + 1] = 0xdd;
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverreportingFinishHooks;
+
+impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
+    type Error = EngineError;
+    type PlanAction = ();
+
+    fn prepare_encode(
+        &mut self,
+        _codec: &WideCodec,
+        _value: &u8,
+        _input_index: usize,
+    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
+        Ok(EncodePlan::new(1, ()))
+    }
+
+    unsafe fn write_encode(
+        &mut self,
+        _codec: &WideCodec,
+        context: EncodeContext<'_, u8, u8>,
+        _plan: EncodePlan<Self::PlanAction>,
+    ) -> Result<usize, Self::Error> {
+        context.output[context.output_index] = *context.input_value;
+        Ok(1)
+    }
+
+    fn invalid_input_index(&mut self, _codec: &WideCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
+        1
+    }
+
+    fn finish(&mut self, _codec: &WideCodec, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xee;
+        Ok(2)
+    }
+}
+
 #[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
     let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
@@ -279,6 +360,24 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     encoder.reset();
     assert_eq!(0, encoder.max_finish_output_len());
+}
+
+#[test]
+#[should_panic]
+fn test_buffered_encode_engine_finish_passes_bounded_output_to_hooks() {
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, OverwritingFinishHooks);
+    let mut output = [0_u8; 2];
+
+    let _ = encoder.finish(&mut output, 0);
+}
+
+#[test]
+#[should_panic(expected = "BufferedEncodeEngine hook wrote beyond its finish bound")]
+fn test_buffered_encode_engine_finish_panics_when_hook_overreports_bound() {
+    let mut encoder = BufferedEncodeEngine::<_, _>::new(WideCodec, OverreportingFinishHooks);
+    let mut output = [0_u8; 2];
+
+    let _ = encoder.finish(&mut output, 0);
 }
 
 #[test]

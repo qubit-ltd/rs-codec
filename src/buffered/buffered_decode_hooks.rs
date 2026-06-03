@@ -187,6 +187,13 @@ where
     ///
     /// Returns the action selected by this hook policy.
     ///
+    /// Returned actions must be consistent with `context.available`:
+    /// - `NeedInput.required_total` must be greater than `context.available`;
+    /// - `Skip.consumed` and `Emit.consumed` must not exceed
+    ///   `context.available`.
+    ///
+    /// The engine treats violations as hook bugs and panics.
+    ///
     /// # Errors
     ///
     /// Returns `Self::Error` when the policy rejects the input.
@@ -220,17 +227,20 @@ where
     /// Stateful hooks may emit final values such as checksums, reset markers, or
     /// other trailer data. The caller must provide at least
     /// [`BufferedDecodeHooks::max_finish_output_len`] writable slots from
-    /// `output_index`.
+    /// `output_index`. Engines may pass an output slice whose upper bound is
+    /// capped at `output_index + max_finish_output_len`, so implementations must
+    /// not write beyond that declared final-output bound.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `output`: Complete output value slice visible to the hook.
+    /// - `output`: Output value slice visible to the hook.
     /// - `output_index`: Absolute output value index where writing starts.
     ///
     /// # Returns
     ///
-    /// Returns the number of values written by finalization.
+    /// Returns the number of values written by finalization. This count must not
+    /// exceed [`BufferedDecodeHooks::max_finish_output_len`].
     ///
     /// # Errors
     ///

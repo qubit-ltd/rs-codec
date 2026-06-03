@@ -272,17 +272,20 @@ where
     /// Stateful hooks may emit final units such as reset sequences, checksums, or
     /// trailers. The caller must provide at least
     /// [`BufferedEncodeHooks::max_finish_output_len`] writable units from
-    /// `output_index`.
+    /// `output_index`. Engines may pass an output slice whose upper bound is
+    /// capped at `output_index + max_finish_output_len`, so implementations must
+    /// not write beyond that declared final-output bound.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `output`: Complete output unit slice visible to the hook.
+    /// - `output`: Output unit slice visible to the hook.
     /// - `output_index`: Absolute output unit index where writing starts.
     ///
     /// # Returns
     ///
-    /// Returns the number of units written by finalization.
+    /// Returns the number of units written by finalization. This count must not
+    /// exceed [`BufferedEncodeHooks::max_finish_output_len`].
     ///
     /// # Errors
     ///

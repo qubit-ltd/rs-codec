@@ -91,8 +91,9 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   sharing the common loop.
 - **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
   required before a hook writes one value.
-- **`EncodeContext<'a, Value, Unit, P>`**: prepared write context passed to
-  encode hooks after the engine has verified output capacity.
+- **`EncodeContext<'a, Value, Unit>`**: prepared input value, input index,
+  output slice, and cursor passed to encode hooks after the engine has verified
+  output capacity.
 - **`CodecBufferedDecoder<C>`**: wraps a `Codec` as a
   strict `BufferedDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
@@ -196,7 +197,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `BufferedEncodeHooks<C>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
 | `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write action |
-| `EncodeContext<'a, Value, Unit, P>` | Prepared input, plan action, output slice, and cursor passed to encode hooks |
+| `EncodeContext<'a, Value, Unit>` | Prepared input value, input index, output slice, and cursor passed to encode hooks |
 
 ### Decoder Hooks And Engines
 

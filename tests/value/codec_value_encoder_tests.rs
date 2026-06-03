@@ -99,6 +99,41 @@ unsafe impl Codec for RejectOddCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverreportingEncodeCodec;
+
+unsafe impl Codec for OverreportingEncodeCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = *value;
+        Ok(2)
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct NonCloneValue {
     value: u8,
@@ -175,4 +210,12 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error = ValueEncoder::<u8>::encode(&encoder, &7).expect_err("odd value should be rejected");
 
     assert_eq!("odd value", error);
+}
+
+#[test]
+#[should_panic(expected = "Codec::encode_unchecked wrote beyond allocated output")]
+fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
+    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
+
+    let _ = ValueEncoder::<u8>::encode(&encoder, &7);
 }

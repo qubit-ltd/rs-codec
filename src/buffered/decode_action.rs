@@ -21,18 +21,30 @@ use super::decode_step::DecodeStep;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DecodeAction<Value> {
     /// More source units are needed before a value can be produced.
+    ///
+    /// When returned by a decode hook, `required_total` must be greater than
+    /// the hook context's available input count. Returning a value that is
+    /// already satisfied is a hook contract violation and panics in the engine.
     NeedInput {
         /// Total units required from the current value start.
         required_total: usize,
     },
 
     /// Consume invalid input without producing output.
+    ///
+    /// When returned by a decode hook, `consumed` must not exceed the hook
+    /// context's available input count. Over-consuming is a hook contract
+    /// violation and panics in the engine.
     Skip {
         /// Source units to consume.
         consumed: NonZeroUsize,
     },
 
     /// Produce one value and consume source units.
+    ///
+    /// When returned by a decode hook, `consumed` must not exceed the hook
+    /// context's available input count. Over-consuming is a hook contract
+    /// violation and panics in the engine.
     Emit {
         /// Value to write to the output buffer.
         value: Value,
@@ -52,6 +64,11 @@ impl<Value> DecodeAction<Value> {
     /// # Returns
     ///
     /// Returns the internal decode attempt consumed by buffered decode loops.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a hook returns `NeedInput` with `required_total <= available`
+    /// or a consuming action whose consumed count exceeds `available`.
     #[must_use]
     #[inline]
     pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
@@ -76,15 +93,23 @@ impl<Value> DecodeAction<Value> {
     /// # Returns
     ///
     /// Returns a non-zero additional source-unit count.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `required_total <= available`.
     #[must_use]
     #[inline(always)]
     fn missing_input(required_total: usize, available: usize) -> NonZeroUsize {
-        let additional = required_total.saturating_sub(available).max(1);
-        // SAFETY: The count is clamped to at least one.
+        assert!(
+            required_total > available,
+            "DecodeAction::NeedInput required_total must exceed available input",
+        );
+        let additional = required_total - available;
+        // SAFETY: The assertion above guarantees a positive difference.
         unsafe { NonZeroUsize::new_unchecked(additional) }
     }
 
-    /// Bounds a policy-reported consumed source-unit count to available input.
+    /// Validates a policy-reported consumed source-unit count against available input.
     ///
     /// # Parameters
     ///
@@ -93,13 +118,19 @@ impl<Value> DecodeAction<Value> {
     ///
     /// # Returns
     ///
-    /// Returns a non-zero count clamped to the currently available input.
+    /// Returns the validated non-zero consumed count.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `available == 0` or when `consumed > available`.
     #[must_use]
     #[inline(always)]
     fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
-        debug_assert!(available > 0, "decode action cannot consume empty input");
-        let consumed = consumed.get().min(available).max(1);
-        // SAFETY: The normalized count is clamped to at least one.
-        unsafe { NonZeroUsize::new_unchecked(consumed) }
+        assert!(available > 0, "DecodeAction cannot consume empty input");
+        assert!(
+            consumed.get() <= available,
+            "DecodeAction consumed units must not exceed available input",
+        );
+        consumed
     }
 }

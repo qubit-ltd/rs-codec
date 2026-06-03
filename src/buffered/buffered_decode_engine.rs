@@ -298,14 +298,21 @@ where
     ///
     /// Returns [`FinishError`] when the caller provides invalid or insufficient
     /// output capacity, or when hook finalization fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the hook writes or reports more final output values than
+    /// [`BufferedDecodeEngine::max_finish_output_len`] declared.
     pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, FinishError<H::Error>> {
         let required = self.max_finish_output_len();
         FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        let output_end = output_index + required;
+        let output = &mut output[..output_end];
         let written = self
             .hooks
             .finish(&self.codec, output, output_index)
             .map_err(FinishError::source)?;
-        debug_assert!(
+        assert!(
             written <= required,
             "BufferedDecodeEngine hook wrote beyond its finish bound",
         );

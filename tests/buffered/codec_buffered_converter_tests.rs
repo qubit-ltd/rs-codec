@@ -160,6 +160,89 @@ enum TestDecodeError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
 
+#[derive(Debug, Eq, PartialEq)]
+struct NonDefaultValue(u8);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NonDefaultDecoder;
+
+unsafe impl Codec for NonDefaultDecoder {
+    type Value = NonDefaultValue;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode_unchecked(
+        &self,
+        value: &NonDefaultValue,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = value.0;
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct NonDefaultEncoder;
+
+unsafe impl Codec for NonDefaultEncoder {
+    type Value = NonDefaultValue;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode_unchecked(
+        &self,
+        value: &NonDefaultValue,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = value.0.wrapping_add(1);
+        Ok(1)
+    }
+}
+
 #[test]
 fn test_codec_buffered_converter_supports_standard_traits() {
     let converter = CodecBufferedConverter::<VariableByteDecoder, PairByteEncoder>::default();
@@ -173,6 +256,61 @@ fn test_codec_buffered_converter_supports_standard_traits() {
     let mut cloned_hash = DefaultHasher::new();
     cloned.hash(&mut cloned_hash);
     assert_eq!(converter_hash.finish(), cloned_hash.finish());
+}
+
+#[test]
+fn test_codec_buffered_converter_transcodes_non_default_values_with_inherent_api() {
+    type Converter = CodecBufferedConverter<NonDefaultDecoder, NonDefaultEncoder>;
+
+    fn assert_buffered_converter<T: BufferedConverter<u8, u8>>() {}
+
+    assert_buffered_converter::<Converter>();
+
+    let mut converter = CodecBufferedConverter::new(NonDefaultDecoder, NonDefaultEncoder);
+    let mut output = [0_u8; 2];
+
+    assert_eq!(Ok(2), converter.max_output_len(2));
+    assert_eq!(Ok(0), converter.max_finish_output_len());
+
+    let progress = converter
+        .transcode(&[3, 4], 0, &mut output, 0)
+        .expect("non-default values should transcode through inherent API");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(2, progress.read());
+    assert_eq!(2, progress.written());
+    assert_eq!([4, 5], output);
+
+    converter.reset();
+    assert_eq!(Ok(0), converter.finish(&mut output, 0));
+}
+
+#[test]
+fn test_codec_buffered_converter_transcoder_trait_methods_forward() {
+    type Converter = CodecBufferedConverter<VariableByteDecoder, PairByteEncoder>;
+
+    let mut converter = Converter::new(VariableByteDecoder, PairByteEncoder);
+    let mut output = [0_u8; 2];
+
+    assert_eq!(Ok(2), <Converter as Transcoder<u8, u8>>::max_output_len(&converter, 1));
+    assert_eq!(
+        Ok(0),
+        <Converter as Transcoder<u8, u8>>::max_finish_output_len(&converter),
+    );
+
+    let progress = <Converter as Transcoder<u8, u8>>::transcode(&mut converter, &[7], 0, &mut output, 0)
+        .expect("trait transcoder dispatch should convert through the adapter");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(2, progress.written());
+    assert_eq!([7, 8], output);
+
+    <Converter as Transcoder<u8, u8>>::reset(&mut converter);
+    assert_eq!(
+        Ok(0),
+        <Converter as Transcoder<u8, u8>>::finish(&mut converter, &mut output, 0),
+    );
 }
 
 #[test]

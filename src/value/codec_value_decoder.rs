@@ -73,6 +73,11 @@ where
     /// [`CodecDecodeError::Decode`] when the wrapped codec rejects the input.
     /// Returns [`CodecDecodeError::TrailingInput`] when a value is decoded but
     /// extra input remains.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the wrapped codec reports a consumed unit count larger than
+    /// the input slice length.
     fn decode(&self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         debug_assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
@@ -85,12 +90,12 @@ where
         let (value, consumed) =
             unsafe { self.codec.decode_unchecked(input, 0) }.map_err(|error| CodecDecodeError::decode(error, 0))?;
         let consumed = consumed.get();
-        debug_assert!(
+        assert!(
             consumed <= input.len(),
             "Codec::decode_unchecked consumed beyond available input",
         );
 
-        let remaining = input.len().saturating_sub(consumed);
+        let remaining = input.len() - consumed;
         if remaining == 0 {
             Ok(value)
         } else {

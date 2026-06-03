@@ -154,7 +154,8 @@ pub unsafe trait Codec {
     ///
     /// The caller must guarantee that the implementation can write up to
     /// [`max_units_per_value`](Self::max_units_per_value) units starting at
-    /// `index`.
+    /// `index`. On success, implementations must return a written unit count no
+    /// larger than [`max_units_per_value`](Self::max_units_per_value).
     unsafe fn encode_unchecked(
         &self,
         value: &Self::Value,

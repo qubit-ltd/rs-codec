@@ -98,6 +98,44 @@ unsafe impl Codec for FixedPairCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverconsumingCodec;
+
+unsafe impl Codec for OverconsumingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        Ok((
+            input[index],
+            core::num::NonZeroUsize::new(2).expect("literal is non-zero"),
+        ))
+    }
+
+    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
     Invalid { consumed: usize },
@@ -156,4 +194,12 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
         },
         error,
     );
+}
+
+#[test]
+#[should_panic(expected = "Codec::decode_unchecked consumed beyond available input")]
+fn test_codec_value_decoder_panics_when_codec_consumes_beyond_input() {
+    let decoder = CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
+
+    let _ = ValueDecoder::<[u8]>::decode(&decoder, &[7]);
 }
