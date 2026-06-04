@@ -9,7 +9,11 @@
  ******************************************************************************/
 //! Tests for the low-level codec trait.
 
-use qubit_codec::Codec;
+use qubit_codec::{
+    Codec,
+    CodecValueEncoder,
+    ValueEncoder,
+};
 
 #[derive(Default)]
 struct ByteIncrementCodec;
@@ -51,6 +55,41 @@ unsafe impl Codec for ByteIncrementCodec {
     }
 }
 
+#[derive(Default)]
+struct InvalidBoundsCodec;
+
+unsafe impl Codec for InvalidBoundsCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        _input: &[u8],
+        _index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((0, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode_unchecked(
+        &self,
+        _value: &u8,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+}
+
 #[test]
 fn test_codec_trait_encodes_and_decodes_one_value() {
     let codec = ByteIncrementCodec;
@@ -64,4 +103,14 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
     assert_eq!(1, written);
     assert_eq!(1, consumed.get());
     assert_eq!(41, decoded);
+}
+
+#[test]
+#[should_panic(expected = "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()")]
+fn test_codec_unit_bounds_panics_when_min_exceeds_max() {
+    let encoder = CodecValueEncoder::new(InvalidBoundsCodec);
+
+    let _ = encoder
+        .encode(&42)
+        .expect("unit-bound assertion should panic before encoding");
 }

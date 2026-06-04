@@ -13,7 +13,7 @@ use super::ValueDecoder;
 use crate::{
     Codec,
     CodecDecodeError,
-    codec::debug_assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
@@ -79,7 +79,7 @@ where
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length.
     fn decode(&self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
-        debug_assert_unit_bounds::<C>(&self.codec);
+        assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
             return Err(CodecDecodeError::incomplete(0, min_units, input.len()));

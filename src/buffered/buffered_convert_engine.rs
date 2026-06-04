@@ -29,7 +29,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    codec::debug_assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Reusable buffered conversion engine.
@@ -214,8 +214,8 @@ where
             let error = self.encode_engine.invalid_output_index(output_index, output.len());
             return Err(self.hooks.map_encode_error(error));
         }
-        debug_assert_unit_bounds::<D>(self.decode_codec());
-        debug_assert_unit_bounds::<E>(self.encode_codec());
+        assert_unit_bounds::<D>(self.decode_codec());
+        assert_unit_bounds::<E>(self.encode_codec());
 
         let mut state = ConvertState::new(input, input_index, output, output_index);
 
@@ -271,8 +271,8 @@ where
     where
         D::Value: Default,
     {
-        debug_assert_unit_bounds::<D>(self.decode_codec());
-        debug_assert_unit_bounds::<E>(self.encode_codec());
+        assert_unit_bounds::<D>(self.decode_codec());
+        assert_unit_bounds::<E>(self.encode_codec());
         let required = self.max_finish_output_len().map_err(FinishError::capacity)?;
         FinishError::ensure_output_capacity(output.len(), output_index, required)?;
 

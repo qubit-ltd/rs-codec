@@ -21,7 +21,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    codec::debug_assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Reusable buffered encoding engine for codec-backed encoders.
@@ -256,7 +256,7 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        debug_assert_unit_bounds::<C>(&self.codec);
+        assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -320,7 +320,7 @@ where
         if output_index > output.len() {
             return Err(self.hooks.invalid_output_index(&self.codec, output_index, output.len()));
         }
-        debug_assert_unit_bounds::<C>(&self.codec);
+        assert_unit_bounds::<C>(&self.codec);
         let mut state = EncodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {

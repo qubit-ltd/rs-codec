@@ -48,7 +48,8 @@ use core::num::NonZeroUsize;
 /// [`min_units_per_value`](Self::min_units_per_value) is less than or equal to
 /// [`max_units_per_value`](Self::max_units_per_value). Both bounds are non-zero
 /// by type, and `max_units_per_value` must be a valid upper bound for one
-/// complete encoded value or codec quantum.
+/// complete encoded value or codec quantum. Checked adapters assert this
+/// invariant before using codec-provided bounds.
 pub unsafe trait Codec {
     /// Logical value decoded from or encoded into the buffer.
     type Value;
@@ -164,7 +165,7 @@ pub unsafe trait Codec {
     ) -> Result<usize, Self::EncodeError>;
 }
 
-/// Checks the public unit-bound invariant required by [`Codec`].
+/// Asserts the public unit-bound invariant required by [`Codec`].
 ///
 /// # Type Parameters
 ///
@@ -173,19 +174,17 @@ pub unsafe trait Codec {
 /// # Returns
 ///
 /// Returns unit `()`.
-pub(crate) fn debug_assert_unit_bounds<C>(codec: &C)
+///
+/// # Panics
+///
+/// Panics when [`Codec::min_units_per_value`] is greater than
+/// [`Codec::max_units_per_value`].
+pub(crate) fn assert_unit_bounds<C>(codec: &C)
 where
     C: Codec,
 {
-    #[cfg(debug_assertions)]
-    {
-        debug_assert!(
-            codec.min_units_per_value() <= codec.max_units_per_value(),
-            "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()",
-        );
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        let _ = codec;
-    }
+    assert!(
+        codec.min_units_per_value() <= codec.max_units_per_value(),
+        "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()",
+    );
 }

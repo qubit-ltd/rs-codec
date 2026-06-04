@@ -12,7 +12,7 @@
 use super::ValueEncoder;
 use crate::{
     Codec,
-    codec::debug_assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
@@ -77,7 +77,7 @@ where
     /// Panics when the wrapped codec reports more written units than its
     /// declared [`Codec::max_units_per_value`] bound.
     fn encode(&self, input: &C::Value) -> Result<Self::Output, Self::Error> {
-        debug_assert_unit_bounds::<C>(&self.codec);
+        assert_unit_bounds::<C>(&self.codec);
         let mut output = vec![C::Unit::default(); self.codec.max_units_per_value().get()];
         // SAFETY: The output buffer is allocated to the codec's declared maximum
         // width, which is the safety precondition for one-value encoding.
