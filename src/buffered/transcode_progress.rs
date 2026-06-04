@@ -184,14 +184,15 @@ impl TranscodeProgress {
     ///
     /// # Returns
     ///
-    /// Returns `0` when conversion completed.
+    /// Returns `Some` with a non-zero count when conversion needs more input or
+    /// output. Returns `None` when conversion completed.
     #[must_use]
     #[inline(always)]
-    pub const fn additional(self) -> usize {
+    pub const fn additional(self) -> Option<NonZeroUsize> {
         match self.status {
-            TranscodeStatus::Complete => 0,
-            TranscodeStatus::NeedInput { additional, .. } => additional.get(),
-            TranscodeStatus::NeedOutput { additional, .. } => additional.get(),
+            TranscodeStatus::Complete => None,
+            TranscodeStatus::NeedInput { additional, .. } => Some(additional),
+            TranscodeStatus::NeedOutput { additional, .. } => Some(additional),
         }
     }
 
