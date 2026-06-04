@@ -109,7 +109,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ```toml
 [dependencies]
-qubit-codec = "0.6"
+qubit-codec = "0.5"
 ```
 
 ## 快速开始
