@@ -11,7 +11,7 @@ use core::num::NonZeroUsize;
 
 use super::TranscodeStatus;
 
-/// Counts how much work a [`crate::Transcoder`] completed before returning.
+/// Counts how much work a [`crate::BufferedTranscoder`] completed before returning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TranscodeProgress {
     /// Stop reason reported by the transcoder.

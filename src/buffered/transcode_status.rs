@@ -9,7 +9,7 @@
  ******************************************************************************/
 use core::num::NonZeroUsize;
 
-/// Reports why a [`crate::Transcoder`] stopped converting input.
+/// Reports why a [`crate::BufferedTranscoder`] stopped converting input.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscodeStatus {
     /// All currently supplied input was consumed.

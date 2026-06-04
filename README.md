@@ -29,8 +29,8 @@ This crate provides:
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
-- `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for caller-managed logical-stream
-  conversion.
+- `BufferedTranscoder`, `TranscodeProgress`, and `TranscodeStatus` for
+  caller-managed logical-stream conversion.
 - `BufferedEncoder`, `BufferedDecoder`, and `BufferedConverter` marker traits
   for semantic transcoder direction.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
@@ -71,16 +71,16 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecValueDecoder<C>`**: wraps a `Codec` as a
   `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
 
-### Buffer Transcoder Primitives
+### Buffered Transcoder Primitives
 
-- **`Transcoder<Input, Output>`**: converts input units into output units inside
+- **`BufferedTranscoder<Input, Output>`**: converts input units into output units inside
   caller-provided buffers, then finishes internally retained output after the
   caller has handled any incomplete input tail.
-- **`BufferedEncoder<Value, Unit>`**: semantic `Transcoder` bound for value-to-unit
+- **`BufferedEncoder<Value, Unit>`**: semantic `BufferedTranscoder` bound for value-to-unit
   buffered encoding.
-- **`BufferedDecoder<Unit, Value>`**: semantic `Transcoder` bound for unit-to-value
+- **`BufferedDecoder<Unit, Value>`**: semantic `BufferedTranscoder` bound for unit-to-value
   buffered decoding.
-- **`BufferedConverter<InputUnit, OutputUnit>`**: semantic `Transcoder` bound for
+- **`BufferedConverter<InputUnit, OutputUnit>`**: semantic `BufferedTranscoder` bound for
   unit-to-unit buffered conversion.
 - **`CodecBufferedEncoder<C>`**: wraps a `Codec` as a
   `BufferedEncoder<C::Value, C::Unit>` over caller-provided output buffers.
@@ -208,7 +208,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
 
-### `Transcoder` Operations
+### `BufferedTranscoder` Operations
 
 | Method | Description |
 |--------|-------------|

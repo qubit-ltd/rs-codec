@@ -1,15 +1,15 @@
 use qubit_codec::{
+    BufferedTranscoder,
     CapacityError,
     FinishError,
     TranscodeProgress,
     TranscodeStatus,
-    Transcoder,
 };
 
 #[derive(Default)]
-struct CopyTranscoder;
+struct CopyBufferedTranscoder;
 
-impl Transcoder<u8, u8> for CopyTranscoder {
+impl BufferedTranscoder<u8, u8> for CopyBufferedTranscoder {
     type Error = core::convert::Infallible;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
@@ -44,11 +44,11 @@ impl Transcoder<u8, u8> for CopyTranscoder {
 }
 
 #[derive(Default)]
-struct FinishingTranscoder {
+struct FinishingBufferedTranscoder {
     suffix_index: usize,
 }
 
-impl Transcoder<u8, u8> for FinishingTranscoder {
+impl BufferedTranscoder<u8, u8> for FinishingBufferedTranscoder {
     type Error = core::convert::Infallible;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
@@ -70,7 +70,7 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CopyTranscoder.transcode(input, input_index, output, output_index)
+        CopyBufferedTranscoder.transcode(input, input_index, output, output_index)
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
@@ -88,8 +88,8 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
 }
 
 #[test]
-fn test_transcoder_contract_uses_absolute_indices_and_relative_progress() {
-    let mut transcoder = CopyTranscoder;
+fn test_buffered_transcoder_contract_uses_absolute_indices_and_relative_progress() {
+    let mut transcoder = CopyBufferedTranscoder;
     let mut output = [0_u8; 4];
 
     let progress = transcoder
@@ -103,14 +103,14 @@ fn test_transcoder_contract_uses_absolute_indices_and_relative_progress() {
 }
 
 #[test]
-fn test_transcoder_default_reset_and_finish_are_noops() {
-    let mut transcoder = CopyTranscoder;
+fn test_buffered_transcoder_default_reset_and_finish_are_noops() {
+    let mut transcoder = CopyBufferedTranscoder;
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(3), transcoder.max_output_len(3));
     assert_eq!(Ok(0), transcoder.max_finish_output_len());
 
-    Transcoder::<u8, u8>::reset(&mut transcoder);
+    BufferedTranscoder::<u8, u8>::reset(&mut transcoder);
     let written = transcoder.finish(&mut output, 0).expect("finish is noop");
 
     assert_eq!(0, written);
@@ -118,8 +118,8 @@ fn test_transcoder_default_reset_and_finish_are_noops() {
 }
 
 #[test]
-fn test_transcoder_default_finish_reports_output_index_beyond_buffer() {
-    let mut transcoder = CopyTranscoder;
+fn test_buffered_transcoder_default_finish_reports_output_index_beyond_buffer() {
+    let mut transcoder = CopyBufferedTranscoder;
     let mut output = [];
 
     let error = transcoder
@@ -130,8 +130,8 @@ fn test_transcoder_default_finish_reports_output_index_beyond_buffer() {
 }
 
 #[test]
-fn test_transcoder_finish_requires_one_shot_output_capacity() {
-    let mut transcoder = FinishingTranscoder::default();
+fn test_buffered_transcoder_finish_requires_one_shot_output_capacity() {
+    let mut transcoder = FinishingBufferedTranscoder::default();
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(2), transcoder.max_finish_output_len());

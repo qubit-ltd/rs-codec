@@ -28,7 +28,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `BufferedDecodeEngine`、`BufferedDecodeHooks`、`DecodeAction` 和
   `DecodeContext`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
-- 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus`。
+- 用于调用方管理逻辑流缓冲区转换的 `BufferedTranscoder`、`TranscodeProgress`
+  和 `TranscodeStatus`。
 - 用于表达 transcoder 语义方向的 `BufferedEncoder`、`BufferedDecoder` 和
   `BufferedConverter` marker trait。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
@@ -61,15 +62,15 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecValueDecoder<C>`**：把 `Codec` 包装为
   接收恰好一个完整编码值的 `ValueDecoder<[C::Unit]>`。
 
-### 缓冲区 Transcoder 原语
+### 缓冲区转换原语
 
-- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
+- **`BufferedTranscoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
 - **`BufferedEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
-  `Transcoder` bound。
+  `BufferedTranscoder` bound。
 - **`BufferedDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
-  `Transcoder` bound。
+  `BufferedTranscoder` bound。
 - **`BufferedConverter<InputUnit, OutputUnit>`**：表示 unit-to-unit 缓冲区转换的语义化
-  `Transcoder` bound。
+  `BufferedTranscoder` bound。
 - **`CodecBufferedEncoder<C>`**：把 `Codec` 包装为在调用方输出缓冲区上工作的
   `BufferedEncoder<C::Value, C::Unit>`。
 - **`BufferedEncodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
@@ -188,7 +189,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeAction<Value>` | transcode 阶段的策略动作：需要输入、跳过输入或输出一个值 |
 
-### `Transcoder` 操作
+### `BufferedTranscoder` 操作
 
 | 方法 | 描述 |
 |------|------|

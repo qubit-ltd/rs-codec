@@ -11,9 +11,9 @@
 
 use super::{
     BufferedEncoder,
+    BufferedTranscoder,
     FinishError,
     TranscodeProgress,
-    Transcoder,
     buffered_encode_engine::BufferedEncodeEngine,
     codec_buffered_encode_hooks::CodecBufferedEncodeHooks,
 };
@@ -26,7 +26,7 @@ use crate::{
 /// Encodes values into caller-provided output units by using a [`Codec`].
 ///
 /// `CodecBufferedEncoder` is the default bridge from the low-level unchecked
-/// [`Codec`] contract to the buffered [`Transcoder`] and [`BufferedEncoder`]
+/// [`Codec`] contract to the buffered [`BufferedTranscoder`] and [`BufferedEncoder`]
 /// contracts. It encodes complete values only; when the remaining output
 /// capacity is smaller than `codec.max_units_per_value()`, it stops before
 /// consuming the next input value and reports [`crate::TranscodeStatus::NeedOutput`].
@@ -62,7 +62,7 @@ where
     }
 }
 
-impl<C> Transcoder<C::Value, C::Unit> for CodecBufferedEncoder<C>
+impl<C> BufferedTranscoder<C::Value, C::Unit> for CodecBufferedEncoder<C>
 where
     C: Codec,
 {

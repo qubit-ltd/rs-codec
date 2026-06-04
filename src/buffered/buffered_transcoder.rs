@@ -21,13 +21,13 @@ use super::{
 /// A transcoder instance has a simple lifecycle:
 ///
 /// 1. A newly created or reset instance is ready for a new logical stream.
-/// 2. Call [`Transcoder::transcode`] zero or more times while input is available.
+/// 2. Call [`BufferedTranscoder::transcode`] zero or more times while input is available.
 /// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
 ///    the caller-owned input buffer.
-/// 4. Call [`Transcoder::finish`] after the caller knows no more input remains
+/// 4. Call [`BufferedTranscoder::finish`] after the caller knows no more input remains
 ///    and has handled any incomplete tail. Size this final output with
-///    [`Transcoder::max_finish_output_len`].
-/// 5. After [`Transcoder::finish`] succeeds, call [`Transcoder::reset`] before
+///    [`BufferedTranscoder::max_finish_output_len`].
+/// 5. After [`BufferedTranscoder::finish`] succeeds, call [`BufferedTranscoder::reset`] before
 ///    starting another logical stream with the same instance.
 ///
 /// The method is suitable for:
@@ -36,16 +36,16 @@ use super::{
 /// - stateless and stateful codecs that all return progress-oriented stopping
 ///   reasons.
 ///
-/// `Transcoder` is intentionally independent from any charset semantics:
+/// `BufferedTranscoder` is intentionally independent from any charset semantics:
 ///
-/// - Use `Transcoder` directly for custom, policy-free unit transforms.
-/// - Use `Transcoder` when you want to own malformed/unmappable decisions at the call site.
+/// - Use `BufferedTranscoder` directly for custom, policy-free unit transforms.
+/// - Use `BufferedTranscoder` when you want to own malformed/unmappable decisions at the call site.
 ///
 /// # Example: streaming byte-to-word decoder
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;
-/// use qubit_codec::{Transcoder, TranscodeProgress, TranscodeStatus};
+/// use qubit_codec::{BufferedTranscoder, TranscodeProgress, TranscodeStatus};
 ///
 /// #[derive(Default)]
 /// struct U16BeBytesDecoder;
@@ -56,7 +56,7 @@ use super::{
 ///     InvalidOutputIndex,
 /// }
 ///
-/// impl Transcoder<u8, u16> for U16BeBytesDecoder {
+/// impl BufferedTranscoder<u8, u16> for U16BeBytesDecoder {
 ///     type Error = U16BeBytesDecodeError;
 ///
 ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
@@ -155,7 +155,7 @@ use super::{
 ///
 /// - `Input`: Input unit type accepted by this transcoder.
 /// - `Output`: Output unit type produced by this transcoder.
-pub trait Transcoder<Input, Output> {
+pub trait BufferedTranscoder<Input, Output> {
     /// Error reported for semantic conversion failures.
     type Error;
 
@@ -180,8 +180,8 @@ pub trait Transcoder<Input, Output> {
     /// Returns an upper bound for output units produced by stream finalization.
     ///
     /// This bound is evaluated against the transcoder's current state. It does
-    /// not include output that may be produced by future [`Transcoder::transcode`]
-    /// calls. Use it before [`Transcoder::finish`] when the caller wants to size
+    /// not include output that may be produced by future [`BufferedTranscoder::transcode`]
+    /// calls. Use it before [`BufferedTranscoder::finish`] when the caller wants to size
     /// a final output buffer for the already supplied input.
     ///
     /// # Returns
@@ -248,22 +248,22 @@ pub trait Transcoder<Input, Output> {
     /// incomplete input tail reported by `transcode`. It emits final output
     /// derived from internal state, such as reset bytes, checksums, digests, or
     /// trailers. The caller must provide enough output capacity for
-    /// [`Transcoder::max_finish_output_len`].
+    /// [`BufferedTranscoder::max_finish_output_len`].
     ///
     /// After `finish` succeeds, the logical stream is closed. Portable callers
-    /// should call [`Transcoder::reset`] before passing input for another
+    /// should call [`BufferedTranscoder::reset`] before passing input for another
     /// logical stream to the same instance.
     ///
     /// # Example
     ///
     /// ```rust
     /// use core::num::NonZeroUsize;
-    /// use qubit_codec::{Transcoder, TranscodeStatus};
+    /// use qubit_codec::{BufferedTranscoder, TranscodeStatus};
     ///
     /// #[derive(Default)]
     /// struct ByteCopy;
     ///
-    /// impl Transcoder<u8, u8> for ByteCopy {
+    /// impl BufferedTranscoder<u8, u8> for ByteCopy {
     ///     type Error = core::convert::Infallible;
     ///
     ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {

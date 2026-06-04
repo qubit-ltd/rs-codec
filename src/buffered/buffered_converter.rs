@@ -9,11 +9,11 @@
  ******************************************************************************/
 //! Semantic marker trait for buffered converters.
 
-use super::Transcoder;
+use super::BufferedTranscoder;
 
 /// Converts encoded units of one representation into encoded units of another.
 ///
-/// `BufferedConverter` refines [`Transcoder`] for implementations whose input
+/// `BufferedConverter` refines [`BufferedTranscoder`] for implementations whose input
 /// and output are both encoded unit streams. Any intermediate logical values
 /// are implementation details of the concrete converter.
 ///
@@ -25,4 +25,4 @@ use super::Transcoder;
 ///
 /// - `InputUnit`: Encoded input unit type accepted by the converter.
 /// - `OutputUnit`: Encoded output unit type produced by the converter.
-pub trait BufferedConverter<InputUnit, OutputUnit>: Transcoder<InputUnit, OutputUnit> {}
+pub trait BufferedConverter<InputUnit, OutputUnit>: BufferedTranscoder<InputUnit, OutputUnit> {}

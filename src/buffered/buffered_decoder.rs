@@ -9,11 +9,11 @@
  ******************************************************************************/
 //! Semantic marker trait for buffered decoders.
 
-use super::Transcoder;
+use super::BufferedTranscoder;
 
 /// Decodes encoded units into logical values over caller-provided buffers.
 ///
-/// `BufferedDecoder` refines [`Transcoder`] for implementations whose input is
+/// `BufferedDecoder` refines [`BufferedTranscoder`] for implementations whose input is
 /// the encoded unit stream and whose output is the logical value stream. The
 /// trait adds no methods; it exists to make generic bounds distinguish decoding
 /// direction from encoding and unit-to-unit conversion.
@@ -25,4 +25,4 @@ use super::Transcoder;
 ///
 /// - `Unit`: Encoded unit type accepted by the decoder.
 /// - `Value`: Logical value type produced by the decoder.
-pub trait BufferedDecoder<Unit, Value>: Transcoder<Unit, Value> {}
+pub trait BufferedDecoder<Unit, Value>: BufferedTranscoder<Unit, Value> {}

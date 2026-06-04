@@ -2,6 +2,7 @@ mod buffered_convert_engine_tests;
 mod buffered_decode_engine_tests;
 mod buffered_encode_engine_tests;
 mod buffered_traits_tests;
+mod buffered_transcoder_tests;
 mod codec_buffered_converter_tests;
 mod codec_buffered_decoder_tests;
 mod codec_buffered_encoder_tests;
@@ -10,6 +11,5 @@ mod finish_error_tests;
 mod support_tests;
 mod transcode_progress_tests;
 mod transcode_status_tests;
-mod transcoder_tests;
 
 pub(crate) use support_tests::nz;

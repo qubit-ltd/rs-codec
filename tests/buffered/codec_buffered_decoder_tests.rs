@@ -11,12 +11,12 @@
 
 use qubit_codec::{
     BufferedDecoder,
+    BufferedTranscoder,
     Codec,
     CodecBufferedDecoder,
     CodecDecodeError,
     FinishError,
     TranscodeStatus,
-    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

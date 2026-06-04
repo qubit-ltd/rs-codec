@@ -11,9 +11,9 @@
 
 use super::{
     BufferedDecoder,
+    BufferedTranscoder,
     FinishError,
     TranscodeProgress,
-    Transcoder,
     buffered_decode_engine::BufferedDecodeEngine,
     codec_buffered_decode_hooks::CodecBufferedDecodeHooks,
 };
@@ -26,7 +26,7 @@ use crate::{
 /// Decodes encoded units into caller-provided value buffers by using a [`Codec`].
 ///
 /// `CodecBufferedDecoder` is a policy-free bridge from the low-level unchecked
-/// [`Codec`] contract to [`Transcoder`] and [`BufferedDecoder`]. It leaves
+/// [`Codec`] contract to [`BufferedTranscoder`] and [`BufferedDecoder`]. It leaves
 /// incomplete input tails in the caller-provided input slice; callers own
 /// input-buffer refill and EOF incomplete-tail policy.
 ///
@@ -61,7 +61,7 @@ where
     }
 }
 
-impl<C> Transcoder<C::Unit, C::Value> for CodecBufferedDecoder<C>
+impl<C> BufferedTranscoder<C::Unit, C::Value> for CodecBufferedDecoder<C>
 where
     C: Codec,
 {

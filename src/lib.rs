@@ -36,6 +36,7 @@ pub use buffered::{
     BufferedEncodeEngine,
     BufferedEncodeHooks,
     BufferedEncoder,
+    BufferedTranscoder,
     CapacityError,
     CodecBufferedConverter,
     CodecBufferedDecoder,
@@ -47,7 +48,6 @@ pub use buffered::{
     FinishError,
     TranscodeProgress,
     TranscodeStatus,
-    Transcoder,
 };
 pub use byte_order::{
     BigEndian,

@@ -12,7 +12,7 @@
 /// Encodes a borrowed input value into an owned representation.
 ///
 /// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
-/// single-value buffer encoding and [`crate::Transcoder`] for batch conversion over
+/// single-value buffer encoding and [`crate::BufferedTranscoder`] for batch conversion over
 /// caller-provided buffers.
 pub trait ValueEncoder<Input: ?Sized> {
     /// Encoded output type.

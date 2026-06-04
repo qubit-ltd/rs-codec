@@ -11,6 +11,7 @@
 
 use qubit_codec::{
     BufferedConverter,
+    BufferedTranscoder,
     CapacityError,
     Codec,
     CodecBufferedConverter,
@@ -18,7 +19,6 @@ use qubit_codec::{
     CodecDecodeError,
     CodecEncodeError,
     TranscodeStatus,
-    Transcoder,
 };
 
 use std::{
@@ -293,13 +293,16 @@ fn test_codec_buffered_converter_transcoder_trait_methods_forward() {
     let mut converter = Converter::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(2), <Converter as Transcoder<u8, u8>>::max_output_len(&converter, 1));
+    assert_eq!(
+        Ok(2),
+        <Converter as BufferedTranscoder<u8, u8>>::max_output_len(&converter, 1)
+    );
     assert_eq!(
         Ok(0),
-        <Converter as Transcoder<u8, u8>>::max_finish_output_len(&converter),
+        <Converter as BufferedTranscoder<u8, u8>>::max_finish_output_len(&converter),
     );
 
-    let progress = <Converter as Transcoder<u8, u8>>::transcode(&mut converter, &[7], 0, &mut output, 0)
+    let progress = <Converter as BufferedTranscoder<u8, u8>>::transcode(&mut converter, &[7], 0, &mut output, 0)
         .expect("trait transcoder dispatch should convert through the adapter");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
@@ -307,10 +310,10 @@ fn test_codec_buffered_converter_transcoder_trait_methods_forward() {
     assert_eq!(2, progress.written());
     assert_eq!([7, 8], output);
 
-    <Converter as Transcoder<u8, u8>>::reset(&mut converter);
+    <Converter as BufferedTranscoder<u8, u8>>::reset(&mut converter);
     assert_eq!(
         Ok(0),
-        <Converter as Transcoder<u8, u8>>::finish(&mut converter, &mut output, 0),
+        <Converter as BufferedTranscoder<u8, u8>>::finish(&mut converter, &mut output, 0),
     );
 }
 

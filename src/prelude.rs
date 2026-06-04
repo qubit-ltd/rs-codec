@@ -21,6 +21,7 @@ pub use crate::{
     BufferedConverter,
     BufferedDecoder,
     BufferedEncoder,
+    BufferedTranscoder,
     ByteOrder,
     ByteOrderSpec,
     CapacityError,
@@ -39,7 +40,6 @@ pub use crate::{
     LittleEndian,
     TranscodeProgress,
     TranscodeStatus,
-    Transcoder,
     ValueDecoder,
     ValueEncoder,
 };

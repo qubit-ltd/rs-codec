@@ -20,10 +20,10 @@ use core::{
 use super::{
     BufferedConvertEngine,
     BufferedConverter,
+    BufferedTranscoder,
     FinishError,
     TranscodeProgress,
     TranscodeStatus,
-    Transcoder,
     codec_buffered_convert_hooks::CodecBufferedConvertHooks,
 };
 use crate::{
@@ -304,7 +304,7 @@ where
     }
 }
 
-impl<D, E> Transcoder<D::Unit, E::Unit> for CodecBufferedConverter<D, E>
+impl<D, E> BufferedTranscoder<D::Unit, E::Unit> for CodecBufferedConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
