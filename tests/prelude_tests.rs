@@ -143,8 +143,15 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let convert_error = CodecConvertError::<core::convert::Infallible, core::convert::Infallible>::decode(decode_error);
     assert!(matches!(convert_error, CodecConvertError::Decode { .. }));
 
-    let encode_error = CodecEncodeError::<core::convert::Infallible>::invalid_input_index(2, 1);
-    assert!(matches!(encode_error, CodecEncodeError::InvalidInputIndex { .. }));
+    let encode_error = CodecEncodeError::<core::convert::Infallible>::invalid_output_index(2, 1);
+    assert!(matches!(encode_error, CodecEncodeError::InvalidOutputIndex { .. }));
+    let convert_error = CodecConvertError::<core::convert::Infallible, core::convert::Infallible>::encode(encode_error);
+    assert!(matches!(
+        convert_error,
+        CodecConvertError::Encode {
+            source: CodecEncodeError::InvalidOutputIndex { .. },
+        },
+    ));
 
     let mut output = [0_u8; 1];
     let context = EncodeContext {

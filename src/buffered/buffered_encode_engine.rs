@@ -132,6 +132,15 @@ use crate::{
 ///     ) -> Self::Error {
 ///         CodecEncodeError::invalid_input_index(index, input_len)
 ///     }
+///
+///     fn invalid_output_index(
+///         &mut self,
+///         _codec: &ByteCodec,
+///         index: usize,
+///         output_len: usize,
+///     ) -> Self::Error {
+///         CodecEncodeError::invalid_output_index(index, output_len)
+///     }
 /// }
 ///
 /// let mut engine = BufferedEncodeEngine::new(ByteCodec, StrictHooks);
@@ -295,8 +304,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when `input_index` is outside `input`, or when hook
-    /// planning or writing rejects a value.
+    /// Returns hook errors when `input_index` is outside `input`, when
+    /// `output_index` is outside `output`, or when hook planning or writing
+    /// rejects a value.
     pub fn transcode(
         &mut self,
         input: &[C::Value],
@@ -307,11 +317,11 @@ where
         if input_index > input.len() {
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
+        if output_index > output.len() {
+            return Err(self.hooks.invalid_output_index(&self.codec, output_index, output.len()));
+        }
         debug_assert_unit_bounds::<C>(&self.codec);
         let mut state = EncodeState::new(input, input_index, output, output_index);
-        if !state.output_cursor_in_bounds() {
-            return Ok(state.need_output_progress(self.codec.max_units_per_value().get()));
-        }
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
@@ -324,6 +334,21 @@ where
         }
 
         Ok(state.complete_progress())
+    }
+
+    /// Builds an invalid-output-index error through the configured hooks.
+    ///
+    /// # Parameters
+    ///
+    /// - `index`: Invalid output index.
+    /// - `output_len`: Output slice length.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific error.
+    #[inline(always)]
+    pub(crate) fn invalid_output_index(&mut self, index: usize, output_len: usize) -> H::Error {
+        self.hooks.invalid_output_index(&self.codec, index, output_len)
     }
 
     /// Finishes hook-owned output after EOF.
@@ -396,7 +421,7 @@ where
         // SAFETY: The capacity check above guarantees the bound requested by
         // the prepared plan.
         let written = unsafe { self.write_prepared_value(context, plan) }?;
-        debug_assert!(
+        assert!(
             written <= max_output_units,
             "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",
         );

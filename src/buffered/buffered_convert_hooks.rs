@@ -9,8 +9,6 @@
  ******************************************************************************/
 //! Policy hooks used by buffered convert engines.
 
-use core::num::NonZeroUsize;
-
 use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
     buffered_encode_hooks::BufferedEncodeHooks,
@@ -111,24 +109,6 @@ where
     ///
     /// Returns the hook-specific invalid-input-index error.
     fn invalid_input_index(&self, decode_codec: &D, index: usize, input_len: usize) -> Self::Error;
-
-    /// Returns the additional output units requested when `output_index` is invalid.
-    ///
-    /// The default uses the target codec maximum value width.
-    ///
-    /// # Parameters
-    ///
-    /// - `decode_codec`: Source codec owned by the engine.
-    /// - `encode_codec`: Target codec owned by the engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns at least one additional output unit.
-    #[must_use]
-    #[inline(always)]
-    fn invalid_output_additional(&self, _decode_codec: &D, encode_codec: &E) -> NonZeroUsize {
-        encode_codec.max_units_per_value()
-    }
 
     /// Resets conversion-level hook-owned state.
     ///

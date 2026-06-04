@@ -197,6 +197,7 @@ where
     /// # Errors
     ///
     /// Returns hook errors when indices are invalid or concrete conversion fails.
+    /// Invalid output indices are reported through the encode-side error path.
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -209,16 +210,14 @@ where
                 .hooks
                 .invalid_input_index(self.decode_codec(), input_index, input.len()));
         }
+        if output_index > output.len() {
+            let error = self.encode_engine.invalid_output_index(output_index, output.len());
+            return Err(self.hooks.map_encode_error(error));
+        }
         debug_assert_unit_bounds::<D>(self.decode_codec());
         debug_assert_unit_bounds::<E>(self.encode_codec());
 
         let mut state = ConvertState::new(input, input_index, output, output_index);
-        if !state.output_cursor_in_bounds() {
-            let additional = self
-                .hooks
-                .invalid_output_additional(self.decode_codec(), self.encode_codec());
-            return Ok(state.need_output_progress(additional, 0));
-        }
 
         // A retained decoded value must be written before consuming more input,
         // otherwise callers could observe output reordered across buffer turns.

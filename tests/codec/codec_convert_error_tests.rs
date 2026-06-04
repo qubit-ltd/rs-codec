@@ -1,6 +1,7 @@
 use qubit_codec::{
     CodecConvertError,
     CodecDecodeError,
+    CodecEncodeError,
 };
 
 #[test]
@@ -18,11 +19,28 @@ fn test_codec_convert_error_wraps_decode_error_explicitly() {
 
 #[test]
 fn test_codec_convert_error_wraps_encode_error_explicitly() {
-    let error = CodecConvertError::<&'static str, &'static str>::encode("encode failed");
+    let encode = CodecEncodeError::encode("encode failed", 7);
+    let error = CodecConvertError::<&'static str, &'static str>::encode(encode);
 
     assert_eq!(
         CodecConvertError::Encode {
-            source: "encode failed",
+            source: CodecEncodeError::Encode {
+                source: "encode failed",
+                input_index: 7,
+            },
+        },
+        error,
+    );
+}
+
+#[test]
+fn test_codec_convert_error_wraps_invalid_output_index() {
+    let encode = CodecEncodeError::<&'static str>::invalid_output_index(5, 2);
+    let error = CodecConvertError::<&'static str, &'static str>::encode(encode);
+
+    assert_eq!(
+        CodecConvertError::Encode {
+            source: CodecEncodeError::InvalidOutputIndex { index: 5, len: 2 },
         },
         error,
     );

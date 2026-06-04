@@ -117,7 +117,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns an encode error if encoding cannot continue under current policy.
+    /// Returns an encode error when indices are invalid or when encoding cannot
+    /// continue under current policy.
     #[inline(always)]
     fn transcode(
         &mut self,

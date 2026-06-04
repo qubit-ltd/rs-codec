@@ -87,16 +87,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         }
     }
 
-    /// Returns whether the output cursor is within the visible output slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when `output_cursor` is at most `output.len()`.
-    #[inline(always)]
-    pub(super) fn output_cursor_in_bounds(&self) -> bool {
-        self.output_cursor <= self.output.len()
-    }
-
     /// Returns the number of writable output units from the current cursor.
     ///
     /// # Returns
@@ -118,7 +108,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
     pub(super) fn accept_written_value(&mut self, written: usize) {
-        debug_assert!(
+        assert!(
             written <= self.available_output(),
             "encode step wrote beyond available output",
         );
@@ -138,23 +128,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
             self.input_cursor - self.input_start,
             self.output_cursor - self.output_start,
         )
-    }
-
-    /// Returns progress for a missing output capacity bound.
-    ///
-    /// # Parameters
-    ///
-    /// - `required`: Output units required before the current value can be encoded.
-    ///
-    /// # Returns
-    ///
-    /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
-    #[inline(always)]
-    pub(super) fn need_output_progress(&self, required: usize) -> TranscodeProgress {
-        let available = self.available_output();
-        debug_assert!(required > available, "need-output progress requires missing capacity");
-        let additional = NonZeroUsize::new(required - available).expect("missing output is non-zero");
-        self.need_output_progress_with(additional, available)
     }
 
     /// Returns progress for a known missing output capacity.

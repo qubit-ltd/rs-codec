@@ -83,14 +83,54 @@ unsafe impl Codec for PrefixCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverconsumingCodec;
+
+unsafe impl Codec for OverconsumingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        unsafe { core::num::NonZeroUsize::new_unchecked(2) }
+    }
+
+    unsafe fn decode_unchecked(
+        &self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        Ok((input[index], unsafe { core::num::NonZeroUsize::new_unchecked(2) }))
+    }
+
+    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum EngineError {
     InvalidInputIndex { index: usize, input_len: usize },
+    InvalidOutputIndex { index: usize, output_len: usize },
 }
 
 impl EngineError {
     fn invalid_input_index(index: usize, input_len: usize) -> Self {
         Self::InvalidInputIndex { index, input_len }
+    }
+
+    fn invalid_output_index(index: usize, output_len: usize) -> Self {
+        Self::InvalidOutputIndex { index, output_len }
     }
 }
 
@@ -120,6 +160,34 @@ impl BufferedDecodeHooks<PrefixCodec> for ReplacingHooks {
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
     }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct OverconsumingHooks;
+
+impl BufferedDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
+    type Error = EngineError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &OverconsumingCodec,
+        error: core::convert::Infallible,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match error {}
+    }
+
+    fn invalid_input_index(&mut self, _codec: &OverconsumingCodec, index: usize, input_len: usize) -> Self::Error {
+        EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &OverconsumingCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -146,6 +214,10 @@ impl BufferedDecodeHooks<PrefixCodec> for SkippingHooks {
 
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
     }
 }
 
@@ -181,6 +253,10 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
 
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
     }
 
     fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
@@ -236,6 +312,10 @@ impl BufferedDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
     }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -262,6 +342,10 @@ impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
 
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
     }
 
     fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
@@ -299,6 +383,10 @@ impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 
     fn invalid_input_index(&mut self, _codec: &PrefixCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &PrefixCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
     }
 
     fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
@@ -370,6 +458,10 @@ impl BufferedDecodeHooks<MinTwoCodec> for ReplacingHooks {
 
     fn invalid_input_index(&mut self, _codec: &MinTwoCodec, index: usize, input_len: usize) -> Self::Error {
         EngineError::invalid_input_index(index, input_len)
+    }
+
+    fn invalid_output_index(&mut self, _codec: &MinTwoCodec, index: usize, output_len: usize) -> Self::Error {
+        EngineError::invalid_output_index(index, output_len)
     }
 }
 
@@ -652,18 +744,26 @@ fn test_buffered_decode_engine_reports_output_bounds_without_consuming_input() {
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 
-    let progress = decoder
+    let error = decoder
         .transcode(&[1], 0, &mut output, 1)
-        .expect("out-of-range output index should request capacity");
+        .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
+        EngineError::InvalidOutputIndex {
+            index: 1,
+            output_len: 0,
         },
-        progress.status(),
+        error,
     );
+}
+
+#[test]
+#[should_panic(expected = "Codec::decode_unchecked consumed beyond available input")]
+fn test_buffered_decode_engine_panics_when_codec_consumes_beyond_available_input() {
+    let mut decoder = BufferedDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
+    let mut output = [0_u8; 1];
+
+    let _ = decoder.transcode(&[1], 0, &mut output, 0);
 }
 
 #[test]

@@ -61,8 +61,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`Codec`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
-  adapter-level encode, decode, and conversion errors without hiding
-  codec-specific failures.
+  adapter-level encode, decode, and conversion errors, including invalid buffer
+  indices, without hiding codec-specific failures.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -129,7 +129,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.5"
+qubit-codec = "0.6"
 ```
 
 ## Quick Start
@@ -176,9 +176,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid input indices |
-| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid indices, or trailing input |
-| `CodecConvertError<D, E>` | Adapter-level converter error that separates decode and encode failures |
+| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
+| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
+| `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
 
 ### Codec Adapters
 

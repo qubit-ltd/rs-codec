@@ -184,20 +184,11 @@ fn test_codec_buffered_decoder_reports_output_index_beyond_buffer() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [];
 
-    let progress = decoder
+    let error = decoder
         .transcode(&[1], 0, &mut output, 1)
-        .expect("out-of-range output index should request capacity");
+        .expect_err("out-of-range output index should fail");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 1,
-            additional: super::nz(1),
-            available: 0,
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+    assert_eq!(CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 }, error,);
 }
 
 #[test]

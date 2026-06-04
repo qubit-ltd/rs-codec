@@ -209,7 +209,8 @@ pub trait Transcoder<Input, Output> {
     /// # Errors
     ///
     /// Returns `Self::Error` for semantic conversion failures that the transcoder's
-    /// policy does not absorb.
+    /// policy does not absorb, including caller-supplied `input_index` or
+    /// `output_index` values outside their corresponding slices.
     fn transcode(
         &mut self,
         input: &[Input],

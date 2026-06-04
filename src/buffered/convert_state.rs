@@ -151,17 +151,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         )
     }
 
-    /// Returns whether the output cursor is within the visible output slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when `output_cursor` is at most `output.len()`.
-    #[must_use]
-    #[inline(always)]
-    pub(crate) fn output_cursor_in_bounds(&self) -> bool {
-        self.output_cursor <= self.output.len()
-    }
-
     /// Advances the input cursor.
     ///
     /// # Parameters
@@ -169,7 +158,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// - `read`: Number of input units consumed by the conversion step.
     #[inline(always)]
     pub(crate) fn advance_input(&mut self, read: usize) {
-        debug_assert!(read <= self.available_input(), "conversion step read beyond input");
+        assert!(read <= self.available_input(), "conversion step read beyond input");
         self.input_cursor += read;
     }
 
@@ -180,7 +169,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// - `written`: Number of output units written by the conversion step.
     #[inline(always)]
     pub(crate) fn advance_output(&mut self, written: usize) {
-        debug_assert!(
+        assert!(
             written <= self.available_output(),
             "conversion step wrote beyond output",
         );

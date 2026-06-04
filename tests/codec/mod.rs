@@ -11,4 +11,5 @@
 
 mod codec_convert_error_tests;
 mod codec_decode_error_tests;
+mod codec_encode_error_tests;
 mod codec_tests;

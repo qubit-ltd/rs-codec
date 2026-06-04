@@ -104,12 +104,7 @@ where
     /// Returns a converter-level encode error.
     #[inline]
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        match error {
-            CodecEncodeError::Encode { source, .. } => CodecConvertError::encode(source),
-            CodecEncodeError::InvalidInputIndex { .. } => {
-                unreachable!("codec converter encodes pending values from in-bounds source positions")
-            }
-        }
+        CodecConvertError::encode(error)
     }
 
     /// Creates an invalid source input index error.

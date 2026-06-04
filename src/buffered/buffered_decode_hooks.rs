@@ -126,6 +126,15 @@ use crate::{
 ///     ) -> Self::Error {
 ///         CodecDecodeError::invalid_input_index(index, input_len)
 ///     }
+///
+///     fn invalid_output_index(
+///         &mut self,
+///         _codec: &MyCodec,
+///         index: usize,
+///         output_len: usize,
+///     ) -> Self::Error {
+///         CodecDecodeError::invalid_output_index(index, output_len)
+///     }
 /// }
 /// ```
 ///
@@ -220,6 +229,23 @@ where
     ///
     /// Returns the hook-specific error representing `index > input_len`.
     fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+
+    /// Creates an error for a caller-supplied output index outside the output slice.
+    ///
+    /// The generic engine detects this before writing any decoded value. The
+    /// hook owns the concrete decoder error type, so it also owns the
+    /// adapter-level error construction.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `index`: Invalid output index supplied by the caller.
+    /// - `output_len`: Length of the output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific error representing `index > output_len`.
+    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///

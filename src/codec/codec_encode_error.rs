@@ -16,7 +16,7 @@ use thiserror::Error;
 /// The wrapped codec remains responsible for domain-specific encode failures.
 /// This type adds adapter-level failures that cannot be represented by the
 /// wrapped codec itself, such as a buffered encoder receiving an invalid input
-/// start index.
+/// or output start index.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 pub enum CodecEncodeError<E> {
     /// The wrapped codec reported an encode error.
@@ -35,6 +35,15 @@ pub enum CodecEncodeError<E> {
         /// Invalid input index supplied by the caller.
         index: usize,
         /// Length of the input slice.
+        len: usize,
+    },
+
+    /// The caller supplied an output index outside the output slice.
+    #[error("invalid output index {index} for output length {len}")]
+    InvalidOutputIndex {
+        /// Invalid output index supplied by the caller.
+        index: usize,
+        /// Length of the output slice.
         len: usize,
     },
 }
@@ -70,5 +79,21 @@ impl<E> CodecEncodeError<E> {
     #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
+    }
+
+    /// Creates an invalid-output-index error.
+    ///
+    /// # Parameters
+    ///
+    /// - `index`: Invalid output index supplied by the caller.
+    /// - `len`: Length of the output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns an invalid-output-index error.
+    #[must_use]
+    #[inline(always)]
+    pub const fn invalid_output_index(index: usize, len: usize) -> Self {
+        Self::InvalidOutputIndex { index, len }
     }
 }

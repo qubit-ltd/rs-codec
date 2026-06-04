@@ -139,6 +139,17 @@ use crate::{
 ///             consumed: NonZeroUsize::MIN,
 ///         }
 ///     }
+///
+///     fn invalid_output_index(
+///         &mut self,
+///         _codec: &ByteCodec,
+///         _index: usize,
+///         _output_len: usize,
+///     ) -> Self::Error {
+///         ByteDecodeError::Malformed {
+///             consumed: NonZeroUsize::MIN,
+///         }
+///     }
 /// }
 ///
 /// let mut engine = BufferedDecodeEngine::<_, _>::new(ByteCodec, ReplacementHooks);
@@ -249,8 +260,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when `input_index` is outside `input`, or when a
-    /// concrete policy hook rejects a value.
+    /// Returns hook errors when `input_index` is outside `input`, when
+    /// `output_index` is outside `output`, or when a concrete policy hook
+    /// rejects a value.
     pub fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -261,11 +273,11 @@ where
         if input_index > input.len() {
             return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
         }
+        if output_index > output.len() {
+            return Err(self.hooks.invalid_output_index(&self.codec, output_index, output.len()));
+        }
         debug_assert_unit_bounds::<C>(&self.codec);
         let mut state = DecodeState::new(input, input_index, output, output_index);
-        if !state.output_cursor_in_bounds() {
-            return Ok(state.need_output_progress());
-        }
 
         while state.has_input() {
             let context = state.context();
@@ -414,7 +426,7 @@ where
     ) -> Result<DecodeStep<C::Value>, H::Error> {
         match result {
             Ok((value, consumed)) => {
-                debug_assert!(
+                assert!(
                     consumed.get() <= context.available,
                     "Codec::decode_unchecked consumed beyond available input",
                 );

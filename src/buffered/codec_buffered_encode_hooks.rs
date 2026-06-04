@@ -93,4 +93,20 @@ where
     fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
         CodecEncodeError::invalid_input_index(index, input_len)
     }
+
+    /// Creates an invalid output index error.
+    ///
+    /// # Parameters
+    ///
+    /// - `_codec`: Low-level codec for context only.
+    /// - `index`: Invalid absolute output index.
+    /// - `output_len`: Output slice length.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encode invalid-output-index error.
+    #[inline(always)]
+    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
+        CodecEncodeError::invalid_output_index(index, output_len)
+    }
 }

@@ -130,6 +130,15 @@ use crate::{
 ///     ) -> Self::Error {
 ///         CodecEncodeError::invalid_input_index(index, input_len)
 ///     }
+///
+///     fn invalid_output_index(
+///         &mut self,
+///         _codec: &C,
+///         index: usize,
+///         output_len: usize,
+///     ) -> Self::Error {
+///         CodecEncodeError::invalid_output_index(index, output_len)
+///     }
 /// }
 /// ```
 ///
@@ -265,6 +274,23 @@ where
     ///
     /// Returns the hook-specific invalid-input-index error.
     fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+
+    /// Builds an error for a caller-supplied output index outside the output slice.
+    ///
+    /// The engine calls this hook before it writes output. Keeping this
+    /// construction in the hook lets codec-backed adapters preserve their own
+    /// concrete error type without a separate public factory trait.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `index`: Invalid absolute output index supplied by the caller.
+    /// - `output_len`: Length of the output slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific invalid-output-index error.
+    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output units.
     ///

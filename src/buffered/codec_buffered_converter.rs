@@ -248,8 +248,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns converter error when source index is invalid or decoding/encoding
-    /// fails under current policy.
+    /// Returns converter error when source or target indices are invalid, or
+    /// when decoding/encoding fails under current policy.
     #[inline(always)]
     pub fn transcode(
         &mut self,
@@ -360,8 +360,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns converter error when source index is invalid or decoding/encoding
-    /// fails under current policy.
+    /// Returns converter error when source or target indices are invalid, or
+    /// when decoding/encoding fails under current policy.
     #[inline(always)]
     fn transcode(
         &mut self,

@@ -80,16 +80,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         self.input_cursor < self.input.len()
     }
 
-    /// Returns whether the output cursor is within the visible output slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when `output_cursor` is at most `output.len()`.
-    #[inline(always)]
-    pub(super) fn output_cursor_in_bounds(&self) -> bool {
-        self.output_cursor <= self.output.len()
-    }
-
     /// Returns whether the output slice has no slot for the next value.
     ///
     /// # Returns
@@ -134,7 +124,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     #[inline(always)]
     pub(super) fn skip(&mut self, consumed: NonZeroUsize) {
         let consumed = consumed.get();
-        debug_assert!(
+        assert!(
             consumed <= self.available(),
             "decode step consumed beyond available input",
         );
@@ -154,11 +144,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     #[inline(always)]
     pub(super) fn emit(&mut self, value: Value, consumed: NonZeroUsize) {
         let consumed = consumed.get();
-        debug_assert!(
+        assert!(
             consumed <= self.available(),
             "decode step consumed beyond available input",
         );
-        debug_assert!(!self.needs_output(), "decode step emitted without output capacity",);
+        assert!(!self.needs_output(), "decode step emitted without output capacity",);
         // SAFETY: `needs_output()` returned false, so the output cursor points
         // at a writable slot.
         unsafe {

@@ -16,6 +16,7 @@ use qubit_codec::{
     CodecBufferedConverter,
     CodecConvertError,
     CodecDecodeError,
+    CodecEncodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -485,16 +486,14 @@ fn test_codec_buffered_converter_reports_invalid_indices() {
         error,
     );
 
-    let progress = converter
+    let error = converter
         .transcode(&[1], 0, &mut output, 3)
-        .expect("out-of-range output index should request capacity");
+        .expect_err("out-of-range output index should fail");
     assert_eq!(
-        TranscodeStatus::NeedOutput {
-            output_index: 3,
-            additional: super::nz(2),
-            available: 0,
+        CodecConvertError::Encode {
+            source: CodecEncodeError::InvalidOutputIndex { index: 3, len: 2 },
         },
-        progress.status(),
+        error,
     );
 }
 
@@ -522,7 +521,10 @@ fn test_codec_buffered_converter_wraps_decode_and_encode_errors() {
         .expect_err("unencodable value should fail");
     assert_eq!(
         CodecConvertError::Encode {
-            source: TestEncodeError,
+            source: CodecEncodeError::Encode {
+                source: TestEncodeError,
+                input_index: 0,
+            },
         },
         error,
     );

@@ -116,7 +116,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a decode error if conversion fails under hook policy.
+    /// Returns a decode error when indices are invalid or when conversion fails
+    /// under hook policy.
     #[inline(always)]
     fn transcode(
         &mut self,

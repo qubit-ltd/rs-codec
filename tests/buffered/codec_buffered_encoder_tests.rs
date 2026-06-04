@@ -175,6 +175,18 @@ fn test_codec_buffered_encoder_reports_partial_output_capacity() {
 }
 
 #[test]
+fn test_codec_buffered_encoder_reports_output_index_beyond_buffer() {
+    let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
+    let mut output = [];
+
+    let error = encoder
+        .transcode(&[3], 0, &mut output, 1)
+        .expect_err("out-of-range output index should fail");
+
+    assert_eq!(CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 }, error);
+}
+
+#[test]
 fn test_codec_buffered_encoder_finish_reports_output_index_beyond_buffer() {
     let mut encoder = CodecBufferedEncoder::new(PairByteCodec);
     let mut output = [];
