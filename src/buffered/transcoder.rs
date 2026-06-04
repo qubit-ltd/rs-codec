@@ -50,8 +50,14 @@ use super::{
 /// #[derive(Default)]
 /// struct U16BeBytesDecoder;
 ///
+/// #[derive(Debug, Eq, PartialEq)]
+/// enum U16BeBytesDecodeError {
+///     InvalidInputIndex,
+///     InvalidOutputIndex,
+/// }
+///
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
-///     type Error = core::convert::Infallible;
+///     type Error = U16BeBytesDecodeError;
 ///
 ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
@@ -64,6 +70,13 @@ use super::{
 ///         output: &mut [u16],
 ///         output_index: usize,
 ///     ) -> Result<TranscodeProgress, Self::Error> {
+///         if input_index > input.len() {
+///             return Err(U16BeBytesDecodeError::InvalidInputIndex);
+///         }
+///         if output_index > output.len() {
+///             return Err(U16BeBytesDecodeError::InvalidOutputIndex);
+///         }
+///
 ///         let mut read = 0;
 ///         let mut written = 0;
 ///         while input_index + read + 1 < input.len() {
@@ -121,6 +134,15 @@ use super::{
 /// assert_eq!(2, progress.read());
 /// assert_eq!(1, progress.written());
 /// assert_eq!([0x1234, 0], output);
+///
+/// assert!(matches!(
+///     transcoder.transcode(&[0x12], 2, &mut output, 0),
+///     Err(U16BeBytesDecodeError::InvalidInputIndex),
+/// ));
+/// assert!(matches!(
+///     transcoder.transcode(&[0x12], 0, &mut output, 3),
+///     Err(U16BeBytesDecodeError::InvalidOutputIndex),
+/// ));
 /// ```
 ///
 /// The trait is intentionally independent from charset concepts. Implementors
