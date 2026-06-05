@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the encoder trait contract.
 
 use qubit_codec::ValueEncoder;
@@ -25,7 +23,8 @@ impl ValueEncoder<str> for StringEncoder {
 
 #[test]
 fn test_encoder_trait_dispatches_to_implementor() {
-    let encoded = ValueEncoder::<str>::encode(&StringEncoder, "text").expect("encoding should be infallible");
+    let encoded = ValueEncoder::<str>::encode(&StringEncoder, "text")
+        .expect("encoding should be infallible");
 
     assert_eq!("text", encoded);
 }

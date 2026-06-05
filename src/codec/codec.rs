@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Low-level value codec trait.
 
 use core::num::NonZeroUsize;
@@ -25,14 +23,14 @@ use core::num::NonZeroUsize;
 /// exist, so a streaming caller can request more input, report an incomplete
 /// EOF tail. For decoding, this minimum is the smallest safety precondition
 /// checked callers must satisfy before entering
-/// [`decode_unchecked`](Self::decode_unchecked). The maximum is the conservative
-/// bound callers normally use to prove that unchecked writes stay inside the
-/// provided output buffer.
+/// [`decode_unchecked`](Self::decode_unchecked). The maximum is the
+/// conservative bound callers normally use to prove that unchecked writes stay
+/// inside the provided output buffer.
 ///
 /// # Associated Types
 ///
-/// - `Value`: Logical value decoded from or encoded into the buffer. This may be
-///   a scalar such as `u64`, a `char`, or a fixed quantum such as `[u8; 3]`.
+/// - `Value`: Logical value decoded from or encoded into the buffer. This may
+///   be a scalar such as `u64`, a `char`, or a fixed quantum such as `[u8; 3]`.
 /// - `Unit`: Buffer unit used by the encoded representation.
 ///
 /// # Safety
@@ -67,16 +65,16 @@ pub unsafe trait Codec {
     ///
     /// This is a lower bound used by checked callers for planning and fast
     /// impossibility checks. If a streaming decoder has fewer than this many
-    /// readable units, no complete value can be present at the current position.
-    /// If the stream has reached EOF, such a tail is necessarily incomplete;
-    /// otherwise the caller should read more input. Similarly, an encoder or
-    /// transcoder can avoid calling into the codec when the remaining output
-    /// capacity is smaller than this lower bound.
+    /// readable units, no complete value can be present at the current
+    /// position. If the stream has reached EOF, such a tail is necessarily
+    /// incomplete; otherwise the caller should read more input. Similarly,
+    /// an encoder or transcoder can avoid calling into the codec when the
+    /// remaining output capacity is smaller than this lower bound.
     ///
     /// This value does not prove that encoding will fit. For variable-width
     /// representations, a value may require more units, up to
-    /// [`max_units_per_value`](Self::max_units_per_value). For decoding, this is
-    /// the minimum safety precondition required by
+    /// [`max_units_per_value`](Self::max_units_per_value). For decoding, this
+    /// is the minimum safety precondition required by
     /// [`decode_unchecked`](Self::decode_unchecked); if fewer units are
     /// available, a checked caller must request more input or report a closed
     /// incomplete tail without calling into the unchecked method.
@@ -90,7 +88,8 @@ pub unsafe trait Codec {
     #[must_use]
     fn min_units_per_value(&self) -> NonZeroUsize;
 
-    /// Returns the maximum non-zero unit count needed to encode or decode one value.
+    /// Returns the maximum non-zero unit count needed to encode or decode one
+    /// value.
     ///
     /// # Returns
     ///
@@ -119,9 +118,10 @@ pub unsafe trait Codec {
     ///
     /// The caller must guarantee that `index` is a valid boundary in `input`
     /// and that at least [`min_units_per_value`](Self::min_units_per_value)
-    /// units are readable from `index`. Implementations must not read beyond the
-    /// currently available units under that precondition. They may return
-    /// `Self::DecodeError` when those units are a valid but incomplete prefix.
+    /// units are readable from `index`. Implementations must not read beyond
+    /// the currently available units under that precondition. They may
+    /// return `Self::DecodeError` when those units are a valid but
+    /// incomplete prefix.
     ///
     /// On success, implementations must return a consumed unit count no larger
     /// than the available input. The return type guarantees that successful

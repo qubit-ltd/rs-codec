@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Generic encode error used by codec-backed encoder adapters.
 
 use thiserror::Error;
@@ -62,7 +60,10 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn encode(source: E, input_index: usize) -> Self {
-        Self::Encode { source, input_index }
+        Self::Encode {
+            source,
+            input_index,
+        }
     }
 
     /// Creates an invalid-input-index error.

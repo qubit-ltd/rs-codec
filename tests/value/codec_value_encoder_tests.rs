@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
 use qubit_codec::{
@@ -44,10 +42,16 @@ unsafe impl Codec for PairByteCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index + 2 <= output.len());
 
-        // SAFETY: The caller guarantees that two bytes are writable from `index`.
+        // SAFETY: The caller guarantees that two bytes are writable from
+        // `index`.
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
@@ -85,7 +89,12 @@ unsafe impl Codec for RejectOddCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         if !value.is_multiple_of(2) {
             return Err("odd value");
         }
@@ -126,7 +135,12 @@ unsafe impl Codec for OverreportingEncodeCodec {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
@@ -160,7 +174,8 @@ unsafe impl Codec for NonCloneValueCodec {
         &self,
         input: &[u8],
         index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError>
+    {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -188,17 +203,22 @@ unsafe impl Codec for NonCloneValueCodec {
 fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
     let encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
 
-    let output = ValueEncoder::<u8>::encode(&encoder, &7).expect("encoding should be infallible");
+    let output = ValueEncoder::<u8>::encode(&encoder, &7)
+        .expect("encoding should be infallible");
 
     assert_eq!(vec![7, 8], output);
 }
 
 #[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
-    let encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
+    let encoder =
+        CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
 
-    let output = ValueEncoder::<NonCloneValue>::encode(&encoder, &NonCloneValue { value: 11 })
-        .expect("encoding should not require cloning the value");
+    let output = ValueEncoder::<NonCloneValue>::encode(
+        &encoder,
+        &NonCloneValue { value: 11 },
+    )
+    .expect("encoding should not require cloning the value");
 
     assert_eq!(vec![11], output);
 }
@@ -207,15 +227,20 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 fn test_codec_value_encoder_propagates_encode_error() {
     let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
-    let error = ValueEncoder::<u8>::encode(&encoder, &7).expect_err("odd value should be rejected");
+    let error = ValueEncoder::<u8>::encode(&encoder, &7)
+        .expect_err("odd value should be rejected");
 
     assert_eq!("odd value", error);
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode_unchecked wrote beyond allocated output")]
+#[should_panic(
+    expected = "Codec::encode_unchecked wrote beyond allocated output"
+)]
 fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
-    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
+    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(
+        OverreportingEncodeCodec,
+    );
 
     let _ = ValueEncoder::<u8>::encode(&encoder, &7);
 }

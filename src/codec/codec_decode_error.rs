@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Generic decode error used by codec adapters.
 
 use thiserror::Error;
@@ -31,7 +29,9 @@ pub enum CodecDecodeError<E> {
     },
 
     /// The adapter could not safely call the wrapped codec because input ended.
-    #[error("incomplete input at index {input_index}: required {required_total} units, available {available}")]
+    #[error(
+        "incomplete input at index {input_index}: required {required_total} units, available {available}"
+    )]
     Incomplete {
         /// Absolute input index where the incomplete value starts.
         input_index: usize,
@@ -42,7 +42,9 @@ pub enum CodecDecodeError<E> {
     },
 
     /// A whole-value decode succeeded but left trailing input units.
-    #[error("trailing input after decoded value: consumed {consumed} units, remaining {remaining}")]
+    #[error(
+        "trailing input after decoded value: consumed {consumed} units, remaining {remaining}"
+    )]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -83,7 +85,10 @@ impl<E> CodecDecodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn decode(source: E, input_index: usize) -> Self {
-        Self::Decode { source, input_index }
+        Self::Decode {
+            source,
+            input_index,
+        }
     }
 
     /// Creates an adapter-level incomplete-input error.
@@ -99,7 +104,11 @@ impl<E> CodecDecodeError<E> {
     /// Returns an incomplete-input error.
     #[must_use]
     #[inline(always)]
-    pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
+    pub const fn incomplete(
+        input_index: usize,
+        required_total: usize,
+        available: usize,
+    ) -> Self {
         Self::Incomplete {
             input_index,
             required_total,
@@ -120,7 +129,10 @@ impl<E> CodecDecodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
-        Self::TrailingInput { consumed, remaining }
+        Self::TrailingInput {
+            consumed,
+            remaining,
+        }
     }
 
     /// Creates an invalid-input-index error.

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_codec::prelude::{
     BigEndian,
@@ -81,7 +79,12 @@ unsafe impl Codec for EchoCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
@@ -105,32 +108,53 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     fn _accept_buffered_decode_engine<T>() {}
     fn _accept_buffered_encode_engine<T>() {}
     fn _accept_buffered_convert_engine<T>() {}
-    fn _accept_buffered_decode_hooks<T: qubit_codec::BufferedDecodeHooks<EchoCodec>>() {}
-    fn _accept_buffered_encode_hooks<T: qubit_codec::BufferedEncodeHooks<EchoCodec>>() {}
-    fn _accept_buffered_convert_hooks<T: BufferedConvertHooks<EchoCodec, EchoCodec>>() {}
+    fn _accept_buffered_decode_hooks<
+        T: qubit_codec::BufferedDecodeHooks<EchoCodec>,
+    >() {
+    }
+    fn _accept_buffered_encode_hooks<
+        T: qubit_codec::BufferedEncodeHooks<EchoCodec>,
+    >() {
+    }
+    fn _accept_buffered_convert_hooks<
+        T: BufferedConvertHooks<EchoCodec, EchoCodec>,
+    >() {
+    }
 
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec>>();
     _accept_codec_buffered_encoder::<CodecBufferedEncoder<EchoCodec>>();
     _accept_codec_buffered_decoder::<CodecBufferedDecoder<EchoCodec>>();
-    _accept_codec_buffered_converter::<CodecBufferedConverter<EchoCodec, EchoCodec>>();
-    _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, ()>>();
-    _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, ()>>();
+    _accept_codec_buffered_converter::<
+        CodecBufferedConverter<EchoCodec, EchoCodec>,
+    >();
+    _accept_buffered_decode_engine::<
+        qubit_codec::BufferedDecodeEngine<EchoCodec, ()>,
+    >();
+    _accept_buffered_encode_engine::<
+        qubit_codec::BufferedEncodeEngine<EchoCodec, ()>,
+    >();
     let codec = EchoCodec;
 
-    let encoded = ValueEncoder::<str>::encode(&codec, "abc").expect("echo encode should be infallible");
-    let decoded = ValueDecoder::<str>::decode(&codec, &encoded).expect("echo decode should be infallible");
+    let encoded = ValueEncoder::<str>::encode(&codec, "abc")
+        .expect("echo encode should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&codec, &encoded)
+        .expect("echo decode should be infallible");
     assert_eq!("abc", decoded);
 
     let progress = TranscodeProgress::complete(1, 2);
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(
-        FinishError::<core::convert::Infallible>::InvalidOutputIndex { index: 1, len: 0 },
+        FinishError::<core::convert::Infallible>::InvalidOutputIndex {
+            index: 1,
+            len: 0
+        },
         FinishError::invalid_output_index(1, 0),
     );
 
-    let decode_error = CodecDecodeError::<core::convert::Infallible>::incomplete(0, 2, 1);
+    let decode_error =
+        CodecDecodeError::<core::convert::Infallible>::incomplete(0, 2, 1);
     assert!(matches!(
         decode_error,
         CodecDecodeError::Incomplete {
@@ -140,12 +164,24 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         }
     ));
 
-    let convert_error = CodecConvertError::<core::convert::Infallible, core::convert::Infallible>::decode(decode_error);
+    let convert_error = CodecConvertError::<
+        core::convert::Infallible,
+        core::convert::Infallible,
+    >::decode(decode_error);
     assert!(matches!(convert_error, CodecConvertError::Decode { .. }));
 
-    let encode_error = CodecEncodeError::<core::convert::Infallible>::invalid_output_index(2, 1);
-    assert!(matches!(encode_error, CodecEncodeError::InvalidOutputIndex { .. }));
-    let convert_error = CodecConvertError::<core::convert::Infallible, core::convert::Infallible>::encode(encode_error);
+    let encode_error =
+        CodecEncodeError::<core::convert::Infallible>::invalid_output_index(
+            2, 1,
+        );
+    assert!(matches!(
+        encode_error,
+        CodecEncodeError::InvalidOutputIndex { .. }
+    ));
+    let convert_error = CodecConvertError::<
+        core::convert::Infallible,
+        core::convert::Infallible,
+    >::encode(encode_error);
     assert!(matches!(
         convert_error,
         CodecConvertError::Encode {
@@ -167,6 +203,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(3, encode_plan.max_output_units);
     assert_eq!("action", encode_plan.action);
 
-    let (decoded, consumed) = unsafe { codec.decode_unchecked(&[1], 0) }.expect("decode should be infallible");
+    let (decoded, consumed) = unsafe { codec.decode_unchecked(&[1], 0) }
+        .expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));
 }

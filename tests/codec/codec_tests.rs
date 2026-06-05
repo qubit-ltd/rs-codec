@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the low-level codec trait.
 
 use qubit_codec::{
@@ -44,7 +42,12 @@ unsafe impl Codec for ByteIncrementCodec {
         Ok((value.wrapping_sub(1), core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
@@ -95,8 +98,10 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
     let codec = ByteIncrementCodec;
     let mut output = [0_u8; 1];
 
-    let written = unsafe { codec.encode_unchecked(&41, &mut output, 0) }.expect("encoding should be infallible");
-    let (decoded, consumed) = unsafe { codec.decode_unchecked(&output, 0) }.expect("decoding should be infallible");
+    let written = unsafe { codec.encode_unchecked(&41, &mut output, 0) }
+        .expect("encoding should be infallible");
+    let (decoded, consumed) = unsafe { codec.decode_unchecked(&output, 0) }
+        .expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
@@ -106,7 +111,9 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()")]
+#[should_panic(
+    expected = "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()"
+)]
 fn test_codec_unit_bounds_panics_when_min_exceeds_max() {
     let encoder = CodecValueEncoder::new(InvalidBoundsCodec);
 

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! # qubit-codec
 //!
 //! Core codec traits and buffer conversion primitives for Rust applications.
@@ -15,7 +13,6 @@
 //! codecs, owned value encoder/decoder helpers, byte-order markers, and
 //! progress-oriented buffer transcoders. Concrete binary, text, misc, and I/O
 //! adapters live in sibling crates.
-//!
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]

@@ -7,7 +7,8 @@ enum TestDecodeError {
 
 #[test]
 fn test_codec_decode_error_wraps_codec_error() {
-    let error = CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
+    let error =
+        CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
 
     assert_eq!(
         CodecDecodeError::Decode {
@@ -49,12 +50,18 @@ fn test_codec_decode_error_reports_trailing_input() {
 fn test_codec_decode_error_reports_invalid_input_index() {
     let error = CodecDecodeError::<TestDecodeError>::invalid_input_index(5, 2);
 
-    assert_eq!(CodecDecodeError::InvalidInputIndex { index: 5, len: 2 }, error);
+    assert_eq!(
+        CodecDecodeError::InvalidInputIndex { index: 5, len: 2 },
+        error
+    );
 }
 
 #[test]
 fn test_codec_decode_error_reports_invalid_output_index() {
     let error = CodecDecodeError::<TestDecodeError>::invalid_output_index(5, 2);
 
-    assert_eq!(CodecDecodeError::InvalidOutputIndex { index: 5, len: 2 }, error);
+    assert_eq!(
+        CodecDecodeError::InvalidOutputIndex { index: 5, len: 2 },
+        error
+    );
 }

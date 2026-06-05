@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
@@ -82,13 +80,18 @@ where
         assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
-            return Err(CodecDecodeError::incomplete(0, min_units, input.len()));
+            return Err(CodecDecodeError::incomplete(
+                0,
+                min_units,
+                input.len(),
+            ));
         }
 
         // SAFETY: The input slice has at least the codec's declared minimum
         // number of readable units from index zero.
         let (value, consumed) =
-            unsafe { self.codec.decode_unchecked(input, 0) }.map_err(|error| CodecDecodeError::decode(error, 0))?;
+            unsafe { self.codec.decode_unchecked(input, 0) }
+                .map_err(|error| CodecDecodeError::decode(error, 0))?;
         let consumed = consumed.get();
         assert!(
             consumed <= input.len(),

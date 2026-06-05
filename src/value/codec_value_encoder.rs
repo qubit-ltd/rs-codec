@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
@@ -20,8 +18,8 @@ use crate::{
 /// `CodecValueEncoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueEncoder`] contract. It
 /// allocates `codec.max_units_per_value()` output units, calls
-/// [`Codec::encode_unchecked`] with the borrowed value, then truncates the owned
-/// output to the number of units actually written.
+/// [`Codec::encode_unchecked`] with the borrowed value, then truncates the
+/// owned output to the number of units actually written.
 ///
 /// # Type Parameters
 ///
@@ -78,10 +76,13 @@ where
     /// declared [`Codec::max_units_per_value`] bound.
     fn encode(&self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
-        let mut output = vec![C::Unit::default(); self.codec.max_units_per_value().get()];
-        // SAFETY: The output buffer is allocated to the codec's declared maximum
-        // width, which is the safety precondition for one-value encoding.
-        let written = unsafe { self.codec.encode_unchecked(input, &mut output, 0) }?;
+        let mut output =
+            vec![C::Unit::default(); self.codec.max_units_per_value().get()];
+        // SAFETY: The output buffer is allocated to the codec's declared
+        // maximum width, which is the safety precondition for one-value
+        // encoding.
+        let written =
+            unsafe { self.codec.encode_unchecked(input, &mut output, 0) }?;
         assert!(
             written <= output.len(),
             "Codec::encode_unchecked wrote beyond allocated output",

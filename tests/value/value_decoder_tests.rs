@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the decoder trait contract.
 
 use qubit_codec::ValueDecoder;
@@ -25,7 +23,8 @@ impl ValueDecoder<str> for StringDecoder {
 
 #[test]
 fn test_decoder_trait_dispatches_to_implementor() {
-    let decoded = ValueDecoder::<str>::decode(&StringDecoder, "text").expect("decoding should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&StringDecoder, "text")
+        .expect("decoding should be infallible");
 
     assert_eq!("text", decoded);
 }
