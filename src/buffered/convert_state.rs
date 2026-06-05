@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Mutable state for one buffered conversion call.
 
 use core::num::NonZeroUsize;
@@ -52,8 +50,16 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// positions.
     #[must_use]
     #[inline(always)]
-    pub(crate) fn new(input: &'a [Input], input_index: usize, output: &'a mut [Output], output_index: usize) -> Self {
-        debug_assert!(input_index <= input.len(), "input index must be within the input slice");
+    pub(crate) fn new(
+        input: &'a [Input],
+        input_index: usize,
+        output: &'a mut [Output],
+        output_index: usize,
+    ) -> Self {
+        debug_assert!(
+            input_index <= input.len(),
+            "input index must be within the input slice"
+        );
         Self {
             input,
             input_start: input_index,
@@ -158,7 +164,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// - `read`: Number of input units consumed by the conversion step.
     #[inline(always)]
     pub(crate) fn advance_input(&mut self, read: usize) {
-        assert!(read <= self.available_input(), "conversion step read beyond input");
+        assert!(
+            read <= self.available_input(),
+            "conversion step read beyond input"
+        );
         self.input_cursor += read;
     }
 
@@ -221,8 +230,18 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
     #[must_use]
     #[inline(always)]
-    pub(crate) fn need_input_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
-        TranscodeProgress::need_input(self.input_cursor, additional, available, self.read(), self.written())
+    pub(crate) fn need_input_progress(
+        &self,
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> TranscodeProgress {
+        TranscodeProgress::need_input(
+            self.input_cursor,
+            additional,
+            available,
+            self.read(),
+            self.written(),
+        )
     }
 
     /// Returns progress for missing output.
@@ -237,7 +256,17 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
     #[must_use]
     #[inline(always)]
-    pub(crate) fn need_output_progress(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
-        TranscodeProgress::need_output(self.output_cursor, additional, available, self.read(), self.written())
+    pub(crate) fn need_output_progress(
+        &self,
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> TranscodeProgress {
+        TranscodeProgress::need_output(
+            self.output_cursor,
+            additional,
+            available,
+            self.read(),
+            self.written(),
+        )
     }
 }

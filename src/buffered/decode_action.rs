@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Decode actions returned by buffered decoder policy hooks.
 
 use core::num::NonZeroUsize;
@@ -67,19 +65,29 @@ impl<Value> DecodeAction<Value> {
     ///
     /// # Panics
     ///
-    /// Panics when a hook returns `NeedInput` with `required_total <= available`
-    /// or a consuming action whose consumed count exceeds `available`.
+    /// Panics when a hook returns `NeedInput` with `required_total <=
+    /// available` or a consuming action whose consumed count exceeds
+    /// `available`.
     #[must_use]
     #[inline]
-    pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
+    pub(super) fn into_step(
+        self,
+        input_index: usize,
+        available: usize,
+    ) -> DecodeStep<Value> {
         match self {
-            Self::NeedInput { required_total } => {
-                DecodeStep::need_input(Self::missing_input(required_total, available), available)
+            Self::NeedInput { required_total } => DecodeStep::need_input(
+                Self::missing_input(required_total, available),
+                available,
+            ),
+            Self::Skip { consumed } => {
+                DecodeStep::skipped(Self::bound_consumed(consumed, available))
             }
-            Self::Skip { consumed } => DecodeStep::skipped(Self::bound_consumed(consumed, available)),
-            Self::Emit { value, consumed } => {
-                DecodeStep::decoded(value, Self::bound_consumed(consumed, available), input_index)
-            }
+            Self::Emit { value, consumed } => DecodeStep::decoded(
+                value,
+                Self::bound_consumed(consumed, available),
+                input_index,
+            ),
         }
     }
 
@@ -87,7 +95,8 @@ impl<Value> DecodeAction<Value> {
     ///
     /// # Parameters
     ///
-    /// - `required_total`: Total source units required from the current value start.
+    /// - `required_total`: Total source units required from the current value
+    ///   start.
     /// - `available`: Source units already visible at the current value start.
     ///
     /// # Returns
@@ -109,7 +118,8 @@ impl<Value> DecodeAction<Value> {
         unsafe { NonZeroUsize::new_unchecked(additional) }
     }
 
-    /// Validates a policy-reported consumed source-unit count against available input.
+    /// Validates a policy-reported consumed source-unit count against available
+    /// input.
     ///
     /// # Parameters
     ///
@@ -125,7 +135,10 @@ impl<Value> DecodeAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[must_use]
     #[inline(always)]
-    fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
+    fn bound_consumed(
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> NonZeroUsize {
         assert!(available > 0, "DecodeAction cannot consume empty input");
         assert!(
             consumed.get() <= available,

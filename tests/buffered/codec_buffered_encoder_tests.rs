@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
@@ -49,10 +47,16 @@ unsafe impl Codec for PairByteCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index + 2 <= output.len());
 
-        // SAFETY: The caller guarantees that two bytes are writable from `index`.
+        // SAFETY: The caller guarantees that two bytes are writable from
+        // `index`.
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
@@ -90,7 +94,12 @@ unsafe impl Codec for RejectOddCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         if !value.is_multiple_of(2) {
             return Err("odd value");
         }
@@ -183,7 +192,10 @@ fn test_codec_buffered_encoder_reports_output_index_beyond_buffer() {
         .transcode(&[3], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 }, error);
+    assert_eq!(
+        CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error
+    );
 }
 
 #[test]

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Mutable state for one buffered encode call.
 
 use core::num::NonZeroUsize;
@@ -47,8 +45,16 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns initialized encode state with cursors at the requested start
     /// positions.
     #[inline(always)]
-    pub(super) fn new(input: &'a [Value], input_index: usize, output: &'a mut [Unit], output_index: usize) -> Self {
-        debug_assert!(input_index <= input.len(), "input index must be within the input slice");
+    pub(super) fn new(
+        input: &'a [Value],
+        input_index: usize,
+        output: &'a mut [Unit],
+        output_index: usize,
+    ) -> Self {
+        debug_assert!(
+            input_index <= input.len(),
+            "input index must be within the input slice"
+        );
 
         Self {
             input,
@@ -76,7 +82,9 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) unsafe fn context_unchecked(&mut self) -> EncodeContext<'_, Value, Unit> {
+    pub(super) unsafe fn context_unchecked(
+        &mut self,
+    ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { self.input.get_unchecked(self.input_cursor) };
         EncodeContext {
@@ -134,14 +142,20 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// # Parameters
     ///
-    /// - `additional`: Additional output units required before encoding can continue.
+    /// - `additional`: Additional output units required before encoding can
+    ///   continue.
     /// - `available`: Output units currently writable at the stop boundary.
     ///
     /// # Returns
     ///
-    /// Returns [`TranscodeProgress::need_output`] with missing-capacity counters.
+    /// Returns [`TranscodeProgress::need_output`] with missing-capacity
+    /// counters.
     #[inline(always)]
-    pub(super) fn need_output_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
+    pub(super) fn need_output_progress_with(
+        &self,
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> TranscodeProgress {
         TranscodeProgress::need_output(
             self.output_cursor,
             additional,

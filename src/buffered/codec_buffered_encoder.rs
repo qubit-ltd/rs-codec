@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Buffered encoder adapter backed by a low-level codec.
 
 use super::{
@@ -26,10 +24,11 @@ use crate::{
 /// Encodes values into caller-provided output units by using a [`Codec`].
 ///
 /// `CodecBufferedEncoder` is the default bridge from the low-level unchecked
-/// [`Codec`] contract to the buffered [`BufferedTranscoder`] and [`BufferedEncoder`]
-/// contracts. It encodes complete values only; when the remaining output
-/// capacity is smaller than `codec.max_units_per_value()`, it stops before
-/// consuming the next input value and reports [`crate::TranscodeStatus::NeedOutput`].
+/// [`Codec`] contract to the buffered [`BufferedTranscoder`] and
+/// [`BufferedEncoder`] contracts. It encodes complete values only; when the
+/// remaining output capacity is smaller than `codec.max_units_per_value()`, it
+/// stops before consuming the next input value and reports
+/// [`crate::TranscodeStatus::NeedOutput`].
 ///
 /// # Type Parameters
 ///
@@ -68,7 +67,8 @@ where
 {
     type Error = CodecEncodeError<C::EncodeError>;
 
-    /// Returns the maximum number of output units needed for `input_len` values.
+    /// Returns the maximum number of output units needed for `input_len`
+    /// values.
     ///
     /// # Parameters
     ///
@@ -113,7 +113,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress for consumed input and produced output units.
+    /// Returns conversion progress for consumed input and produced output
+    /// units.
     ///
     /// # Errors
     ///
@@ -127,7 +128,8 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        self.engine.transcode(input, input_index, output, output_index)
+        self.engine
+            .transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -145,9 +147,16 @@ where
     ///
     /// Returns a finish error if retained output cannot be fully emitted.
     #[inline(always)]
-    fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
+    fn finish(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, FinishError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where C: Codec {}
+impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where
+    C: Codec
+{
+}

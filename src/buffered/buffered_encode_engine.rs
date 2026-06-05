@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Reusable buffered encoder engine.
 
 use super::{
@@ -33,11 +31,11 @@ use crate::{
 ///
 /// Use this type to build a streaming encoder over a one-value [`Codec`]. The
 /// engine does not allocate output. It repeatedly asks hooks to plan one input
-/// value, verifies that the caller-provided output slice can hold that plan, and
-/// then lets the hooks write the value. If the next value would not fit, the
-/// engine returns [`crate::TranscodeStatus::NeedOutput`] without consuming that
-/// value; the caller can provide a larger or fresh output buffer and resume
-/// with the returned input index.
+/// value, verifies that the caller-provided output slice can hold that plan,
+/// and then lets the hooks write the value. If the next value would not fit,
+/// the engine returns [`crate::TranscodeStatus::NeedOutput`] without consuming
+/// that value; the caller can provide a larger or fresh output buffer and
+/// resume with the returned input index.
 ///
 /// For the common strict policy that simply wraps codec errors, use
 /// [`crate::CodecBufferedEncoder`]. Use `BufferedEncodeEngine` directly when
@@ -199,18 +197,21 @@ where
     /// # Parameters
     ///
     /// - `input_value`: Input value to be planned.
-    /// - `input_index`: Absolute input value index at which this value is located.
+    /// - `input_index`: Absolute input value index at which this value is
+    ///   located.
     ///
     /// # Returns
     ///
-    /// Returns an encode plan containing the maximum planned output width and action.
+    /// Returns an encode plan containing the maximum planned output width and
+    /// action.
     #[inline(always)]
     pub(crate) fn prepare_value(
         &mut self,
         input_value: &C::Value,
         input_index: usize,
     ) -> Result<EncodePlan<H::PlanAction>, H::Error> {
-        self.hooks.prepare_encode(&self.codec, input_value, input_index)
+        self.hooks
+            .prepare_encode(&self.codec, input_value, input_index)
     }
 
     /// Writes one value using a previously prepared encode context.
@@ -243,7 +244,8 @@ where
         unsafe { self.hooks.write_encode(&self.codec, context, plan) }
     }
 
-    /// Returns a conservative upper bound for output units needed for `input_len` values.
+    /// Returns a conservative upper bound for output units needed for
+    /// `input_len` values.
     ///
     /// # Parameters
     ///
@@ -255,7 +257,10 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
@@ -315,13 +320,22 @@ where
         output_index: usize,
     ) -> Result<TranscodeProgress, H::Error> {
         if input_index > input.len() {
-            return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
+            return Err(self.hooks.invalid_input_index(
+                &self.codec,
+                input_index,
+                input.len(),
+            ));
         }
         if output_index > output.len() {
-            return Err(self.hooks.invalid_output_index(&self.codec, output_index, output.len()));
+            return Err(self.hooks.invalid_output_index(
+                &self.codec,
+                output_index,
+                output.len(),
+            ));
         }
         assert_unit_bounds::<C>(&self.codec);
-        let mut state = EncodeState::new(input, input_index, output, output_index);
+        let mut state =
+            EncodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
@@ -347,16 +361,21 @@ where
     ///
     /// Returns the hook-specific error.
     #[inline(always)]
-    pub(crate) fn invalid_output_index(&mut self, index: usize, output_len: usize) -> H::Error {
-        self.hooks.invalid_output_index(&self.codec, index, output_len)
+    pub(crate) fn invalid_output_index(
+        &mut self,
+        index: usize,
+        output_len: usize,
+    ) -> H::Error {
+        self.hooks
+            .invalid_output_index(&self.codec, index, output_len)
     }
 
     /// Finishes hook-owned output after EOF.
     ///
     /// The engine owns no final output state itself. Hook implementations may
-    /// finish their own retained state and emit final output after the caller has
-    /// supplied all input values. The caller must provide enough output capacity
-    /// for [`BufferedEncodeEngine::max_finish_output_len`].
+    /// finish their own retained state and emit final output after the caller
+    /// has supplied all input values. The caller must provide enough output
+    /// capacity for [`BufferedEncodeEngine::max_finish_output_len`].
     ///
     /// # Parameters
     ///
@@ -376,9 +395,17 @@ where
     ///
     /// Panics when the hook writes or reports more final output units than
     /// [`BufferedEncodeEngine::max_finish_output_len`] declared.
-    pub fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, FinishError<H::Error>> {
+    pub fn finish(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, FinishError<H::Error>> {
         let required = self.max_finish_output_len();
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         let output_end = output_index + required;
         let output = &mut output[..output_end];
         let written = self
@@ -396,12 +423,13 @@ where
     ///
     /// # Parameters
     ///
-    /// - `context`: Current value, absolute input index, and target output cursor.
+    /// - `context`: Current value, absolute input index, and target output
+    ///   cursor.
     ///
     /// # Returns
     ///
-    /// Returns an encode step describing either written output or missing output
-    /// capacity.
+    /// Returns an encode step describing either written output or missing
+    /// output capacity.
     ///
     /// # Errors
     ///
@@ -411,7 +439,8 @@ where
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeStep, H::Error> {
-        let plan = self.prepare_value(context.input_value, context.input_index)?;
+        let plan =
+            self.prepare_value(context.input_value, context.input_index)?;
         let max_output_units = plan.max_output_units;
         let available = context.available_output();
         if available < max_output_units {

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Buffered decoder adapter backed by a low-level codec.
 
 use super::{
@@ -23,12 +21,13 @@ use crate::{
     CodecDecodeError,
 };
 
-/// Decodes encoded units into caller-provided value buffers by using a [`Codec`].
+/// Decodes encoded units into caller-provided value buffers by using a
+/// [`Codec`].
 ///
 /// `CodecBufferedDecoder` is a policy-free bridge from the low-level unchecked
-/// [`Codec`] contract to [`BufferedTranscoder`] and [`BufferedDecoder`]. It leaves
-/// incomplete input tails in the caller-provided input slice; callers own
-/// input-buffer refill and EOF incomplete-tail policy.
+/// [`Codec`] contract to [`BufferedTranscoder`] and [`BufferedDecoder`]. It
+/// leaves incomplete input tails in the caller-provided input slice; callers
+/// own input-buffer refill and EOF incomplete-tail policy.
 ///
 /// # Type Parameters
 ///
@@ -67,7 +66,8 @@ where
 {
     type Error = CodecDecodeError<C::DecodeError>;
 
-    /// Returns an upper bound for decoded values produced from `input_len` units.
+    /// Returns an upper bound for decoded values produced from `input_len`
+    /// units.
     ///
     /// # Parameters
     ///
@@ -85,7 +85,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the number of values that may still be emitted by finishing state.
+    /// Returns the number of values that may still be emitted by finishing
+    /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
@@ -126,7 +127,8 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        self.engine.transcode(input, input_index, output, output_index)
+        self.engine
+            .transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -144,9 +146,16 @@ where
     ///
     /// Returns a finish error if finalization cannot complete.
     #[inline(always)]
-    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
+    fn finish(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<usize, FinishError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C> BufferedDecoder<C::Unit, C::Value> for CodecBufferedDecoder<C> where C: Codec {}
+impl<C> BufferedDecoder<C::Unit, C::Value> for CodecBufferedDecoder<C> where
+    C: Codec
+{
+}

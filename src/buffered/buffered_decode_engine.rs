@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Reusable buffered decoder engine.
 
 use core::num::NonZeroUsize;
@@ -202,7 +200,8 @@ where
         Self { codec, hooks }
     }
 
-    /// Returns an upper bound for decoded values produced from `input_len` units.
+    /// Returns an upper bound for decoded values produced from `input_len`
+    /// units.
     ///
     /// # Parameters
     ///
@@ -214,7 +213,10 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
@@ -271,13 +273,22 @@ where
         output_index: usize,
     ) -> Result<TranscodeProgress, H::Error> {
         if input_index > input.len() {
-            return Err(self.hooks.invalid_input_index(&self.codec, input_index, input.len()));
+            return Err(self.hooks.invalid_input_index(
+                &self.codec,
+                input_index,
+                input.len(),
+            ));
         }
         if output_index > output.len() {
-            return Err(self.hooks.invalid_output_index(&self.codec, output_index, output.len()));
+            return Err(self.hooks.invalid_output_index(
+                &self.codec,
+                output_index,
+                output.len(),
+            ));
         }
         assert_unit_bounds::<C>(&self.codec);
-        let mut state = DecodeState::new(input, input_index, output, output_index);
+        let mut state =
+            DecodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             let context = state.context();
@@ -315,9 +326,17 @@ where
     ///
     /// Panics when the hook writes or reports more final output values than
     /// [`BufferedDecodeEngine::max_finish_output_len`] declared.
-    pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, FinishError<H::Error>> {
+    pub fn finish(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<usize, FinishError<H::Error>> {
         let required = self.max_finish_output_len();
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         let output_end = output_index + required;
         let output = &mut output[..output_end];
         let written = self
@@ -375,7 +394,8 @@ where
     /// # Parameters
     ///
     /// - `input`: Complete input unit slice visible to the caller.
-    /// - `context`: Decode context describing the current source and output cursors.
+    /// - `context`: Decode context describing the current source and output
+    ///   cursors.
     ///
     /// # Returns
     ///
@@ -393,17 +413,20 @@ where
     ) -> Result<DecodeStep<C::Value>, H::Error> {
         let min_units = self.codec.min_units_per_value().get();
         if context.available < min_units {
-            let additional = NonZeroUsize::new(min_units - context.available).expect("missing input is non-zero");
+            let additional = NonZeroUsize::new(min_units - context.available)
+                .expect("missing input is non-zero");
             return Ok(DecodeStep::need_input(additional, context.available));
         }
 
         // SAFETY: The context reports at least `min_units_per_value()` source
         // units available from `context.input_index`.
-        let result = unsafe { self.decode_unchecked_at(input, context.input_index) };
+        let result =
+            unsafe { self.decode_unchecked_at(input, context.input_index) };
         self.handle_decode_result(context, result)
     }
 
-    /// Handles one low-level decode result and returns a normalized decode step.
+    /// Handles one low-level decode result and returns a normalized decode
+    /// step.
     ///
     /// # Parameters
     ///

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Internal pending-value encode step used by buffered converters.
 
 use core::num::NonZeroUsize;
@@ -59,7 +57,11 @@ impl<Value> PendingEncodeStep<Value> {
     ///
     /// Returns a step containing the retained value and shortage.
     #[inline(always)]
-    pub(super) const fn need_output(pending: PendingValue<Value>, additional: NonZeroUsize, available: usize) -> Self {
+    pub(super) const fn need_output(
+        pending: PendingValue<Value>,
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> Self {
         Self::NeedOutput {
             pending,
             additional,

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by buffered decoder engines.
 
 use super::{
@@ -148,7 +146,8 @@ where
     /// Error type returned by the buffered decoder.
     type Error;
 
-    /// Returns an upper bound for decoded values produced from `input_len` units.
+    /// Returns an upper bound for decoded values produced from `input_len`
+    /// units.
     ///
     /// # Parameters
     ///
@@ -161,7 +160,11 @@ where
     /// [`Codec::min_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / codec.min_units_per_value().get())
     }
 
@@ -213,7 +216,8 @@ where
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error>;
 
-    /// Creates an error for a caller-supplied input index outside the input slice.
+    /// Creates an error for a caller-supplied input index outside the input
+    /// slice.
     ///
     /// The generic engine detects this before invoking the codec. The hook owns
     /// the concrete decoder error type, so it also owns the adapter-level error
@@ -228,9 +232,15 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > input_len`.
-    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(
+        &mut self,
+        codec: &C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error;
 
-    /// Creates an error for a caller-supplied output index outside the output slice.
+    /// Creates an error for a caller-supplied output index outside the output
+    /// slice.
     ///
     /// The generic engine detects this before writing any decoded value. The
     /// hook owns the concrete decoder error type, so it also owns the
@@ -245,17 +255,22 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > output_len`.
-    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
+    fn invalid_output_index(
+        &mut self,
+        codec: &C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///
     /// The default implementation is a no-op for stateless decode hooks.
-    /// Stateful hooks may emit final values such as checksums, reset markers, or
-    /// other trailer data. The caller must provide at least
+    /// Stateful hooks may emit final values such as checksums, reset markers,
+    /// or other trailer data. The caller must provide at least
     /// [`BufferedDecodeHooks::max_finish_output_len`] writable slots from
     /// `output_index`. Engines may pass an output slice whose upper bound is
-    /// capped at `output_index + max_finish_output_len`, so implementations must
-    /// not write beyond that declared final-output bound.
+    /// capped at `output_index + max_finish_output_len`, so implementations
+    /// must not write beyond that declared final-output bound.
     ///
     /// # Parameters
     ///
@@ -265,14 +280,19 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the number of values written by finalization. This count must not
-    /// exceed [`BufferedDecodeHooks::max_finish_output_len`].
+    /// Returns the number of values written by finalization. This count must
+    /// not exceed [`BufferedDecodeHooks::max_finish_output_len`].
     ///
     /// # Errors
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
     #[inline]
-    fn finish(&mut self, _codec: &C, _output: &mut [C::Value], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _codec: &C,
+        _output: &mut [C::Value],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 

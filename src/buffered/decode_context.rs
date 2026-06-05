@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Decode context passed to buffered decoder policy hooks.
 
 /// Context for one codec decode attempt inside a buffered decoder engine.
@@ -29,10 +27,13 @@ impl DecodeContext {
     ///
     /// # Parameters
     ///
-    /// - `input_start`: Absolute source index where this `transcode` call starts.
+    /// - `input_start`: Absolute source index where this `transcode` call
+    ///   starts.
     /// - `input_index`: Absolute source index where the attempted value starts.
-    /// - `output_start`: Absolute output index where this `transcode` call starts.
-    /// - `output_index`: Absolute output index where the next value would be written.
+    /// - `output_start`: Absolute output index where this `transcode` call
+    ///   starts.
+    /// - `output_index`: Absolute output index where the next value would be
+    ///   written.
     /// - `available`: Units visible to the codec from `input_index`.
     ///
     /// # Returns

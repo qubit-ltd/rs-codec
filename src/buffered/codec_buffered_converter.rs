@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Buffered converter adapter backed by two low-level codecs.
 
 use core::{
@@ -33,9 +31,11 @@ use crate::{
 };
 
 /// Strict codec-backed converter error type.
-type CodecBufferedConvertError<D, E> = CodecConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError>;
+type CodecBufferedConvertError<D, E> =
+    CodecConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError>;
 
-/// Converts source units to target units through a decoded value by using codecs.
+/// Converts source units to target units through a decoded value by using
+/// codecs.
 ///
 /// The converter decodes one source value with the decoder codec, then encodes
 /// that value with the encoder codec. If the current output buffer cannot hold
@@ -186,7 +186,11 @@ where
     #[inline(always)]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
-            engine: BufferedConvertEngine::new(decoder, encoder, CodecBufferedConvertHooks::new()),
+            engine: BufferedConvertEngine::new(
+                decoder,
+                encoder,
+                CodecBufferedConvertHooks::new(),
+            ),
         }
     }
 
@@ -204,7 +208,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
@@ -258,7 +265,8 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, CodecBufferedConvertError<D, E>> {
-        self.engine.transcode(input, input_index, output, output_index)
+        self.engine
+            .transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -285,8 +293,14 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<usize, FinishError<CodecBufferedConvertError<D, E>>> {
-        let required = self.max_finish_output_len().map_err(FinishError::capacity)?;
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        let required = self
+            .max_finish_output_len()
+            .map_err(FinishError::capacity)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let empty_input: &[D::Unit] = &[];
         let progress = self
@@ -295,10 +309,14 @@ where
         match progress.status() {
             TranscodeStatus::Complete => Ok(progress.written()),
             TranscodeStatus::NeedInput { .. } => {
-                unreachable!("codec converter finish uses empty input and strict no-op decode finish hooks")
+                unreachable!(
+                    "codec converter finish uses empty input and strict no-op decode finish hooks"
+                )
             }
             TranscodeStatus::NeedOutput { .. } => {
-                unreachable!("codec converter finish reserves the complete pending-output bound before draining")
+                unreachable!(
+                    "codec converter finish reserves the complete pending-output bound before draining"
+                )
             }
         }
     }
@@ -356,7 +374,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress for consumed/produced counters and stop reason.
+    /// Returns conversion progress for consumed/produced counters and stop
+    /// reason.
     ///
     /// # Errors
     ///
@@ -370,7 +389,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CodecBufferedConverter::transcode(self, input, input_index, output, output_index)
+        CodecBufferedConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -388,7 +413,11 @@ where
     ///
     /// Returns a finish error for pending output that cannot be finalized.
     #[inline(always)]
-    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
+    fn finish(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, FinishError<Self::Error>> {
         CodecBufferedConverter::finish(self, output, output_index)
     }
 }

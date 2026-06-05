@@ -1,19 +1,18 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Encode context for one buffered encode step.
 
 /// Context for one encode attempt inside a buffered encoder engine.
 ///
 /// The context carries the current input value and output cursor. It does not
 /// contain the prepared [`crate::EncodePlan`]; the engine keeps planning
-/// separate so callers and hooks can distinguish cursor state from policy state.
+/// separate so callers and hooks can distinguish cursor state from policy
+/// state.
 ///
 /// # Type Parameters
 ///

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Error reported while finishing buffered output.
 
 use thiserror::Error;
@@ -38,7 +36,9 @@ pub enum FinishError<E> {
     },
 
     /// The output slice cannot hold all final output.
-    #[error("insufficient finish output at index {output_index}: required {required} units, available {available}")]
+    #[error(
+        "insufficient finish output at index {output_index}: required {required} units, available {available}"
+    )]
     InsufficientOutput {
         /// Absolute output index where finalization would start writing.
         output_index: usize,
@@ -62,7 +62,8 @@ impl<E> FinishError<E> {
     ///
     /// # Parameters
     ///
-    /// - `source`: Capacity planning error reported while computing the finish bound.
+    /// - `source`: Capacity planning error reported while computing the finish
+    ///   bound.
     ///
     /// # Returns
     ///
@@ -102,7 +103,11 @@ impl<E> FinishError<E> {
     /// Returns an insufficient-output finish error.
     #[must_use]
     #[inline(always)]
-    pub const fn insufficient_output(output_index: usize, required: usize, available: usize) -> Self {
+    pub const fn insufficient_output(
+        output_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
         Self::InsufficientOutput {
             output_index,
             required,
@@ -146,7 +151,9 @@ impl<E> FinishError<E> {
     {
         match self {
             Self::Capacity { source } => FinishError::Capacity { source },
-            Self::InvalidOutputIndex { index, len } => FinishError::InvalidOutputIndex { index, len },
+            Self::InvalidOutputIndex { index, len } => {
+                FinishError::InvalidOutputIndex { index, len }
+            }
             Self::InsufficientOutput {
                 output_index,
                 required,
@@ -156,7 +163,9 @@ impl<E> FinishError<E> {
                 required,
                 available,
             },
-            Self::Source { source } => FinishError::Source { source: map(source) },
+            Self::Source { source } => FinishError::Source {
+                source: map(source),
+            },
         }
     }
 
@@ -174,17 +183,25 @@ impl<E> FinishError<E> {
     ///
     /// # Errors
     ///
-    /// Returns [`FinishError::InvalidOutputIndex`] when `output_index` is beyond
-    /// the slice, or [`FinishError::InsufficientOutput`] when fewer than
-    /// `required` units are writable from `output_index`.
+    /// Returns [`FinishError::InvalidOutputIndex`] when `output_index` is
+    /// beyond the slice, or [`FinishError::InsufficientOutput`] when fewer
+    /// than `required` units are writable from `output_index`.
     #[inline]
-    pub fn ensure_output_capacity(output_len: usize, output_index: usize, required: usize) -> Result<(), Self> {
+    pub fn ensure_output_capacity(
+        output_len: usize,
+        output_index: usize,
+        required: usize,
+    ) -> Result<(), Self> {
         if output_index > output_len {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(output_index, required, available));
+            return Err(Self::insufficient_output(
+                output_index,
+                required,
+                available,
+            ));
         }
         Ok(())
     }

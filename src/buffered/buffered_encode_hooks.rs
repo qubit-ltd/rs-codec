@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
 use super::{
@@ -27,8 +25,8 @@ use crate::{
 /// Implement this trait when a buffered encoder needs policy decisions around
 /// individual values while reusing the common engine loop. Examples include
 /// rejecting unsupported values with adapter-level context, consuming values
-/// without writing output, writing replacement units, or emitting final state in
-/// [`finish`](Self::finish).
+/// without writing output, writing replacement units, or emitting final state
+/// in [`finish`](Self::finish).
 ///
 /// The engine calls [`prepare_encode`](Self::prepare_encode) before each value
 /// is consumed. The returned [`EncodePlan`] states the required output capacity
@@ -168,7 +166,11 @@ where
     /// [`Codec::max_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(codec.max_units_per_value().get())
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -177,8 +179,8 @@ where
     /// Returns an upper bound for units emitted by finishing hook-owned state.
     ///
     /// `finish` never receives more input values. Implementations must only
-    /// report output derived from hook-owned state that remains after the caller
-    /// has supplied all input.
+    /// report output derived from hook-owned state that remains after the
+    /// caller has supplied all input.
     ///
     /// # Parameters
     ///
@@ -234,7 +236,8 @@ where
     /// - `codec`: Low-level codec owned by the engine.
     /// - `context`: Encode-write context containing the input value, input
     ///   index, output slice, and output cursor.
-    /// - `plan`: Prepared plan returned by [`prepare_encode`](Self::prepare_encode).
+    /// - `plan`: Prepared plan returned by
+    ///   [`prepare_encode`](Self::prepare_encode).
     ///
     /// # Returns
     ///
@@ -258,7 +261,8 @@ where
         plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error>;
 
-    /// Builds an error for a caller-supplied input index outside the input slice.
+    /// Builds an error for a caller-supplied input index outside the input
+    /// slice.
     ///
     /// The engine calls this hook before it reads input. Keeping this
     /// construction in the hook lets codec-backed adapters preserve their own
@@ -273,9 +277,15 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(
+        &mut self,
+        codec: &C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error;
 
-    /// Builds an error for a caller-supplied output index outside the output slice.
+    /// Builds an error for a caller-supplied output index outside the output
+    /// slice.
     ///
     /// The engine calls this hook before it writes output. Keeping this
     /// construction in the hook lets codec-backed adapters preserve their own
@@ -290,17 +300,22 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-output-index error.
-    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
+    fn invalid_output_index(
+        &mut self,
+        codec: &C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output units.
     ///
     /// The default implementation is a no-op for stateless encode hooks.
-    /// Stateful hooks may emit final units such as reset sequences, checksums, or
-    /// trailers. The caller must provide at least
+    /// Stateful hooks may emit final units such as reset sequences, checksums,
+    /// or trailers. The caller must provide at least
     /// [`BufferedEncodeHooks::max_finish_output_len`] writable units from
     /// `output_index`. Engines may pass an output slice whose upper bound is
-    /// capped at `output_index + max_finish_output_len`, so implementations must
-    /// not write beyond that declared final-output bound.
+    /// capped at `output_index + max_finish_output_len`, so implementations
+    /// must not write beyond that declared final-output bound.
     ///
     /// # Parameters
     ///
@@ -317,7 +332,12 @@ where
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
     #[inline]
-    fn finish(&mut self, _codec: &C, _output: &mut [C::Unit], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _codec: &C,
+        _output: &mut [C::Unit],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 

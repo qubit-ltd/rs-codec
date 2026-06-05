@@ -1,17 +1,16 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use core::num::NonZeroUsize;
 
 use super::TranscodeStatus;
 
-/// Counts how much work a [`crate::BufferedTranscoder`] completed before returning.
+/// Counts how much work a [`crate::BufferedTranscoder`] completed before
+/// returning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TranscodeProgress {
     /// Stop reason reported by the transcoder.
@@ -29,15 +28,24 @@ impl TranscodeProgress {
     ///
     /// - `status`: The reason conversion stopped.
     /// - `read`: Number of input units consumed from the call's input index.
-    /// - `written`: Number of output units written from the call's output index.
+    /// - `written`: Number of output units written from the call's output
+    ///   index.
     ///
     /// # Returns
     ///
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
     #[inline(always)]
-    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
-        Self { status, read, written }
+    pub const fn new(
+        status: TranscodeStatus,
+        read: usize,
+        written: usize,
+    ) -> Self {
+        Self {
+            status,
+            read,
+            written,
+        }
     }
 
     /// Creates a completed progress value.
@@ -129,7 +137,8 @@ impl TranscodeProgress {
     ///
     /// # Returns
     ///
-    /// Returns a count relative to the input index passed to the conversion call.
+    /// Returns a count relative to the input index passed to the conversion
+    /// call.
     #[must_use]
     #[inline(always)]
     pub const fn read(self) -> usize {
@@ -140,14 +149,16 @@ impl TranscodeProgress {
     ///
     /// # Returns
     ///
-    /// Returns a count relative to the output index passed to the conversion call.
+    /// Returns a count relative to the output index passed to the conversion
+    /// call.
     #[must_use]
     #[inline(always)]
     pub const fn written(self) -> usize {
         self.written
     }
 
-    /// Rebases `read` and `written` onto `self` while preserving its stop reason.
+    /// Rebases `read` and `written` onto `self` while preserving its stop
+    /// reason.
     ///
     /// Nested engines report progress scoped to one sub-step. Callers that
     /// orchestrate several sub-steps must replace those counters with totals
@@ -157,11 +168,13 @@ impl TranscodeProgress {
     /// # Parameters
     ///
     /// - `read`: Input units consumed relative to the outer call's input index.
-    /// - `written`: Output units written relative to the outer call's output index.
+    /// - `written`: Output units written relative to the outer call's output
+    ///   index.
     ///
     /// # Returns
     ///
-    /// Returns progress with the same status as `self` and the supplied counters.
+    /// Returns progress with the same status as `self` and the supplied
+    /// counters.
     #[must_use]
     #[inline(always)]
     pub const fn with_counters(self, read: usize, written: usize) -> Self {
@@ -171,12 +184,24 @@ impl TranscodeProgress {
                 input_index,
                 additional,
                 available,
-            } => Self::need_input(input_index, additional, available, read, written),
+            } => Self::need_input(
+                input_index,
+                additional,
+                available,
+                read,
+                written,
+            ),
             TranscodeStatus::NeedOutput {
                 output_index,
                 additional,
                 available,
-            } => Self::need_output(output_index, additional, available, read, written),
+            } => Self::need_output(
+                output_index,
+                additional,
+                available,
+                read,
+                written,
+            ),
         }
     }
 
@@ -210,7 +235,9 @@ impl TranscodeProgress {
         match self.status {
             TranscodeStatus::Complete => None,
             TranscodeStatus::NeedInput { input_index, .. } => Some(input_index),
-            TranscodeStatus::NeedOutput { output_index, .. } => Some(output_index),
+            TranscodeStatus::NeedOutput { output_index, .. } => {
+                Some(output_index)
+            }
         }
     }
 

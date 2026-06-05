@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by buffered convert engines.
 
 use super::{
@@ -57,7 +55,11 @@ where
     /// # Returns
     ///
     /// Returns the decode hooks used by the internal buffered decoder.
-    fn create_decode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::DecodeHooks;
+    fn create_decode_hooks(
+        &self,
+        decode_codec: &D,
+        encode_codec: &E,
+    ) -> Self::DecodeHooks;
 
     /// Creates encode policy hooks for the internal buffered encoder.
     ///
@@ -69,7 +71,11 @@ where
     /// # Returns
     ///
     /// Returns the encode hooks used by the internal buffered encoder.
-    fn create_encode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::EncodeHooks;
+    fn create_encode_hooks(
+        &self,
+        decode_codec: &D,
+        encode_codec: &E,
+    ) -> Self::EncodeHooks;
 
     /// Maps a decode-engine error into the converter error type.
     ///
@@ -93,7 +99,8 @@ where
     /// Returns the converter-level error.
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
 
-    /// Builds an error for a caller-supplied source input index outside the input slice.
+    /// Builds an error for a caller-supplied source input index outside the
+    /// input slice.
     ///
     /// The engine calls this hook before it reads source input. Keeping this
     /// construction in the hook lets converter adapters preserve their concrete
@@ -108,7 +115,12 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index(&self, decode_codec: &D, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(
+        &self,
+        decode_codec: &D,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error;
 
     /// Resets conversion-level hook-owned state.
     ///

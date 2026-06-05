@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
@@ -48,9 +46,14 @@ unsafe impl Codec for VariableByteCodec {
             0x80 => {
                 let available = input.len() - index;
                 if available < 2 {
-                    Err(TestDecodeError::Incomplete { required: 2, available })
+                    Err(TestDecodeError::Incomplete {
+                        required: 2,
+                        available,
+                    })
                 } else {
-                    Ok((input[index + 1], unsafe { core::num::NonZeroUsize::new_unchecked(2) }))
+                    Ok((input[index + 1], unsafe {
+                        core::num::NonZeroUsize::new_unchecked(2)
+                    }))
                 }
             }
             0xff => Err(TestDecodeError::Invalid { consumed: 1 }),
@@ -58,7 +61,12 @@ unsafe impl Codec for VariableByteCodec {
         }
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
@@ -102,7 +110,12 @@ unsafe impl Codec for FixedPairCodec {
         ))
     }
 
-    unsafe fn encode_unchecked(&self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_unchecked(
+        &self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
@@ -188,7 +201,10 @@ fn test_codec_buffered_decoder_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 }, error,);
+    assert_eq!(
+        CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error,
+    );
 }
 
 #[test]
@@ -200,7 +216,10 @@ fn test_codec_buffered_decoder_reports_input_index_beyond_buffer() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("out-of-range input index should fail");
 
-    assert_eq!(CodecDecodeError::InvalidInputIndex { index: 2, len: 1 }, error);
+    assert_eq!(
+        CodecDecodeError::InvalidInputIndex { index: 2, len: 1 },
+        error
+    );
 }
 
 #[test]

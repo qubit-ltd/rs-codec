@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Internal encode-step result used by buffered encoders.
 
 use core::num::NonZeroUsize;
@@ -60,8 +58,12 @@ impl EncodeStep {
     /// Returns a step describing the missing output capacity.
     #[inline(always)]
     pub(super) fn need_output(required: usize, available: usize) -> Self {
-        let additional = NonZeroUsize::new(required - available).expect("missing output is non-zero");
-        Self::NeedOutput { additional, available }
+        let additional = NonZeroUsize::new(required - available)
+            .expect("missing output is non-zero");
+        Self::NeedOutput {
+            additional,
+            available,
+        }
     }
 
     /// Applies this step to the current encode state.
@@ -83,7 +85,10 @@ impl EncodeStep {
                 state.accept_written_value(written);
                 None
             }
-            Self::NeedOutput { additional, available } => Some(state.need_output_progress_with(additional, available)),
+            Self::NeedOutput {
+                additional,
+                available,
+            } => Some(state.need_output_progress_with(additional, available)),
         }
     }
 }

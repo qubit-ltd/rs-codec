@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by the default codec-backed buffered converter.
 
 use super::{
@@ -58,9 +56,14 @@ where
     ///
     /// # Returns
     ///
-    /// Returns decode hooks that map decode failures directly to codec decode errors.
+    /// Returns decode hooks that map decode failures directly to codec decode
+    /// errors.
     #[inline(always)]
-    fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
+    fn create_decode_hooks(
+        &self,
+        _decode_codec: &D,
+        _encode_codec: &E,
+    ) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
 
@@ -73,9 +76,14 @@ where
     ///
     /// # Returns
     ///
-    /// Returns encode hooks that map encode failures directly to codec encode errors.
+    /// Returns encode hooks that map encode failures directly to codec encode
+    /// errors.
     #[inline(always)]
-    fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
+    fn create_encode_hooks(
+        &self,
+        _decode_codec: &D,
+        _encode_codec: &E,
+    ) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
 
@@ -111,7 +119,8 @@ where
     ///
     /// # Parameters
     ///
-    /// - `_decode_codec`: Source codec for which the caller-supplied index is invalid.
+    /// - `_decode_codec`: Source codec for which the caller-supplied index is
+    ///   invalid.
     /// - `index`: Invalid source input index.
     /// - `input_len`: Length of the source input slice.
     ///
@@ -119,8 +128,15 @@ where
     ///
     /// Returns a converter-level error describing the invalid source index.
     #[inline(always)]
-    fn invalid_input_index(&self, _decode_codec: &D, index: usize, input_len: usize) -> Self::Error {
-        CodecConvertError::decode(CodecDecodeError::invalid_input_index(index, input_len))
+    fn invalid_input_index(
+        &self,
+        _decode_codec: &D,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error {
+        CodecConvertError::decode(CodecDecodeError::invalid_input_index(
+            index, input_len,
+        ))
     }
 
     /// Resets stateless codec-backed converter hooks.

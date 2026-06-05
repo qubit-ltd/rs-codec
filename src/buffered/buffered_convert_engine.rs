@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Reusable buffered converter engine.
 
 use super::{
@@ -35,10 +33,10 @@ use crate::{
 /// Reusable buffered conversion engine.
 ///
 /// The engine owns reusable buffered decode and encode engines plus a small
-/// conversion-level hook object. It keeps common converter control flow private:
-/// index validation, pending-value retention, pending flush, decode-error
-/// policy dispatch, encode planning, output-capacity checks, and progress
-/// reporting.
+/// conversion-level hook object. It keeps common converter control flow
+/// private: index validation, pending-value retention, pending flush,
+/// decode-error policy dispatch, encode planning, output-capacity checks, and
+/// progress reporting.
 ///
 /// `BufferedConvertEngine` is intentionally batch-oriented. Its public
 /// `transcode` method drives a source/output buffer loop and reuses the same
@@ -157,10 +155,14 @@ where
 
     /// Returns an upper bound for target units produced from `input_len` units.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
         let decoded_values = self.decode_engine.max_output_len(input_len)?;
-        let converted_units = self.encode_engine.max_output_len(decoded_values)?;
+        let converted_units =
+            self.encode_engine.max_output_len(decoded_values)?;
         pending_units
             .checked_add(converted_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -171,7 +173,8 @@ where
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len();
-        let decoder_finish_units = self.encode_engine.max_output_len(decoder_finish_values)?;
+        let decoder_finish_units =
+            self.encode_engine.max_output_len(decoder_finish_values)?;
         let encoder_finish_units = self.encode_engine.max_finish_output_len();
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
@@ -196,8 +199,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when indices are invalid or concrete conversion fails.
-    /// Invalid output indices are reported through the encode-side error path.
+    /// Returns hook errors when indices are invalid or concrete conversion
+    /// fails. Invalid output indices are reported through the encode-side
+    /// error path.
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -206,18 +210,23 @@ where
         output_index: usize,
     ) -> ConvertProgressResult<D, E, H> {
         if input_index > input.len() {
-            return Err(self
-                .hooks
-                .invalid_input_index(self.decode_codec(), input_index, input.len()));
+            return Err(self.hooks.invalid_input_index(
+                self.decode_codec(),
+                input_index,
+                input.len(),
+            ));
         }
         if output_index > output.len() {
-            let error = self.encode_engine.invalid_output_index(output_index, output.len());
+            let error = self
+                .encode_engine
+                .invalid_output_index(output_index, output.len());
             return Err(self.hooks.map_encode_error(error));
         }
         assert_unit_bounds::<D>(self.decode_codec());
         assert_unit_bounds::<E>(self.encode_codec());
 
-        let mut state = ConvertState::new(input, input_index, output, output_index);
+        let mut state =
+            ConvertState::new(input, input_index, output, output_index);
 
         // A retained decoded value must be written before consuming more input,
         // otherwise callers could observe output reordered across buffer turns.
@@ -245,9 +254,9 @@ where
     ///
     /// Finalization drains a pending decoded value first, then lets the
     /// source-side decode hooks emit final values, encodes those values through
-    /// the target-side encode hooks, and finally finishes target-side encode hook
-    /// state. The decode-finish value buffer used for this cold path requires
-    /// `D::Value: Default`; the normal `transcode` loop does not.
+    /// the target-side encode hooks, and finally finishes target-side encode
+    /// hook state. The decode-finish value buffer used for this cold path
+    /// requires `D::Value: Default`; the normal `transcode` loop does not.
     ///
     /// # Parameters
     ///
@@ -260,9 +269,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`FinishError`] when capacity planning overflows, when the caller
-    /// provides invalid or insufficient output capacity, or when hook
-    /// finalization fails.
+    /// Returns [`FinishError`] when capacity planning overflows, when the
+    /// caller provides invalid or insufficient output capacity, or when
+    /// hook finalization fails.
     pub fn finish(
         &mut self,
         output: &mut [E::Unit],
@@ -273,15 +282,27 @@ where
     {
         assert_unit_bounds::<D>(self.decode_codec());
         assert_unit_bounds::<E>(self.encode_codec());
-        let required = self.max_finish_output_len().map_err(FinishError::capacity)?;
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        let required = self
+            .max_finish_output_len()
+            .map_err(FinishError::capacity)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let empty_input: &[D::Unit] = &[];
         let mut state = ConvertState::new(empty_input, 0, output, output_index);
         // Finish keeps the same priority as transcode: output any retained
         // decoded value before asking source-side hooks for final values.
-        if self.drain_pending(&mut state).map_err(FinishError::source)?.is_some() {
-            unreachable!("converter finish bound must reserve space for pending values");
+        if self
+            .drain_pending(&mut state)
+            .map_err(FinishError::source)?
+            .is_some()
+        {
+            unreachable!(
+                "converter finish bound must reserve space for pending values"
+            );
         }
 
         // Source-side finish may emit one or more final values. Drain them into
@@ -292,7 +313,9 @@ where
         let written = self
             .encode_engine
             .finish(state.output_mut(), output_cursor)
-            .map_err(|error| error.map_source(|error| self.hooks.map_encode_error(error)))?;
+            .map_err(|error| {
+                error.map_source(|error| self.hooks.map_encode_error(error))
+            })?;
         state.advance_output(written);
         Ok(state.written())
     }
@@ -316,12 +339,17 @@ where
 
     /// Converts one value from the current state cursors.
     #[inline]
-    fn convert_next(&mut self, state: &mut ConvertState<'_, D::Unit, E::Unit>) -> ConvertStepResult<D, E, H> {
+    fn convert_next(
+        &mut self,
+        state: &mut ConvertState<'_, D::Unit, E::Unit>,
+    ) -> ConvertStepResult<D, E, H> {
         let step = self
             .decode_engine
             .decode_step(state.input(), state.decode_context())
             .map_err(|error| self.hooks.map_decode_error(error))?;
-        step.apply_to_convert_state(state, |pending, state| self.encode_pending(pending, state))
+        step.apply_to_convert_state(state, |pending, state| {
+            self.encode_pending(pending, state)
+        })
     }
 
     /// Returns the output bound for the retained pending value.
@@ -332,14 +360,18 @@ where
 
     /// Writes a retained decoded value before new input is consumed.
     #[inline]
-    fn drain_pending(&mut self, state: &mut ConvertState<'_, D::Unit, E::Unit>) -> ConvertStepResult<D, E, H> {
+    fn drain_pending(
+        &mut self,
+        state: &mut ConvertState<'_, D::Unit, E::Unit>,
+    ) -> ConvertStepResult<D, E, H> {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
         self.encode_pending(pending, state)
     }
 
-    /// Drains source-side decode finish output and encodes emitted final values.
+    /// Drains source-side decode finish output and encodes emitted final
+    /// values.
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -348,11 +380,14 @@ where
         D::Value: Default,
     {
         let value_count = self.decode_engine.max_finish_output_len();
-        let mut decoded: Vec<D::Value> = (0..value_count).map(|_| D::Value::default()).collect();
-        let written = self
-            .decode_engine
-            .finish(&mut decoded, 0)
-            .map_err(|error| error.map_source(|error| self.hooks.map_decode_error(error)))?;
+        let mut decoded: Vec<D::Value> =
+            (0..value_count).map(|_| D::Value::default()).collect();
+        let written =
+            self.decode_engine
+                .finish(&mut decoded, 0)
+                .map_err(|error| {
+                    error.map_source(|error| self.hooks.map_decode_error(error))
+                })?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self
@@ -360,7 +395,9 @@ where
                 .map_err(FinishError::source)?
                 .is_some()
             {
-                unreachable!("converter finish bound must reserve space for decode finish values");
+                unreachable!(
+                    "converter finish bound must reserve space for decode finish values"
+                );
             }
         }
         Ok(())
@@ -386,10 +423,13 @@ where
             .encode_step(context)
             .map_err(|error| self.hooks.map_encode_error(error))?;
         let step = match step {
-            EncodeStep::Written { written } => PendingEncodeStep::written(written),
-            EncodeStep::NeedOutput { additional, available } => {
-                PendingEncodeStep::need_output(pending, additional, available)
+            EncodeStep::Written { written } => {
+                PendingEncodeStep::written(written)
             }
+            EncodeStep::NeedOutput {
+                additional,
+                available,
+            } => PendingEncodeStep::need_output(pending, additional, available),
         };
         Ok(self.pending.apply_pending_encode_step(step, state))
     }

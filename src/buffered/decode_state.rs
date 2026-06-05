@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Mutable state for one buffered decode call.
 
 use core::num::NonZeroUsize;
@@ -47,8 +45,16 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns initialized decode state with cursors at the requested start
     /// positions.
     #[inline(always)]
-    pub(super) fn new(input: &'a [Unit], input_index: usize, output: &'a mut [Value], output_index: usize) -> Self {
-        debug_assert!(input_index <= input.len(), "input index must be within the input slice");
+    pub(super) fn new(
+        input: &'a [Unit],
+        input_index: usize,
+        output: &'a mut [Value],
+        output_index: usize,
+    ) -> Self {
+        debug_assert!(
+            input_index <= input.len(),
+            "input index must be within the input slice"
+        );
 
         Self {
             input,
@@ -148,7 +154,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             consumed <= self.available(),
             "decode step consumed beyond available input",
         );
-        assert!(!self.needs_output(), "decode step emitted without output capacity",);
+        assert!(
+            !self.needs_output(),
+            "decode step emitted without output capacity",
+        );
         // SAFETY: `needs_output()` returned false, so the output cursor points
         // at a writable slot.
         unsafe {
@@ -199,7 +208,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress at the current decode cursor.
     #[inline(always)]
-    pub(super) fn need_input_progress_with(&self, additional: NonZeroUsize, available: usize) -> TranscodeProgress {
+    pub(super) fn need_input_progress_with(
+        &self,
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> TranscodeProgress {
         TranscodeProgress::need_input(
             self.input_cursor,
             additional,

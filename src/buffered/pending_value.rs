@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Pending decoded value retained by buffered converters.
 
 /// Decoded value retained after source input has been consumed.
@@ -38,7 +36,8 @@ impl<Value> PendingValue<Value> {
     ///
     /// # Returns
     ///
-    /// Returns the absolute source input index used for downstream encode errors.
+    /// Returns the absolute source input index used for downstream encode
+    /// errors.
     #[must_use]
     #[inline(always)]
     pub(super) const fn input_index(&self) -> usize {

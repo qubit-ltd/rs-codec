@@ -55,12 +55,18 @@ fn test_transcoder_progress_exposes_status_and_counts() {
 #[test]
 fn test_transcoder_progress_constructors_create_expected_progress() {
     let need_input = TranscodeProgress::need_input(4, super::nz(2), 1, 5, 6);
-    assert_eq!(TranscodeStatus::need_input(4, super::nz(2), 1), need_input.status());
+    assert_eq!(
+        TranscodeStatus::need_input(4, super::nz(2), 1),
+        need_input.status()
+    );
     assert_eq!(5, need_input.read());
     assert_eq!(6, need_input.written());
 
     let need_output = TranscodeProgress::need_output(7, super::nz(3), 0, 8, 9);
-    assert_eq!(TranscodeStatus::need_output(7, super::nz(3), 0), need_output.status());
+    assert_eq!(
+        TranscodeStatus::need_output(7, super::nz(3), 0),
+        need_output.status()
+    );
     assert_eq!(8, need_output.read());
     assert_eq!(9, need_output.written());
 }
@@ -75,13 +81,19 @@ fn test_transcode_progress_with_counters_rebases_read_and_written() {
 
     let sub_step = TranscodeProgress::need_output(11, super::nz(4), 1, 0, 2);
     let rebased = sub_step.with_counters(0, 5);
-    assert_eq!(TranscodeStatus::need_output(11, super::nz(4), 1), rebased.status());
+    assert_eq!(
+        TranscodeStatus::need_output(11, super::nz(4), 1),
+        rebased.status()
+    );
     assert_eq!(0, rebased.read());
     assert_eq!(5, rebased.written());
 
     let sub_step = TranscodeProgress::need_input(3, super::nz(2), 1, 1, 1);
     let rebased = sub_step.with_counters(4, 6);
-    assert_eq!(TranscodeStatus::need_input(3, super::nz(2), 1), rebased.status());
+    assert_eq!(
+        TranscodeStatus::need_input(3, super::nz(2), 1),
+        rebased.status()
+    );
     assert_eq!(4, rebased.read());
     assert_eq!(6, rebased.written());
 }

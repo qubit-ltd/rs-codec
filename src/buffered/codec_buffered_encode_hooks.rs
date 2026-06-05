@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
 use super::{
@@ -74,8 +72,14 @@ where
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
-        unsafe { codec.encode_unchecked(context.input_value, context.output, context.output_index) }
-            .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+        unsafe {
+            codec.encode_unchecked(
+                context.input_value,
+                context.output,
+                context.output_index,
+            )
+        }
+        .map_err(|error| CodecEncodeError::encode(error, context.input_index))
     }
 
     /// Creates an invalid input index error.
@@ -90,7 +94,12 @@ where
     ///
     /// Returns an encode invalid-input-index error.
     #[inline(always)]
-    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+    fn invalid_input_index(
+        &mut self,
+        _codec: &C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error {
         CodecEncodeError::invalid_input_index(index, input_len)
     }
 
@@ -106,7 +115,12 @@ where
     ///
     /// Returns an encode invalid-output-index error.
     #[inline(always)]
-    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
+    fn invalid_output_index(
+        &mut self,
+        _codec: &C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error {
         CodecEncodeError::invalid_output_index(index, output_len)
     }
 }

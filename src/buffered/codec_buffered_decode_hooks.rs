@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Policy hooks used by the default codec-backed buffered decoder.
 
 use super::{
@@ -62,7 +60,12 @@ where
     ///
     /// Returns a codec decode error describing the invalid index.
     #[inline(always)]
-    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+    fn invalid_input_index(
+        &mut self,
+        _codec: &C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error {
         CodecDecodeError::invalid_input_index(index, input_len)
     }
 
@@ -78,7 +81,12 @@ where
     ///
     /// Returns a codec decode error describing the invalid output index.
     #[inline(always)]
-    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
+    fn invalid_output_index(
+        &mut self,
+        _codec: &C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error {
         CodecDecodeError::invalid_output_index(index, output_len)
     }
 }

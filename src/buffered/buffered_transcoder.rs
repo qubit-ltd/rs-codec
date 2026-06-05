@@ -1,19 +1,18 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use super::{
     capacity_error::CapacityError,
     finish_error::FinishError,
     transcode_progress::TranscodeProgress,
 };
 
-/// Converts one logical stream of input units into one logical stream of output units.
+/// Converts one logical stream of input units into one logical stream of output
+/// units.
 ///
 /// `transcode` is the main streaming API. It transforms a provided input
 /// segment and writes as much output as available buffer space allows.
@@ -21,14 +20,16 @@ use super::{
 /// A transcoder instance has a simple lifecycle:
 ///
 /// 1. A newly created or reset instance is ready for a new logical stream.
-/// 2. Call [`BufferedTranscoder::transcode`] zero or more times while input is available.
+/// 2. Call [`BufferedTranscoder::transcode`] zero or more times while input is
+///    available.
 /// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
 ///    the caller-owned input buffer.
-/// 4. Call [`BufferedTranscoder::finish`] after the caller knows no more input remains
-///    and has handled any incomplete tail. Size this final output with
+/// 4. Call [`BufferedTranscoder::finish`] after the caller knows no more input
+///    remains and has handled any incomplete tail. Size this final output with
 ///    [`BufferedTranscoder::max_finish_output_len`].
-/// 5. After [`BufferedTranscoder::finish`] succeeds, call [`BufferedTranscoder::reset`] before
-///    starting another logical stream with the same instance.
+/// 5. After [`BufferedTranscoder::finish`] succeeds, call
+///    [`BufferedTranscoder::reset`] before starting another logical stream with
+///    the same instance.
 ///
 /// The method is suitable for:
 /// - pull-style consumers that call conversion repeatedly as buffers arrive;
@@ -36,10 +37,12 @@ use super::{
 /// - stateless and stateful codecs that all return progress-oriented stopping
 ///   reasons.
 ///
-/// `BufferedTranscoder` is intentionally independent from any charset semantics:
+/// `BufferedTranscoder` is intentionally independent from any charset
+/// semantics:
 ///
 /// - Use `BufferedTranscoder` directly for custom, policy-free unit transforms.
-/// - Use `BufferedTranscoder` when you want to own malformed/unmappable decisions at the call site.
+/// - Use `BufferedTranscoder` when you want to own malformed/unmappable
+///   decisions at the call site.
 ///
 /// # Example: streaming byte-to-word decoder
 ///
@@ -148,8 +151,8 @@ use super::{
 /// The trait is intentionally independent from charset concepts. Implementors
 /// use `input_index` and `output_index` as absolute positions in the supplied
 /// slices. Returned progress counters are relative counts from those positions.
-/// For raw codecs this gives a compact API; higher-level workflows can wrap this
-/// trait with their own semantic policies.
+/// For raw codecs this gives a compact API; higher-level workflows can wrap
+/// this trait with their own semantic policies.
 ///
 /// # Type Parameters
 ///
@@ -180,9 +183,10 @@ pub trait BufferedTranscoder<Input, Output> {
     /// Returns an upper bound for output units produced by stream finalization.
     ///
     /// This bound is evaluated against the transcoder's current state. It does
-    /// not include output that may be produced by future [`BufferedTranscoder::transcode`]
-    /// calls. Use it before [`BufferedTranscoder::finish`] when the caller wants to size
-    /// a final output buffer for the already supplied input.
+    /// not include output that may be produced by future
+    /// [`BufferedTranscoder::transcode`] calls. Use it before
+    /// [`BufferedTranscoder::finish`] when the caller wants to size a final
+    /// output buffer for the already supplied input.
     ///
     /// # Returns
     ///
@@ -214,7 +218,8 @@ pub trait BufferedTranscoder<Input, Output> {
     /// This method processes an input segment without closing the logical input
     /// stream. When the current segment ends in a partial value, the transcoder
     /// reports [`crate::TranscodeStatus::NeedInput`] without consuming that
-    /// tail. The caller owns input-buffer refill and EOF incomplete-tail policy.
+    /// tail. The caller owns input-buffer refill and EOF incomplete-tail
+    /// policy.
     ///
     /// # Parameters
     ///
@@ -225,14 +230,15 @@ pub trait BufferedTranscoder<Input, Output> {
     ///
     /// # Returns
     ///
-    /// Returns progress describing how many units were consumed and produced and
-    /// why conversion stopped.
+    /// Returns progress describing how many units were consumed and produced
+    /// and why conversion stopped.
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` for semantic conversion failures that the transcoder's
-    /// policy does not absorb, including caller-supplied `input_index` or
-    /// `output_index` values outside their corresponding slices.
+    /// Returns `Self::Error` for semantic conversion failures that the
+    /// transcoder's policy does not absorb, including caller-supplied
+    /// `input_index` or `output_index` values outside their corresponding
+    /// slices.
     fn transcode(
         &mut self,
         input: &[Input],
@@ -251,8 +257,8 @@ pub trait BufferedTranscoder<Input, Output> {
     /// [`BufferedTranscoder::max_finish_output_len`].
     ///
     /// After `finish` succeeds, the logical stream is closed. Portable callers
-    /// should call [`BufferedTranscoder::reset`] before passing input for another
-    /// logical stream to the same instance.
+    /// should call [`BufferedTranscoder::reset`] before passing input for
+    /// another logical stream to the same instance.
     ///
     /// # Example
     ///
@@ -330,9 +336,16 @@ pub trait BufferedTranscoder<Input, Output> {
     /// capacity is insufficient, or when internal state cannot be finished
     /// according to the transcoder's policy.
     #[inline]
-    fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<usize, FinishError<Self::Error>> {
+    fn finish(
+        &mut self,
+        output: &mut [Output],
+        output_index: usize,
+    ) -> Result<usize, FinishError<Self::Error>> {
         if output_index > output.len() {
-            return Err(FinishError::invalid_output_index(output_index, output.len()));
+            return Err(FinishError::invalid_output_index(
+                output_index,
+                output.len(),
+            ));
         }
         Ok(0)
     }

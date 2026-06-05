@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Internal decode-step result used by buffered converters.
 
 use core::num::NonZeroUsize;
@@ -57,7 +55,11 @@ impl<Value> DecodeStep<Value> {
     ///
     /// Returns a decoded step.
     #[inline(always)]
-    pub(super) const fn decoded(value: Value, consumed: NonZeroUsize, input_index: usize) -> Self {
+    pub(super) const fn decoded(
+        value: Value,
+        consumed: NonZeroUsize,
+        input_index: usize,
+    ) -> Self {
         Self::Decoded {
             value,
             consumed,
@@ -90,8 +92,14 @@ impl<Value> DecodeStep<Value> {
     ///
     /// Returns a need-input step.
     #[inline(always)]
-    pub(super) const fn need_input(additional: NonZeroUsize, available: usize) -> Self {
-        Self::NeedInput { additional, available }
+    pub(super) const fn need_input(
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> Self {
+        Self::NeedInput {
+            additional,
+            available,
+        }
     }
 
     /// Applies this decode step to the current conversion state.
@@ -101,7 +109,8 @@ impl<Value> DecodeStep<Value> {
     /// - `Decoded`: advances input cursor and passes the decoded value into the
     ///   converter encode path.
     /// - `Skipped`: only advances input cursor.
-    /// - `NeedInput`: returns [`TranscodeProgress`] requesting additional input.
+    /// - `NeedInput`: returns [`TranscodeProgress`] requesting additional
+    ///   input.
     ///
     /// # Parameters
     ///
@@ -129,7 +138,10 @@ impl<Value> DecodeStep<Value> {
         mut encode: F,
     ) -> Result<Option<TranscodeProgress>, Error>
     where
-        F: FnMut(PendingValue<Value>, &mut ConvertState<'_, Input, Output>) -> Result<Option<TranscodeProgress>, Error>,
+        F: FnMut(
+            PendingValue<Value>,
+            &mut ConvertState<'_, Input, Output>,
+        ) -> Result<Option<TranscodeProgress>, Error>,
     {
         match self {
             Self::Decoded {
@@ -144,7 +156,10 @@ impl<Value> DecodeStep<Value> {
                 state.advance_input(consumed.get());
                 Ok(None)
             }
-            Self::NeedInput { additional, available } => Ok(Some(state.need_input_progress(additional, available))),
+            Self::NeedInput {
+                additional,
+                available,
+            } => Ok(Some(state.need_input_progress(additional, available))),
         }
     }
 
@@ -160,8 +175,8 @@ impl<Value> DecodeStep<Value> {
     ///
     /// # Returns
     ///
-    /// Returns optional public stop progress when decoding cannot continue in this
-    /// call.
+    /// Returns optional public stop progress when decoding cannot continue in
+    /// this call.
     #[must_use]
     #[inline]
     pub(super) fn apply_to_decode_state<Unit>(
@@ -169,7 +184,9 @@ impl<Value> DecodeStep<Value> {
         state: &mut DecodeState<'_, Unit, Value>,
     ) -> Option<TranscodeProgress> {
         match self {
-            Self::Decoded { value, consumed, .. } => {
+            Self::Decoded {
+                value, consumed, ..
+            } => {
                 if state.needs_output() {
                     return Some(state.need_output_progress());
                 }
@@ -180,7 +197,10 @@ impl<Value> DecodeStep<Value> {
                 state.skip(consumed);
                 None
             }
-            Self::NeedInput { additional, available } => Some(state.need_input_progress_with(additional, available)),
+            Self::NeedInput {
+                additional,
+                available,
+            } => Some(state.need_input_progress_with(additional, available)),
         }
     }
 }

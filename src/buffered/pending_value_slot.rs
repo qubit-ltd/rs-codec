@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Slot that owns the converter's retained decoded value.
 
 use super::{
@@ -53,7 +51,10 @@ impl<Value> PendingValueSlot<Value> {
     /// Returns the output unit bound contributed by the retained value.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    pub(super) fn max_output_len<E, H>(&self, engine: &BufferedEncodeEngine<E, H>) -> Result<usize, CapacityError>
+    pub(super) fn max_output_len<E, H>(
+        &self,
+        engine: &BufferedEncodeEngine<E, H>,
+    ) -> Result<usize, CapacityError>
     where
         E: Codec<Value = Value>,
         H: BufferedEncodeHooks<E>,
@@ -85,7 +86,8 @@ impl<Value> PendingValueSlot<Value> {
         self.value.take()
     }
 
-    /// Applies a pending-value encode step to this slot and the current conversion state.
+    /// Applies a pending-value encode step to this slot and the current
+    /// conversion state.
     ///
     /// # Type Parameters
     ///
@@ -101,7 +103,8 @@ impl<Value> PendingValueSlot<Value> {
     ///
     /// Returns:
     /// - `None` when output has been produced immediately.
-    /// - `Some(progress)` when output progress should stop for missing capacity.
+    /// - `Some(progress)` when output progress should stop for missing
+    ///   capacity.
     #[inline]
     pub(super) fn apply_pending_encode_step<Input, Output>(
         &mut self,
