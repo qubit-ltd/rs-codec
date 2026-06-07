@@ -8,18 +8,11 @@
 //! Buffered encoder adapter backed by a low-level codec.
 
 use super::{
-    BufferedEncoder,
-    BufferedTranscoder,
-    FinishError,
-    TranscodeProgress,
+    BufferedEncoder, BufferedTranscoder, FinishError, TranscodeProgress,
     buffered_encode_engine::BufferedEncodeEngine,
     codec_buffered_encode_hooks::CodecBufferedEncodeHooks,
 };
-use crate::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-};
+use crate::{CapacityError, Codec, CodecEncodeError};
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
 ///
@@ -156,7 +149,4 @@ where
     }
 }
 
-impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where
-    C: Codec
-{
-}
+impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where C: Codec {}

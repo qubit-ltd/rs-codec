@@ -7,14 +7,8 @@
 // =============================================================================
 //! Policy hooks used by buffered decoder engines.
 
-use super::{
-    decode_action::DecodeAction,
-    decode_context::DecodeContext,
-};
-use crate::{
-    CapacityError,
-    Codec,
-};
+use super::{decode_action::DecodeAction, decode_context::DecodeContext};
+use crate::{CapacityError, Codec};
 
 /// Policy hooks for [`crate::BufferedDecodeEngine`].
 ///
@@ -160,11 +154,7 @@ where
     /// [`Codec::min_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(
-        &self,
-        codec: &C,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len / codec.min_units_per_value().get())
     }
 
@@ -232,12 +222,7 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > input_len`.
-    fn invalid_input_index(
-        &mut self,
-        codec: &C,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error;
+    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
 
     /// Creates an error for a caller-supplied output index outside the output
     /// slice.
@@ -255,12 +240,7 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > output_len`.
-    fn invalid_output_index(
-        &mut self,
-        codec: &C,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error;
+    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///

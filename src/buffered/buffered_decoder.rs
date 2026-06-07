@@ -23,7 +23,4 @@ use super::BufferedTranscoder;
 ///
 /// - `Unit`: Encoded unit type accepted by the decoder.
 /// - `Value`: Logical value type produced by the decoder.
-pub trait BufferedDecoder<Unit, Value>:
-    BufferedTranscoder<Unit, Value>
-{
-}
+pub trait BufferedDecoder<Unit, Value>: BufferedTranscoder<Unit, Value> {}

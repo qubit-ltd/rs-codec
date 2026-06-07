@@ -9,10 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    decode_context::DecodeContext,
-    transcode_progress::TranscodeProgress,
-};
+use super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
 
 /// Mutable state for one buffered decode call.
 pub(super) struct DecodeState<'a, Unit, Value> {

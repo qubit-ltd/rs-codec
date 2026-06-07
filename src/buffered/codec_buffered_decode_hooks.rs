@@ -8,14 +8,10 @@
 //! Policy hooks used by the default codec-backed buffered decoder.
 
 use super::{
-    buffered_decode_hooks::BufferedDecodeHooks,
-    decode_action::DecodeAction,
+    buffered_decode_hooks::BufferedDecodeHooks, decode_action::DecodeAction,
     decode_context::DecodeContext,
 };
-use crate::{
-    Codec,
-    CodecDecodeError,
-};
+use crate::{Codec, CodecDecodeError};
 
 /// Policy hooks for [`super::CodecBufferedDecoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -60,12 +56,7 @@ where
     ///
     /// Returns a codec decode error describing the invalid index.
     #[inline(always)]
-    fn invalid_input_index(
-        &mut self,
-        _codec: &C,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
+    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
         CodecDecodeError::invalid_input_index(index, input_len)
     }
 
@@ -81,12 +72,7 @@ where
     ///
     /// Returns a codec decode error describing the invalid output index.
     #[inline(always)]
-    fn invalid_output_index(
-        &mut self,
-        _codec: &C,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
+    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
         CodecDecodeError::invalid_output_index(index, output_len)
     }
 }
