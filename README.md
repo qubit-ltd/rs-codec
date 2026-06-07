@@ -106,6 +106,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   transcode-stage policy decisions.
 - **`CodecBufferedConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `BufferedConverter`.
+- **`BufferedDecodeInput<I, D, M, Value>`**: adapts a unit-level `Input` into a
+  decoded-value `Input` through `BufferedInput`, preserves incomplete tails, and
+  runs decoder finish at clean EOF.
+- **`BufferedEncodeOutput<O, E, M, Value>`**: adapts a value-level `Output` into
+  an encoded-unit `Output` through `BufferedOutput`; ordinary `flush` drains
+  buffered units and explicit `finish` writes final encoder output.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -189,6 +195,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecBufferedEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
 | `CodecBufferedDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
 | `CodecBufferedConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
+
+### I/O Adapters
+
+| Type | Purpose |
+|------|---------|
+| `BufferedDecodeInput<I, D, M, Value>` | Decode units from a `qubit_io::Input` into values through a buffered decoder; clean EOF runs one-shot decoder finish |
+| `BufferedEncodeOutput<O, E, M, Value>` | Encode values into a `qubit_io::Output`; `flush` drains buffered units and `finish` writes final encoder output |
 
 ### Encoder Hooks And Engines
 
