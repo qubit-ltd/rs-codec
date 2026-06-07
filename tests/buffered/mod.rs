@@ -1,6 +1,8 @@
 mod buffered_convert_engine_tests;
 mod buffered_decode_engine_tests;
+mod buffered_decode_input_tests;
 mod buffered_encode_engine_tests;
+mod buffered_encode_output_tests;
 mod buffered_traits_tests;
 mod buffered_transcoder_tests;
 mod codec_buffered_converter_tests;

@@ -1,8 +1,4 @@
-use qubit_codec::{
-    CodecConvertError,
-    CodecDecodeError,
-    CodecEncodeError,
-};
+use qubit_codec::{CodecConvertError, CodecDecodeError, CodecEncodeError};
 
 #[test]
 fn test_codec_convert_error_wraps_decode_error_explicitly() {

@@ -7,11 +7,7 @@
 // =============================================================================
 //! Tests for the low-level codec trait.
 
-use qubit_codec::{
-    Codec,
-    CodecValueEncoder,
-    ValueEncoder,
-};
+use qubit_codec::{Codec, CodecValueEncoder, ValueEncoder};
 
 #[derive(Default)]
 struct ByteIncrementCodec;
@@ -100,8 +96,8 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
 
     let written = unsafe { codec.encode_unchecked(&41, &mut output, 0) }
         .expect("encoding should be infallible");
-    let (decoded, consumed) = unsafe { codec.decode_unchecked(&output, 0) }
-        .expect("decoding should be infallible");
+    let (decoded, consumed) =
+        unsafe { codec.decode_unchecked(&output, 0) }.expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
