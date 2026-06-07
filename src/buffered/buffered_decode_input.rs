@@ -7,12 +7,26 @@
 // =============================================================================
 //! Input adapter that decodes buffered units into values.
 
-use core::{fmt, marker::PhantomData};
-use std::io::{Error, ErrorKind, Result};
+use core::{
+    fmt,
+    marker::PhantomData,
+};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+};
 
-use qubit_io::{BufferedInput, Input};
+use qubit_io::{
+    BufferedInput,
+    Input,
+};
 
-use super::{BufferedTranscoder, FinishError, TranscodeStatus};
+use super::{
+    BufferedTranscoder,
+    FinishError,
+    TranscodeStatus,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -24,9 +38,9 @@ use super::{BufferedTranscoder, FinishError, TranscodeStatus};
 /// At clean EOF, the adapter calls the decoder's finish operation exactly once
 /// and returns EOF on later reads. If finishing can emit values, the current
 /// caller-provided output range must have enough remaining slots for
-/// [`BufferedTranscoder::max_finish_output_len`]. The adapter intentionally does
-/// not allocate a pending final-output buffer, so finalization keeps the same
-/// caller-buffer ownership model as normal transcoding. Incomplete tails
+/// [`BufferedTranscoder::max_finish_output_len`]. The adapter intentionally
+/// does not allocate a pending final-output buffer, so finalization keeps the
+/// same caller-buffer ownership model as normal transcoding. Incomplete tails
 /// reported by the decoder at EOF are returned as [`ErrorKind::UnexpectedEof`]
 /// and are not finalized.
 ///
@@ -87,7 +101,12 @@ where
     /// A new buffered decoder input.
     #[must_use]
     #[inline]
-    pub fn with_capacity(inner: I, decoder: D, capacity: usize, map_error: M) -> Self {
+    pub fn with_capacity(
+        inner: I,
+        decoder: D,
+        capacity: usize,
+        map_error: M,
+    ) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
             decoder,
@@ -147,7 +166,11 @@ where
     /// # Errors
     ///
     /// Returns capacity or decoder finalization errors mapped to I/O errors.
-    fn finish_decoder(&mut self, output: &mut [Value], output_index: usize) -> Result<usize> {
+    fn finish_decoder(
+        &mut self,
+        output: &mut [Value],
+        output_index: usize,
+    ) -> Result<usize> {
         let required = self
             .decoder
             .max_finish_output_len()
@@ -155,7 +178,11 @@ where
         let available = output.len().saturating_sub(output_index);
         if required > available {
             return Err(finish_to_io_error(
-                FinishError::insufficient_output(output_index, required, available),
+                FinishError::insufficient_output(
+                    output_index,
+                    required,
+                    available,
+                ),
                 &mut self.map_error,
             ));
         }
@@ -208,14 +235,16 @@ where
                 let written = self.finish_decoder(output, output_index)?;
                 return Ok(written);
             }
-            if self.input.available() == 0 {
-                return Ok(written_total);
-            }
             let (units, unit_index, available) = self.input.unread_raw_parts();
             let units = &units[..unit_index + available];
             let progress = self
                 .decoder
-                .transcode(units, unit_index, output, output_index + written_total)
+                .transcode(
+                    units,
+                    unit_index,
+                    output,
+                    output_index + written_total,
+                )
                 .map_err(&mut self.map_error)?;
             let consumed = progress.read();
             let written = progress.written();
@@ -270,7 +299,9 @@ where
         FinishError::Capacity { source } => capacity_to_io_error(source),
         FinishError::InvalidOutputIndex { index, len } => Error::new(
             ErrorKind::InvalidData,
-            format!("invalid finish output index {index} for output length {len}"),
+            format!(
+                "invalid finish output index {index} for output length {len}"
+            ),
         ),
         FinishError::InsufficientOutput {
             output_index,
