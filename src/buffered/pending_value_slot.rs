@@ -8,11 +8,17 @@
 //! Slot that owns the converter's retained decoded value.
 
 use super::{
-    buffered_encode_engine::BufferedEncodeEngine, buffered_encode_hooks::BufferedEncodeHooks,
-    convert_state::ConvertState, pending_encode_step::PendingEncodeStep,
-    pending_value::PendingValue, transcode_progress::TranscodeProgress,
+    buffered_encode_engine::BufferedEncodeEngine,
+    buffered_encode_hooks::BufferedEncodeHooks,
+    convert_state::ConvertState,
+    pending_encode_step::PendingEncodeStep,
+    pending_value::PendingValue,
+    transcode_progress::TranscodeProgress,
 };
-use crate::{CapacityError, Codec};
+use crate::{
+    CapacityError,
+    Codec,
+};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

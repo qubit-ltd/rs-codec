@@ -23,8 +23,8 @@ impl ValueDecoder<str> for StringDecoder {
 
 #[test]
 fn test_decoder_trait_dispatches_to_implementor() {
-    let decoded =
-        ValueDecoder::<str>::decode(&StringDecoder, "text").expect("decoding should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&StringDecoder, "text")
+        .expect("decoding should be infallible");
 
     assert_eq!("text", decoded);
 }

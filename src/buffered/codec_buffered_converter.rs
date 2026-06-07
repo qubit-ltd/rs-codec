@@ -9,14 +9,26 @@
 
 use core::{
     fmt,
-    hash::{Hash, Hasher},
+    hash::{
+        Hash,
+        Hasher,
+    },
 };
 
 use super::{
-    BufferedConvertEngine, BufferedConverter, BufferedTranscoder, FinishError, TranscodeProgress,
-    TranscodeStatus, codec_buffered_convert_hooks::CodecBufferedConvertHooks,
+    BufferedConvertEngine,
+    BufferedConverter,
+    BufferedTranscoder,
+    FinishError,
+    TranscodeProgress,
+    TranscodeStatus,
+    codec_buffered_convert_hooks::CodecBufferedConvertHooks,
 };
-use crate::{CapacityError, Codec, CodecConvertError};
+use crate::{
+    CapacityError,
+    Codec,
+    CodecConvertError,
+};
 
 /// Strict codec-backed converter error type.
 type CodecBufferedConvertError<D, E> =
@@ -174,7 +186,11 @@ where
     #[inline(always)]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
-            engine: BufferedConvertEngine::new(decoder, encoder, CodecBufferedConvertHooks::new()),
+            engine: BufferedConvertEngine::new(
+                decoder,
+                encoder,
+                CodecBufferedConvertHooks::new(),
+            ),
         }
     }
 
@@ -192,7 +208,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
@@ -277,7 +296,11 @@ where
         let required = self
             .max_finish_output_len()
             .map_err(FinishError::capacity)?;
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let empty_input: &[D::Unit] = &[];
         let progress = self
@@ -366,7 +389,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CodecBufferedConverter::transcode(self, input, input_index, output, output_index)
+        CodecBufferedConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.

@@ -7,7 +7,10 @@
 // =============================================================================
 //! Result type for converter steps that may stop with public progress.
 
-use super::{convert_error_of::ConvertErrorOf, transcode_progress::TranscodeProgress};
+use super::{
+    convert_error_of::ConvertErrorOf,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Result type for converter steps that may stop with public progress.
 ///

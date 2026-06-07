@@ -8,8 +8,14 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    BufferedEncoder, BufferedTranscoder, CapacityError, Codec, CodecBufferedEncoder,
-    CodecEncodeError, FinishError, TranscodeStatus,
+    BufferedEncoder,
+    BufferedTranscoder,
+    CapacityError,
+    Codec,
+    CodecBufferedEncoder,
+    CodecEncodeError,
+    FinishError,
+    TranscodeStatus,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

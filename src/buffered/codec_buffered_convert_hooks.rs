@@ -12,7 +12,12 @@ use super::{
     codec_buffered_decode_hooks::CodecBufferedDecodeHooks,
     codec_buffered_encode_hooks::CodecBufferedEncodeHooks,
 };
-use crate::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError};
+use crate::{
+    Codec,
+    CodecConvertError,
+    CodecDecodeError,
+    CodecEncodeError,
+};
 
 /// Policy hooks for [`super::CodecBufferedConverter`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -54,7 +59,11 @@ where
     /// Returns decode hooks that map decode failures directly to codec decode
     /// errors.
     #[inline(always)]
-    fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
+    fn create_decode_hooks(
+        &self,
+        _decode_codec: &D,
+        _encode_codec: &E,
+    ) -> Self::DecodeHooks {
         CodecBufferedDecodeHooks
     }
 
@@ -70,7 +79,11 @@ where
     /// Returns encode hooks that map encode failures directly to codec encode
     /// errors.
     #[inline(always)]
-    fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
+    fn create_encode_hooks(
+        &self,
+        _decode_codec: &D,
+        _encode_codec: &E,
+    ) -> Self::EncodeHooks {
         CodecBufferedEncodeHooks
     }
 
@@ -121,7 +134,9 @@ where
         index: usize,
         input_len: usize,
     ) -> Self::Error {
-        CodecConvertError::decode(CodecDecodeError::invalid_input_index(index, input_len))
+        CodecConvertError::decode(CodecDecodeError::invalid_input_index(
+            index, input_len,
+        ))
     }
 
     /// Resets stateless codec-backed converter hooks.

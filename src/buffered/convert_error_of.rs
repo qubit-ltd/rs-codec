@@ -7,7 +7,10 @@
 // =============================================================================
 //! Converter error and result type aliases selected by converter hooks.
 
-use super::{buffered_convert_hooks::BufferedConvertHooks, transcode_progress::TranscodeProgress};
+use super::{
+    buffered_convert_hooks::BufferedConvertHooks,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Converter error type selected by hooks for one target output unit type.
 ///
@@ -16,7 +19,8 @@ use super::{buffered_convert_hooks::BufferedConvertHooks, transcode_progress::Tr
 /// - `D`: Source codec type.
 /// - `E`: Target codec type.
 /// - `H`: Converter hook type exposing `Error`.
-pub(super) type ConvertErrorOf<D, E, H> = <H as BufferedConvertHooks<D, E>>::Error;
+pub(super) type ConvertErrorOf<D, E, H> =
+    <H as BufferedConvertHooks<D, E>>::Error;
 
 /// Converter progress result type selected by hooks for one target output unit
 /// type.
@@ -33,4 +37,5 @@ pub(super) type ConvertErrorOf<D, E, H> = <H as BufferedConvertHooks<D, E>>::Err
 /// - `Ok(progress)` when a conversion step advances or completes without error,
 ///   or
 /// - `Err(error)` when conversion cannot continue.
-pub(super) type ConvertProgressResult<D, E, H> = Result<TranscodeProgress, ConvertErrorOf<D, E, H>>;
+pub(super) type ConvertProgressResult<D, E, H> =
+    Result<TranscodeProgress, ConvertErrorOf<D, E, H>>;

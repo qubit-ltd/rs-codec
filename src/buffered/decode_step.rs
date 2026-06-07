@@ -10,7 +10,9 @@
 use core::num::NonZeroUsize;
 
 use super::{
-    convert_state::ConvertState, decode_state::DecodeState, pending_value::PendingValue,
+    convert_state::ConvertState,
+    decode_state::DecodeState,
+    pending_value::PendingValue,
     transcode_progress::TranscodeProgress,
 };
 
@@ -53,7 +55,11 @@ impl<Value> DecodeStep<Value> {
     ///
     /// Returns a decoded step.
     #[inline(always)]
-    pub(super) const fn decoded(value: Value, consumed: NonZeroUsize, input_index: usize) -> Self {
+    pub(super) const fn decoded(
+        value: Value,
+        consumed: NonZeroUsize,
+        input_index: usize,
+    ) -> Self {
         Self::Decoded {
             value,
             consumed,
@@ -86,7 +92,10 @@ impl<Value> DecodeStep<Value> {
     ///
     /// Returns a need-input step.
     #[inline(always)]
-    pub(super) const fn need_input(additional: NonZeroUsize, available: usize) -> Self {
+    pub(super) const fn need_input(
+        additional: NonZeroUsize,
+        available: usize,
+    ) -> Self {
         Self::NeedInput {
             additional,
             available,

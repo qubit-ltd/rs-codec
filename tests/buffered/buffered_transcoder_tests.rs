@@ -1,5 +1,9 @@
 use qubit_codec::{
-    BufferedTranscoder, CapacityError, FinishError, TranscodeProgress, TranscodeStatus,
+    BufferedTranscoder,
+    CapacityError,
+    FinishError,
+    TranscodeProgress,
+    TranscodeStatus,
 };
 
 #[derive(Default)]
@@ -21,7 +25,9 @@ impl BufferedTranscoder<u8, u8> for CopyBufferedTranscoder {
     ) -> Result<TranscodeProgress, Self::Error> {
         let mut read = 0;
         let mut written = 0;
-        while input_index + read < input.len() && output_index + written < output.len() {
+        while input_index + read < input.len()
+            && output_index + written < output.len()
+        {
             output[output_index + written] = input[input_index + read];
             read += 1;
             written += 1;
@@ -66,7 +72,12 @@ impl BufferedTranscoder<u8, u8> for FinishingBufferedTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CopyBufferedTranscoder.transcode(input, input_index, output, output_index)
+        CopyBufferedTranscoder.transcode(
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     fn finish(
@@ -76,7 +87,11 @@ impl BufferedTranscoder<u8, u8> for FinishingBufferedTranscoder {
     ) -> Result<usize, FinishError<Self::Error>> {
         let suffix = *b"!\n";
         let required = suffix.len() - self.suffix_index;
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        FinishError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         let mut written = 0;
         while self.suffix_index < suffix.len() {
             output[output_index + written] = suffix[self.suffix_index];
@@ -88,7 +103,8 @@ impl BufferedTranscoder<u8, u8> for FinishingBufferedTranscoder {
 }
 
 #[test]
-fn test_buffered_transcoder_contract_uses_absolute_indices_and_relative_progress() {
+fn test_buffered_transcoder_contract_uses_absolute_indices_and_relative_progress()
+ {
     let mut transcoder = CopyBufferedTranscoder;
     let mut output = [0_u8; 4];
 
@@ -118,7 +134,8 @@ fn test_buffered_transcoder_default_reset_and_finish_are_noops() {
 }
 
 #[test]
-fn test_buffered_transcoder_default_finish_reports_output_index_beyond_buffer() {
+fn test_buffered_transcoder_default_finish_reports_output_index_beyond_buffer()
+{
     let mut transcoder = CopyBufferedTranscoder;
     let mut output = [];
 
@@ -152,9 +169,9 @@ fn test_buffered_transcoder_finish_requires_one_shot_output_capacity() {
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
     let mut output = [0_u8; 2];
-    let written = transcoder
-        .finish(&mut output, 0)
-        .expect("finish should write the whole suffix once capacity is available");
+    let written = transcoder.finish(&mut output, 0).expect(
+        "finish should write the whole suffix once capacity is available",
+    );
 
     assert_eq!(2, written);
     assert_eq!(*b"!\n", output);

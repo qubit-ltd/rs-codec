@@ -7,7 +7,12 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
-use qubit_codec::{Codec, CodecDecodeError, CodecValueDecoder, ValueDecoder};
+use qubit_codec::{
+    Codec,
+    CodecDecodeError,
+    CodecValueDecoder,
+    ValueDecoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
@@ -153,7 +158,8 @@ enum TestDecodeError {
 fn test_codec_value_decoder_decodes_exactly_one_value() {
     let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let output = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect("single byte should decode");
+    let output = ValueDecoder::<[u8]>::decode(&decoder, &[7])
+        .expect("single byte should decode");
 
     assert_eq!(7, output);
 }
@@ -162,7 +168,8 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
 fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
     let decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect_err("one byte is incomplete");
+    let error = ValueDecoder::<[u8]>::decode(&decoder, &[7])
+        .expect_err("one byte is incomplete");
 
     assert_eq!(
         CodecDecodeError::Incomplete {
@@ -178,8 +185,8 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
 fn test_codec_value_decoder_rejects_trailing_input() {
     let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error =
-        ValueDecoder::<[u8]>::decode(&decoder, &[7, 8]).expect_err("trailing input should fail");
+    let error = ValueDecoder::<[u8]>::decode(&decoder, &[7, 8])
+        .expect_err("trailing input should fail");
 
     assert_eq!(
         CodecDecodeError::TrailingInput {
@@ -194,7 +201,8 @@ fn test_codec_value_decoder_rejects_trailing_input() {
 fn test_codec_value_decoder_wraps_codec_decode_error() {
     let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&decoder, &[0xff]).expect_err("0xff should fail");
+    let error = ValueDecoder::<[u8]>::decode(&decoder, &[0xff])
+        .expect_err("0xff should fail");
 
     assert_eq!(
         CodecDecodeError::Decode {
@@ -206,9 +214,12 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::decode_unchecked consumed beyond available input")]
+#[should_panic(
+    expected = "Codec::decode_unchecked consumed beyond available input"
+)]
 fn test_codec_value_decoder_panics_when_codec_consumes_beyond_input() {
-    let decoder = CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
+    let decoder =
+        CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
 
     let _ = ValueDecoder::<[u8]>::decode(&decoder, &[7]);
 }

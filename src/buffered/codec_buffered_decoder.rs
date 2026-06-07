@@ -8,11 +8,18 @@
 //! Buffered decoder adapter backed by a low-level codec.
 
 use super::{
-    BufferedDecoder, BufferedTranscoder, FinishError, TranscodeProgress,
+    BufferedDecoder,
+    BufferedTranscoder,
+    FinishError,
+    TranscodeProgress,
     buffered_decode_engine::BufferedDecodeEngine,
     codec_buffered_decode_hooks::CodecBufferedDecodeHooks,
 };
-use crate::{CapacityError, Codec, CodecDecodeError};
+use crate::{
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+};
 
 /// Decodes encoded units into caller-provided value buffers by using a
 /// [`Codec`].
@@ -148,4 +155,7 @@ where
     }
 }
 
-impl<C> BufferedDecoder<C::Unit, C::Value> for CodecBufferedDecoder<C> where C: Codec {}
+impl<C> BufferedDecoder<C::Unit, C::Value> for CodecBufferedDecoder<C> where
+    C: Codec
+{
+}

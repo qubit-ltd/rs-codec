@@ -42,7 +42,9 @@ pub enum CodecDecodeError<E> {
     },
 
     /// A whole-value decode succeeded but left trailing input units.
-    #[error("trailing input after decoded value: consumed {consumed} units, remaining {remaining}")]
+    #[error(
+        "trailing input after decoded value: consumed {consumed} units, remaining {remaining}"
+    )]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -102,7 +104,11 @@ impl<E> CodecDecodeError<E> {
     /// Returns an incomplete-input error.
     #[must_use]
     #[inline(always)]
-    pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
+    pub const fn incomplete(
+        input_index: usize,
+        required_total: usize,
+        available: usize,
+    ) -> Self {
         Self::Incomplete {
             input_index,
             required_total,

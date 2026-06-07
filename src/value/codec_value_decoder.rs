@@ -8,7 +8,11 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
-use crate::{Codec, CodecDecodeError, codec::assert_unit_bounds};
+use crate::{
+    Codec,
+    CodecDecodeError,
+    codec::assert_unit_bounds,
+};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -76,13 +80,18 @@ where
         assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
-            return Err(CodecDecodeError::incomplete(0, min_units, input.len()));
+            return Err(CodecDecodeError::incomplete(
+                0,
+                min_units,
+                input.len(),
+            ));
         }
 
         // SAFETY: The input slice has at least the codec's declared minimum
         // number of readable units from index zero.
-        let (value, consumed) = unsafe { self.codec.decode_unchecked(input, 0) }
-            .map_err(|error| CodecDecodeError::decode(error, 0))?;
+        let (value, consumed) =
+            unsafe { self.codec.decode_unchecked(input, 0) }
+                .map_err(|error| CodecDecodeError::decode(error, 0))?;
         let consumed = consumed.get();
         assert!(
             consumed <= input.len(),

@@ -8,7 +8,8 @@
 //! Policy hooks used by buffered convert engines.
 
 use super::{
-    buffered_decode_hooks::BufferedDecodeHooks, buffered_encode_hooks::BufferedEncodeHooks,
+    buffered_decode_hooks::BufferedDecodeHooks,
+    buffered_encode_hooks::BufferedEncodeHooks,
 };
 use crate::Codec;
 
@@ -54,7 +55,11 @@ where
     /// # Returns
     ///
     /// Returns the decode hooks used by the internal buffered decoder.
-    fn create_decode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::DecodeHooks;
+    fn create_decode_hooks(
+        &self,
+        decode_codec: &D,
+        encode_codec: &E,
+    ) -> Self::DecodeHooks;
 
     /// Creates encode policy hooks for the internal buffered encoder.
     ///
@@ -66,7 +71,11 @@ where
     /// # Returns
     ///
     /// Returns the encode hooks used by the internal buffered encoder.
-    fn create_encode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::EncodeHooks;
+    fn create_encode_hooks(
+        &self,
+        decode_codec: &D,
+        encode_codec: &E,
+    ) -> Self::EncodeHooks;
 
     /// Maps a decode-engine error into the converter error type.
     ///
@@ -106,7 +115,12 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index(&self, decode_codec: &D, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(
+        &self,
+        decode_codec: &D,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error;
 
     /// Resets conversion-level hook-owned state.
     ///

@@ -7,7 +7,11 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec::{Codec, CodecValueEncoder, ValueEncoder};
+use qubit_codec::{
+    Codec,
+    CodecValueEncoder,
+    ValueEncoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
@@ -170,7 +174,8 @@ unsafe impl Codec for NonCloneValueCodec {
         &self,
         input: &[u8],
         index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError>
+    {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -198,17 +203,22 @@ unsafe impl Codec for NonCloneValueCodec {
 fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
     let encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
 
-    let output = ValueEncoder::<u8>::encode(&encoder, &7).expect("encoding should be infallible");
+    let output = ValueEncoder::<u8>::encode(&encoder, &7)
+        .expect("encoding should be infallible");
 
     assert_eq!(vec![7, 8], output);
 }
 
 #[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
-    let encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
+    let encoder =
+        CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
 
-    let output = ValueEncoder::<NonCloneValue>::encode(&encoder, &NonCloneValue { value: 11 })
-        .expect("encoding should not require cloning the value");
+    let output = ValueEncoder::<NonCloneValue>::encode(
+        &encoder,
+        &NonCloneValue { value: 11 },
+    )
+    .expect("encoding should not require cloning the value");
 
     assert_eq!(vec![11], output);
 }
@@ -217,15 +227,20 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 fn test_codec_value_encoder_propagates_encode_error() {
     let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
-    let error = ValueEncoder::<u8>::encode(&encoder, &7).expect_err("odd value should be rejected");
+    let error = ValueEncoder::<u8>::encode(&encoder, &7)
+        .expect_err("odd value should be rejected");
 
     assert_eq!("odd value", error);
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode_unchecked wrote beyond allocated output")]
+#[should_panic(
+    expected = "Codec::encode_unchecked wrote beyond allocated output"
+)]
 fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
-    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
+    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(
+        OverreportingEncodeCodec,
+    );
 
     let _ = ValueEncoder::<u8>::encode(&encoder, &7);
 }

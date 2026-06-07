@@ -7,12 +7,26 @@
 // =============================================================================
 //! Output adapter that encodes values into buffered units.
 
-use core::{fmt, marker::PhantomData};
-use std::io::{Error, ErrorKind, Result};
+use core::{
+    fmt,
+    marker::PhantomData,
+};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+};
 
-use qubit_io::{BufferedOutput, Output};
+use qubit_io::{
+    BufferedOutput,
+    Output,
+};
 
-use super::{BufferedTranscoder, FinishError, TranscodeStatus};
+use super::{
+    BufferedTranscoder,
+    FinishError,
+    TranscodeStatus,
+};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -23,11 +37,11 @@ use super::{BufferedTranscoder, FinishError, TranscodeStatus};
 /// encoder may emit retained final units such as reset bytes, digests, or
 /// trailers.
 ///
-/// [`Output::flush`] only drains already buffered units. [`Self::finish`] closes
-/// the encoder's logical stream under the [`BufferedTranscoder`] lifecycle.
-/// After finishing, callers must use a reset or new encoder state before writing
-/// another logical stream; this adapter does not expose reset and does not add a
-/// closed-state branch to the write hot path.
+/// [`Output::flush`] only drains already buffered units. [`Self::finish`]
+/// closes the encoder's logical stream under the [`BufferedTranscoder`]
+/// lifecycle. After finishing, callers must use a reset or new encoder state
+/// before writing another logical stream; this adapter does not expose reset
+/// and does not add a closed-state branch to the write hot path.
 ///
 /// # Type Parameters
 ///
@@ -84,7 +98,12 @@ where
     /// A new buffered encoder output.
     #[must_use]
     #[inline]
-    pub fn with_capacity(inner: O, encoder: E, capacity: usize, map_error: M) -> Self {
+    pub fn with_capacity(
+        inner: O,
+        encoder: E,
+        capacity: usize,
+        map_error: M,
+    ) -> Self {
         Self {
             output: BufferedOutput::with_capacity(inner, capacity),
             encoder,
@@ -209,7 +228,8 @@ where
             if self.output.spare_capacity() == 0 {
                 self.output.flush_buffer()?;
             }
-            let (units, unit_index, available) = self.output.spare_raw_parts_mut();
+            let (units, unit_index, available) =
+                self.output.spare_raw_parts_mut();
             let units = &mut units[..unit_index + available];
             let progress = self
                 .encoder
@@ -268,7 +288,9 @@ where
         FinishError::Capacity { source } => capacity_to_io_error(source),
         FinishError::InvalidOutputIndex { index, len } => Error::new(
             ErrorKind::InvalidData,
-            format!("invalid finish output index {index} for output length {len}"),
+            format!(
+                "invalid finish output index {index} for output length {len}"
+            ),
         ),
         FinishError::InsufficientOutput {
             output_index,

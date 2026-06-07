@@ -7,7 +7,10 @@
 // =============================================================================
 //! Tests for lightweight encoder and decoder traits.
 
-use qubit_codec::{ValueDecoder, ValueEncoder};
+use qubit_codec::{
+    ValueDecoder,
+    ValueEncoder,
+};
 
 #[derive(Default)]
 struct UppercaseCodec;

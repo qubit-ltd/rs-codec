@@ -8,7 +8,11 @@
 //! Tests for semantic buffered transcoder marker traits.
 
 use qubit_codec::{
-    BufferedConverter, BufferedDecoder, BufferedEncoder, BufferedTranscoder, CapacityError,
+    BufferedConverter,
+    BufferedDecoder,
+    BufferedEncoder,
+    BufferedTranscoder,
+    CapacityError,
     TranscodeProgress,
 };
 
