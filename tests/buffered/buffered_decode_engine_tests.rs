@@ -12,6 +12,7 @@ use core::num::NonZeroUsize;
 use qubit_codec::{
     BufferedDecodeEngine,
     BufferedDecodeHooks,
+    BufferedTranscoder,
     Codec,
     DecodeAction,
     DecodeContext,
@@ -941,4 +942,44 @@ fn test_buffered_decode_engine_uses_hooks_for_invalid_input_index() {
         },
         error,
     );
+}
+
+#[test]
+fn test_buffered_decode_engine_implements_buffered_transcoder() {
+    type Decoder = BufferedDecodeEngine<PrefixCodec, ReplacingHooks>;
+    let mut decoder = Decoder::new(PrefixCodec, ReplacingHooks);
+
+    let available = <Decoder as BufferedTranscoder<
+        <PrefixCodec as Codec>::Unit,
+        <PrefixCodec as Codec>::Value,
+    >>::max_output_len(&decoder, 1)
+    .expect("max_output_len should be callable through trait");
+    assert_eq!(1, available);
+
+    let mut output = [0_u8; 1];
+    let progress =
+        <Decoder as BufferedTranscoder<
+            <PrefixCodec as Codec>::Unit,
+            <PrefixCodec as Codec>::Value,
+        >>::transcode(&mut decoder, &[0xfe, 7], 0, &mut output, 0)
+        .expect("trait transcode should decode a prefixed value");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(2, progress.read());
+    assert_eq!(1, progress.written());
+
+    let finish = BufferedTranscoder::finish(&mut decoder, &mut output, 0)
+        .expect("trait finish should delegate to hooks");
+    assert_eq!(0, finish);
+
+    let finish_output_len = <Decoder as BufferedTranscoder<
+        <PrefixCodec as Codec>::Unit,
+        <PrefixCodec as Codec>::Value,
+    >>::max_finish_output_len(&decoder)
+    .expect("max_finish_output_len should be callable through trait");
+    assert_eq!(0, finish_output_len);
+
+    assert_eq!(7, output[0]);
+
+    BufferedTranscoder::reset(&mut decoder);
 }

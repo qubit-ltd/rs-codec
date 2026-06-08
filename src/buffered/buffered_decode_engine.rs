@@ -11,6 +11,7 @@ use core::num::NonZeroUsize;
 
 use super::{
     buffered_decode_hooks::BufferedDecodeHooks,
+    buffered_transcoder::BufferedTranscoder,
     decode_action::DecodeAction,
     decode_context::DecodeContext,
     decode_state::DecodeState,
@@ -463,5 +464,60 @@ where
                 Ok(action.into_step(context.input_index, context.available))
             }
         }
+    }
+}
+
+impl<C, H> BufferedTranscoder<C::Unit, C::Value> for BufferedDecodeEngine<C, H>
+where
+    C: Codec,
+    H: BufferedDecodeHooks<C>,
+{
+    type Error = H::Error;
+
+    /// Returns an upper bound for decoded values produced from `input_len`
+    /// units.
+    #[inline(always)]
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        BufferedDecodeEngine::max_output_len(self, input_len)
+    }
+
+    /// Returns an upper bound for values produced by finishing hook state.
+    #[inline(always)]
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(BufferedDecodeEngine::max_finish_output_len(self))
+    }
+
+    /// Resets hook-owned state.
+    #[inline(always)]
+    fn reset(&mut self) {
+        BufferedDecodeEngine::reset(self)
+    }
+
+    /// Decodes source units into logical values.
+    #[inline(always)]
+    fn transcode(
+        &mut self,
+        input: &[C::Unit],
+        input_index: usize,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> core::result::Result<TranscodeProgress, Self::Error> {
+        BufferedDecodeEngine::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
+    }
+
+    /// Finishes internally retained output after EOF.
+    #[inline(always)]
+    fn finish(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> core::result::Result<usize, FinishError<Self::Error>> {
+        BufferedDecodeEngine::finish(self, output, output_index)
     }
 }
