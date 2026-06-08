@@ -165,6 +165,56 @@ where
         unsafe { self.output.write_all_unchecked(input, 0, input.len()) }
     }
 
+    /// Returns raw spare-buffer parts for hot-path callers.
+    ///
+    /// The returned tuple contains the full internal backing storage, the start
+    /// index of spare units, and the spare unit count.
+    #[inline(always)]
+    #[must_use]
+    pub fn spare_raw_parts_mut(&mut self) -> (&mut [O::Item], usize, usize) {
+        self.output.spare_raw_parts_mut()
+    }
+
+    /// Returns the number of spare units available in the output buffer.
+    #[inline(always)]
+    #[must_use]
+    pub fn spare_capacity(&self) -> usize {
+        self.output.spare_capacity()
+    }
+
+    /// Ensures at least `count` spare units are available, flushing pending
+    /// output if needed.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Minimum spare units required.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the requested spare space is available, or any I/O error
+    /// while flushing.
+    #[inline]
+    pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
+        self.output.ensure_spare_capacity(count)
+    }
+
+    /// Marks `count` units from the spare buffer as initialized.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Number of units successfully written by the caller.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `count` exceeds the spare capacity.
+    #[inline]
+    pub fn advance_unchecked(&mut self, count: usize) {
+        // SAFETY: This delegates unchecked advancement to the buffered output.
+        unsafe {
+            self.output.advance_unchecked(count);
+        }
+    }
+
     /// Writes raw units from an indexed input range.
     ///
     /// # Parameters

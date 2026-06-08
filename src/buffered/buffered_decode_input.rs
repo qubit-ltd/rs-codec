@@ -191,6 +191,39 @@ where
         unsafe { self.read_units_unchecked(output, 0, output.len()) }
     }
 
+    /// Returns raw unread-buffer parts for hot-path callers.
+    ///
+    /// The returned tuple contains the full internal backing storage, the start
+    /// index of unread units, and the unread unit count.
+    #[inline(always)]
+    #[must_use]
+    pub fn unread_raw_parts(&self) -> (&[I::Item], usize, usize) {
+        let (units, unit_index, available) = self.input.unread_raw_parts();
+        debug_assert!(unit_index <= units.len());
+        debug_assert!(unit_index + available <= units.len());
+        (&units[..unit_index + available], unit_index, available)
+    }
+
+    /// Refills the internal buffer until at least `count` unread units are
+    /// available, returning whether the requested amount was reached.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Minimum unread units required.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(true)` if at least `count` unread units are available, or
+    /// `Ok(false)` at EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns any non-interrupted I/O error reported by the wrapped input.
+    #[inline]
+    pub fn fill_until(&mut self, count: usize) -> Result<bool> {
+        self.input.fill_until(count)
+    }
+
     /// Reads raw units through the internal buffer into an indexed range.
     ///
     /// # Parameters
