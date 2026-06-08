@@ -291,6 +291,9 @@ where
             DecodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
+            if state.needs_output() && state.has_written_output() {
+                return Ok(state.need_output_progress());
+            }
             let context = state.context();
             let step = self.decode_step(state.input(), context)?;
             if let Some(progress) = step.apply_to_decode_state(&mut state) {

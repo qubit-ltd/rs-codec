@@ -5,16 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Input adapter that decodes buffered units into values.
+//! Buffered input driver that decodes units into values.
 
-use core::{
-    fmt,
-    marker::PhantomData,
-};
+use core::fmt;
 use std::io::{
     Error,
     ErrorKind,
+    Read,
     Result,
+    Seek,
+    SeekFrom,
 };
 
 use qubit_io::{
@@ -30,89 +30,82 @@ use super::{
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
-/// This adapter owns a unit-level [`qubit_io::BufferedInput`] and a buffered
-/// decoder. Reads from this adapter fill the internal unit buffer, drive the
-/// decoder into the caller-provided value slice, and consume only the source
-/// units reported by the decoder progress.
+/// This type owns only the unit-level [`qubit_io::BufferedInput`]. Callers pass
+/// the decoder and error mapper to each decode operation, which lets one
+/// buffered input drive different decoders without nesting buffers or storing
+/// codec-specific state in the buffer owner.
 ///
-/// At clean EOF, the adapter calls the decoder's finish operation exactly once
-/// and returns EOF on later reads. If finishing can emit values, the current
-/// caller-provided output range must have enough remaining slots for
-/// [`BufferedTranscoder::max_finish_output_len`]. The adapter intentionally
-/// does not allocate a pending final-output buffer, so finalization keeps the
-/// same caller-buffer ownership model as normal transcoding. Incomplete tails
-/// reported by the decoder at EOF are returned as [`ErrorKind::UnexpectedEof`]
-/// and are not finalized.
+/// Decoding does not finish the decoder automatically at clean EOF. Decoder
+/// finish state belongs to the caller-owned decoder, so callers that need
+/// final output must call [`Self::finish_into`] or
+/// [`Self::finish_into_unchecked`] exactly when their logical stream ends.
+/// Incomplete tails remain buffered when EOF prevents a
+/// [`TranscodeStatus::NeedInput`] request from being satisfied; the caller can
+/// then decide whether to reject, replace, or otherwise handle the tail.
 ///
 /// # Type Parameters
 ///
 /// * `I` - Wrapped unit input.
-/// * `D` - Buffered decoder from the wrapped input item to `Value`.
-/// * `M` - Error mapping function from decoder errors to I/O errors.
-/// * `Value` - Decoded value type written to callers.
-pub struct BufferedDecodeInput<I, D, M, Value>
+pub struct BufferedDecodeInput<I>
 where
     I: Input,
     I::Item: Copy + Default,
 {
     input: BufferedInput<I>,
-    decoder: D,
-    map_error: M,
-    finished: bool,
-    marker: PhantomData<fn() -> Value>,
 }
 
-impl<I, D, M, Value> fmt::Debug for BufferedDecodeInput<I, D, M, Value>
+impl<I> fmt::Debug for BufferedDecodeInput<I>
 where
     I: Input,
     I::Item: Copy + Default,
     BufferedInput<I>: fmt::Debug,
-    D: fmt::Debug,
-    M: fmt::Debug,
 {
     /// Formats this buffered decode input for debugging.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("BufferedDecodeInput")
             .field("input", &self.input)
-            .field("decoder", &self.decoder)
-            .field("map_error", &self.map_error)
-            .field("finished", &self.finished)
             .finish()
     }
 }
 
-impl<I, D, M, Value> BufferedDecodeInput<I, D, M, Value>
+impl<I> BufferedDecodeInput<I>
 where
     I: Input,
     I::Item: Copy + Default,
 {
-    /// Creates a decoder input with a unit buffer of at least `capacity`.
+    /// Creates a decoder input with the default unit buffer capacity.
     ///
     /// # Parameters
     ///
     /// * `inner` - Unit input read by this adapter.
-    /// * `decoder` - Buffered decoder that converts units into values.
-    /// * `capacity` - Requested internal unit buffer capacity.
-    /// * `map_error` - Function that maps decoder errors into I/O errors.
     ///
     /// # Returns
     ///
     /// A new buffered decoder input.
     #[must_use]
     #[inline]
-    pub fn with_capacity(
-        inner: I,
-        decoder: D,
-        capacity: usize,
-        map_error: M,
-    ) -> Self {
+    pub fn new(inner: I) -> Self {
+        Self {
+            input: BufferedInput::new(inner),
+        }
+    }
+
+    /// Creates a decoder input with a unit buffer of at least `capacity`.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Unit input read by this adapter.
+    /// * `capacity` - Requested internal unit buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// A new buffered decoder input.
+    #[must_use]
+    #[inline]
+    pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
-            decoder,
-            map_error,
-            finished: false,
-            marker: PhantomData,
         }
     }
 
@@ -127,91 +120,258 @@ where
         self.input.inner()
     }
 
-    /// Returns a shared reference to the buffered decoder.
+    /// Returns a mutable reference to the wrapped unit input.
     ///
     /// # Returns
     ///
-    /// A shared reference to the buffered decoder.
+    /// A mutable reference to the wrapped unit input.
+    #[inline(always)]
+    pub fn inner_mut(&mut self) -> &mut I {
+        self.input.inner_mut()
+    }
+
+    /// Returns the number of unread units currently buffered.
+    ///
+    /// # Returns
+    ///
+    /// The number of buffered units available before reading from the wrapped
+    /// input again.
     #[must_use]
     #[inline(always)]
-    pub const fn decoder(&self) -> &D {
-        &self.decoder
+    pub fn available(&self) -> usize {
+        self.input.available()
+    }
+
+    /// Consumes all currently buffered unread units.
+    ///
+    /// # Returns
+    ///
+    /// The number of units discarded from the unread buffer.
+    #[inline]
+    pub fn consume_available(&mut self) -> usize {
+        let available = self.input.available();
+        self.input.consume(available);
+        available
+    }
+
+    /// Consumes `count` buffered unread units.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Number of currently buffered units to consume.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `count` exceeds [`Self::available`].
+    #[inline]
+    pub fn consume_units(&mut self, count: usize) {
+        assert!(
+            count <= self.input.available(),
+            "cannot consume beyond available buffered input",
+        );
+        self.input.consume(count);
+    }
+
+    /// Reads raw units through the internal buffer.
+    ///
+    /// # Parameters
+    ///
+    /// * `output` - Destination unit storage.
+    ///
+    /// # Returns
+    ///
+    /// The number of raw units read.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors reported by the wrapped input.
+    #[inline]
+    pub fn read_units(&mut self, output: &mut [I::Item]) -> Result<usize> {
+        // SAFETY: The full output slice is a valid destination range.
+        unsafe { self.read_units_unchecked(output, 0, output.len()) }
+    }
+
+    /// Reads raw units through the internal buffer into an indexed range.
+    ///
+    /// # Parameters
+    ///
+    /// * `output` - Destination unit storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of units to read.
+    ///
+    /// # Returns
+    ///
+    /// The number of raw units read.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors reported by the wrapped input.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    #[inline]
+    pub unsafe fn read_units_unchecked(
+        &mut self,
+        output: &mut [I::Item],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize> {
+        // SAFETY: The caller guarantees that the destination range is valid.
+        unsafe { self.input.read_into_unchecked(output, output_index, count) }
     }
 
     /// Consumes this adapter and returns its parts.
     ///
     /// # Returns
     ///
-    /// The wrapped input, unread units, decoder, and error mapper.
+    /// The wrapped input and unread units.
     #[must_use]
     #[inline]
-    pub fn into_parts(self) -> (I, Vec<I::Item>, D, M) {
-        let (inner, unread) = self.input.into_parts();
-        (inner, unread, self.decoder, self.map_error)
+    pub fn into_parts(self) -> (I, Vec<I::Item>) {
+        self.input.into_parts()
     }
 }
 
-impl<I, D, M, Value> BufferedDecodeInput<I, D, M, Value>
+impl<I> BufferedDecodeInput<I>
 where
-    I: Input,
-    D: BufferedTranscoder<I::Item, Value>,
-    M: FnMut(D::Error) -> Error,
-    I::Item: Copy + Default,
+    I: Input<Item = u8> + Seek,
 {
-    /// Finishes the decoder into the caller-provided output slice.
+    /// Seeks the wrapped byte input and discards buffered bytes after success.
     ///
-    /// Finalization is a one-shot operation. The caller-provided output range
-    /// must be able to accept the decoder's advertised finish bound.
+    /// # Parameters
+    ///
+    /// * `position` - Target seek position.
+    ///
+    /// # Returns
+    ///
+    /// The new stream position reported by the wrapped input.
     ///
     /// # Errors
     ///
-    /// Returns capacity or decoder finalization errors mapped to I/O errors.
-    fn finish_decoder(
-        &mut self,
-        output: &mut [Value],
-        output_index: usize,
-    ) -> Result<usize> {
-        let required = self
-            .decoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
-        let available = output.len().saturating_sub(output_index);
-        if required > available {
-            return Err(finish_to_io_error(
-                FinishError::insufficient_output(
-                    output_index,
-                    required,
-                    available,
-                ),
-                &mut self.map_error,
-            ));
-        }
-        let written = self
-            .decoder
-            .finish(output, output_index)
-            .map_err(|error| finish_to_io_error(error, &mut self.map_error))?;
-        assert!(written <= required, "finish wrote beyond its bound");
-        self.finished = true;
-        Ok(written)
+    /// Returns seek errors from the wrapped input.
+    #[inline]
+    pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        Seek::seek(&mut self.input, position)
     }
 }
 
-impl<I, D, M, Value> Input for BufferedDecodeInput<I, D, M, Value>
+impl<I> Read for BufferedDecodeInput<I>
+where
+    I: Input<Item = u8>,
+{
+    /// Reads raw bytes through the internal buffer.
+    #[inline]
+    fn read(&mut self, output: &mut [u8]) -> Result<usize> {
+        self.read_units(output)
+    }
+}
+
+impl<I> Seek for BufferedDecodeInput<I>
+where
+    I: Input<Item = u8> + Seek,
+{
+    /// Seeks the wrapped byte input and discards buffered bytes after success.
+    #[inline]
+    fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        self.seek(position)
+    }
+}
+
+impl<I> BufferedDecodeInput<I>
 where
     I: Input,
-    D: BufferedTranscoder<I::Item, Value>,
-    M: FnMut(D::Error) -> Error,
     I::Item: Copy + Default,
 {
-    type Item = Value;
-
-    /// Reads decoded values into an indexed output range.
-    unsafe fn read_unchecked(
+    /// Decodes values into a checked output range.
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Decoder used for this operation.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written. A zero result means either `count` was
+    /// zero, clean EOF was reached, or an incomplete tail remains buffered at
+    /// EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns input errors, capacity errors from the internal buffer, or
+    /// decoder errors mapped by `map_error`.
+    pub fn decode_into<D, M, Value>(
         &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
         output: &mut [Value],
         output_index: usize,
         count: usize,
-    ) -> Result<usize> {
+    ) -> Result<usize>
+    where
+        D: BufferedTranscoder<I::Item, Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        assert!(
+            output_index
+                .checked_add(count)
+                .is_some_and(|end| end <= output.len()),
+            "decoded output range exceeds destination buffer",
+        );
+        // SAFETY: The assertion proves that the requested output range is
+        // valid.
+        unsafe {
+            self.decode_into_unchecked(
+                decoder,
+                map_error,
+                output,
+                output_index,
+                count,
+            )
+        }
+    }
+
+    /// Decodes values into an indexed output range without checking bounds.
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Decoder used for this operation.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written. Incomplete EOF tails are left buffered
+    /// and reported as `Ok(written)`, so callers can apply their own EOF
+    /// policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns input errors, capacity errors from the internal buffer, or
+    /// decoder errors mapped by `map_error`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    pub unsafe fn decode_into_unchecked<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        D: BufferedTranscoder<I::Item, Value>,
+        M: FnMut(D::Error) -> Error,
+    {
         debug_assert!(
             output_index
                 .checked_add(count)
@@ -221,31 +381,23 @@ where
         if count == 0 {
             return Ok(0);
         }
-        if self.finished {
-            return Ok(0);
-        }
         let output_end = output_index + count;
         let output = &mut output[..output_end];
         let mut written_total = 0;
         loop {
             if self.input.available() == 0 && !self.input.fill_more()? {
-                if written_total > 0 {
-                    return Ok(written_total);
-                }
-                let written = self.finish_decoder(output, output_index)?;
-                return Ok(written);
+                return Ok(written_total);
             }
             let (units, unit_index, available) = self.input.unread_raw_parts();
             let units = &units[..unit_index + available];
-            let progress = self
-                .decoder
+            let progress = decoder
                 .transcode(
                     units,
                     unit_index,
                     output,
                     output_index + written_total,
                 )
-                .map_err(&mut self.map_error)?;
+                .map_err(&mut *map_error)?;
             let consumed = progress.read();
             let written = progress.written();
             // SAFETY: The decoder reported consumed units from the currently
@@ -272,16 +424,120 @@ where
                     if self.input.fill_until(required)? {
                         continue;
                     }
-                    if written_total > 0 {
-                        return Ok(written_total);
-                    }
-                    return Err(Error::new(
-                        ErrorKind::UnexpectedEof,
-                        "incomplete encoded input at EOF",
-                    ));
+                    return Ok(written_total);
                 }
             }
         }
+    }
+
+    /// Finishes the decoder into the caller-provided output slice.
+    ///
+    /// The caller-provided output range must be able to accept the decoder's
+    /// advertised finish bound.
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Decoder whose final output is being collected.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of finish values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written by the decoder finish operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity or decoder finalization errors mapped to I/O errors.
+    pub fn finish_into<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        D: BufferedTranscoder<I::Item, Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        assert!(
+            output_index
+                .checked_add(count)
+                .is_some_and(|end| end <= output.len()),
+            "finish output range exceeds destination buffer",
+        );
+        // SAFETY: The assertion proves that the requested output range is
+        // valid.
+        unsafe {
+            self.finish_into_unchecked(
+                decoder,
+                map_error,
+                output,
+                output_index,
+                count,
+            )
+        }
+    }
+
+    /// Finishes the decoder into an indexed output range without bounds
+    /// checks.
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Decoder whose final output is being collected.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of finish values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written by the decoder finish operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity or decoder finalization errors mapped to I/O errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    pub unsafe fn finish_into_unchecked<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        D: BufferedTranscoder<I::Item, Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        debug_assert!(
+            output_index
+                .checked_add(count)
+                .is_some_and(|end| end <= output.len()),
+            "unchecked finish output range exceeds destination buffer",
+        );
+        let required = decoder
+            .max_finish_output_len()
+            .map_err(capacity_to_io_error)?;
+        if required > count {
+            return Err(finish_to_io_error(
+                FinishError::insufficient_output(output_index, required, count),
+                map_error,
+            ));
+        }
+        let output_end = output_index + count;
+        let output = &mut output[..output_end];
+        let written = decoder
+            .finish(output, output_index)
+            .map_err(|error| finish_to_io_error(error, map_error))?;
+        assert!(written <= required, "finish wrote beyond its bound");
+        Ok(written)
     }
 }
 

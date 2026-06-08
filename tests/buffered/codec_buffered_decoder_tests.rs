@@ -150,6 +150,28 @@ fn test_codec_buffered_decoder_decodes_until_output_needs_capacity() {
 }
 
 #[test]
+fn test_codec_buffered_decoder_does_not_decode_after_output_is_full() {
+    let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
+    let mut output = [0_u8; 1];
+
+    let progress = decoder
+        .transcode(&[1, 0xff], 0, &mut output, 0)
+        .expect("full output should stop before invalid trailing input");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            output_index: 1,
+            additional: super::nz(1),
+            available: 0,
+        },
+        progress.status(),
+    );
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([1], output);
+}
+
+#[test]
 fn test_codec_buffered_decoder_reports_bounds_and_resets_state() {
     let mut decoder = CodecBufferedDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 1];

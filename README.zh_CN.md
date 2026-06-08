@@ -90,12 +90,12 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`DecodeAction<Value>`**：decoder engine hook 在 transcode 阶段返回的策略动作。
 - **`CodecBufferedConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `BufferedConverter`。
-- **`BufferedDecodeInput<I, D, M, Value>`**：把底层 unit `Input` 适配为 decoded
-  value `Input`，使用 `BufferedInput` 保留不完整尾部，并在 clean EOF 时执行
-  decoder finish。
-- **`BufferedEncodeOutput<O, E, M, Value>`**：把 value `Output` 适配为 encoded
-  unit `Output`，普通 `flush` 只排空 unit buffer，显式 `finish` 写入 encoder
-  final output。
+- **`BufferedDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
+  `decode_into` / `finish_into` 驱动调用方传入的 decoder；不完整尾部保留在
+  buffer 中，由调用方决定 EOF 策略。
+- **`BufferedEncodeOutput<O>`**：持有底层 unit `BufferedOutput`，通过
+  `encode_from` / `finish` 驱动调用方传入的 encoder；普通 `flush` 只排空
+  unit buffer。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -181,8 +181,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `BufferedDecodeInput<I, D, M, Value>` | 通过 buffered decoder 把 `qubit_io::Input` 中的 unit 解码为 value；clean EOF 时执行一次 decoder finish |
-| `BufferedEncodeOutput<O, E, M, Value>` | 把 value 编码进 `qubit_io::Output`；`flush` 排空 buffered unit，`finish` 写入 encoder final output |
+| `BufferedDecodeInput<I>` | 调用时传入 caller-owned buffered decoder，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；`finish_into` 显式完成 decoder |
+| `BufferedEncodeOutput<O>` | 调用时传入 caller-owned buffered encoder，通过 `encode_from` 把 value 编码进 `qubit_io::Output`；`flush` 排空 unit，`finish` 完成传入的 encoder |
 
 ### Encoder Hooks 和 Engine
 

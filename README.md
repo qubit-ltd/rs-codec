@@ -106,12 +106,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   transcode-stage policy decisions.
 - **`CodecBufferedConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `BufferedConverter`.
-- **`BufferedDecodeInput<I, D, M, Value>`**: adapts a unit-level `Input` into a
-  decoded-value `Input` through `BufferedInput`, preserves incomplete tails, and
-  runs decoder finish at clean EOF.
-- **`BufferedEncodeOutput<O, E, M, Value>`**: adapts a value-level `Output` into
-  an encoded-unit `Output` through `BufferedOutput`; ordinary `flush` drains
-  buffered units and explicit `finish` writes final encoder output.
+- **`BufferedDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
+  caller-provided decoders through `decode_into` / `finish_into`; incomplete
+  tails remain buffered for caller-owned EOF policy.
+- **`BufferedEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and drives
+  caller-provided encoders through `encode_from` / `finish`; ordinary `flush`
+  only drains buffered units.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -200,8 +200,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `BufferedDecodeInput<I, D, M, Value>` | Decode units from a `qubit_io::Input` into values through a buffered decoder; clean EOF runs one-shot decoder finish |
-| `BufferedEncodeOutput<O, E, M, Value>` | Encode values into a `qubit_io::Output`; `flush` drains buffered units and `finish` writes final encoder output |
+| `BufferedDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned buffered decoder to `decode_into`; finish is explicit via `finish_into` |
+| `BufferedEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned buffered encoder to `encode_from`; `flush` drains units and `finish` finalizes the supplied encoder |
 
 ### Encoder Hooks And Engines
 

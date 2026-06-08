@@ -5,16 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Output adapter that encodes values into buffered units.
+//! Buffered output driver that encodes values into units.
 
-use core::{
-    fmt,
-    marker::PhantomData,
-};
+use core::fmt;
 use std::io::{
     Error,
     ErrorKind,
     Result,
+    Seek,
+    SeekFrom,
+    Write,
 };
 
 use qubit_io::{
@@ -30,85 +30,80 @@ use super::{
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
-/// This adapter owns a unit-level [`qubit_io::BufferedOutput`] and a buffered
-/// encoder. Writes to this adapter drive the encoder from caller-provided
-/// values into the internal unit buffer, flushing that unit buffer when more
-/// capacity is needed. Call [`Self::finish`] after the last value when the
-/// encoder may emit retained final units such as reset bytes, digests, or
-/// trailers.
+/// This type owns only the unit-level [`qubit_io::BufferedOutput`]. Callers
+/// pass the encoder and error mapper to each encode operation, which lets one
+/// buffered output drive different encoders without nesting buffers or storing
+/// codec-specific state in the buffer owner.
 ///
-/// [`Output::flush`] only drains already buffered units. [`Self::finish`]
-/// closes the encoder's logical stream under the [`BufferedTranscoder`]
-/// lifecycle. After finishing, callers must use a reset or new encoder state
-/// before writing another logical stream; this adapter does not expose reset
-/// and does not add a closed-state branch to the write hot path.
+/// [`Self::flush`] only drains already buffered units. [`Self::finish`] accepts
+/// a caller-owned encoder and closes that encoder's logical stream under the
+/// [`BufferedTranscoder`] lifecycle. Because encoder state is not stored here,
+/// closed/open state remains the responsibility of the caller-owned encoder or
+/// wrapper.
 ///
 /// # Type Parameters
 ///
 /// * `O` - Wrapped unit output.
-/// * `E` - Buffered encoder from `Value` to the wrapped output item.
-/// * `M` - Error mapping function from encoder errors to I/O errors.
-/// * `Value` - Logical value type accepted by this output.
-pub struct BufferedEncodeOutput<O, E, M, Value>
+pub struct BufferedEncodeOutput<O>
 where
     O: Output,
     O::Item: Copy + Default,
 {
     output: BufferedOutput<O>,
-    encoder: E,
-    map_error: M,
-    marker: PhantomData<fn(Value)>,
 }
 
-impl<O, E, M, Value> fmt::Debug for BufferedEncodeOutput<O, E, M, Value>
+impl<O> fmt::Debug for BufferedEncodeOutput<O>
 where
     O: Output,
     O::Item: Copy + Default,
     BufferedOutput<O>: fmt::Debug,
-    E: fmt::Debug,
-    M: fmt::Debug,
 {
     /// Formats this buffered encode output for debugging.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("BufferedEncodeOutput")
             .field("output", &self.output)
-            .field("encoder", &self.encoder)
-            .field("map_error", &self.map_error)
             .finish()
     }
 }
 
-impl<O, E, M, Value> BufferedEncodeOutput<O, E, M, Value>
+impl<O> BufferedEncodeOutput<O>
 where
     O: Output,
     O::Item: Copy + Default,
 {
-    /// Creates an encoder output with a unit buffer of at least `capacity`.
+    /// Creates an encoder output with the default unit buffer capacity.
     ///
     /// # Parameters
     ///
     /// * `inner` - Unit output written by this adapter.
-    /// * `encoder` - Buffered encoder that converts values into units.
-    /// * `capacity` - Requested internal unit buffer capacity.
-    /// * `map_error` - Function that maps encoder errors into I/O errors.
     ///
     /// # Returns
     ///
     /// A new buffered encoder output.
     #[must_use]
     #[inline]
-    pub fn with_capacity(
-        inner: O,
-        encoder: E,
-        capacity: usize,
-        map_error: M,
-    ) -> Self {
+    pub fn new(inner: O) -> Self {
+        Self {
+            output: BufferedOutput::new(inner),
+        }
+    }
+
+    /// Creates an encoder output with a unit buffer of at least `capacity`.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Unit output written by this adapter.
+    /// * `capacity` - Requested internal unit buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// A new buffered encoder output.
+    #[must_use]
+    #[inline]
+    pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
             output: BufferedOutput::with_capacity(inner, capacity),
-            encoder,
-            map_error,
-            marker: PhantomData,
         }
     }
 
@@ -123,95 +118,231 @@ where
         self.output.inner()
     }
 
-    /// Returns a shared reference to the buffered encoder.
+    /// Returns a mutable reference to the wrapped unit output.
     ///
     /// # Returns
     ///
-    /// A shared reference to the buffered encoder.
-    #[must_use]
+    /// A mutable reference to the wrapped unit output.
     #[inline(always)]
-    pub const fn encoder(&self) -> &E {
-        &self.encoder
+    pub fn inner_mut(&mut self) -> &mut O {
+        self.output.inner_mut()
     }
 
     /// Consumes this adapter and returns its parts.
     ///
     /// # Returns
     ///
-    /// The wrapped output, pending units, encoder, and error mapper.
+    /// The wrapped output and pending units.
     #[must_use]
     #[inline]
-    pub fn into_parts(self) -> (O, Vec<O::Item>, E, M) {
-        let (inner, pending) = self.output.into_parts();
-        (inner, pending, self.encoder, self.map_error)
+    pub fn into_parts(self) -> (O, Vec<O::Item>) {
+        self.output.into_parts()
+    }
+
+    /// Flushes buffered units without finishing any encoder stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors from the wrapped output while flushing pending units.
+    #[inline]
+    pub fn flush(&mut self) -> Result<()> {
+        self.output.flush()
+    }
+
+    /// Writes raw units through the internal output buffer.
+    ///
+    /// # Parameters
+    ///
+    /// * `input` - Source units to write.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors from the wrapped output while accepting or flushing
+    /// units.
+    #[inline]
+    pub fn write_units(&mut self, input: &[O::Item]) -> Result<()> {
+        // SAFETY: The full input slice is a valid source range.
+        unsafe { self.output.write_all_unchecked(input, 0, input.len()) }
+    }
+
+    /// Writes raw units from an indexed input range.
+    ///
+    /// # Parameters
+    ///
+    /// * `input` - Source units.
+    /// * `input_index` - Start index inside `input`.
+    /// * `count` - Number of units to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of units accepted by the buffered output.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors from the wrapped output while accepting or flushing
+    /// units.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `input_index..input_index + count` is a
+    /// valid range inside `input` and that the addition does not overflow.
+    #[inline]
+    pub unsafe fn write_units_unchecked(
+        &mut self,
+        input: &[O::Item],
+        input_index: usize,
+        count: usize,
+    ) -> Result<usize> {
+        // SAFETY: The caller guarantees that the source range is valid.
+        unsafe { self.output.write_from_unchecked(input, input_index, count) }
     }
 }
 
-impl<O, E, M, Value> BufferedEncodeOutput<O, E, M, Value>
+impl<O> BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8> + Seek,
+{
+    /// Flushes pending bytes, then seeks the wrapped byte output.
+    ///
+    /// # Parameters
+    ///
+    /// * `position` - Target seek position.
+    ///
+    /// # Returns
+    ///
+    /// The new stream position reported by the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns flush or seek errors from the wrapped output.
+    #[inline]
+    pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        Seek::seek(&mut self.output, position)
+    }
+}
+
+impl<O> Write for BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8>,
+{
+    /// Writes raw bytes through the internal buffer.
+    #[inline]
+    fn write(&mut self, input: &[u8]) -> Result<usize> {
+        // SAFETY: The full input slice is a valid source range.
+        unsafe { self.write_units_unchecked(input, 0, input.len()) }
+    }
+
+    /// Writes all raw bytes through the internal buffer.
+    #[inline]
+    fn write_all(&mut self, input: &[u8]) -> Result<()> {
+        self.write_units(input)
+    }
+
+    /// Flushes buffered bytes to the wrapped output.
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        BufferedEncodeOutput::flush(self)
+    }
+}
+
+impl<O> Seek for BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8> + Seek,
+{
+    /// Flushes pending bytes, then seeks the wrapped byte output.
+    #[inline]
+    fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        self.seek(position)
+    }
+}
+
+impl<O> BufferedEncodeOutput<O>
 where
     O: Output,
-    E: BufferedTranscoder<Value, O::Item>,
-    M: FnMut(E::Error) -> Error,
     O::Item: Copy + Default,
 {
-    /// Finishes the encoder into the internal unit buffer.
+    /// Encodes values from a checked input range.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder used for this operation.
+    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    /// * `input` - Source values.
+    /// * `input_index` - Start index inside `input`.
+    /// * `count` - Maximum number of values to encode.
+    ///
+    /// # Returns
+    ///
+    /// The number of source values consumed.
     ///
     /// # Errors
     ///
     /// Returns capacity, encoder, or output errors.
-    fn finish_encoder(&mut self) -> Result<()> {
-        let required = self
-            .encoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
-        self.output.ensure_spare_capacity(required)?;
-        let (units, unit_index, available) = self.output.spare_raw_parts_mut();
-        debug_assert!(available >= required, "insufficient finish capacity");
-        let written = self
-            .encoder
-            .finish(units, unit_index)
-            .map_err(|error| finish_to_io_error(error, &mut self.map_error))?;
-        assert!(written <= required, "finish wrote beyond its bound");
-        // SAFETY: The encoder reported initialized units within the spare
-        // range that was reserved above.
-        unsafe {
-            self.output.advance_unchecked(written);
-        }
-        Ok(())
-    }
-
-    /// Finishes the encoder and flushes the wrapped unit output.
-    ///
-    /// Call this after the last logical value has been written. Ordinary
-    /// [`Output::flush`] calls only drain buffered units and do not close the
-    /// encoder stream. After this method succeeds, further writes are caller
-    /// misuse unless the encoder state is reset outside this adapter.
-    ///
-    /// # Errors
-    ///
-    /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    pub fn finish(&mut self) -> Result<()> {
-        self.finish_encoder()?;
-        self.output.flush()
-    }
-}
-
-impl<O, E, M, Value> Output for BufferedEncodeOutput<O, E, M, Value>
-where
-    O: Output,
-    E: BufferedTranscoder<Value, O::Item>,
-    M: FnMut(E::Error) -> Error,
-    O::Item: Copy + Default,
-{
-    type Item = Value;
-
-    /// Encodes values from an indexed input range.
-    unsafe fn write_unchecked(
+    pub fn encode_from<E, M, Value>(
         &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
         input: &[Value],
         input_index: usize,
         count: usize,
-    ) -> Result<usize> {
+    ) -> Result<usize>
+    where
+        E: BufferedTranscoder<Value, O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        assert!(
+            input_index
+                .checked_add(count)
+                .is_some_and(|end| end <= input.len()),
+            "encode input range exceeds source buffer",
+        );
+        // SAFETY: The assertion proves that the requested input range is
+        // valid.
+        unsafe {
+            self.encode_from_unchecked(
+                encoder,
+                map_error,
+                input,
+                input_index,
+                count,
+            )
+        }
+    }
+
+    /// Encodes values from an indexed input range without checking bounds.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder used for this operation.
+    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    /// * `input` - Source values.
+    /// * `input_index` - Start index inside `input`.
+    /// * `count` - Maximum number of values to encode.
+    ///
+    /// # Returns
+    ///
+    /// The number of source values consumed.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, encoder, or output errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `input_index..input_index + count` is a
+    /// valid range inside `input` and that the addition does not overflow.
+    pub unsafe fn encode_from_unchecked<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+        input: &[Value],
+        input_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        E: BufferedTranscoder<Value, O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
         debug_assert!(
             input_index
                 .checked_add(count)
@@ -231,10 +362,9 @@ where
             let (units, unit_index, available) =
                 self.output.spare_raw_parts_mut();
             let units = &mut units[..unit_index + available];
-            let progress = self
-                .encoder
+            let progress = encoder
                 .transcode(input, input_index + read_total, units, unit_index)
-                .map_err(&mut self.map_error)?;
+                .map_err(&mut *map_error)?;
             let read = progress.read();
             let written = progress.written();
             // SAFETY: The encoder reported initialized units in the spare
@@ -268,8 +398,63 @@ where
         Ok(read_total)
     }
 
-    /// Flushes buffered units without finishing the encoder stream.
-    fn flush(&mut self) -> Result<()> {
+    /// Finishes the encoder into the internal unit buffer.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder whose final units are being collected.
+    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, encoder, or output errors.
+    pub fn finish_encoder<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
+    where
+        E: BufferedTranscoder<Value, O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        let required = encoder
+            .max_finish_output_len()
+            .map_err(capacity_to_io_error)?;
+        self.output.ensure_spare_capacity(required)?;
+        let (units, unit_index, available) = self.output.spare_raw_parts_mut();
+        debug_assert!(available >= required, "insufficient finish capacity");
+        let written = encoder
+            .finish(units, unit_index)
+            .map_err(|error| finish_to_io_error(error, map_error))?;
+        assert!(written <= required, "finish wrote beyond its bound");
+        // SAFETY: The encoder reported initialized units within the spare
+        // range that was reserved above.
+        unsafe {
+            self.output.advance_unchecked(written);
+        }
+        Ok(())
+    }
+
+    /// Finishes the encoder and flushes the wrapped unit output.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder whose final units are being collected.
+    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, encoder finalization, or wrapped output flush errors.
+    pub fn finish<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
+    where
+        E: BufferedTranscoder<Value, O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        self.finish_encoder(encoder, map_error)?;
         self.output.flush()
     }
 }
