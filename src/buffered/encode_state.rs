@@ -9,10 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    encode_context::EncodeContext,
-    transcode_progress::TranscodeProgress,
-};
+use super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
 
 /// Mutable state for one buffered encode call.
 pub(super) struct EncodeState<'a, Value, Unit> {
@@ -82,9 +79,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(super) unsafe fn context_unchecked(
-        &mut self,
-    ) -> EncodeContext<'_, Value, Unit> {
+    pub(super) unsafe fn context_unchecked(&mut self) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { self.input.get_unchecked(self.input_cursor) };
         EncodeContext {

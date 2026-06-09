@@ -23,8 +23,8 @@ impl ValueEncoder<str> for StringEncoder {
 
 #[test]
 fn test_encoder_trait_dispatches_to_implementor() {
-    let encoded = ValueEncoder::<str>::encode(&StringEncoder, "text")
-        .expect("encoding should be infallible");
+    let encoded =
+        ValueEncoder::<str>::encode(&StringEncoder, "text").expect("encoding should be infallible");
 
     assert_eq!("text", encoded);
 }

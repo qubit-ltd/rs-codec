@@ -11,10 +11,7 @@ use super::{
     buffered_convert_hooks::BufferedConvertHooks,
     buffered_decode_engine::BufferedDecodeEngine,
     buffered_encode_engine::BufferedEncodeEngine,
-    convert_error_of::{
-        ConvertErrorOf,
-        ConvertProgressResult,
-    },
+    convert_error_of::{ConvertErrorOf, ConvertProgressResult},
     convert_state::ConvertState,
     convert_step_result::ConvertStepResult,
     encode_context::EncodeContext,
@@ -24,11 +21,7 @@ use super::{
     pending_value::PendingValue,
     pending_value_slot::PendingValueSlot,
 };
-use crate::{
-    CapacityError,
-    Codec,
-    codec::assert_unit_bounds,
-};
+use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 
 /// Reusable buffered conversion engine.
 ///
@@ -155,14 +148,10 @@ where
 
     /// Returns an upper bound for target units produced from `input_len` units.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
         let decoded_values = self.decode_engine.max_output_len(input_len)?;
-        let converted_units =
-            self.encode_engine.max_output_len(decoded_values)?;
+        let converted_units = self.encode_engine.max_output_len(decoded_values)?;
         pending_units
             .checked_add(converted_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -173,8 +162,7 @@ where
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len();
-        let decoder_finish_units =
-            self.encode_engine.max_output_len(decoder_finish_values)?;
+        let decoder_finish_units = self.encode_engine.max_output_len(decoder_finish_values)?;
         let encoder_finish_units = self.encode_engine.max_finish_output_len();
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
@@ -225,8 +213,7 @@ where
         assert_unit_bounds::<D>(self.decode_codec());
         assert_unit_bounds::<E>(self.encode_codec());
 
-        let mut state =
-            ConvertState::new(input, input_index, output, output_index);
+        let mut state = ConvertState::new(input, input_index, output, output_index);
 
         // A retained decoded value must be written before consuming more input,
         // otherwise callers could observe output reordered across buffer turns.
@@ -285,11 +272,7 @@ where
         let required = self
             .max_finish_output_len()
             .map_err(FinishError::capacity)?;
-        FinishError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
 
         let empty_input: &[D::Unit] = &[];
         let mut state = ConvertState::new(empty_input, 0, output, output_index);
@@ -300,9 +283,7 @@ where
             .map_err(FinishError::source)?
             .is_some()
         {
-            unreachable!(
-                "converter finish bound must reserve space for pending values"
-            );
+            unreachable!("converter finish bound must reserve space for pending values");
         }
 
         // Source-side finish may emit one or more final values. Drain them into
@@ -313,9 +294,7 @@ where
         let written = self
             .encode_engine
             .finish(state.output_mut(), output_cursor)
-            .map_err(|error| {
-                error.map_source(|error| self.hooks.map_encode_error(error))
-            })?;
+            .map_err(|error| error.map_source(|error| self.hooks.map_encode_error(error)))?;
         state.advance_output(written);
         Ok(state.written())
     }
@@ -347,9 +326,7 @@ where
             .decode_engine
             .decode_step(state.input(), state.decode_context())
             .map_err(|error| self.hooks.map_decode_error(error))?;
-        step.apply_to_convert_state(state, |pending, state| {
-            self.encode_pending(pending, state)
-        })
+        step.apply_to_convert_state(state, |pending, state| self.encode_pending(pending, state))
     }
 
     /// Returns the output bound for the retained pending value.
@@ -380,14 +357,11 @@ where
         D::Value: Default,
     {
         let value_count = self.decode_engine.max_finish_output_len();
-        let mut decoded: Vec<D::Value> =
-            (0..value_count).map(|_| D::Value::default()).collect();
-        let written =
-            self.decode_engine
-                .finish(&mut decoded, 0)
-                .map_err(|error| {
-                    error.map_source(|error| self.hooks.map_decode_error(error))
-                })?;
+        let mut decoded: Vec<D::Value> = (0..value_count).map(|_| D::Value::default()).collect();
+        let written = self
+            .decode_engine
+            .finish(&mut decoded, 0)
+            .map_err(|error| error.map_source(|error| self.hooks.map_decode_error(error)))?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self
@@ -395,9 +369,7 @@ where
                 .map_err(FinishError::source)?
                 .is_some()
             {
-                unreachable!(
-                    "converter finish bound must reserve space for decode finish values"
-                );
+                unreachable!("converter finish bound must reserve space for decode finish values");
             }
         }
         Ok(())
@@ -423,9 +395,7 @@ where
             .encode_step(context)
             .map_err(|error| self.hooks.map_encode_error(error))?;
         let step = match step {
-            EncodeStep::Written { written } => {
-                PendingEncodeStep::written(written)
-            }
+            EncodeStep::Written { written } => PendingEncodeStep::written(written),
             EncodeStep::NeedOutput {
                 additional,
                 available,

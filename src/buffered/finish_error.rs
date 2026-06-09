@@ -197,11 +197,7 @@ impl<E> FinishError<E> {
         }
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(
-                output_index,
-                required,
-                available,
-            ));
+            return Err(Self::insufficient_output(output_index, required, available));
         }
         Ok(())
     }

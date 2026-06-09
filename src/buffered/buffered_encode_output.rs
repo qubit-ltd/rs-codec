@@ -8,25 +8,11 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{
-    BufferedOutput,
-    Output,
-};
+use qubit_io::{BufferedOutput, Output};
 
-use super::{
-    BufferedTranscoder,
-    FinishError,
-    TranscodeStatus,
-};
+use super::{BufferedTranscoder, FinishError, TranscodeStatus};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -50,21 +36,6 @@ where
     O::Item: Copy + Default,
 {
     output: BufferedOutput<O>,
-}
-
-impl<O> fmt::Debug for BufferedEncodeOutput<O>
-where
-    O: Output,
-    O::Item: Copy + Default,
-    BufferedOutput<O>: fmt::Debug,
-{
-    /// Formats this buffered encode output for debugging.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("BufferedEncodeOutput")
-            .field("output", &self.output)
-            .finish()
-    }
 }
 
 impl<O> BufferedEncodeOutput<O>
@@ -128,6 +99,55 @@ where
         self.output.inner_mut()
     }
 
+    /// Returns the available capacity of the spare output buffer.
+    ///
+    /// # Returns
+    ///
+    /// The number of output units that can still be appended without flushing.
+    #[must_use]
+    #[inline(always)]
+    pub fn spare_capacity(&self) -> usize {
+        self.output.spare_capacity()
+    }
+
+    /// Returns the unused portion of the internal output buffer.
+    ///
+    /// # Returns
+    ///
+    /// A mutable slice over the currently available spare units.
+    #[inline(always)]
+    #[must_use]
+    pub fn spare_slice_mut(&mut self) -> &mut [O::Item] {
+        self.output.spare_slice_mut()
+    }
+
+    /// Marks `count` units from [`Self::spare_slice_mut`] as written.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `count <= Self::spare_capacity()` and that
+    /// the corresponding units in the returned spare slice have been
+    /// initialized.
+    #[inline(always)]
+    pub unsafe fn advance_unchecked(&mut self, count: usize) {
+        // SAFETY: The caller guarantees `count` and initialization invariants.
+        unsafe { self.output.advance_unchecked(count) }
+    }
+
+    /// Ensures that at least `count` spare units are available.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Number of spare units required.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O errors from the wrapped output while flushing pending units.
+    #[inline(always)]
+    pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
+        self.output.ensure_spare_capacity(count)
+    }
+
     /// Consumes this adapter and returns its parts.
     ///
     /// # Returns
@@ -149,217 +169,7 @@ where
         self.output.flush()
     }
 
-    /// Writes raw units through the internal output buffer.
-    ///
-    /// # Parameters
-    ///
-    /// * `input` - Source units to write.
-    ///
-    /// # Errors
-    ///
-    /// Returns errors from the wrapped output while accepting or flushing
-    /// units.
-    #[inline]
-    pub fn write_units(&mut self, input: &[O::Item]) -> Result<()> {
-        // SAFETY: The full input slice is a valid source range.
-        unsafe { self.output.write_all_unchecked(input, 0, input.len()) }
-    }
-
-    /// Returns raw spare-buffer parts for hot-path callers.
-    ///
-    /// The returned tuple contains the full internal backing storage, the start
-    /// index of spare units, and the spare unit count.
-    #[inline(always)]
-    #[must_use]
-    pub fn spare_raw_parts_mut(&mut self) -> (&mut [O::Item], usize, usize) {
-        self.output.spare_raw_parts_mut()
-    }
-
-    /// Returns the number of spare units available in the output buffer.
-    #[inline(always)]
-    #[must_use]
-    pub fn spare_capacity(&self) -> usize {
-        self.output.spare_capacity()
-    }
-
-    /// Ensures at least `count` spare units are available, flushing pending
-    /// output if needed.
-    ///
-    /// # Parameters
-    ///
-    /// * `count` - Minimum spare units required.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` when the requested spare space is available, or any I/O error
-    /// while flushing.
-    #[inline]
-    pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
-        self.output.ensure_spare_capacity(count)
-    }
-
-    /// Marks `count` units from the spare buffer as initialized.
-    ///
-    /// # Parameters
-    ///
-    /// * `count` - Number of units successfully written by the caller.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `count` exceeds the spare capacity.
-    #[inline]
-    pub fn advance_unchecked(&mut self, count: usize) {
-        // SAFETY: This delegates unchecked advancement to the buffered output.
-        unsafe {
-            self.output.advance_unchecked(count);
-        }
-    }
-
-    /// Writes raw units from an indexed input range.
-    ///
-    /// # Parameters
-    ///
-    /// * `input` - Source units.
-    /// * `input_index` - Start index inside `input`.
-    /// * `count` - Number of units to write.
-    ///
-    /// # Returns
-    ///
-    /// The number of units accepted by the buffered output.
-    ///
-    /// # Errors
-    ///
-    /// Returns errors from the wrapped output while accepting or flushing
-    /// units.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that `input_index..input_index + count` is a
-    /// valid range inside `input` and that the addition does not overflow.
-    #[inline]
-    pub unsafe fn write_units_unchecked(
-        &mut self,
-        input: &[O::Item],
-        input_index: usize,
-        count: usize,
-    ) -> Result<usize> {
-        // SAFETY: The caller guarantees that the source range is valid.
-        unsafe { self.output.write_from_unchecked(input, input_index, count) }
-    }
-}
-
-impl<O> BufferedEncodeOutput<O>
-where
-    O: Output<Item = u8> + Seek,
-{
-    /// Flushes pending bytes, then seeks the wrapped byte output.
-    ///
-    /// # Parameters
-    ///
-    /// * `position` - Target seek position.
-    ///
-    /// # Returns
-    ///
-    /// The new stream position reported by the wrapped output.
-    ///
-    /// # Errors
-    ///
-    /// Returns flush or seek errors from the wrapped output.
-    #[inline]
-    pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        Seek::seek(&mut self.output, position)
-    }
-}
-
-impl<O> Write for BufferedEncodeOutput<O>
-where
-    O: Output<Item = u8>,
-{
-    /// Writes raw bytes through the internal buffer.
-    #[inline]
-    fn write(&mut self, input: &[u8]) -> Result<usize> {
-        // SAFETY: The full input slice is a valid source range.
-        unsafe { self.write_units_unchecked(input, 0, input.len()) }
-    }
-
-    /// Writes all raw bytes through the internal buffer.
-    #[inline]
-    fn write_all(&mut self, input: &[u8]) -> Result<()> {
-        self.write_units(input)
-    }
-
-    /// Flushes buffered bytes to the wrapped output.
-    #[inline]
-    fn flush(&mut self) -> Result<()> {
-        BufferedEncodeOutput::flush(self)
-    }
-}
-
-impl<O> Seek for BufferedEncodeOutput<O>
-where
-    O: Output<Item = u8> + Seek,
-{
-    /// Flushes pending bytes, then seeks the wrapped byte output.
-    #[inline]
-    fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        self.seek(position)
-    }
-}
-
-impl<O> BufferedEncodeOutput<O>
-where
-    O: Output,
-    O::Item: Copy + Default,
-{
-    /// Encodes values from a checked input range.
-    ///
-    /// # Parameters
-    ///
-    /// * `encoder` - Encoder used for this operation.
-    /// * `map_error` - Function mapping encoder errors into I/O errors.
-    /// * `input` - Source values.
-    /// * `input_index` - Start index inside `input`.
-    /// * `count` - Maximum number of values to encode.
-    ///
-    /// # Returns
-    ///
-    /// The number of source values consumed.
-    ///
-    /// # Errors
-    ///
-    /// Returns capacity, encoder, or output errors.
-    pub fn encode_from<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-        input: &[Value],
-        input_index: usize,
-        count: usize,
-    ) -> Result<usize>
-    where
-        E: BufferedTranscoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
-    {
-        assert!(
-            input_index
-                .checked_add(count)
-                .is_some_and(|end| end <= input.len()),
-            "encode input range exceeds source buffer",
-        );
-        // SAFETY: The assertion proves that the requested input range is
-        // valid.
-        unsafe {
-            self.encode_from_unchecked(
-                encoder,
-                map_error,
-                input,
-                input_index,
-                count,
-            )
-        }
-    }
-
-    /// Encodes values from an indexed input range without checking bounds.
+    /// Encodes values from an indexed input range.
     ///
     /// # Parameters
     ///
@@ -379,9 +189,9 @@ where
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that `input_index..input_index + count` is a
-    /// valid range inside `input` and that the addition does not overflow.
-    pub unsafe fn encode_from_unchecked<E, M, Value>(
+    /// The caller must guarantee that `input_index..input_index + count` is
+    /// a valid range inside `input` and that the addition does not overflow.
+    pub unsafe fn encode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
         map_error: &mut M,
@@ -409,11 +219,9 @@ where
             if self.output.spare_capacity() == 0 {
                 self.output.flush_buffer()?;
             }
-            let (units, unit_index, available) =
-                self.output.spare_raw_parts_mut();
-            let units = &mut units[..unit_index + available];
+            let units = self.output.spare_slice_mut();
             let progress = encoder
-                .transcode(input, input_index + read_total, units, unit_index)
+                .transcode(input, input_index + read_total, units, 0)
                 .map_err(&mut *map_error)?;
             let read = progress.read();
             let written = progress.written();
@@ -448,43 +256,6 @@ where
         Ok(read_total)
     }
 
-    /// Finishes the encoder into the internal unit buffer.
-    ///
-    /// # Parameters
-    ///
-    /// * `encoder` - Encoder whose final units are being collected.
-    /// * `map_error` - Function mapping encoder errors into I/O errors.
-    ///
-    /// # Errors
-    ///
-    /// Returns capacity, encoder, or output errors.
-    pub fn finish_encoder<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
-    where
-        E: BufferedTranscoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
-    {
-        let required = encoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
-        self.output.ensure_spare_capacity(required)?;
-        let (units, unit_index, available) = self.output.spare_raw_parts_mut();
-        debug_assert!(available >= required, "insufficient finish capacity");
-        let written = encoder
-            .finish(units, unit_index)
-            .map_err(|error| finish_to_io_error(error, map_error))?;
-        assert!(written <= required, "finish wrote beyond its bound");
-        // SAFETY: The encoder reported initialized units within the spare
-        // range that was reserved above.
-        unsafe {
-            self.output.advance_unchecked(written);
-        }
-        Ok(())
-    }
-
     /// Finishes the encoder and flushes the wrapped unit output.
     ///
     /// # Parameters
@@ -495,23 +266,102 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    pub fn finish<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
+    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: BufferedTranscoder<Value, O::Item>,
         M: FnMut(E::Error) -> Error,
     {
-        self.finish_encoder(encoder, map_error)?;
+        let required = encoder
+            .max_finish_output_len()
+            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+        self.output.ensure_spare_capacity(required)?;
+        let units = self.output.spare_slice_mut();
+        debug_assert!(units.len() >= required, "insufficient finish capacity");
+        let written = encoder
+            .finish(units, 0)
+            .map_err(|e| finish_to_io_error(e, map_error))?;
+        assert!(written <= required, "finish wrote beyond its bound");
+        // SAFETY: The encoder reported initialized units within the spare
+        // range that was reserved above.
+        unsafe {
+            self.output.advance_unchecked(written);
+        }
         self.output.flush()
     }
 }
 
-/// Converts a capacity planning failure into an I/O error.
-fn capacity_to_io_error(error: super::CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
+impl<O> BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8> + Seek,
+{
+    /// Flushes pending bytes, then seeks the wrapped byte output.
+    ///
+    /// # Parameters
+    ///
+    /// * `position` - Target seek position.
+    ///
+    /// # Returns
+    ///
+    /// The new stream position reported by the wrapped output.
+    ///
+    /// # Errors
+    ///
+    /// Returns flush or seek errors from the wrapped output.
+    #[inline]
+    pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        Seek::seek(&mut self.output, position)
+    }
+}
+
+impl<O> Write for BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8>,
+{
+    /// Writes raw bytes through the internal buffer.
+    #[inline]
+    fn write(&mut self, input: &[u8]) -> Result<usize> {
+        // SAFETY: The full input slice is a valid source range.
+        unsafe { self.output.write_unchecked(input, 0, input.len()) }
+    }
+
+    /// Writes all raw bytes through the internal buffer.
+    #[inline]
+    fn write_all(&mut self, input: &[u8]) -> Result<()> {
+        // SAFETY: The full input slice is a valid source range.
+        unsafe { self.output.write_all_unchecked(input, 0, input.len()) }
+    }
+
+    /// Flushes buffered bytes to the wrapped output.
+    #[inline]
+    fn flush(&mut self) -> Result<()> {
+        BufferedEncodeOutput::flush(self)
+    }
+}
+
+impl<O> Seek for BufferedEncodeOutput<O>
+where
+    O: Output<Item = u8> + Seek,
+{
+    /// Flushes pending bytes, then seeks the wrapped byte output.
+    #[inline]
+    fn seek(&mut self, position: SeekFrom) -> Result<u64> {
+        self.seek(position)
+    }
+}
+
+impl<O> fmt::Debug for BufferedEncodeOutput<O>
+where
+    O: Output,
+    O::Item: Copy + Default,
+    BufferedOutput<O>: fmt::Debug,
+{
+    /// Formats this buffered encode output for debugging.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BufferedEncodeOutput")
+            .field("output", &self.output)
+            .finish()
+    }
 }
 
 /// Converts a finish failure into an I/O error.
@@ -520,12 +370,10 @@ where
     M: FnMut(E) -> Error,
 {
     match error {
-        FinishError::Capacity { source } => capacity_to_io_error(source),
+        FinishError::Capacity { source } => Error::new(ErrorKind::InvalidData, source),
         FinishError::InvalidOutputIndex { index, len } => Error::new(
             ErrorKind::InvalidData,
-            format!(
-                "invalid finish output index {index} for output length {len}"
-            ),
+            format!("invalid finish output index {index} for output length {len}"),
         ),
         FinishError::InsufficientOutput {
             output_index,

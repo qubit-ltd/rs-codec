@@ -7,8 +7,7 @@ enum TestDecodeError {
 
 #[test]
 fn test_codec_decode_error_wraps_codec_error() {
-    let error =
-        CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
+    let error = CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
 
     assert_eq!(
         CodecDecodeError::Decode {

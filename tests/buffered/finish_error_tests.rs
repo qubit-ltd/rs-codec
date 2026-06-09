@@ -5,10 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_codec::{
-    CapacityError,
-    FinishError,
-};
+use qubit_codec::{CapacityError, FinishError};
 
 #[test]
 fn test_finish_error_constructors_create_expected_variants() {
@@ -41,10 +38,8 @@ fn test_finish_error_maps_source_only_for_semantic_errors() {
     let mapped = FinishError::source("finish").map_source(str::len);
     assert_eq!(FinishError::Source { source: 6 }, mapped);
 
-    let mapped = FinishError::<&'static str>::capacity(
-        CapacityError::OutputLengthOverflow,
-    )
-    .map_source(str::len);
+    let mapped = FinishError::<&'static str>::capacity(CapacityError::OutputLengthOverflow)
+        .map_source(str::len);
     assert_eq!(
         FinishError::<usize>::Capacity {
             source: CapacityError::OutputLengthOverflow,
@@ -52,15 +47,13 @@ fn test_finish_error_maps_source_only_for_semantic_errors() {
         mapped,
     );
 
-    let mapped = FinishError::<&'static str>::invalid_output_index(3, 2)
-        .map_source(str::len);
+    let mapped = FinishError::<&'static str>::invalid_output_index(3, 2).map_source(str::len);
     assert_eq!(
         FinishError::<usize>::InvalidOutputIndex { index: 3, len: 2 },
         mapped
     );
 
-    let mapped = FinishError::<&'static str>::insufficient_output(2, 4, 1)
-        .map_source(str::len);
+    let mapped = FinishError::<&'static str>::insufficient_output(2, 4, 1).map_source(str::len);
     assert_eq!(
         FinishError::<usize>::InsufficientOutput {
             output_index: 2,

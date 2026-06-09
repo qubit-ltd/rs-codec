@@ -6,21 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Cursor,
-    Error,
-    ErrorKind,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use std::io::{Cursor, Error, ErrorKind, Seek, SeekFrom, Write};
 
 use qubit_codec::{
-    BufferedEncodeOutput,
-    BufferedTranscoder,
-    CapacityError,
-    FinishError,
-    TranscodeProgress,
+    BufferedEncodeOutput, BufferedTranscoder, CapacityError, FinishError, TranscodeProgress,
 };
 use qubit_io::Output;
 
@@ -124,13 +113,7 @@ impl BufferedTranscoder<u32, u16> for FinishEncoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                nz(1),
-                0,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(output_index, nz(1), 0, 0, 0));
         }
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::complete(1, 1))
@@ -290,12 +273,8 @@ impl BufferedTranscoder<u32, u16> for FailingFinishEncoder {
             FinishFailure::Capacity => {
                 Err(FinishError::capacity(CapacityError::OutputLengthOverflow))
             }
-            FinishFailure::InvalidIndex => {
-                Err(FinishError::invalid_output_index(4, 1))
-            }
-            FinishFailure::InsufficientOutput => {
-                Err(FinishError::insufficient_output(0, 2, 1))
-            }
+            FinishFailure::InvalidIndex => Err(FinishError::invalid_output_index(4, 1)),
+            FinishFailure::InsufficientOutput => Err(FinishError::insufficient_output(0, 2, 1)),
         }
     }
 }
@@ -364,15 +343,7 @@ where
 {
     let mut mapper: fn(PairEncodeError) -> Error = map_error;
     // SAFETY: The caller upholds the requested input range contract.
-    unsafe {
-        output.encode_from_unchecked(
-            encoder,
-            &mut mapper,
-            input,
-            input_index,
-            count,
-        )
-    }
+    unsafe { output.encode_from(encoder, &mut mapper, input, input_index, count) }
 }
 
 fn finish_with<E>(
@@ -405,20 +376,13 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
     let mut output = BufferedEncodeOutput::new(Cursor::new(Vec::new()));
     output.inner_mut().set_position(0);
 
-    output
-        .write_units(&[1, 2])
-        .expect("raw unit write should succeed");
-    let written = unsafe {
-        // SAFETY: The source range `1..3` is valid.
-        output
-            .write_units_unchecked(&[9, 3, 4], 1, 2)
-            .expect("unchecked raw write should succeed")
-    };
+    let written = Write::write(&mut output, &[1, 2]).expect("raw unit write should succeed");
+    assert_eq!(2, written);
+    let written = Write::write(&mut output, &[3, 4]).expect("raw unit write should succeed");
     assert_eq!(2, written);
     assert_eq!(
         1,
-        Write::write(&mut output, &[5])
-            .expect("std::io::Write should delegate to raw unit writes")
+        Write::write(&mut output, &[5]).expect("std::io::Write should delegate to raw unit writes")
     );
     Write::write_all(&mut output, &[6, 7])
         .expect("std::io::Write::write_all should delegate to raw units");
@@ -430,8 +394,7 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
         Seek::seek(&mut output, SeekFrom::Start(1))
             .expect("std::io::Seek should flush then delegate")
     );
-    Write::write_all(&mut output, &[8])
-        .expect("write after seek should update the wrapped cursor");
+    Write::write_all(&mut output, &[8]).expect("write after seek should update the wrapped cursor");
     output.flush().expect("flush should drain after seek");
     assert_eq!(&[1, 8, 3, 4, 5, 6, 7], output.inner().get_ref().as_slice(),);
 }
@@ -453,14 +416,13 @@ fn test_buffered_encode_output_returns_zero_for_zero_count() {
 }
 
 #[test]
-fn test_buffered_encode_output_checked_encode_from_validates_range() {
+fn test_buffered_encode_output_encode_from_respects_input_range() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = BufferedEncodeOutput::with_capacity(output, 4);
     let mut mapper: fn(PairEncodeError) -> Error = map_error;
 
-    let written = output
-        .encode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1)
+    let written = unsafe { output.encode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1) }
         .expect("checked encode should accept a valid input range");
 
     output.flush().expect("flush should drain encoded units");
@@ -477,14 +439,8 @@ fn test_buffered_encode_output_encodes_and_flushes_units() {
 
     // SAFETY: The full input range is valid.
     let written = unsafe {
-        encode_with(
-            &mut output,
-            &mut encoder,
-            &[0x0001_0002, 0x0003_0004],
-            0,
-            2,
-        )
-        .expect("encoding should accept both values")
+        encode_with(&mut output, &mut encoder, &[0x0001_0002, 0x0003_0004], 0, 2)
+            .expect("encoding should accept both values")
     };
     assert_eq!(2, written);
 
@@ -526,11 +482,8 @@ fn test_buffered_encode_output_reports_no_progress_need_output_capacity() {
     let mut output = BufferedEncodeOutput::with_capacity(output, 1);
 
     // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1) }
-            .expect_err(
-                "insufficient fixed buffer capacity should be reported",
-            );
+    let error = unsafe { encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1) }
+        .expect_err("insufficient fixed buffer capacity should be reported");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert!(error.to_string().contains("spare capacity"));
@@ -572,9 +525,8 @@ fn test_buffered_encode_output_rejects_need_input_status() {
     let mut output = BufferedEncodeOutput::with_capacity(output, 3);
 
     // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err("encoder NeedInput status should be rejected");
+    let error = unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
+        .expect_err("encoder NeedInput status should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
@@ -602,26 +554,24 @@ fn test_buffered_encode_output_flush_does_not_finish_encoder() {
         .expect("flush should only drain buffered units");
     assert_eq!(&[0x1234], output.inner().units.as_slice());
 
-    finish_with(&mut output, &mut encoder)
-        .expect("finish should write encoder trailer");
+    finish_with(&mut output, &mut encoder).expect("finish should write encoder trailer");
     assert_eq!(&[0x1234, 0xeeee], output.inner().units.as_slice());
 }
 
 #[test]
-fn test_buffered_encode_output_finish_encoder_does_not_flush() {
+fn test_buffered_encode_output_finish_writes_and_flushes() {
     let output = UnitOutput::default();
     let mut encoder = FinishEncoder::default();
     let mut output = BufferedEncodeOutput::with_capacity(output, 3);
-    let mut mapper: fn(PairEncodeError) -> Error = map_error;
 
-    output
-        .finish_encoder(&mut encoder, &mut mapper)
-        .expect("finish_encoder should buffer final units");
+    finish_with(&mut output, &mut encoder).expect("finish should write trailer and flush");
 
-    assert!(output.inner().units.is_empty());
+    assert_eq!(&[0xeeee], output.inner().units.as_slice());
+    assert!(output.inner().flushed);
+    output.inner_mut().flushed = false;
     output
         .flush()
-        .expect("explicit flush should drain final units");
+        .expect("explicit flush should be harmless after finish");
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
 }
 
@@ -678,25 +628,13 @@ fn test_buffered_encode_output_takes_encoder_per_call() {
     // SAFETY: The requested input range is valid.
     let first = unsafe {
         output
-            .encode_from_unchecked(
-                &mut first_encoder,
-                &mut mapper,
-                &[0x0001_0002],
-                0,
-                1,
-            )
+            .encode_from(&mut first_encoder, &mut mapper, &[0x0001_0002], 0, 1)
             .expect("first encoder should write one value")
     };
     // SAFETY: The requested input range is valid.
     let second = unsafe {
         output
-            .encode_from_unchecked(
-                &mut second_encoder,
-                &mut mapper,
-                &[0x0003_0004],
-                0,
-                1,
-            )
+            .encode_from(&mut second_encoder, &mut mapper, &[0x0003_0004], 0, 1)
             .expect("second encoder should reuse the same buffer")
     };
 

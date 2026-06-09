@@ -6,9 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError,
-    finish_error::FinishError,
-    transcode_progress::TranscodeProgress,
+    capacity_error::CapacityError, finish_error::FinishError, transcode_progress::TranscodeProgress,
 };
 
 /// Converts one logical stream of input units into one logical stream of output

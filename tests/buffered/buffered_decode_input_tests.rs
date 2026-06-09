@@ -7,21 +7,10 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::io::{
-    Cursor,
-    Error,
-    ErrorKind,
-    Read,
-    Seek,
-    SeekFrom,
-};
+use std::io::{Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
 use qubit_codec::{
-    BufferedDecodeInput,
-    BufferedTranscoder,
-    CapacityError,
-    FinishError,
-    TranscodeProgress,
+    BufferedDecodeInput, BufferedTranscoder, CapacityError, FinishError, TranscodeProgress,
 };
 use qubit_io::Input;
 
@@ -105,10 +94,7 @@ struct FinishDecoder {
 impl BufferedTranscoder<u16, u32> for FinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -155,10 +141,7 @@ struct ZeroWidthFailingFinishDecoder;
 impl BufferedTranscoder<u16, u32> for ZeroWidthFailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -231,10 +214,7 @@ struct TwoUnitFinishDecoder;
 impl BufferedTranscoder<u16, u32> for TwoUnitFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -273,10 +253,7 @@ struct CapacityBoundDecoder;
 impl BufferedTranscoder<u16, u32> for CapacityBoundDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -304,10 +281,7 @@ struct FailingTranscodeDecoder;
 impl BufferedTranscoder<u16, u32> for FailingTranscodeDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -339,10 +313,7 @@ struct FailingFinishDecoder {
 impl BufferedTranscoder<u16, u32> for FailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -372,9 +343,7 @@ impl BufferedTranscoder<u16, u32> for FailingFinishDecoder {
             FinishFailure::Capacity => {
                 Err(FinishError::capacity(CapacityError::OutputLengthOverflow))
             }
-            FinishFailure::InvalidIndex => {
-                Err(FinishError::invalid_output_index(4, 1))
-            }
+            FinishFailure::InvalidIndex => Err(FinishError::invalid_output_index(4, 1)),
         }
     }
 }
@@ -442,18 +411,10 @@ where
 {
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
     // SAFETY: The caller upholds the requested output range contract.
-    unsafe {
-        input.decode_into_unchecked(
-            decoder,
-            &mut mapper,
-            output,
-            output_index,
-            count,
-        )
-    }
+    unsafe { input.decode_into(decoder, &mut mapper, output, output_index, count) }
 }
 
-fn finish_with<I, D>(
+unsafe fn finish_with<I, D>(
     input: &mut BufferedDecodeInput<I>,
     decoder: &mut D,
     output: &mut [u32],
@@ -465,7 +426,8 @@ where
     D: BufferedTranscoder<u16, u32, Error = PairDecodeError>,
 {
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
-    input.finish_into(decoder, &mut mapper, output, output_index, count)
+    // SAFETY: The caller upholds the requested output range contract.
+    unsafe { input.finish_into(decoder, &mut mapper, output, output_index, count) }
 }
 
 #[test]
@@ -488,29 +450,19 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
     input.inner_mut().set_position(0);
 
     let mut first = [0_u8; 1];
-    assert_eq!(
-        1,
-        input
-            .read_units(&mut first)
-            .expect("raw unit read should succeed")
-    );
+    let read = Read::read(&mut input, &mut first).expect("raw unit read should succeed");
+    assert_eq!(1, read);
     assert_eq!([1], first);
 
     let mut middle = [0_u8; 4];
-    let read = unsafe {
-        // SAFETY: The destination range `1..3` is valid.
-        input
-            .read_units_unchecked(&mut middle, 1, 2)
-            .expect("unchecked raw read should succeed")
-    };
+    let read = Read::read(&mut input, &mut middle[1..3]).expect("raw unit read should succeed");
     assert_eq!(2, read);
     assert_eq!([0, 2, 3, 0], middle);
 
     let mut next = [0_u8; 1];
     assert_eq!(
         1,
-        Read::read(&mut input, &mut next)
-            .expect("std::io::Read should delegate to raw unit reads")
+        Read::read(&mut input, &mut next).expect("std::io::Read should delegate to raw unit reads")
     );
     assert_eq!([4], next);
 
@@ -520,12 +472,8 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
             .expect("std::io::Seek should delegate to the buffered input")
     );
     let mut after_seek = [0_u8; 1];
-    assert_eq!(
-        1,
-        input
-            .read_units(&mut after_seek)
-            .expect("seek should discard buffered bytes")
-    );
+    let read = Read::read(&mut input, &mut after_seek).expect("seek should discard buffered bytes");
+    assert_eq!(1, read);
     assert_eq!([1], after_seek);
 }
 
@@ -547,15 +495,14 @@ fn test_buffered_decode_input_returns_zero_for_zero_count() {
 }
 
 #[test]
-fn test_buffered_decode_input_checked_decode_into_validates_range() {
+fn test_buffered_decode_input_decode_into_respects_output_range() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut decoder = PairDecoder;
     let mut input = BufferedDecodeInput::with_capacity(input, 3);
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
     let mut output = [0_u32; 1];
 
-    let read = input
-        .decode_into(&mut decoder, &mut mapper, &mut output, 0, 1)
+    let read = unsafe { input.decode_into(&mut decoder, &mut mapper, &mut output, 0, 1) }
         .expect("checked decode should accept a valid output range");
 
     assert_eq!(1, read);
@@ -564,8 +511,7 @@ fn test_buffered_decode_input_checked_decode_into_validates_range() {
 
 #[test]
 fn test_buffered_decode_input_decodes_across_refills() {
-    let input =
-        ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
+    let input = ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
     let mut decoder = PairDecoder;
     let mut input = BufferedDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
@@ -622,9 +568,8 @@ fn test_buffered_decode_input_reports_initial_refill_errors() {
     let mut output = [0_u32; 1];
 
     // SAFETY: The full output range is valid.
-    let error =
-        unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
-            .expect_err("input refill error should be returned");
+    let error = unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
+        .expect_err("input refill error should be returned");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
@@ -637,9 +582,8 @@ fn test_buffered_decode_input_reports_transcoder_errors() {
     let mut output = [0_u32; 1];
 
     // SAFETY: The full output range is valid.
-    let error =
-        unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
-            .expect_err("decoder error should be mapped to I/O error");
+    let error = unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
+        .expect_err("decoder error should be mapped to I/O error");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("BadInputIndex"));
@@ -653,9 +597,8 @@ fn test_buffered_decode_input_reports_refill_errors_after_need_input() {
     let mut output = [0_u32; 1];
 
     // SAFETY: The full output range is valid.
-    let error =
-        unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
-            .expect_err("NeedInput refill error should be returned");
+    let error = unsafe { decode_with(&mut input, &mut decoder, &mut output, 0, 1) }
+        .expect_err("NeedInput refill error should be returned");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
@@ -706,9 +649,11 @@ fn test_buffered_decode_input_consumes_incomplete_tail() {
     assert_eq!(0, read);
     assert_eq!(1, input.available());
 
-    input.consume_units(1);
+    input.consume(1);
     assert_eq!(0, input.available());
-    assert_eq!(0, input.consume_available());
+    let available = input.available();
+    input.consume(available);
+    assert_eq!(0, available);
 }
 
 #[test]
@@ -729,7 +674,9 @@ fn test_buffered_decode_input_consume_available_discards_tail() {
             .expect("incomplete EOF tail should stay buffered")
     };
 
-    assert_eq!(1, input.consume_available());
+    let available = input.available();
+    input.consume(available);
+    assert_eq!(1, available);
     assert_eq!(0, input.available());
 }
 
@@ -740,7 +687,7 @@ fn test_buffered_decode_input_reports_insufficient_finish_output() {
     let mut input = BufferedDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 1];
 
-    let error = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+    let error = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
         .expect_err("one-shot finish should require the full finish bound");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -754,7 +701,7 @@ fn test_buffered_decode_input_maps_finish_capacity_bound_error() {
     let mut input = BufferedDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 1];
 
-    let error = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+    let error = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
         .expect_err("finish bound overflow should be mapped to I/O error");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -769,7 +716,7 @@ fn test_buffered_decode_input_maps_finish_failure_variants() {
         let mut input = BufferedDecodeInput::with_capacity(input, 3);
         let mut output = [0_u32; 1];
 
-        let error = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+        let error = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
             .expect_err("finish failure should be mapped to I/O error");
 
         assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -790,12 +737,12 @@ fn test_buffered_decode_input_finishes_decoder_at_clean_eof() {
     };
     assert_eq!(0, read);
 
-    let read = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+    let read = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
         .expect("caller-owned decoder should finish explicitly");
     assert_eq!(1, read);
     assert_eq!([0xfeed_beef], output);
 
-    let read = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+    let read = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
         .expect("finished decoder should report EOF");
     assert_eq!(0, read);
 }
@@ -807,7 +754,7 @@ fn test_buffered_decode_input_delegates_zero_width_finish_at_clean_eof() {
     let mut input = BufferedDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 1];
 
-    let error = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+    let error = unsafe { finish_with(&mut input, &mut decoder, &mut output, 0, 1) }
         .expect_err("zero-width finish errors should not be skipped");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
@@ -824,25 +771,13 @@ fn test_buffered_decode_input_takes_decoder_per_call() {
     // SAFETY: The requested output range is valid.
     let first = unsafe {
         input
-            .decode_into_unchecked(
-                &mut first_decoder,
-                &mut mapper,
-                &mut output,
-                0,
-                1,
-            )
+            .decode_into(&mut first_decoder, &mut mapper, &mut output, 0, 1)
             .expect("first decoder should read one value")
     };
     // SAFETY: The requested output range is valid.
     let second = unsafe {
         input
-            .decode_into_unchecked(
-                &mut second_decoder,
-                &mut mapper,
-                &mut output,
-                1,
-                1,
-            )
+            .decode_into(&mut second_decoder, &mut mapper, &mut output, 1, 1)
             .expect("second decoder should continue from the same buffer")
     };
 

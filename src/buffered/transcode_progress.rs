@@ -36,11 +36,7 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
     #[inline(always)]
-    pub const fn new(
-        status: TranscodeStatus,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self {
             status,
             read,
@@ -184,24 +180,12 @@ impl TranscodeProgress {
                 input_index,
                 additional,
                 available,
-            } => Self::need_input(
-                input_index,
-                additional,
-                available,
-                read,
-                written,
-            ),
+            } => Self::need_input(input_index, additional, available, read, written),
             TranscodeStatus::NeedOutput {
                 output_index,
                 additional,
                 available,
-            } => Self::need_output(
-                output_index,
-                additional,
-                available,
-                read,
-                written,
-            ),
+            } => Self::need_output(output_index, additional, available, read, written),
         }
     }
 
@@ -235,9 +219,7 @@ impl TranscodeProgress {
         match self.status {
             TranscodeStatus::Complete => None,
             TranscodeStatus::NeedInput { input_index, .. } => Some(input_index),
-            TranscodeStatus::NeedOutput { output_index, .. } => {
-                Some(output_index)
-            }
+            TranscodeStatus::NeedOutput { output_index, .. } => Some(output_index),
         }
     }
 

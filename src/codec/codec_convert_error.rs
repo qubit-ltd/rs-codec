@@ -9,10 +9,7 @@
 
 use thiserror::Error;
 
-use super::{
-    codec_decode_error::CodecDecodeError,
-    codec_encode_error::CodecEncodeError,
-};
+use super::{codec_decode_error::CodecDecodeError, codec_encode_error::CodecEncodeError};
 
 /// Error reported by codec-backed buffered converters.
 ///
