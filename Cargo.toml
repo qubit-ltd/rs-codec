@@ -30,7 +30,7 @@ include = [
 [dependencies]
 thiserror = "2.0"
 
-qubit-io = "0.9"
+qubit-io = { version = "0.9", path = "../rs-io" }
 
 [[test]]
 name = "tests"
