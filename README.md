@@ -106,12 +106,14 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   transcode-stage policy decisions.
 - **`CodecBufferedConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `BufferedConverter`.
-- **`BufferedDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
-  caller-provided decoders through `decode_into` / `finish_into`; incomplete
-  tails remain buffered for caller-owned EOF policy.
-- **`BufferedEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and drives
-  caller-provided encoders through `encode_from` / `finish`; ordinary `flush`
-  only drains buffered units.
+- **`BufferedDecodeInput<I>`**: owns a unit-level `BufferedInput` and decodes
+  caller-provided `Codec` values through `decode_into`; `finish_into` is a
+  no-op because `Codec` has no finish state. Stateful streaming decoders use
+  `transcode_into` / `finish_transcode_into`.
+- **`BufferedEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and encodes
+  caller-provided `Codec` values through `encode_from`; ordinary `flush` only
+  drains buffered units. Stateful streaming encoders use `transcode_from` and
+  `finish`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -200,8 +202,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `BufferedDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned buffered decoder to `decode_into`; finish is explicit via `finish_into` |
-| `BufferedEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned buffered encoder to `encode_from`; `flush` drains units and `finish` finalizes the supplied encoder |
+| `BufferedDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned `Codec` to `decode_into`; stateful streaming decoders use `transcode_into` and `finish_transcode_into` |
+| `BufferedEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned `Codec` to `encode_from`; stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
 
