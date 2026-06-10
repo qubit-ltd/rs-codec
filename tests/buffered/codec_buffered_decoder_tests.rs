@@ -20,6 +20,8 @@ unsafe impl Codec for VariableByteCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -29,8 +31,8 @@ unsafe impl Codec for VariableByteCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -56,8 +58,8 @@ unsafe impl Codec for VariableByteCodec {
         }
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -83,6 +85,8 @@ unsafe impl Codec for FixedPairCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -92,8 +96,8 @@ unsafe impl Codec for FixedPairCodec {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -105,8 +109,8 @@ unsafe impl Codec for FixedPairCodec {
         ))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,

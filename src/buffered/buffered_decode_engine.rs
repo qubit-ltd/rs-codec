@@ -20,7 +20,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 /// The engine owns the low-level codec and hook object. It keeps the common
 /// buffered decoding loop private: input-index validation, output-capacity
-/// checks, calls to [`Codec::decode_unchecked`], hook dispatch, and
+/// checks, calls to [`Codec::decode`], hook dispatch, and
 /// [`crate::TranscodeStatus`] reporting. Incomplete input tails are left in the
 /// caller-provided input slice; callers own input-buffer refill.
 ///
@@ -68,6 +68,8 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///     type Unit = u8;
 ///     type DecodeError = ByteDecodeError;
 ///     type EncodeError = core::convert::Infallible;
+///     type DecodeState = ();
+///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -77,8 +79,8 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///         NonZeroUsize::MIN
 ///     }
 ///
-///     unsafe fn decode_unchecked(
-///         &self,
+///     unsafe fn decode(
+///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
 ///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
@@ -90,8 +92,8 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///         }
 ///     }
 ///
-///     unsafe fn encode_unchecked(
-///         &self,
+///     unsafe fn encode(
+///         &mut self,
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
@@ -108,7 +110,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     fn handle_decode_error(
 ///         &mut self,
-///         _codec: &ByteCodec,
+///         _codec: &mut ByteCodec,
 ///         error: ByteDecodeError,
 ///         _context: DecodeContext,
 ///     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -121,7 +123,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     fn invalid_input_index(
 ///         &mut self,
-///         _codec: &ByteCodec,
+///         _codec: &mut ByteCodec,
 ///         _index: usize,
 ///         _input_len: usize,
 ///     ) -> Self::Error {
@@ -132,7 +134,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     fn invalid_output_index(
 ///         &mut self,
-///         _codec: &ByteCodec,
+///         _codec: &mut ByteCodec,
 ///         _index: usize,
 ///         _output_len: usize,
 ///     ) -> Self::Error {
@@ -210,7 +212,8 @@ where
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
-    /// Returns the maximum values emitted by finishing hook-owned state.
+    /// Returns the maximum values emitted by flushing codec state and finishing
+    /// hook-owned state.
     ///
     /// # Returns
     ///
@@ -218,10 +221,10 @@ where
     #[must_use]
     #[inline(always)]
     pub fn max_finish_output_len(&self) -> usize {
-        self.hooks.max_finish_output_len(&self.codec)
+        self.codec.max_decode_flush_values() + self.hooks.max_finish_output_len(&self.codec)
     }
 
-    /// Resets hook-owned state.
+    /// Resets codec decode state and hook-owned state.
     ///
     /// # Parameters
     ///
@@ -232,7 +235,8 @@ where
     /// Returns unit `()`.
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.hooks.reset(&self.codec);
+        self.codec.reset_decode_state();
+        self.hooks.reset(&mut self.codec);
     }
 
     /// Decodes source units into caller-provided output values.
@@ -264,21 +268,29 @@ where
         if input_index > input.len() {
             return Err(self
                 .hooks
-                .invalid_input_index(&self.codec, input_index, input.len()));
+                .invalid_input_index(&mut self.codec, input_index, input.len()));
         }
         if output_index > output.len() {
-            return Err(self
-                .hooks
-                .invalid_output_index(&self.codec, output_index, output.len()));
+            return Err(self.hooks.invalid_output_index(
+                &mut self.codec,
+                output_index,
+                output.len(),
+            ));
         }
         assert_unit_bounds::<C>(&self.codec);
         let mut state = DecodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
-            if state.needs_output() && state.has_written_output() {
+            let context = state.context();
+            let min_units = self.codec.min_units_per_value().get();
+            if context.available < min_units {
+                let additional = NonZeroUsize::new(min_units - context.available)
+                    .expect("missing input is non-zero");
+                return Ok(state.need_input_progress_with(additional, context.available));
+            }
+            if state.needs_output() {
                 return Ok(state.need_output_progress());
             }
-            let context = state.context();
             let step = self.decode_step(state.input(), context)?;
             if let Some(progress) = step.apply_to_decode_state(&mut state) {
                 return Ok(progress);
@@ -322,15 +334,25 @@ where
         FinishError::ensure_output_capacity(output.len(), output_index, required)?;
         let output_end = output_index + required;
         let output = &mut output[..output_end];
+        let snapshot = self.codec.decode_state();
+        let flushed =
+            unsafe { self.codec.decode_flush(output, output_index) }.map_err(|error| {
+                self.codec.set_decode_state(snapshot);
+                FinishError::source(self.hooks.map_decode_flush_error(&mut self.codec, error))
+            })?;
+        assert!(
+            flushed <= self.codec.max_decode_flush_values(),
+            "Codec::decode_flush wrote beyond its flush bound",
+        );
         let written = self
             .hooks
-            .finish(&self.codec, output, output_index)
+            .finish(&mut self.codec, output, output_index + flushed)
             .map_err(FinishError::source)?;
         assert!(
-            written <= required,
+            flushed + written <= required,
             "BufferedDecodeEngine hook wrote beyond its finish bound",
         );
-        Ok(written)
+        Ok(flushed + written)
     }
 
     /// Decodes one value at a caller-proven readable input cursor.
@@ -340,20 +362,20 @@ where
     /// The caller must guarantee that at least `codec.min_units_per_value()`
     /// units are readable from `input_index`.
     #[inline(always)]
-    pub(crate) unsafe fn decode_unchecked_at(
-        &self,
+    pub(crate) unsafe fn decode_at(
+        &mut self,
         input: &[C::Unit],
         input_index: usize,
     ) -> Result<(C::Value, NonZeroUsize), C::DecodeError> {
         // SAFETY: Forwarded from this method's safety contract.
-        unsafe { self.codec.decode_unchecked(input, input_index) }
+        unsafe { self.codec.decode(input, input_index) }
     }
 
     /// Lets the configured decode hooks classify a low-level decode error.
     ///
     /// # Parameters
     ///
-    /// - `error`: Decode error returned by [`Codec::decode_unchecked`].
+    /// - `error`: Decode error returned by [`Codec::decode`].
     /// - `context`: Decode context used by policy hooks.
     ///
     /// # Returns
@@ -369,7 +391,8 @@ where
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, H::Error> {
-        self.hooks.handle_decode_error(&self.codec, error, context)
+        self.hooks
+            .handle_decode_error(&mut self.codec, error, context)
     }
 
     /// Decodes one source value attempt into a normalized decode step.
@@ -403,8 +426,9 @@ where
 
         // SAFETY: The context reports at least `min_units_per_value()` source
         // units available from `context.input_index`.
-        let result = unsafe { self.decode_unchecked_at(input, context.input_index) };
-        self.handle_decode_result(context, result)
+        let snapshot = self.codec.decode_state();
+        let result = unsafe { self.decode_at(input, context.input_index) };
+        self.handle_decode_result(context, snapshot, result)
     }
 
     /// Handles one low-level decode result and returns a normalized decode
@@ -427,17 +451,19 @@ where
     fn handle_decode_result(
         &mut self,
         context: DecodeContext,
+        snapshot: C::DecodeState,
         result: Result<(C::Value, NonZeroUsize), C::DecodeError>,
     ) -> Result<DecodeStep<C::Value>, H::Error> {
         match result {
             Ok((value, consumed)) => {
                 assert!(
                     consumed.get() <= context.available,
-                    "Codec::decode_unchecked consumed beyond available input",
+                    "Codec::decode consumed beyond available input",
                 );
                 Ok(DecodeStep::decoded(value, consumed, context.input_index))
             }
             Err(error) => {
+                self.codec.set_decode_state(snapshot);
                 let action = self.handle_decode_error(error, context)?;
                 Ok(action.into_step(context.input_index, context.available))
             }

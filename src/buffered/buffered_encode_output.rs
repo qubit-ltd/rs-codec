@@ -13,19 +13,17 @@ use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 use qubit_io::{BufferedOutput, Output};
 
 use super::{BufferedTranscoder, FinishError, TranscodeStatus};
+use crate::{Codec, codec::assert_unit_bounds};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
 /// This type owns only the unit-level [`qubit_io::BufferedOutput`]. Callers
-/// pass the encoder and error mapper to each encode operation, which lets one
+/// pass a [`Codec`] and error mapper to each encode operation, which lets one
 /// buffered output drive different encoders without nesting buffers or storing
 /// codec-specific state in the buffer owner.
 ///
-/// [`Self::flush`] only drains already buffered units. [`Self::finish`] accepts
-/// a caller-owned encoder and closes that encoder's logical stream under the
-/// [`BufferedTranscoder`] lifecycle. Because encoder state is not stored here,
-/// closed/open state remains the responsibility of the caller-owned encoder or
-/// wrapper.
+/// [`Self::flush`] only drains already buffered units. State-aware streaming
+/// encoders can use [`Self::transcode_from`] and [`Self::finish`] explicitly.
 ///
 /// # Type Parameters
 ///
@@ -110,18 +108,19 @@ where
         self.output.spare_capacity()
     }
 
-    /// Returns the unused portion of the internal output buffer.
+    /// Returns raw spare-buffer parts for the internal output buffer.
     ///
     /// # Returns
     ///
-    /// A mutable slice over the currently available spare units.
+    /// The full backing storage, the spare start index, and the spare unit
+    /// count.
     #[inline(always)]
     #[must_use]
-    pub fn spare_slice_mut(&mut self) -> &mut [O::Item] {
-        self.output.spare_slice_mut()
+    pub fn spare_raw_parts_mut(&mut self) -> (&mut [O::Item], usize, usize) {
+        self.output.spare_raw_parts_mut()
     }
 
-    /// Marks `count` units from [`Self::spare_slice_mut`] as written.
+    /// Marks `count` units from [`Self::spare_raw_parts_mut`] as written.
     ///
     /// # Safety
     ///
@@ -169,11 +168,11 @@ where
         self.output.flush()
     }
 
-    /// Encodes values from an indexed input range.
+    /// Encodes values from an indexed input range using a [`Codec`].
     ///
     /// # Parameters
     ///
-    /// * `encoder` - Encoder used for this operation.
+    /// * `encoder` - Codec used for this operation.
     /// * `map_error` - Function mapping encoder errors into I/O errors.
     /// * `input` - Source values.
     /// * `input_index` - Start index inside `input`.
@@ -191,7 +190,78 @@ where
     ///
     /// The caller must guarantee that `input_index..input_index + count` is
     /// a valid range inside `input` and that the addition does not overflow.
-    pub unsafe fn encode_from<E, M, Value>(
+    pub unsafe fn encode_from<C, M>(
+        &mut self,
+        encoder: &mut C,
+        map_error: &mut M,
+        input: &[C::Value],
+        input_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        C: Codec<Unit = O::Item>,
+        M: FnMut(C::EncodeError) -> Error,
+    {
+        debug_assert!(
+            input_index
+                .checked_add(count)
+                .is_some_and(|end| end <= input.len()),
+            "unchecked encode input range exceeds source buffer",
+        );
+        if count == 0 {
+            return Ok(0);
+        }
+        assert_unit_bounds::<C>(encoder);
+        let max_units = encoder.max_units_per_value().get();
+        let mut read_total = 0;
+        while read_total < count {
+            self.output.ensure_spare_capacity(max_units)?;
+            let (units, output_index, available) = self.output.spare_raw_parts_mut();
+            debug_assert!(
+                available >= max_units,
+                "insufficient encode capacity reserved in spare output buffer",
+            );
+            let written = unsafe {
+                // SAFETY: `ensure_spare_capacity` reserved at least
+                // `max_units_per_value` units at `output_index`.
+                encoder.encode(&input[input_index + read_total], units, output_index)
+            }
+            .map_err(&mut *map_error)?;
+            assert!(written <= max_units, "Codec::encode wrote beyond its bound",);
+            unsafe {
+                // SAFETY: The codec-reported written count was checked
+                // against the reserved spare output window.
+                self.output.advance_unchecked(written);
+            }
+            read_total += 1;
+        }
+        Ok(read_total)
+    }
+
+    /// Encodes values from an indexed input range using a streaming
+    /// [`BufferedTranscoder`].
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Streaming encoder used for this operation.
+    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    /// * `input` - Source values.
+    /// * `input_index` - Start index inside `input`.
+    /// * `count` - Maximum number of values to encode.
+    ///
+    /// # Returns
+    ///
+    /// The number of source values consumed.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity, encoder, or output errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `input_index..input_index + count` is
+    /// a valid range inside `input` and that the addition does not overflow.
+    pub unsafe fn transcode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
         map_error: &mut M,
@@ -219,9 +289,9 @@ where
             if self.output.spare_capacity() == 0 {
                 self.output.flush_buffer()?;
             }
-            let units = self.output.spare_slice_mut();
+            let (units, output_index, _) = self.output.spare_raw_parts_mut();
             let progress = encoder
-                .transcode(input, input_index + read_total, units, 0)
+                .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
             let read = progress.read();
             let written = progress.written();
@@ -275,10 +345,13 @@ where
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let units = self.output.spare_slice_mut();
-        debug_assert!(units.len() >= required, "insufficient finish capacity");
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        debug_assert!(
+            available >= required,
+            "insufficient finish capacity reserved in spare output buffer",
+        );
         let written = encoder
-            .finish(units, 0)
+            .finish(units, output_index)
             .map_err(|e| finish_to_io_error(e, map_error))?;
         assert!(written <= required, "finish wrote beyond its bound");
         // SAFETY: The encoder reported initialized units within the spare

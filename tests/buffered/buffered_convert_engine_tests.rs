@@ -57,6 +57,8 @@ unsafe impl Codec for SourceCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> NonZeroUsize {
         NonZeroUsize::MIN
@@ -66,8 +68,8 @@ unsafe impl Codec for SourceCodec {
         NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
@@ -76,8 +78,8 @@ unsafe impl Codec for SourceCodec {
         Ok((value.wrapping_add(1), NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -95,6 +97,8 @@ unsafe impl Codec for TargetCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> NonZeroUsize {
         NonZeroUsize::MIN
@@ -104,8 +108,8 @@ unsafe impl Codec for TargetCodec {
         NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
@@ -114,8 +118,8 @@ unsafe impl Codec for TargetCodec {
         Ok((value, NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -136,6 +140,8 @@ unsafe impl Codec for ErrorSourceCodec {
     type Unit = u8;
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> NonZeroUsize {
         NonZeroUsize::MIN
@@ -145,16 +151,16 @@ unsafe impl Codec for ErrorSourceCodec {
         NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         _input: &[u8],
         _index: usize,
     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
         Err(EngineError::Decode)
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -175,7 +181,7 @@ impl BufferedDecodeHooks<SourceCodec> for StrictDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -184,7 +190,7 @@ impl BufferedDecodeHooks<SourceCodec> for StrictDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -193,7 +199,7 @@ impl BufferedDecodeHooks<SourceCodec> for StrictDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -210,7 +216,7 @@ impl BufferedEncodeHooks<TargetCodec> for StrictEncodeHooks {
 
     fn prepare_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         _input_value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -219,7 +225,7 @@ impl BufferedEncodeHooks<TargetCodec> for StrictEncodeHooks {
 
     unsafe fn write_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -230,12 +236,12 @@ impl BufferedEncodeHooks<TargetCodec> for StrictEncodeHooks {
             ..
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
-        unsafe { codec.encode_unchecked(input_value, output, output_index) }
+        unsafe { codec.encode(input_value, output, output_index) }
     }
 
     fn invalid_input_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -244,7 +250,7 @@ impl BufferedEncodeHooks<TargetCodec> for StrictEncodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -274,7 +280,7 @@ impl BufferedDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &ErrorSourceCodec,
+        _codec: &mut ErrorSourceCodec,
         _error: EngineError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -292,7 +298,7 @@ impl BufferedDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &ErrorSourceCodec,
+        _codec: &mut ErrorSourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -301,7 +307,7 @@ impl BufferedDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &ErrorSourceCodec,
+        _codec: &mut ErrorSourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -422,7 +428,7 @@ impl BufferedDecodeHooks<SourceCodec> for FinishDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -431,7 +437,7 @@ impl BufferedDecodeHooks<SourceCodec> for FinishDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -440,7 +446,7 @@ impl BufferedDecodeHooks<SourceCodec> for FinishDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -449,7 +455,7 @@ impl BufferedDecodeHooks<SourceCodec> for FinishDecodeHooks {
 
     fn finish(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -540,7 +546,7 @@ impl BufferedDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -549,7 +555,7 @@ impl BufferedDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -558,7 +564,7 @@ impl BufferedDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -567,7 +573,7 @@ impl BufferedDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
 
     fn finish(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -647,7 +653,7 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
 
     fn prepare_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         _input_value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -656,7 +662,7 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
 
     unsafe fn write_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -667,12 +673,12 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
             ..
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
-        unsafe { codec.encode_unchecked(input_value, output, output_index) }
+        unsafe { codec.encode(input_value, output, output_index) }
     }
 
     fn invalid_input_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -681,7 +687,7 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -694,7 +700,7 @@ impl BufferedEncodeHooks<TargetCodec> for FinishEncodeHooks {
 
     fn finish(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -779,7 +785,7 @@ impl BufferedDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -788,7 +794,7 @@ impl BufferedDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -797,7 +803,7 @@ impl BufferedDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -806,7 +812,7 @@ impl BufferedDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
 
     fn finish(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -863,7 +869,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
 
     fn prepare_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         _input_value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -877,7 +883,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         _context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -886,7 +892,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -895,7 +901,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -904,7 +910,7 @@ impl BufferedEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
 
     fn finish(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -992,7 +998,7 @@ impl BufferedDecodeHooks<SourceCodec> for FactoryDecodeHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -1001,7 +1007,7 @@ impl BufferedDecodeHooks<SourceCodec> for FactoryDecodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -1010,7 +1016,7 @@ impl BufferedDecodeHooks<SourceCodec> for FactoryDecodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &SourceCodec,
+        _codec: &mut SourceCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -1029,7 +1035,7 @@ impl BufferedEncodeHooks<TargetCodec> for FactoryEncodeHooks {
 
     fn prepare_encode(
         &mut self,
-        codec: &TargetCodec,
+        codec: &mut TargetCodec,
         _input_value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -1038,7 +1044,7 @@ impl BufferedEncodeHooks<TargetCodec> for FactoryEncodeHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -1054,7 +1060,7 @@ impl BufferedEncodeHooks<TargetCodec> for FactoryEncodeHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -1063,7 +1069,7 @@ impl BufferedEncodeHooks<TargetCodec> for FactoryEncodeHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &TargetCodec,
+        _codec: &mut TargetCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {

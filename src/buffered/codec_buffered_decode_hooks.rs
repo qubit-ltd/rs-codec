@@ -37,11 +37,17 @@ where
     #[inline(always)]
     fn handle_decode_error(
         &mut self,
-        _codec: &C,
+        _codec: &mut C,
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error> {
         Err(CodecDecodeError::decode(error, context.input_index))
+    }
+
+    /// Maps flush errors into generic codec decode errors.
+    #[inline(always)]
+    fn map_decode_flush_error(&mut self, _codec: &mut C, error: C::DecodeError) -> Self::Error {
+        CodecDecodeError::decode(error, 0)
     }
 
     /// Creates an invalid input index error.
@@ -56,7 +62,12 @@ where
     ///
     /// Returns a codec decode error describing the invalid index.
     #[inline(always)]
-    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+    fn invalid_input_index(
+        &mut self,
+        _codec: &mut C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error {
         CodecDecodeError::invalid_input_index(index, input_len)
     }
 
@@ -72,7 +83,12 @@ where
     ///
     /// Returns a codec decode error describing the invalid output index.
     #[inline(always)]
-    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
+    fn invalid_output_index(
+        &mut self,
+        _codec: &mut C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error {
         CodecDecodeError::invalid_output_index(index, output_len)
     }
 }

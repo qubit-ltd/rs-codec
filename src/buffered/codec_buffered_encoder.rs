@@ -26,7 +26,7 @@ use crate::{CapacityError, Codec, CodecEncodeError};
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode values.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CodecBufferedEncoder<C> {
     /// Common buffered encoding engine.
     engine: BufferedEncodeEngine<C, CodecBufferedEncodeHooks>,
@@ -150,3 +150,18 @@ where
 }
 
 impl<C> BufferedEncoder<C::Value, C::Unit> for CodecBufferedEncoder<C> where C: Codec {}
+
+impl<C> Default for CodecBufferedEncoder<C>
+where
+    C: Codec + Default,
+{
+    /// Creates a default codec-backed buffered encoder.
+    ///
+    /// # Returns
+    ///
+    /// Returns an encoder backed by `C::default()`.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(C::default())
+    }
+}

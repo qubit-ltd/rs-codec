@@ -93,12 +93,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         self.output_cursor == self.output.len()
     }
 
-    /// Returns whether this call has emitted at least one output value.
-    #[inline(always)]
-    pub(super) fn has_written_output(&self) -> bool {
-        self.output_cursor > self.output_start
-    }
-
     /// Returns input units visible from the current input cursor.
     #[inline(always)]
     fn available(&self) -> usize {

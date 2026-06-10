@@ -56,6 +56,8 @@ use crate::{CapacityError, Codec};
 ///     type Unit = u8;
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
+///     type DecodeState = ();
+///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -65,16 +67,16 @@ use crate::{CapacityError, Codec};
 ///         NonZeroUsize::MIN
 ///     }
 ///
-///     unsafe fn decode_unchecked(
-///         &self,
+///     unsafe fn decode(
+///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
 ///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
 ///         Ok((input[index], NonZeroUsize::MIN))
 ///     }
 ///
-///     unsafe fn encode_unchecked(
-///         &self,
+///     unsafe fn encode(
+///         &mut self,
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
@@ -95,7 +97,7 @@ use crate::{CapacityError, Codec};
 ///
 ///     fn prepare_encode(
 ///         &mut self,
-///         codec: &C,
+///         codec: &mut C,
 ///         _value: &C::Value,
 ///         _input_index: usize,
 ///     ) -> Result<EncodePlan<()>, Self::Error> {
@@ -104,19 +106,19 @@ use crate::{CapacityError, Codec};
 ///
 ///     unsafe fn write_encode(
 ///         &mut self,
-///         codec: &C,
+///         codec: &mut C,
 ///         context: EncodeContext<'_, C::Value, C::Unit>,
 ///         _plan: EncodePlan<()>,
 ///     ) -> Result<usize, Self::Error> {
 ///         unsafe {
-///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
+///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
 ///
 ///     fn invalid_input_index(
 ///         &mut self,
-///         _codec: &C,
+///         _codec: &mut C,
 ///         index: usize,
 ///         input_len: usize,
 ///     ) -> Self::Error {
@@ -125,7 +127,7 @@ use crate::{CapacityError, Codec};
 ///
 ///     fn invalid_output_index(
 ///         &mut self,
-///         _codec: &C,
+///         _codec: &mut C,
 ///         index: usize,
 ///         output_len: usize,
 ///     ) -> Self::Error {
@@ -207,7 +209,7 @@ where
     /// policy.
     fn prepare_encode(
         &mut self,
-        codec: &C,
+        codec: &mut C,
         input_value: &C::Value,
         input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error>;
@@ -246,10 +248,63 @@ where
     /// [`EncodeContext::output_index`] in [`EncodeContext::output`].
     unsafe fn write_encode(
         &mut self,
-        codec: &C,
+        codec: &mut C,
         context: EncodeContext<'_, C::Value, C::Unit>,
         plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error>;
+
+    /// Maps a codec-level reset error into this hook's public error type.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `error`: Error returned by [`Codec::encode_reset`].
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific error.
+    #[inline]
+    fn map_encode_reset_error(&mut self, _codec: &mut C, _error: C::EncodeError) -> Self::Error {
+        panic!(
+            "BufferedEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
+        )
+    }
+
+    /// Writes encoder reset output through the wrapped codec.
+    ///
+    /// The default implementation delegates to [`Codec::encode_reset`] and
+    /// maps errors through [`map_encode_reset_error`](Self::map_encode_reset_error).
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `output`: Destination unit buffer.
+    /// - `output_index`: Absolute output index where reset output starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns hook-specific reset errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that at least
+    /// [`Codec::max_encode_reset_units`] units are writable from
+    /// `output_index`.
+    #[inline]
+    unsafe fn write_encode_reset(
+        &mut self,
+        codec: &mut C,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        // SAFETY: Forwarded from this method's safety contract.
+        unsafe { codec.encode_reset(output, output_index) }
+            .map_err(|error| self.map_encode_reset_error(codec, error))
+    }
 
     /// Builds an error for a caller-supplied input index outside the input
     /// slice.
@@ -267,7 +322,8 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(&mut self, codec: &mut C, index: usize, input_len: usize)
+    -> Self::Error;
 
     /// Builds an error for a caller-supplied output index outside the output
     /// slice.
@@ -285,7 +341,12 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific invalid-output-index error.
-    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
+    fn invalid_output_index(
+        &mut self,
+        codec: &mut C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output units.
     ///
@@ -314,7 +375,7 @@ where
     #[inline]
     fn finish(
         &mut self,
-        _codec: &C,
+        _codec: &mut C,
         _output: &mut [C::Unit],
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -327,5 +388,5 @@ where
     ///
     /// - `codec`: Low-level codec owned by the engine.
     #[inline(always)]
-    fn reset(&mut self, _codec: &C) {}
+    fn reset(&mut self, _codec: &mut C) {}
 }

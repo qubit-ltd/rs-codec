@@ -13,21 +13,19 @@ use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 use qubit_io::{BufferedInput, Input};
 
 use super::{BufferedTranscoder, FinishError, TranscodeStatus};
+use crate::{Codec, codec::assert_unit_bounds};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
 /// This type owns only the unit-level [`qubit_io::BufferedInput`]. Callers pass
-/// the decoder and error mapper to each decode operation, which lets one
+/// a [`Codec`] and error mapper to each decode operation, which lets one
 /// buffered input drive different decoders without nesting buffers or storing
 /// codec-specific state in the buffer owner.
 ///
-/// Decoding does not finish the decoder automatically at clean EOF. Decoder
-/// finish state belongs to the caller-owned decoder, so callers that need
-/// final output must call [`Self::finish_into`] exactly when their logical
-/// stream ends.
-/// Incomplete tails remain buffered when EOF prevents a
-/// [`TranscodeStatus::NeedInput`] request from being satisfied; the caller can
-/// then decide whether to reject, replace, or otherwise handle the tail.
+/// A [`Codec`] has no decoder-owned finish state, so [`Self::finish_into`] is
+/// a no-op retained for API symmetry. Callers that need a stateful streaming
+/// decoder can use [`Self::transcode_into`] and [`Self::finish_transcode_into`]
+/// explicitly.
 ///
 /// # Type Parameters
 ///
@@ -112,15 +110,15 @@ where
         self.input.available()
     }
 
-    /// Returns unread units in the current readable window.
+    /// Returns the internal unit buffer capacity.
     ///
     /// # Returns
     ///
-    /// The unread window slice.
+    /// The maximum number of units retained in the internal buffer.
     #[must_use]
     #[inline(always)]
-    pub fn unread_slice(&self) -> &[I::Item] {
-        self.input.unread_slice()
+    pub fn capacity(&self) -> usize {
+        self.input.capacity()
     }
 
     /// Refills the internal buffer until at least `count` unread units are
@@ -152,6 +150,35 @@ where
         self.input.consume(count)
     }
 
+    /// Copies unread units into an indexed output range without consuming them.
+    ///
+    /// # Parameters
+    ///
+    /// * `output` - Destination storage that receives a copy of unread units.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Number of unread units to copy.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output`, that the addition does not overflow, that
+    /// `count <= self.available()`, and that the destination range does not
+    /// overlap with the unread units stored inside this buffer.
+    #[inline(always)]
+    pub unsafe fn copy_unread_to_unchecked(
+        &self,
+        output: &mut [I::Item],
+        output_index: usize,
+        count: usize,
+    ) {
+        // SAFETY: The caller guarantees the destination range and non-overlap
+        // requirements for the unread copy.
+        unsafe {
+            self.input
+                .copy_unread_to_unchecked(output, output_index, count);
+        }
+    }
+
     /// Consumes this adapter and returns its parts.
     ///
     /// # Returns
@@ -163,11 +190,127 @@ where
         self.input.into_parts()
     }
 
-    /// Decodes values into an indexed output range.
+    /// Reads buffered units into an indexed output range.
     ///
     /// # Parameters
     ///
-    /// * `decoder` - Decoder used for this operation.
+    /// * `output` - Destination unit storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of units to read.
+    ///
+    /// # Returns
+    ///
+    /// The number of units copied into `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns input or buffer validation errors from the wrapped
+    /// [`qubit_io::BufferedInput`].
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    #[inline(always)]
+    pub unsafe fn read_into_unchecked(
+        &mut self,
+        output: &mut [I::Item],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize> {
+        // SAFETY: The caller guarantees the destination range is valid.
+        unsafe { self.input.read_into_unchecked(output, output_index, count) }
+    }
+
+    /// Decodes values into an indexed output range using a [`Codec`].
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Codec used for this operation.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written. If EOF occurs before
+    /// [`Codec::min_units_per_value`] units are available for the next value,
+    /// the incomplete tail is left buffered and `Ok(written)` is returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns input errors, buffer refill errors, or decoder errors mapped by
+    /// `map_error`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    pub unsafe fn decode_into<C, M>(
+        &mut self,
+        decoder: &mut C,
+        map_error: &mut M,
+        output: &mut [C::Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        debug_assert!(
+            output_index
+                .checked_add(count)
+                .is_some_and(|end| end <= output.len()),
+            "unchecked decoded output range exceeds destination buffer",
+        );
+        if count == 0 {
+            return Ok(0);
+        }
+        assert_unit_bounds::<C>(decoder);
+        let min_units = decoder.min_units_per_value().get();
+        let max_units = decoder.max_units_per_value().get();
+        let mut written_total = 0;
+
+        while written_total < count {
+            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
+                return Ok(written_total);
+            }
+
+            if self.input.available() < max_units && max_units <= self.input.capacity() {
+                let _ = self.input.fill_until(max_units)?;
+            }
+
+            let available = self.input.available();
+            let (value, consumed) = unsafe {
+                // SAFETY: The unread window contains at least
+                // `min_units_per_value` units from index zero.
+                decoder.decode(self.input.unread(), 0)
+            }
+            .map_err(&mut *map_error)?;
+            let consumed = consumed.get();
+            assert!(
+                consumed <= available,
+                "Codec::decode consumed beyond available input",
+            );
+            output[output_index + written_total] = value;
+            unsafe {
+                // SAFETY: The codec-reported consumed count was checked
+                // against the current unread input window.
+                self.input.consume_unchecked(consumed);
+            }
+            written_total += 1;
+        }
+        Ok(written_total)
+    }
+
+    /// Decodes values into an indexed output range using a streaming
+    /// [`BufferedTranscoder`].
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Streaming decoder used for this operation.
     /// * `map_error` - Function mapping decoder errors into I/O errors.
     /// * `output` - Destination value storage.
     /// * `output_index` - Start index inside `output`.
@@ -188,7 +331,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
-    pub unsafe fn decode_into<D, M, Value>(
+    pub unsafe fn transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
         map_error: &mut M,
@@ -212,11 +355,23 @@ where
         let output_end = output_index + count;
         let output = &mut output[..output_end];
         let mut written_total = 0;
+        let mut units = Vec::new();
         loop {
             if self.input.available() == 0 && !self.input.fill_more()? {
                 return Ok(written_total);
             }
-            let units = self.input.unread_slice();
+            let available = self.input.available();
+            if units.len() < available {
+                units.resize(available, I::Item::default());
+            }
+            // SAFETY: The first `available` slots in `units` are a valid
+            // destination range, and the copied range does not overlap with
+            // the buffered input storage.
+            unsafe {
+                self.input
+                    .copy_unread_to_unchecked(&mut units, 0, available);
+            }
+            let units = &units[..available];
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
@@ -252,11 +407,55 @@ where
         }
     }
 
-    /// Finishes the decoder into an indexed output range.
+    /// Finishes a codec decode operation into an indexed output range.
     ///
     /// # Parameters
     ///
-    /// * `decoder` - Decoder whose final output is being collected.
+    /// * `decoder` - Codec whose decode operation is being finished.
+    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `output` - Destination value storage.
+    /// * `output_index` - Start index inside `output`.
+    /// * `count` - Maximum number of finish values to write.
+    ///
+    /// # Returns
+    ///
+    /// The number of values written by the finish operation. Since [`Codec`]
+    /// has no decoder-owned finish state, this method always returns `0`.
+    ///
+    /// # Errors
+    ///
+    /// This method performs no I/O and returns no codec errors.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that `output_index..output_index + count` is
+    /// a valid range inside `output` and that the addition does not overflow.
+    pub unsafe fn finish_into<C, M>(
+        &mut self,
+        _decoder: &C,
+        _map_error: &mut M,
+        output: &mut [C::Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<usize>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        debug_assert!(
+            output_index
+                .checked_add(count)
+                .is_some_and(|end| end <= output.len()),
+            "unchecked finish output range exceeds destination buffer",
+        );
+        Ok(0)
+    }
+
+    /// Finishes a streaming decoder into an indexed output range.
+    ///
+    /// # Parameters
+    ///
+    /// * `decoder` - Streaming decoder whose final output is being collected.
     /// * `map_error` - Function mapping decoder errors into I/O errors.
     /// * `output` - Destination value storage.
     /// * `output_index` - Start index inside `output`.
@@ -274,7 +473,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
-    pub unsafe fn finish_into<D, M, Value>(
+    pub unsafe fn finish_transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
         map_error: &mut M,

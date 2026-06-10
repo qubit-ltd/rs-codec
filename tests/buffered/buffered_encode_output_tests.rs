@@ -9,7 +9,7 @@
 use std::io::{Cursor, Error, ErrorKind, Seek, SeekFrom, Write};
 
 use qubit_codec::{
-    BufferedEncodeOutput, BufferedTranscoder, CapacityError, FinishError, TranscodeProgress,
+    BufferedEncodeOutput, BufferedTranscoder, CapacityError, Codec, FinishError, TranscodeProgress,
 };
 use qubit_io::Output;
 
@@ -23,6 +23,53 @@ enum PairEncodeError {
 
 #[derive(Debug, Default)]
 struct PairEncoder;
+
+#[derive(Debug, Default)]
+struct PairCodec;
+
+unsafe impl Codec for PairCodec {
+    type DecodeError = PairEncodeError;
+    type EncodeError = PairEncodeError;
+    type DecodeState = ();
+    type EncodeState = ();
+    type Unit = u16;
+    type Value = u32;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        nz(2)
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        nz(2)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), Self::DecodeError> {
+        if index + 1 >= input.len() {
+            return Err(PairEncodeError::BadInputIndex);
+        }
+        let high = input[index] as u32;
+        let low = input[index + 1] as u32;
+        Ok(((high << 16) | low, nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        if index + 1 >= output.len() {
+            return Err(PairEncodeError::BadOutputIndex);
+        }
+        output[index] = (value >> 16) as u16;
+        output[index + 1] = *value as u16;
+        Ok(2)
+    }
+}
 
 impl BufferedTranscoder<u32, u16> for PairEncoder {
     type Error = PairEncodeError;
@@ -343,7 +390,7 @@ where
 {
     let mut mapper: fn(PairEncodeError) -> Error = map_error;
     // SAFETY: The caller upholds the requested input range contract.
-    unsafe { output.encode_from(encoder, &mut mapper, input, input_index, count) }
+    unsafe { output.transcode_from(encoder, &mut mapper, input, input_index, count) }
 }
 
 fn finish_with<E>(
@@ -422,13 +469,30 @@ fn test_buffered_encode_output_encode_from_respects_input_range() {
     let mut output = BufferedEncodeOutput::with_capacity(output, 4);
     let mut mapper: fn(PairEncodeError) -> Error = map_error;
 
-    let written = unsafe { output.encode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1) }
+    let written = unsafe { output.transcode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1) }
         .expect("checked encode should accept a valid input range");
 
     output.flush().expect("flush should drain encoded units");
 
     assert_eq!(1, written);
     assert_eq!(&[1, 2], output.inner().units.as_slice());
+}
+
+#[test]
+fn test_buffered_encode_output_encode_from_accepts_codec_encoder() {
+    let output = UnitOutput::default();
+    let mut encoder = PairCodec;
+    let mut output = BufferedEncodeOutput::with_capacity(output, 4);
+    let mut mapper: fn(PairEncodeError) -> Error = map_error;
+    let input = [0x1111_2222, 0x0001_0002, 0x0003_0004];
+
+    let written = unsafe { output.encode_from(&mut encoder, &mut mapper, &input, 1, 2) }
+        .expect("codec encoder should write directly through the output buffer");
+
+    output.flush().expect("flush should drain encoded units");
+
+    assert_eq!(2, written);
+    assert_eq!(&[1, 2, 3, 4], output.inner().units.as_slice());
 }
 
 #[test]
@@ -628,13 +692,13 @@ fn test_buffered_encode_output_takes_encoder_per_call() {
     // SAFETY: The requested input range is valid.
     let first = unsafe {
         output
-            .encode_from(&mut first_encoder, &mut mapper, &[0x0001_0002], 0, 1)
+            .transcode_from(&mut first_encoder, &mut mapper, &[0x0001_0002], 0, 1)
             .expect("first encoder should write one value")
     };
     // SAFETY: The requested input range is valid.
     let second = unsafe {
         output
-            .encode_from(&mut second_encoder, &mut mapper, &[0x0003_0004], 0, 1)
+            .transcode_from(&mut second_encoder, &mut mapper, &[0x0003_0004], 0, 1)
             .expect("second encoder should reuse the same buffer")
     };
 

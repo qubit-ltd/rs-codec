@@ -38,7 +38,7 @@ where
     #[inline(always)]
     fn prepare_encode(
         &mut self,
-        codec: &C,
+        codec: &mut C,
         _input_value: &C::Value,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -62,14 +62,20 @@ where
     #[inline(always)]
     unsafe fn write_encode(
         &mut self,
-        codec: &C,
+        codec: &mut C,
         context: EncodeContext<'_, C::Value, C::Unit>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
-        unsafe { codec.encode_unchecked(context.input_value, context.output, context.output_index) }
+        unsafe { codec.encode(context.input_value, context.output, context.output_index) }
             .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+    }
+
+    /// Maps reset errors into generic codec encode errors.
+    #[inline(always)]
+    fn map_encode_reset_error(&mut self, _codec: &mut C, error: C::EncodeError) -> Self::Error {
+        CodecEncodeError::encode(error, 0)
     }
 
     /// Creates an invalid input index error.
@@ -84,7 +90,12 @@ where
     ///
     /// Returns an encode invalid-input-index error.
     #[inline(always)]
-    fn invalid_input_index(&mut self, _codec: &C, index: usize, input_len: usize) -> Self::Error {
+    fn invalid_input_index(
+        &mut self,
+        _codec: &mut C,
+        index: usize,
+        input_len: usize,
+    ) -> Self::Error {
         CodecEncodeError::invalid_input_index(index, input_len)
     }
 
@@ -100,7 +111,12 @@ where
     ///
     /// Returns an encode invalid-output-index error.
     #[inline(always)]
-    fn invalid_output_index(&mut self, _codec: &C, index: usize, output_len: usize) -> Self::Error {
+    fn invalid_output_index(
+        &mut self,
+        _codec: &mut C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error {
         CodecEncodeError::invalid_output_index(index, output_len)
     }
 }

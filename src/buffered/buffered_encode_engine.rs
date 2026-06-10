@@ -59,6 +59,8 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///     type Unit = u8;
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
+///     type DecodeState = ();
+///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -68,16 +70,16 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///         NonZeroUsize::MIN
 ///     }
 ///
-///     unsafe fn decode_unchecked(
-///         &self,
+///     unsafe fn decode(
+///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
 ///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
 ///         Ok((input[index], NonZeroUsize::MIN))
 ///     }
 ///
-///     unsafe fn encode_unchecked(
-///         &self,
+///     unsafe fn encode(
+///         &mut self,
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
@@ -95,7 +97,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     fn prepare_encode(
 ///         &mut self,
-///         codec: &ByteCodec,
+///         codec: &mut ByteCodec,
 ///         _value: &u8,
 ///         _input_index: usize,
 ///     ) -> Result<EncodePlan<()>, Self::Error> {
@@ -104,19 +106,19 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     unsafe fn write_encode(
 ///         &mut self,
-///         codec: &ByteCodec,
+///         codec: &mut ByteCodec,
 ///         context: EncodeContext<'_, u8, u8>,
 ///         _plan: EncodePlan<()>,
 ///     ) -> Result<usize, Self::Error> {
 ///         unsafe {
-///             codec.encode_unchecked(context.input_value, context.output, context.output_index)
+///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
 ///
 ///     fn invalid_input_index(
 ///         &mut self,
-///         _codec: &ByteCodec,
+///         _codec: &mut ByteCodec,
 ///         index: usize,
 ///         input_len: usize,
 ///     ) -> Self::Error {
@@ -125,7 +127,7 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 ///     fn invalid_output_index(
 ///         &mut self,
-///         _codec: &ByteCodec,
+///         _codec: &mut ByteCodec,
 ///         index: usize,
 ///         output_len: usize,
 ///     ) -> Self::Error {
@@ -155,12 +157,14 @@ use crate::{CapacityError, Codec, codec::assert_unit_bounds};
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BufferedEncodeEngine<C, H> {
     /// Low-level codec used for one-value encoding.
     pub(super) codec: C,
     /// Policy hooks used for planning and writing values.
     pub(super) hooks: H,
+    /// Whether stream-start reset output still needs to be emitted.
+    pending_reset: bool,
 }
 
 impl<C, H> BufferedEncodeEngine<C, H>
@@ -181,7 +185,11 @@ where
     #[must_use]
     #[inline(always)]
     pub const fn new(codec: C, hooks: H) -> Self {
-        Self { codec, hooks }
+        Self {
+            codec,
+            hooks,
+            pending_reset: true,
+        }
     }
 
     /// Prepares one value for writing through the configured encode hooks.
@@ -203,7 +211,7 @@ where
         input_index: usize,
     ) -> Result<EncodePlan<H::PlanAction>, H::Error> {
         self.hooks
-            .prepare_encode(&self.codec, input_value, input_index)
+            .prepare_encode(&mut self.codec, input_value, input_index)
     }
 
     /// Writes one value using a previously prepared encode context.
@@ -233,7 +241,7 @@ where
         plan: EncodePlan<H::PlanAction>,
     ) -> Result<usize, H::Error> {
         // SAFETY: Forwarded from this method's safety contract.
-        unsafe { self.hooks.write_encode(&self.codec, context, plan) }
+        unsafe { self.hooks.write_encode(&mut self.codec, context, plan) }
     }
 
     /// Returns a conservative upper bound for output units needed for
@@ -251,7 +259,11 @@ where
     #[inline(always)]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         assert_unit_bounds::<C>(&self.codec);
-        self.hooks.max_output_len(&self.codec, input_len)
+        let reset_units = self.pending_encode_reset_units();
+        let input_units = self.max_values_output_len(input_len)?;
+        reset_units
+            .checked_add(input_units)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum output units emitted by finishing hook-owned state.
@@ -262,10 +274,10 @@ where
     #[must_use]
     #[inline(always)]
     pub fn max_finish_output_len(&self) -> usize {
-        self.hooks.max_finish_output_len(&self.codec)
+        self.pending_encode_reset_units() + self.max_hook_finish_output_len()
     }
 
-    /// Resets hook-owned state.
+    /// Resets codec encode state and hook-owned state.
     ///
     /// # Parameters
     ///
@@ -276,7 +288,9 @@ where
     /// Returns unit `()`.
     #[inline(always)]
     pub fn reset(&mut self) {
-        self.hooks.reset(&self.codec);
+        self.codec.reset_encode_state();
+        self.hooks.reset(&mut self.codec);
+        self.pending_reset = true;
     }
 
     /// Encodes values into a caller-provided output buffer.
@@ -311,15 +325,28 @@ where
         if input_index > input.len() {
             return Err(self
                 .hooks
-                .invalid_input_index(&self.codec, input_index, input.len()));
+                .invalid_input_index(&mut self.codec, input_index, input.len()));
         }
         if output_index > output.len() {
-            return Err(self
-                .hooks
-                .invalid_output_index(&self.codec, output_index, output.len()));
+            return Err(self.hooks.invalid_output_index(
+                &mut self.codec,
+                output_index,
+                output.len(),
+            ));
         }
         assert_unit_bounds::<C>(&self.codec);
         let mut state = EncodeState::new(input, input_index, output, output_index);
+
+        let output_cursor = state.output_cursor();
+        if let Some(step) = self.encode_reset_step(state.output_mut(), output_cursor)? {
+            match step {
+                EncodeStep::Written { written } => state.advance_output(written),
+                EncodeStep::NeedOutput {
+                    additional,
+                    available,
+                } => return Ok(state.need_output_progress_with(additional, available)),
+            }
+        }
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
@@ -332,6 +359,101 @@ where
         }
 
         Ok(state.complete_progress())
+    }
+
+    /// Returns the reset output bound that still applies to this stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns `0` when reset output has already been emitted, otherwise the
+    /// codec's reset-output upper bound.
+    #[must_use]
+    #[inline(always)]
+    pub(crate) fn pending_encode_reset_units(&self) -> usize {
+        if self.pending_reset {
+            self.codec.max_encode_reset_units()
+        } else {
+            0
+        }
+    }
+
+    /// Returns the output bound for input values without pending reset output.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of input values.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-planned value-output bound.
+    #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
+    pub(crate) fn max_values_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        self.hooks.max_output_len(&self.codec, input_len)
+    }
+
+    /// Returns the finish bound contributed only by encode hooks.
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-owned final-output bound.
+    #[must_use]
+    #[inline(always)]
+    pub(crate) fn max_hook_finish_output_len(&self) -> usize {
+        self.hooks.max_finish_output_len(&self.codec)
+    }
+
+    /// Attempts to write pending encode-reset output.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination output slice.
+    /// - `output_index`: Absolute output index where reset output starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns `None` when no reset output is pending. Returns an encode step
+    /// when reset output was written or more output is required.
+    ///
+    /// # Errors
+    ///
+    /// Returns hook errors produced while writing reset output.
+    #[inline]
+    pub(super) fn encode_reset_step(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<Option<EncodeStep>, H::Error> {
+        if !self.pending_reset {
+            return Ok(None);
+        }
+        let required = self.codec.max_encode_reset_units();
+        let available = output.len().saturating_sub(output_index);
+        if available < required {
+            return Ok(Some(EncodeStep::need_output(required, available)));
+        }
+
+        let snapshot = self.codec.encode_state();
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the codec's declared
+            // reset-output bound at `output_index`.
+            self.hooks
+                .write_encode_reset(&mut self.codec, output, output_index)
+        };
+        match written {
+            Ok(written) => {
+                assert!(
+                    written <= required,
+                    "Codec::encode_reset wrote beyond its reset bound",
+                );
+                self.pending_reset = false;
+                Ok(Some(EncodeStep::written(written)))
+            }
+            Err(error) => {
+                self.codec.set_encode_state(snapshot);
+                Err(error)
+            }
+        }
     }
 
     /// Builds an invalid-output-index error through the configured hooks.
@@ -347,7 +469,7 @@ where
     #[inline(always)]
     pub(crate) fn invalid_output_index(&mut self, index: usize, output_len: usize) -> H::Error {
         self.hooks
-            .invalid_output_index(&self.codec, index, output_len)
+            .invalid_output_index(&mut self.codec, index, output_len)
     }
 
     /// Finishes hook-owned output after EOF.
@@ -384,15 +506,29 @@ where
         FinishError::ensure_output_capacity(output.len(), output_index, required)?;
         let output_end = output_index + required;
         let output = &mut output[..output_end];
+        let mut written_total = 0;
+        if let Some(step) = self
+            .encode_reset_step(output, output_index)
+            .map_err(FinishError::source)?
+        {
+            match step {
+                EncodeStep::Written { written } => {
+                    written_total += written;
+                }
+                EncodeStep::NeedOutput { .. } => {
+                    unreachable!("encoder finish bound must reserve reset output");
+                }
+            }
+        }
         let written = self
             .hooks
-            .finish(&self.codec, output, output_index)
+            .finish(&mut self.codec, output, output_index + written_total)
             .map_err(FinishError::source)?;
         assert!(
-            written <= required,
+            written_total + written <= required,
             "BufferedEncodeEngine hook wrote beyond its finish bound",
         );
-        Ok(written)
+        Ok(written_total + written)
     }
 
     /// Encodes one value attempt into a normalized encode step.
@@ -424,11 +560,34 @@ where
 
         // SAFETY: The capacity check above guarantees the bound requested by
         // the prepared plan.
-        let written = unsafe { self.write_prepared_value(context, plan) }?;
+        let snapshot = self.codec.encode_state();
+        let written = match unsafe { self.write_prepared_value(context, plan) } {
+            Ok(written) => written,
+            Err(error) => {
+                self.codec.set_encode_state(snapshot);
+                return Err(error);
+            }
+        };
         assert!(
             written <= max_output_units,
             "BufferedEncodeEngine hook wrote beyond its prepared capacity bound",
         );
         Ok(EncodeStep::written(written))
+    }
+}
+
+impl<C, H> Default for BufferedEncodeEngine<C, H>
+where
+    C: Codec + Default,
+    H: BufferedEncodeHooks<C> + Default,
+{
+    /// Creates a default buffered encoder engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns an engine with default codec and hooks and pending reset output.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(C::default(), H::default())
     }
 }

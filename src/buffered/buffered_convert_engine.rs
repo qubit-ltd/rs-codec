@@ -149,22 +149,30 @@ where
     /// Returns an upper bound for target units produced from `input_len` units.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        let reset_units = self.encode_engine.pending_encode_reset_units();
         let pending_units = self.pending_output_len()?;
         let decoded_values = self.decode_engine.max_output_len(input_len)?;
-        let converted_units = self.encode_engine.max_output_len(decoded_values)?;
-        pending_units
+        let converted_units = self.encode_engine.max_values_output_len(decoded_values)?;
+        reset_units
             .checked_add(converted_units)
+            .and_then(|value| value.checked_add(pending_units))
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum target units emitted by finishing retained state.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        let reset_units = self.encode_engine.pending_encode_reset_units();
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len();
-        let decoder_finish_units = self.encode_engine.max_output_len(decoder_finish_values)?;
-        let encoder_finish_units = self.encode_engine.max_finish_output_len();
-        let pending_and_decoder = pending_units
+        let decoder_finish_units = self
+            .encode_engine
+            .max_values_output_len(decoder_finish_values)?;
+        let encoder_finish_units = self.encode_engine.max_hook_finish_output_len();
+        let reset_and_pending = reset_units
+            .checked_add(pending_units)
+            .ok_or(CapacityError::OutputLengthOverflow)?;
+        let pending_and_decoder = reset_and_pending
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
         pending_and_decoder
@@ -214,6 +222,10 @@ where
         assert_unit_bounds::<E>(self.encode_codec());
 
         let mut state = ConvertState::new(input, input_index, output, output_index);
+
+        if let Some(progress) = self.drain_encode_reset(&mut state)? {
+            return Ok(progress);
+        }
 
         // A retained decoded value must be written before consuming more input,
         // otherwise callers could observe output reordered across buffer turns.
@@ -276,6 +288,13 @@ where
 
         let empty_input: &[D::Unit] = &[];
         let mut state = ConvertState::new(empty_input, 0, output, output_index);
+        if self
+            .drain_encode_reset(&mut state)
+            .map_err(FinishError::source)?
+            .is_some()
+        {
+            unreachable!("converter finish bound must reserve encode reset output");
+        }
         // Finish keeps the same priority as transcode: output any retained
         // decoded value before asking source-side hooks for final values.
         if self
@@ -345,6 +364,30 @@ where
             return Ok(None);
         };
         self.encode_pending(pending, state)
+    }
+
+    /// Drains target-side encode reset output before value output.
+    #[inline]
+    fn drain_encode_reset(
+        &mut self,
+        state: &mut ConvertState<'_, D::Unit, E::Unit>,
+    ) -> ConvertStepResult<D, E, H> {
+        let output_index = state.output_cursor();
+        let step = self
+            .encode_engine
+            .encode_reset_step(state.output_mut(), output_index)
+            .map_err(|error| self.hooks.map_encode_error(error))?;
+        match step {
+            None => Ok(None),
+            Some(EncodeStep::Written { written }) => {
+                state.advance_output(written);
+                Ok(None)
+            }
+            Some(EncodeStep::NeedOutput {
+                additional,
+                available,
+            }) => Ok(Some(state.need_output_progress(additional, available))),
+        }
     }
 
     /// Drains source-side decode finish output and encodes emitted final

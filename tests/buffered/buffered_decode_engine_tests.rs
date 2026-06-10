@@ -32,6 +32,8 @@ unsafe impl Codec for PrefixCodec {
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -41,8 +43,8 @@ unsafe impl Codec for PrefixCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -65,8 +67,8 @@ unsafe impl Codec for PrefixCodec {
         }
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -89,6 +91,8 @@ unsafe impl Codec for OverconsumingCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -98,8 +102,8 @@ unsafe impl Codec for OverconsumingCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -110,8 +114,8 @@ unsafe impl Codec for OverconsumingCodec {
         }))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -147,7 +151,7 @@ impl BufferedDecodeHooks<PrefixCodec> for ReplacingHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -164,7 +168,7 @@ impl BufferedDecodeHooks<PrefixCodec> for ReplacingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -173,7 +177,7 @@ impl BufferedDecodeHooks<PrefixCodec> for ReplacingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -189,7 +193,7 @@ impl BufferedDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &OverconsumingCodec,
+        _codec: &mut OverconsumingCodec,
         error: core::convert::Infallible,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -198,7 +202,7 @@ impl BufferedDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &OverconsumingCodec,
+        _codec: &mut OverconsumingCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -207,7 +211,7 @@ impl BufferedDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &OverconsumingCodec,
+        _codec: &mut OverconsumingCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -223,7 +227,7 @@ impl BufferedDecodeHooks<PrefixCodec> for SkippingHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -239,7 +243,7 @@ impl BufferedDecodeHooks<PrefixCodec> for SkippingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -248,7 +252,7 @@ impl BufferedDecodeHooks<PrefixCodec> for SkippingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -274,7 +278,7 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -290,7 +294,7 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -299,7 +303,7 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -312,7 +316,7 @@ impl BufferedDecodeHooks<PrefixCodec> for FinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -343,7 +347,7 @@ impl BufferedDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         _error: PrefixDecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -363,7 +367,7 @@ impl BufferedDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -372,7 +376,7 @@ impl BufferedDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -388,7 +392,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -404,7 +408,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -413,7 +417,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -426,7 +430,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -444,7 +448,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -460,7 +464,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -469,7 +473,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -482,7 +486,7 @@ impl BufferedDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &PrefixCodec,
+        _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -499,6 +503,8 @@ unsafe impl Codec for MinTwoCodec {
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -508,8 +514,8 @@ unsafe impl Codec for MinTwoCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -520,8 +526,8 @@ unsafe impl Codec for MinTwoCodec {
         }))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -538,7 +544,7 @@ impl BufferedDecodeHooks<MinTwoCodec> for ReplacingHooks {
 
     fn handle_decode_error(
         &mut self,
-        _codec: &MinTwoCodec,
+        _codec: &mut MinTwoCodec,
         error: PrefixDecodeError,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -555,7 +561,7 @@ impl BufferedDecodeHooks<MinTwoCodec> for ReplacingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &MinTwoCodec,
+        _codec: &mut MinTwoCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -564,7 +570,7 @@ impl BufferedDecodeHooks<MinTwoCodec> for ReplacingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &MinTwoCodec,
+        _codec: &mut MinTwoCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -663,7 +669,7 @@ fn test_buffered_decode_hooks_default_finish_is_noop() {
     let mut output = [];
 
     let written =
-        BufferedDecodeHooks::<PrefixCodec>::finish(&mut hooks, &PrefixCodec, &mut output, 1)
+        BufferedDecodeHooks::<PrefixCodec>::finish(&mut hooks, &mut PrefixCodec, &mut output, 1)
             .expect("default hook finish should be a no-op");
 
     assert_eq!(0, written);
@@ -868,7 +874,7 @@ fn test_buffered_decode_engine_reports_output_bounds_without_consuming_input() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::decode_unchecked consumed beyond available input")]
+#[should_panic(expected = "Codec::decode consumed beyond available input")]
 fn test_buffered_decode_engine_panics_when_codec_consumes_beyond_available_input() {
     let mut decoder = BufferedDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
     let mut output = [0_u8; 1];

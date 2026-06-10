@@ -25,6 +25,8 @@ unsafe impl Codec for VariableByteDecoder {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -34,8 +36,8 @@ unsafe impl Codec for VariableByteDecoder {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -61,8 +63,8 @@ unsafe impl Codec for VariableByteDecoder {
         }
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -82,6 +84,8 @@ unsafe impl Codec for PairByteEncoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = TestEncodeError;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -91,8 +95,8 @@ unsafe impl Codec for PairByteEncoder {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -101,8 +105,8 @@ unsafe impl Codec for PairByteEncoder {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -126,6 +130,8 @@ unsafe impl Codec for MinTwoDecoder {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -135,8 +141,8 @@ unsafe impl Codec for MinTwoDecoder {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -147,8 +153,8 @@ unsafe impl Codec for MinTwoDecoder {
         }))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -169,7 +175,7 @@ enum TestDecodeError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct NonDefaultValue(u8);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -180,6 +186,8 @@ unsafe impl Codec for NonDefaultDecoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -189,8 +197,8 @@ unsafe impl Codec for NonDefaultDecoder {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), Self::DecodeError> {
@@ -199,8 +207,8 @@ unsafe impl Codec for NonDefaultDecoder {
         Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &NonDefaultValue,
         output: &mut [u8],
         index: usize,
@@ -220,6 +228,8 @@ unsafe impl Codec for NonDefaultEncoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -229,8 +239,8 @@ unsafe impl Codec for NonDefaultEncoder {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), Self::DecodeError> {
@@ -239,8 +249,8 @@ unsafe impl Codec for NonDefaultEncoder {
         Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &NonDefaultValue,
         output: &mut [u8],
         index: usize,

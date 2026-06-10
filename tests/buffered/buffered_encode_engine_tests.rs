@@ -20,6 +20,8 @@ unsafe impl Codec for WideCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -29,8 +31,8 @@ unsafe impl Codec for WideCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(4) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -41,8 +43,8 @@ unsafe impl Codec for WideCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -83,7 +85,7 @@ impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -92,7 +94,7 @@ impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -114,7 +116,7 @@ impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -123,7 +125,7 @@ impl BufferedEncodeHooks<WideCodec> for ExactWidthHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -140,7 +142,7 @@ impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -149,7 +151,7 @@ impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -158,7 +160,7 @@ impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -167,7 +169,7 @@ impl BufferedEncodeHooks<WideCodec> for SkippingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -184,7 +186,7 @@ impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -193,7 +195,7 @@ impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -202,7 +204,7 @@ impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -211,7 +213,7 @@ impl BufferedEncodeHooks<WideCodec> for RejectingHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -228,7 +230,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingWriteHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -237,7 +239,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingWriteHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -247,7 +249,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingWriteHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -256,7 +258,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingWriteHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -283,7 +285,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -292,7 +294,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -308,7 +310,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -317,7 +319,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -330,7 +332,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -343,7 +345,7 @@ impl BufferedEncodeHooks<WideCodec> for FinishHooks {
         Ok(1)
     }
 
-    fn reset(&mut self, _codec: &WideCodec) {
+    fn reset(&mut self, _codec: &mut WideCodec) {
         self.pending_suffix = false;
     }
 }
@@ -357,7 +359,7 @@ impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -366,7 +368,7 @@ impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -376,7 +378,7 @@ impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -385,7 +387,7 @@ impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -398,7 +400,7 @@ impl BufferedEncodeHooks<WideCodec> for OverwritingFinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -417,7 +419,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
     fn prepare_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         _value: &u8,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
@@ -426,7 +428,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
     unsafe fn write_encode(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
@@ -436,7 +438,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
     fn invalid_input_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         input_len: usize,
     ) -> Self::Error {
@@ -445,7 +447,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
     fn invalid_output_index(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         index: usize,
         output_len: usize,
     ) -> Self::Error {
@@ -458,7 +460,7 @@ impl BufferedEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
     fn finish(
         &mut self,
-        _codec: &WideCodec,
+        _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -559,8 +561,9 @@ fn test_buffered_encode_hooks_default_finish_is_noop() {
     let mut hooks = ExactWidthHooks;
     let mut output = [];
 
-    let written = BufferedEncodeHooks::<WideCodec>::finish(&mut hooks, &WideCodec, &mut output, 1)
-        .expect("default hook finish should be a no-op");
+    let written =
+        BufferedEncodeHooks::<WideCodec>::finish(&mut hooks, &mut WideCodec, &mut output, 1)
+            .expect("default hook finish should be a no-op");
 
     assert_eq!(0, written);
 }

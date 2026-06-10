@@ -100,6 +100,43 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         self.output.len().saturating_sub(self.output_cursor)
     }
 
+    /// Returns the current output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns the absolute output index for the next write.
+    #[inline(always)]
+    pub(super) const fn output_cursor(&self) -> usize {
+        self.output_cursor
+    }
+
+    /// Returns the complete output slice mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns the mutable output slice visible to this encode call.
+    #[inline(always)]
+    pub(super) fn output_mut(&mut self) -> &mut [Unit] {
+        self.output
+    }
+
+    /// Advances only the output cursor.
+    ///
+    /// Reset output is not associated with one consumed input value, so it
+    /// needs to move the output cursor independently.
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Output units written by reset output.
+    #[inline(always)]
+    pub(super) fn advance_output(&mut self, written: usize) {
+        assert!(
+            written <= self.available_output(),
+            "encode reset wrote beyond available output",
+        );
+        self.output_cursor += written;
+    }
+
     /// Accepts a completed one-value write and advances both cursors.
     ///
     /// # Parameters

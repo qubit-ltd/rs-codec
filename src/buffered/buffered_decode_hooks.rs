@@ -56,6 +56,8 @@ use crate::{CapacityError, Codec};
 ///     type Unit = u8;
 ///     type DecodeError = MyDecodeError;
 ///     type EncodeError = core::convert::Infallible;
+///     type DecodeState = ();
+///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -65,8 +67,8 @@ use crate::{CapacityError, Codec};
 ///         NonZeroUsize::MIN
 ///     }
 ///
-///     unsafe fn decode_unchecked(
-///         &self,
+///     unsafe fn decode(
+///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
 ///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
@@ -78,8 +80,8 @@ use crate::{CapacityError, Codec};
 ///         }
 ///     }
 ///
-///     unsafe fn encode_unchecked(
-///         &self,
+///     unsafe fn encode(
+///         &mut self,
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
@@ -96,7 +98,7 @@ use crate::{CapacityError, Codec};
 ///
 ///     fn handle_decode_error(
 ///         &mut self,
-///         _codec: &MyCodec,
+///         _codec: &mut MyCodec,
 ///         error: MyDecodeError,
 ///         _context: DecodeContext,
 ///     ) -> Result<DecodeAction<u8>, Self::Error> {
@@ -112,7 +114,7 @@ use crate::{CapacityError, Codec};
 ///
 ///     fn invalid_input_index(
 ///         &mut self,
-///         _codec: &MyCodec,
+///         _codec: &mut MyCodec,
 ///         index: usize,
 ///         input_len: usize,
 ///     ) -> Self::Error {
@@ -121,7 +123,7 @@ use crate::{CapacityError, Codec};
 ///
 ///     fn invalid_output_index(
 ///         &mut self,
-///         _codec: &MyCodec,
+///         _codec: &mut MyCodec,
 ///         index: usize,
 ///         output_len: usize,
 ///     ) -> Self::Error {
@@ -201,10 +203,27 @@ where
     /// Returns `Self::Error` when the policy rejects the input.
     fn handle_decode_error(
         &mut self,
-        codec: &C,
+        codec: &mut C,
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error>;
+
+    /// Maps a codec-level flush error into this hook's public error type.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `error`: Error returned by [`Codec::decode_flush`].
+    ///
+    /// # Returns
+    ///
+    /// Returns the hook-specific error.
+    #[inline]
+    fn map_decode_flush_error(&mut self, _codec: &mut C, _error: C::DecodeError) -> Self::Error {
+        panic!(
+            "BufferedDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
+        )
+    }
 
     /// Creates an error for a caller-supplied input index outside the input
     /// slice.
@@ -222,7 +241,8 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > input_len`.
-    fn invalid_input_index(&mut self, codec: &C, index: usize, input_len: usize) -> Self::Error;
+    fn invalid_input_index(&mut self, codec: &mut C, index: usize, input_len: usize)
+    -> Self::Error;
 
     /// Creates an error for a caller-supplied output index outside the output
     /// slice.
@@ -240,7 +260,12 @@ where
     /// # Returns
     ///
     /// Returns the hook-specific error representing `index > output_len`.
-    fn invalid_output_index(&mut self, codec: &C, index: usize, output_len: usize) -> Self::Error;
+    fn invalid_output_index(
+        &mut self,
+        codec: &mut C,
+        index: usize,
+        output_len: usize,
+    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///
@@ -269,7 +294,7 @@ where
     #[inline]
     fn finish(
         &mut self,
-        _codec: &C,
+        _codec: &mut C,
         _output: &mut [C::Value],
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
@@ -282,5 +307,5 @@ where
     ///
     /// - `codec`: Low-level codec owned by the engine.
     #[inline(always)]
-    fn reset(&mut self, _codec: &C) {}
+    fn reset(&mut self, _codec: &mut C) {}
 }

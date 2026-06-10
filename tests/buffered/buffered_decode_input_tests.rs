@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::io::{Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
 
 use qubit_codec::{
-    BufferedDecodeInput, BufferedTranscoder, CapacityError, FinishError, TranscodeProgress,
+    BufferedDecodeInput, BufferedTranscoder, CapacityError, Codec, FinishError, TranscodeProgress,
 };
 use qubit_io::Input;
 
@@ -24,6 +24,53 @@ enum PairDecodeError {
 
 #[derive(Debug, Default)]
 struct PairDecoder;
+
+#[derive(Debug, Default)]
+struct PairCodec;
+
+unsafe impl Codec for PairCodec {
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+    type DecodeState = ();
+    type EncodeState = ();
+    type Unit = u16;
+    type Value = u32;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        nz(2)
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        nz(2)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), Self::DecodeError> {
+        if index + 1 >= input.len() {
+            return Err(PairDecodeError::BadInputIndex);
+        }
+        let high = input[index] as u32;
+        let low = input[index + 1] as u32;
+        Ok(((high << 16) | low, nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        if index + 1 >= output.len() {
+            return Err(PairDecodeError::BadOutputIndex);
+        }
+        output[index] = (value >> 16) as u16;
+        output[index + 1] = *value as u16;
+        Ok(2)
+    }
+}
 
 impl BufferedTranscoder<u16, u32> for PairDecoder {
     type Error = PairDecodeError;
@@ -411,7 +458,7 @@ where
 {
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
     // SAFETY: The caller upholds the requested output range contract.
-    unsafe { input.decode_into(decoder, &mut mapper, output, output_index, count) }
+    unsafe { input.transcode_into(decoder, &mut mapper, output, output_index, count) }
 }
 
 unsafe fn finish_with<I, D>(
@@ -427,7 +474,7 @@ where
 {
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
     // SAFETY: The caller upholds the requested output range contract.
-    unsafe { input.finish_into(decoder, &mut mapper, output, output_index, count) }
+    unsafe { input.finish_transcode_into(decoder, &mut mapper, output, output_index, count) }
 }
 
 #[test]
@@ -502,11 +549,41 @@ fn test_buffered_decode_input_decode_into_respects_output_range() {
     let mut mapper: fn(PairDecodeError) -> Error = map_error;
     let mut output = [0_u32; 1];
 
-    let read = unsafe { input.decode_into(&mut decoder, &mut mapper, &mut output, 0, 1) }
+    let read = unsafe { input.transcode_into(&mut decoder, &mut mapper, &mut output, 0, 1) }
         .expect("checked decode should accept a valid output range");
 
     assert_eq!(1, read);
     assert_eq!([0x0001_0002], output);
+}
+
+#[test]
+fn test_buffered_decode_input_decode_into_accepts_codec_decoder() {
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
+    let mut decoder = PairCodec;
+    let mut input = BufferedDecodeInput::with_capacity(input, 4);
+    let mut mapper: fn(PairDecodeError) -> Error = map_error;
+    let mut output = [0_u32; 3];
+
+    let read = unsafe { input.decode_into(&mut decoder, &mut mapper, &mut output, 1, 2) }
+        .expect("codec decoder should decode directly through the input buffer");
+
+    assert_eq!(2, read);
+    assert_eq!([0, 0x0001_0002, 0x0003_0004], output);
+}
+
+#[test]
+fn test_buffered_decode_input_finish_into_accepts_codec_decoder_as_noop() {
+    let input = ChunkedInput::new(Vec::new());
+    let decoder = PairCodec;
+    let mut input = BufferedDecodeInput::with_capacity(input, 4);
+    let mut mapper: fn(PairDecodeError) -> Error = map_error;
+    let mut output = [0x1111_u32, 0x2222, 0x3333];
+
+    let written = unsafe { input.finish_into(&decoder, &mut mapper, &mut output, 1, 1) }
+        .expect("codec finish should be a no-op");
+
+    assert_eq!(0, written);
+    assert_eq!([0x1111, 0x2222, 0x3333], output);
 }
 
 #[test]
@@ -771,13 +848,13 @@ fn test_buffered_decode_input_takes_decoder_per_call() {
     // SAFETY: The requested output range is valid.
     let first = unsafe {
         input
-            .decode_into(&mut first_decoder, &mut mapper, &mut output, 0, 1)
+            .transcode_into(&mut first_decoder, &mut mapper, &mut output, 0, 1)
             .expect("first decoder should read one value")
     };
     // SAFETY: The requested output range is valid.
     let second = unsafe {
         input
-            .decode_into(&mut second_decoder, &mut mapper, &mut output, 1, 1)
+            .transcode_into(&mut second_decoder, &mut mapper, &mut output, 1, 1)
             .expect("second decoder should continue from the same buffer")
     };
 
