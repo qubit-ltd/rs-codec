@@ -17,6 +17,8 @@ unsafe impl Codec for SingleByteCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -26,8 +28,8 @@ unsafe impl Codec for SingleByteCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -42,8 +44,8 @@ unsafe impl Codec for SingleByteCodec {
         }
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -66,6 +68,8 @@ unsafe impl Codec for FixedPairCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -75,8 +79,8 @@ unsafe impl Codec for FixedPairCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -87,8 +91,8 @@ unsafe impl Codec for FixedPairCodec {
         }))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -109,6 +113,8 @@ unsafe impl Codec for OverconsumingCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -118,8 +124,8 @@ unsafe impl Codec for OverconsumingCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -131,8 +137,8 @@ unsafe impl Codec for OverconsumingCodec {
         ))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -149,20 +155,99 @@ enum TestDecodeError {
     Invalid { consumed: usize },
 }
 
+#[derive(Default)]
+struct StatefulLifecycleCodec {
+    decode_state: usize,
+}
+
+unsafe impl Codec for StatefulLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+    type DecodeState = usize;
+    type EncodeState = ();
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        1
+    }
+
+    fn decode_state(&self) -> usize {
+        self.decode_state
+    }
+
+    fn set_decode_state(&mut self, state: usize) {
+        self.decode_state = state;
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        let decoded = input[index].wrapping_sub(self.decode_state as u8);
+        self.decode_state += 1;
+        Ok((decoded, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        output[index] = self.decode_state as u8;
+        self.decode_state = 0;
+        Ok(1)
+    }
+}
+
+#[test]
+fn test_codec_value_decoder_flushes_decode_state_after_success() {
+    let mut decoder = CodecValueDecoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
+
+    let first =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[42]).expect("first decode should succeed");
+    let second =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[42]).expect("second decode should succeed");
+
+    assert_eq!(42, first);
+    assert_eq!(42, second);
+}
+
 #[test]
 fn test_codec_value_decoder_decodes_exactly_one_value() {
-    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let output = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect("single byte should decode");
+    let output =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect("single byte should decode");
 
     assert_eq!(7, output);
 }
 
 #[test]
 fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
-    let decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
+    let mut decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&decoder, &[7]).expect_err("one byte is incomplete");
+    let error =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("one byte is incomplete");
 
     assert_eq!(
         CodecDecodeError::Incomplete {
@@ -176,10 +261,10 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
 
 #[test]
 fn test_codec_value_decoder_rejects_trailing_input() {
-    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error =
-        ValueDecoder::<[u8]>::decode(&decoder, &[7, 8]).expect_err("trailing input should fail");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
+        .expect_err("trailing input should fail");
 
     assert_eq!(
         CodecDecodeError::TrailingInput {
@@ -192,9 +277,9 @@ fn test_codec_value_decoder_rejects_trailing_input() {
 
 #[test]
 fn test_codec_value_decoder_wraps_codec_decode_error() {
-    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&decoder, &[0xff]).expect_err("0xff should fail");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[0xff]).expect_err("0xff should fail");
 
     assert_eq!(
         CodecDecodeError::Decode {
@@ -206,9 +291,9 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::decode_unchecked consumed beyond available input")]
+#[should_panic(expected = "Codec::decode consumed beyond available input")]
 fn test_codec_value_decoder_panics_when_codec_consumes_beyond_input() {
-    let decoder = CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
+    let mut decoder = CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
 
-    let _ = ValueDecoder::<[u8]>::decode(&decoder, &[7]);
+    let _ = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]);
 }

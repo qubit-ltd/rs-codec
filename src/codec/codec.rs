@@ -23,21 +23,31 @@ use core::num::NonZeroUsize;
 /// exist, so a streaming caller can request more input, report an incomplete
 /// EOF tail. For decoding, this minimum is the smallest safety precondition
 /// checked callers must satisfy before entering
-/// [`decode_unchecked`](Self::decode_unchecked). The maximum is the
+/// [`decode`](Self::decode). The maximum is the
 /// conservative bound callers normally use to prove that unchecked writes stay
 /// inside the provided output buffer.
+///
+/// A codec may keep decode-side and encode-side stream state. Buffered engines
+/// snapshot that state before speculative low-level operations and restore it
+/// when an operation cannot be committed. Stateless codecs can use the default
+/// snapshot value `0` and no-op restore methods.
 ///
 /// # Associated Types
 ///
 /// - `Value`: Logical value decoded from or encoded into the buffer. This may
 ///   be a scalar such as `u64`, a `char`, or a fixed quantum such as `[u8; 3]`.
-/// - `Unit`: Buffer unit used by the encoded representation.
+///   Implementations must provide [`Copy`] and [`Default`] so convenience
+///   adapters can allocate flush scratch buffers.
+/// - `Unit`: Buffer unit used by the encoded representation. Implementations
+///   must provide [`Copy`] and [`Default`] so convenience adapters can allocate
+///   output unit buffers.
 ///
 /// # Safety
 ///
 /// Implementors must uphold the safety contract documented by
-/// [`decode_unchecked`](Self::decode_unchecked) and
-/// [`encode_unchecked`](Self::encode_unchecked). In particular, unchecked
+/// [`decode`](Self::decode), [`encode`](Self::encode),
+/// [`encode_reset`](Self::encode_reset), and
+/// [`decode_flush`](Self::decode_flush). In particular, unchecked
 /// implementations must not read or write outside the caller-provided ranges.
 /// Implementations should use `debug_assert!` to state the expected buffer
 /// bounds at the unchecked entry point.
@@ -49,17 +59,23 @@ use core::num::NonZeroUsize;
 /// complete encoded value or codec quantum. Checked adapters assert this
 /// invariant before using codec-provided bounds.
 pub unsafe trait Codec {
-    /// Logical value decoded from or encoded into the buffer.
-    type Value;
+    /// The type of logical values decoded from or encoded into the buffer.
+    type Value: Copy + Default;
 
-    /// Buffer unit used by the encoded representation.
-    type Unit: Copy;
+    /// The type of buffer units used by the encoded representation.
+    type Unit: Copy + Default;
 
-    /// Error reported when decoding malformed units.
+    /// The type of errors reported when decoding malformed units.
     type DecodeError;
 
-    /// Error reported when encoding an unsupported value.
+    /// The type of errors reported when encoding an unsupported value.
     type EncodeError;
+
+    /// The type of state for decodeing.
+    type DecodeState: Copy + Default;
+
+    /// The type of state for encoding.
+    type EncodeState: Copy + Default;
 
     /// Returns the minimum possible unit count for one encoded value.
     ///
@@ -75,7 +91,7 @@ pub unsafe trait Codec {
     /// representations, a value may require more units, up to
     /// [`max_units_per_value`](Self::max_units_per_value). For decoding, this
     /// is the minimum safety precondition required by
-    /// [`decode_unchecked`](Self::decode_unchecked); if fewer units are
+    /// [`decode`](Self::decode); if fewer units are
     /// available, a checked caller must request more input or report a closed
     /// incomplete tail without calling into the unchecked method.
     ///
@@ -96,6 +112,156 @@ pub unsafe trait Codec {
     /// Returns an upper bound for one complete value or codec quantum.
     #[must_use]
     fn max_units_per_value(&self) -> NonZeroUsize;
+
+    /// Returns the maximum unit count emitted when resetting encode state.
+    ///
+    /// Stateful encoders may need a stream-start sequence, such as a byte order
+    /// mark, before the first encoded value. Buffered encoders use this bound
+    /// to reserve output capacity before calling
+    /// [`encode_reset`](Self::encode_reset).
+    ///
+    /// # Returns
+    ///
+    /// Returns the finite reset-output upper bound. Stateless codecs should
+    /// use the default `0`.
+    #[must_use]
+    #[inline(always)]
+    fn max_encode_reset_units(&self) -> usize {
+        0
+    }
+
+    /// Returns the maximum value count emitted when flushing decode state.
+    ///
+    /// Stateful decoders may need to produce final values at EOF from retained
+    /// state. Buffered decoders use this bound to reserve output capacity
+    /// before calling [`decode_flush`](Self::decode_flush).
+    ///
+    /// # Returns
+    ///
+    /// Returns the finite flush-output upper bound. Stateless codecs should
+    /// use the default `0`.
+    #[must_use]
+    #[inline(always)]
+    fn max_decode_flush_values(&self) -> usize {
+        0
+    }
+
+    /// Captures decode-side stream state.
+    ///
+    /// # Returns
+    ///
+    /// Returns an opaque state snapshot understood by this codec.
+    #[must_use]
+    #[inline(always)]
+    fn decode_state(&self) -> Self::DecodeState {
+        Self::DecodeState::default()
+    }
+
+    /// Restores decode-side stream state.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Snapshot previously returned by
+    ///   [`decode_state`](Self::decode_state).
+    #[inline(always)]
+    fn set_decode_state(&mut self, _state: Self::DecodeState) {
+        // no-op
+    }
+
+    /// Captures encode-side stream state.
+    ///
+    /// # Returns
+    ///
+    /// Returns an opaque state snapshot understood by this codec.
+    #[must_use]
+    #[inline(always)]
+    fn encode_state(&self) -> Self::EncodeState {
+        Self::EncodeState::default()
+    }
+
+    /// Restores encode-side stream state.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Snapshot previously returned by
+    ///   [`encode_state`](Self::encode_state).
+    #[inline(always)]
+    fn set_encode_state(&mut self, _state: Self::EncodeState) {
+        // no-op
+    }
+
+    /// Resets decode-side stream state to the initial state.
+    #[inline(always)]
+    fn reset_decode_state(&mut self) {
+        self.set_decode_state(Self::DecodeState::default());
+    }
+
+    /// Resets encode-side stream state to the initial state.
+    #[inline(always)]
+    fn reset_encode_state(&mut self) {
+        self.set_encode_state(Self::EncodeState::default());
+    }
+
+    /// Emits stream-start output and resets encode-side state.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination unit buffer.
+    /// - `index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::EncodeError` when reset output cannot be emitted.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`max_encode_reset_units`](Self::max_encode_reset_units) units starting
+    /// at `index`.
+    #[inline(always)]
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [Self::Unit],
+        _index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset_encode_state();
+        Ok(0)
+    }
+
+    /// Encodes one borrowed value into `output` starting at `index`.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Value to encode.
+    /// - `output`: Destination unit buffer.
+    /// - `index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of written units. Implementations may return `0` to
+    /// represent a value that intentionally emits no encoded units.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::EncodeError` when `value` cannot be represented by this
+    /// codec.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`max_units_per_value`](Self::max_units_per_value) units starting at
+    /// `index`. On success, implementations must return a written unit count no
+    /// larger than [`max_units_per_value`](Self::max_units_per_value).
+    unsafe fn encode(
+        &mut self,
+        value: &Self::Value,
+        output: &mut [Self::Unit],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError>;
 
     /// Decodes one value from `input` starting at `index`.
     ///
@@ -127,42 +293,42 @@ pub unsafe trait Codec {
     /// than the available input. The return type guarantees that successful
     /// decoding always consumes at least one unit. Implementations should use
     /// `debug_assert!` to state these unchecked entry-point assumptions.
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[Self::Unit],
         index: usize,
     ) -> Result<(Self::Value, NonZeroUsize), Self::DecodeError>;
 
-    /// Encodes one borrowed value into `output` starting at `index`.
+    /// Flushes decode-side EOF state into `output`.
     ///
     /// # Parameters
     ///
-    /// - `value`: Value to encode.
-    /// - `output`: Destination unit buffer.
+    /// - `output`: Destination value buffer.
     /// - `index`: Start index in `output`.
     ///
     /// # Returns
     ///
-    /// Returns the number of written units. Implementations may return `0` to
-    /// represent a value that intentionally emits no encoded units.
+    /// Returns the number of flushed values written.
     ///
     /// # Errors
     ///
-    /// Returns `Self::EncodeError` when `value` cannot be represented by this
-    /// codec.
+    /// Returns `Self::DecodeError` when retained decode state is invalid at
+    /// EOF.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that the implementation can write up to
-    /// [`max_units_per_value`](Self::max_units_per_value) units starting at
-    /// `index`. On success, implementations must return a written unit count no
-    /// larger than [`max_units_per_value`](Self::max_units_per_value).
-    unsafe fn encode_unchecked(
-        &self,
-        value: &Self::Value,
-        output: &mut [Self::Unit],
-        index: usize,
-    ) -> Result<usize, Self::EncodeError>;
+    /// [`max_decode_flush_values`](Self::max_decode_flush_values) values
+    /// starting at `index`.
+    #[inline(always)]
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [Self::Value],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        self.reset_decode_state();
+        Ok(0)
+    }
 }
 
 /// Asserts the public unit-bound invariant required by [`Codec`].

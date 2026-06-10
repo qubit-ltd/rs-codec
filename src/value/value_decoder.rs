@@ -29,5 +29,5 @@ pub trait ValueDecoder<Input: ?Sized> {
     /// # Errors
     /// Returns an error when the input is malformed or unsupported by the
     /// codec.
-    fn decode(&self, input: &Input) -> Result<Self::Output, Self::Error>;
+    fn decode(&mut self, input: &Input) -> Result<Self::Output, Self::Error>;
 }

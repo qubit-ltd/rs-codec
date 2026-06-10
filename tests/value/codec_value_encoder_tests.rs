@@ -17,6 +17,8 @@ unsafe impl Codec for PairByteCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -26,8 +28,8 @@ unsafe impl Codec for PairByteCodec {
         unsafe { core::num::NonZeroUsize::new_unchecked(2) }
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -38,8 +40,8 @@ unsafe impl Codec for PairByteCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -64,6 +66,8 @@ unsafe impl Codec for RejectOddCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -73,8 +77,8 @@ unsafe impl Codec for RejectOddCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -85,8 +89,8 @@ unsafe impl Codec for RejectOddCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -112,6 +116,8 @@ unsafe impl Codec for OverreportingEncodeCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -121,8 +127,8 @@ unsafe impl Codec for OverreportingEncodeCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -131,8 +137,8 @@ unsafe impl Codec for OverreportingEncodeCodec {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -144,7 +150,7 @@ unsafe impl Codec for OverreportingEncodeCodec {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct NonCloneValue {
     value: u8,
 }
@@ -157,6 +163,8 @@ unsafe impl Codec for NonCloneValueCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -166,8 +174,8 @@ unsafe impl Codec for NonCloneValueCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError> {
@@ -178,8 +186,8 @@ unsafe impl Codec for NonCloneValueCodec {
         Ok((NonCloneValue { value }, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &NonCloneValue,
         output: &mut [u8],
         index: usize,
@@ -194,20 +202,107 @@ unsafe impl Codec for NonCloneValueCodec {
     }
 }
 
+#[derive(Default)]
+struct StatefulLifecycleCodec {
+    encode_state: usize,
+}
+
+unsafe impl Codec for StatefulLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = usize;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_encode_reset_units(&self) -> usize {
+        1
+    }
+
+    fn encode_state(&self) -> usize {
+        self.encode_state
+    }
+
+    fn set_encode_state(&mut self, state: usize) {
+        self.encode_state = state;
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = value.wrapping_add(self.encode_state as u8);
+        self.encode_state += 1;
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = 0xfe;
+        self.encode_state = 1;
+        Ok(1)
+    }
+}
+
+#[test]
+fn test_codec_value_encoder_emits_reset_output_before_value() {
+    let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
+
+    let output =
+        ValueEncoder::<u8>::encode(&mut encoder, &41).expect("encoding should be infallible");
+
+    assert_eq!(vec![0xfe, 42], output);
+}
+
+#[test]
+fn test_codec_value_encoder_resets_stream_state_on_each_call() {
+    let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
+
+    let first =
+        ValueEncoder::<u8>::encode(&mut encoder, &41).expect("first encoding should be infallible");
+    let second = ValueEncoder::<u8>::encode(&mut encoder, &41)
+        .expect("second encoding should be infallible");
+
+    assert_eq!(vec![0xfe, 42], first);
+    assert_eq!(vec![0xfe, 42], second);
+}
+
 #[test]
 fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
-    let encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
+    let mut encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
 
-    let output = ValueEncoder::<u8>::encode(&encoder, &7).expect("encoding should be infallible");
+    let output =
+        ValueEncoder::<u8>::encode(&mut encoder, &7).expect("encoding should be infallible");
 
     assert_eq!(vec![7, 8], output);
 }
 
 #[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
-    let encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
+    let mut encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
 
-    let output = ValueEncoder::<NonCloneValue>::encode(&encoder, &NonCloneValue { value: 11 })
+    let output = ValueEncoder::<NonCloneValue>::encode(&mut encoder, &NonCloneValue { value: 11 })
         .expect("encoding should not require cloning the value");
 
     assert_eq!(vec![11], output);
@@ -215,17 +310,18 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 
 #[test]
 fn test_codec_value_encoder_propagates_encode_error() {
-    let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
+    let mut encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
-    let error = ValueEncoder::<u8>::encode(&encoder, &7).expect_err("odd value should be rejected");
+    let error =
+        ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("odd value should be rejected");
 
     assert_eq!("odd value", error);
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode_unchecked wrote beyond allocated output")]
+#[should_panic(expected = "Codec::encode wrote beyond allocated output")]
 fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
-    let encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
+    let mut encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
 
-    let _ = ValueEncoder::<u8>::encode(&encoder, &7);
+    let _ = ValueEncoder::<u8>::encode(&mut encoder, &7);
 }

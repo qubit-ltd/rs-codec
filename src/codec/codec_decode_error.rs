@@ -14,7 +14,7 @@ use thiserror::Error;
 /// The wrapped codec remains responsible for domain-specific decode failures.
 /// This type adds adapter-level failures that cannot be represented by the
 /// wrapped codec itself, such as a value decoder receiving too few units before
-/// it can safely call [`crate::Codec::decode_unchecked`] or a buffered decoder
+/// it can safely call [`crate::Codec::decode`] or a buffered decoder
 /// receiving an invalid output start index.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 pub enum CodecDecodeError<E> {

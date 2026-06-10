@@ -21,7 +21,7 @@ impl ValueEncoder<str> for EchoCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
@@ -30,7 +30,7 @@ impl ValueDecoder<str> for EchoCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn decode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
@@ -40,6 +40,8 @@ unsafe impl Codec for EchoCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -49,8 +51,8 @@ unsafe impl Codec for EchoCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -61,8 +63,8 @@ unsafe impl Codec for EchoCodec {
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -102,12 +104,12 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_buffered_converter::<CodecBufferedConverter<EchoCodec, EchoCodec>>();
     _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, ()>>();
     _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, ()>>();
-    let codec = EchoCodec;
+    let mut codec = EchoCodec;
 
     let encoded =
-        ValueEncoder::<str>::encode(&codec, "abc").expect("echo encode should be infallible");
-    let decoded =
-        ValueDecoder::<str>::decode(&codec, &encoded).expect("echo decode should be infallible");
+        ValueEncoder::<str>::encode(&mut codec, "abc").expect("echo encode should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&mut codec, &encoded)
+        .expect("echo decode should be infallible");
     assert_eq!("abc", decoded);
 
     let progress = TranscodeProgress::complete(1, 2);
@@ -164,6 +166,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!("action", encode_plan.action);
 
     let (decoded, consumed) =
-        unsafe { codec.decode_unchecked(&[1], 0) }.expect("decode should be infallible");
+        unsafe { Codec::decode(&mut codec, &[1], 0) }.expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));
 }

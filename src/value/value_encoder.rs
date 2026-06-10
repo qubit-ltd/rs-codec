@@ -28,5 +28,5 @@ pub trait ValueEncoder<Input: ?Sized> {
     ///
     /// # Errors
     /// Returns an error when the codec cannot represent the supplied input.
-    fn encode(&self, input: &Input) -> Result<Self::Output, Self::Error>;
+    fn encode(&mut self, input: &Input) -> Result<Self::Output, Self::Error>;
 }

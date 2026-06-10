@@ -17,6 +17,8 @@ unsafe impl Codec for ByteIncrementCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -26,8 +28,8 @@ unsafe impl Codec for ByteIncrementCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         input: &[u8],
         index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
@@ -38,8 +40,8 @@ unsafe impl Codec for ByteIncrementCodec {
         Ok((value.wrapping_sub(1), core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         value: &u8,
         output: &mut [u8],
         index: usize,
@@ -55,6 +57,94 @@ unsafe impl Codec for ByteIncrementCodec {
 }
 
 #[derive(Default)]
+struct StatefulLifecycleCodec {
+    decode_state: usize,
+    encode_state: usize,
+}
+
+unsafe impl Codec for StatefulLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+    type DecodeState = usize;
+    type EncodeState = usize;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_encode_reset_units(&self) -> usize {
+        1
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        1
+    }
+
+    fn decode_state(&self) -> usize {
+        self.decode_state
+    }
+
+    fn set_decode_state(&mut self, state: usize) {
+        self.decode_state = state;
+    }
+
+    fn encode_state(&self) -> usize {
+        self.encode_state
+    }
+
+    fn set_encode_state(&mut self, state: usize) {
+        self.encode_state = state;
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        let decoded = input[index].wrapping_sub(self.decode_state as u8);
+        self.decode_state += 1;
+        Ok((decoded, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = value.wrapping_add(self.encode_state as u8);
+        self.encode_state += 1;
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = 0xfe;
+        self.encode_state = 1;
+        Ok(1)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        output[index] = self.decode_state as u8;
+        self.decode_state = 0;
+        Ok(1)
+    }
+}
+
+#[derive(Default)]
 struct InvalidBoundsCodec;
 
 unsafe impl Codec for InvalidBoundsCodec {
@@ -62,6 +152,8 @@ unsafe impl Codec for InvalidBoundsCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
+    type DecodeState = ();
+    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -71,16 +163,16 @@ unsafe impl Codec for InvalidBoundsCodec {
         core::num::NonZeroUsize::MIN
     }
 
-    unsafe fn decode_unchecked(
-        &self,
+    unsafe fn decode(
+        &mut self,
         _input: &[u8],
         _index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_unchecked(
-        &self,
+    unsafe fn encode(
+        &mut self,
         _value: &u8,
         _output: &mut [u8],
         _index: usize,
@@ -91,13 +183,13 @@ unsafe impl Codec for InvalidBoundsCodec {
 
 #[test]
 fn test_codec_trait_encodes_and_decodes_one_value() {
-    let codec = ByteIncrementCodec;
+    let mut codec = ByteIncrementCodec;
     let mut output = [0_u8; 1];
 
-    let written = unsafe { codec.encode_unchecked(&41, &mut output, 0) }
-        .expect("encoding should be infallible");
+    let written =
+        unsafe { codec.encode(&41, &mut output, 0) }.expect("encoding should be infallible");
     let (decoded, consumed) =
-        unsafe { codec.decode_unchecked(&output, 0) }.expect("decoding should be infallible");
+        unsafe { Codec::decode(&mut codec, &output, 0) }.expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
@@ -107,11 +199,42 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
 }
 
 #[test]
+fn test_codec_trait_exposes_stateful_lifecycle_methods() {
+    let mut codec = StatefulLifecycleCodec::default();
+    let mut encoded = [0_u8; 2];
+    let mut flushed = [0_u8; 1];
+
+    let reset_state = codec.encode_state();
+    let reset_written =
+        unsafe { codec.encode_reset(&mut encoded, 0) }.expect("reset should be infallible");
+    let value_written = unsafe { codec.encode(&41, &mut encoded, reset_written) }
+        .expect("encoding should be infallible");
+
+    assert_eq!(1, reset_written);
+    assert_eq!(1, value_written);
+    assert_eq!([0xfe, 42], encoded);
+
+    codec.set_encode_state(reset_state);
+    assert_eq!(0, codec.encode_state());
+
+    let (decoded, consumed) =
+        unsafe { Codec::decode(&mut codec, &[42], 0) }.expect("decoding should be infallible");
+    let flushed_len =
+        unsafe { codec.decode_flush(&mut flushed, 0) }.expect("flush should be infallible");
+
+    assert_eq!(42, decoded);
+    assert_eq!(1, consumed.get());
+    assert_eq!(1, flushed_len);
+    assert_eq!([1], flushed);
+    assert_eq!(0, codec.decode_state());
+}
+
+#[test]
 #[should_panic(
     expected = "Codec::min_units_per_value() must not exceed Codec::max_units_per_value()"
 )]
 fn test_codec_unit_bounds_panics_when_min_exceeds_max() {
-    let encoder = CodecValueEncoder::new(InvalidBoundsCodec);
+    let mut encoder = CodecValueEncoder::new(InvalidBoundsCodec);
 
     let _ = encoder
         .encode(&42)

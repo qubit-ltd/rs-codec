@@ -14,8 +14,9 @@ use crate::{Codec, CodecDecodeError, codec::assert_unit_bounds};
 ///
 /// `CodecValueDecoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueDecoder`] contract. The
-/// supplied input slice must contain exactly one encoded value. Successfully
-/// decoded prefixes followed by extra units are reported as trailing input.
+/// supplied input slice must contain exactly one encoded value. After a
+/// successful decode, the adapter calls [`Codec::decode_flush`] to reset
+/// decode-side stream state for the next call.
 ///
 /// # Type Parameters
 ///
@@ -71,8 +72,9 @@ where
     /// # Panics
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
-    /// the input slice length.
-    fn decode(&self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    /// the input slice length, or when flush output exceeds
+    /// [`Codec::max_decode_flush_values`].
+    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
@@ -81,19 +83,37 @@ where
 
         // SAFETY: The input slice has at least the codec's declared minimum
         // number of readable units from index zero.
-        let (value, consumed) = unsafe { self.codec.decode_unchecked(input, 0) }
+        let (value, consumed) = unsafe { self.codec.decode(input, 0) }
             .map_err(|error| CodecDecodeError::decode(error, 0))?;
         let consumed = consumed.get();
         assert!(
             consumed <= input.len(),
-            "Codec::decode_unchecked consumed beyond available input",
+            "Codec::decode consumed beyond available input",
         );
 
         let remaining = input.len() - consumed;
-        if remaining == 0 {
-            Ok(value)
-        } else {
-            Err(CodecDecodeError::trailing_input(consumed, remaining))
+        if remaining != 0 {
+            return Err(CodecDecodeError::trailing_input(consumed, remaining));
         }
+
+        let flush_cap = self.codec.max_decode_flush_values();
+        if flush_cap == 0 {
+            // SAFETY: Stateless codecs write no flush values.
+            let _ = unsafe { self.codec.decode_flush(&mut [], 0) }
+                .map_err(|error| CodecDecodeError::decode(error, consumed))?;
+        } else {
+            let mut scratch = Vec::with_capacity(flush_cap);
+            scratch.resize_with(flush_cap, C::Value::default);
+            // SAFETY: The scratch buffer reserves the codec's declared
+            // flush-output bound at index zero.
+            let flushed = unsafe { self.codec.decode_flush(&mut scratch, 0) }
+                .map_err(|error| CodecDecodeError::decode(error, consumed))?;
+            assert!(
+                flushed <= flush_cap,
+                "Codec::decode_flush wrote beyond its flush bound",
+            );
+        }
+
+        Ok(value)
     }
 }

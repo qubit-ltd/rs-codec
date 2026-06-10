@@ -13,10 +13,10 @@ use crate::{Codec, codec::assert_unit_bounds};
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
 /// `CodecValueEncoder` is the default bridge from the low-level unchecked
-/// [`Codec`] contract to the convenience-layer [`ValueEncoder`] contract. It
-/// allocates `codec.max_units_per_value()` output units, calls
-/// [`Codec::encode_unchecked`] with the borrowed value, then truncates the
-/// owned output to the number of units actually written.
+/// [`Codec`] contract to the convenience-layer [`ValueEncoder`] contract. Each
+/// call emits stream-start output through [`Codec::encode_reset`], then encodes
+/// one value through [`Codec::encode`], and returns the owned output truncated
+/// to the units actually written.
 ///
 /// # Type Parameters
 ///
@@ -47,7 +47,6 @@ impl<C> CodecValueEncoder<C> {
 impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
 where
     C: Codec,
-    C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
     type Error = C::EncodeError;
@@ -60,29 +59,42 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the units written by the wrapped codec.
+    /// Returns stream-start output followed by the units written for `input`.
     ///
     /// # Errors
     ///
-    /// Returns the wrapped codec's encode error when `input` cannot be
-    /// represented.
+    /// Returns the wrapped codec's encode error when reset output or `input`
+    /// cannot be represented.
     ///
     /// # Panics
     ///
     /// Panics when the wrapped codec reports more written units than its
-    /// declared [`Codec::max_units_per_value`] bound.
-    fn encode(&self, input: &C::Value) -> Result<Self::Output, Self::Error> {
+    /// declared [`Codec::max_encode_reset_units`] or
+    /// [`Codec::max_units_per_value`] bounds.
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
-        let mut output = vec![C::Unit::default(); self.codec.max_units_per_value().get()];
-        // SAFETY: The output buffer is allocated to the codec's declared
-        // maximum width, which is the safety precondition for one-value
-        // encoding.
-        let written = unsafe { self.codec.encode_unchecked(input, &mut output, 0) }?;
+        let reset_units = self.codec.max_encode_reset_units();
+        let value_units = self.codec.max_units_per_value().get();
+        let mut output = vec![C::Unit::default(); reset_units + value_units];
+
+        // SAFETY: The output buffer reserves the codec's declared reset-output
+        // bound at index zero.
+        let reset_written = unsafe { self.codec.encode_reset(&mut output, 0) }?;
         assert!(
-            written <= output.len(),
-            "Codec::encode_unchecked wrote beyond allocated output",
+            reset_written <= reset_units,
+            "Codec::encode_reset wrote beyond allocated output",
         );
-        output.truncate(written);
+
+        // SAFETY: The output buffer reserves the codec's declared maximum
+        // value width after any reset output.
+        let value_written =
+            unsafe { self.codec.encode(input, &mut output, reset_written) }?;
+        assert!(
+            value_written <= value_units,
+            "Codec::encode wrote beyond allocated output",
+        );
+
+        output.truncate(reset_written + value_written);
         Ok(output)
     }
 }

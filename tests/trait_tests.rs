@@ -16,7 +16,7 @@ impl ValueEncoder<str> for UppercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_ascii_uppercase())
     }
 }
@@ -25,17 +25,17 @@ impl ValueDecoder<str> for UppercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn decode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_ascii_lowercase())
     }
 }
 
 #[test]
 fn test_codec_types_can_be_used_through_traits() {
-    let codec = UppercaseCodec;
-    let encoded = ValueEncoder::<str>::encode(&codec, "abc")
+    let mut codec = UppercaseCodec;
+    let encoded = ValueEncoder::<str>::encode(&mut codec, "abc")
         .expect("uppercase encoding should be infallible");
-    let decoded = ValueDecoder::<str>::decode(&codec, &encoded)
+    let decoded = ValueDecoder::<str>::decode(&mut codec, &encoded)
         .expect("lowercase decoding should be infallible");
 
     assert_eq!("ABC", encoded);

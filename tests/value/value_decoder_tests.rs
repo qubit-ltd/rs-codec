@@ -16,15 +16,15 @@ impl ValueDecoder<str> for StringDecoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn decode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
 
 #[test]
 fn test_decoder_trait_dispatches_to_implementor() {
-    let decoded =
-        ValueDecoder::<str>::decode(&StringDecoder, "text").expect("decoding should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&mut StringDecoder, "text")
+        .expect("decoding should be infallible");
 
     assert_eq!("text", decoded);
 }
