@@ -7,9 +7,9 @@
 // =============================================================================
 
 use qubit_codec::prelude::{
-    BigEndian, BufferedConvertHooks, BufferedConverter, BufferedDecoder, BufferedEncoder,
-    ByteOrder, ByteOrderSpec, Codec, CodecBufferedConverter, CodecBufferedDecoder,
-    CodecBufferedEncoder, CodecConvertError, CodecDecodeError, CodecEncodeError, CodecValueDecoder,
+    BigEndian, TranscodeConvertHooks, TranscodeConverter, TranscodeDecoder, TranscodeEncoder,
+    ByteOrder, ByteOrderSpec, Codec, CodecTranscodeConverter, CodecTranscodeDecoder,
+    CodecTranscodeEncoder, CodecConvertError, CodecDecodeError, CodecEncodeError, CodecValueDecoder,
     CodecValueEncoder, EncodeContext, EncodePlan, FinishError, TranscodeProgress, TranscodeStatus,
     ValueDecoder, ValueEncoder,
 };
@@ -81,29 +81,29 @@ unsafe impl Codec for EchoCodec {
 
 #[test]
 fn test_prelude_imports_core_codec_traits_and_markers() {
-    fn _accept_buffered_encoder<T: BufferedEncoder<char, u8>>() {}
-    fn _accept_buffered_decoder<T: BufferedDecoder<u8, char>>() {}
-    fn _accept_buffered_converter<T: BufferedConverter<u8, u16>>() {}
+    fn _accept_transcode_encoder<T: TranscodeEncoder<char, u8>>() {}
+    fn _accept_transcode_decoder<T: TranscodeDecoder<u8, char>>() {}
+    fn _accept_transcode_converter<T: TranscodeConverter<u8, u16>>() {}
     fn _accept_codec_value_encoder<T: ValueEncoder<u8, Output = Vec<u8>>>() {}
     fn _accept_codec_value_decoder<T: ValueDecoder<[u8], Output = u8>>() {}
-    fn _accept_codec_buffered_encoder<T: BufferedEncoder<u8, u8>>() {}
-    fn _accept_codec_buffered_decoder<T: BufferedDecoder<u8, u8>>() {}
-    fn _accept_codec_buffered_converter<T: BufferedConverter<u8, u8>>() {}
-    fn _accept_buffered_decode_engine<T>() {}
-    fn _accept_buffered_encode_engine<T>() {}
-    fn _accept_buffered_convert_engine<T>() {}
-    fn _accept_buffered_decode_hooks<T: qubit_codec::BufferedDecodeHooks<EchoCodec>>() {}
-    fn _accept_buffered_encode_hooks<T: qubit_codec::BufferedEncodeHooks<EchoCodec>>() {}
-    fn _accept_buffered_convert_hooks<T: BufferedConvertHooks<EchoCodec, EchoCodec>>() {}
+    fn _accept_codec_transcode_encoder<T: TranscodeEncoder<u8, u8>>() {}
+    fn _accept_codec_transcode_decoder<T: TranscodeDecoder<u8, u8>>() {}
+    fn _accept_codec_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
+    fn _accept_transcode_decode_engine<T>() {}
+    fn _accept_transcode_encode_engine<T>() {}
+    fn _accept_transcode_convert_engine<T>() {}
+    fn _accept_transcode_decode_hooks<T: qubit_codec::TranscodeDecodeHooks<EchoCodec>>() {}
+    fn _accept_transcode_encode_hooks<T: qubit_codec::TranscodeEncodeHooks<EchoCodec>>() {}
+    fn _accept_transcode_convert_hooks<T: TranscodeConvertHooks<EchoCodec, EchoCodec>>() {}
 
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec>>();
-    _accept_codec_buffered_encoder::<CodecBufferedEncoder<EchoCodec>>();
-    _accept_codec_buffered_decoder::<CodecBufferedDecoder<EchoCodec>>();
-    _accept_codec_buffered_converter::<CodecBufferedConverter<EchoCodec, EchoCodec>>();
-    _accept_buffered_decode_engine::<qubit_codec::BufferedDecodeEngine<EchoCodec, ()>>();
-    _accept_buffered_encode_engine::<qubit_codec::BufferedEncodeEngine<EchoCodec, ()>>();
+    _accept_codec_transcode_encoder::<CodecTranscodeEncoder<EchoCodec>>();
+    _accept_codec_transcode_decoder::<CodecTranscodeDecoder<EchoCodec>>();
+    _accept_codec_transcode_converter::<CodecTranscodeConverter<EchoCodec, EchoCodec>>();
+    _accept_transcode_decode_engine::<qubit_codec::TranscodeDecodeEngine<EchoCodec, ()>>();
+    _accept_transcode_encode_engine::<qubit_codec::TranscodeEncodeEngine<EchoCodec, ()>>();
     let mut codec = EchoCodec;
 
     let encoded =

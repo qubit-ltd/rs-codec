@@ -28,3 +28,23 @@ fn test_encoder_trait_dispatches_to_implementor() {
 
     assert_eq!("text", encoded);
 }
+
+#[derive(Default)]
+struct UppercaseCodec;
+
+impl ValueEncoder<str> for UppercaseCodec {
+    type Output = String;
+    type Error = core::convert::Infallible;
+
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+        Ok(input.to_ascii_uppercase())
+    }
+}
+
+#[test]
+fn test_codec_types_can_be_used_through_encoder_trait() {
+    let encoded = ValueEncoder::<str>::encode(&mut UppercaseCodec, "abc")
+        .expect("uppercase encoding should be infallible");
+
+    assert_eq!("ABC", encoded);
+}

@@ -19,19 +19,19 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - 用于底层单值缓冲区编码解码的 `Codec` trait。
 - 基于给定 `Codec` 显式适配 value 与 buffered 转换的
-  `CodecValueEncoder`、`CodecValueDecoder`、`CodecBufferedEncoder`、
-  `CodecBufferedDecoder` 和 `CodecBufferedConverter` adapter。
+  `CodecValueEncoder`、`CodecValueDecoder`、`CodecTranscodeEncoder`、
+  `CodecTranscodeDecoder` 和 `CodecTranscodeConverter` adapter。
 - 用于下游带策略 encoder 复用公共 buffered encode 循环的
-  `BufferedEncodeEngine`、`BufferedEncodeHooks`、`EncodePlan` 和
+  `TranscodeEncodeEngine`、`TranscodeEncodeHooks`、`EncodePlan` 和
   `EncodeContext`。
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
-  `BufferedDecodeEngine`、`BufferedDecodeHooks`、`DecodeAction` 和
+  `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeAction` 和
   `DecodeContext`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
-- 用于调用方管理逻辑流缓冲区转换的 `BufferedTranscoder`、`TranscodeProgress`
+- 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress`
   和 `TranscodeStatus`。
-- 用于表达 transcoder 语义方向的 `BufferedEncoder`、`BufferedDecoder` 和
-  `BufferedConverter` marker trait。
+- 用于表达 transcoder 语义方向的 `TranscodeEncoder`、`TranscodeDecoder` 和
+  `TranscodeConverter` marker trait。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
   `BigEndian` 和 `LittleEndian`。
 
@@ -64,37 +64,37 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ### 缓冲区转换原语
 
-- **`BufferedTranscoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
-- **`BufferedEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
-  `BufferedTranscoder` bound。
-- **`BufferedDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
-  `BufferedTranscoder` bound。
-- **`BufferedConverter<InputUnit, OutputUnit>`**：表示 unit-to-unit 缓冲区转换的语义化
-  `BufferedTranscoder` bound。
-- **`CodecBufferedEncoder<C>`**：把 `Codec` 包装为在调用方输出缓冲区上工作的
-  `BufferedEncoder<C::Value, C::Unit>`。
-- **`BufferedEncodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
+- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
+- **`TranscodeEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
+  `Transcoder` bound。
+- **`TranscodeDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
+  `Transcoder` bound。
+- **`TranscodeConverter<InputUnit, OutputUnit>`**：表示 unit-to-unit 缓冲区转换的语义化
+  `Transcoder` bound。
+- **`CodecTranscodeEncoder<C>`**：把 `Codec` 包装为在调用方输出缓冲区上工作的
+  `TranscodeEncoder<C::Value, C::Unit>`。
+- **`TranscodeEncodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
   buffered encode 循环的可复用 engine。
-- **`BufferedEncodeHooks<C>`**：供带策略 codec-backed encoder
+- **`TranscodeEncodeHooks<C>`**：供带策略 codec-backed encoder
   共享公共循环时实现的 transcode/finalization 策略 hook trait。
 - **`EncodePlan<P>`**：单值写入计划，携带写入前必须保证的输出容量上界。
 - **`EncodeContext<'a, Value, Unit>`**：engine 确认输出容量后传给
   encode hook 的输入值、输入索引、输出切片和游标上下文。
-- **`CodecBufferedDecoder<C>`**：把 `Codec` 包装为无策略的
-  严格 `BufferedDecoder<C::Unit, C::Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
+- **`CodecTranscodeDecoder<C>`**：把 `Codec` 包装为无策略的
+  严格 `TranscodeDecoder<C::Unit, C::Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
   codec 返回的 decode error 会被直接包装返回。
-- **`BufferedDecodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
+- **`TranscodeDecodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
   decode 循环的可复用 engine。
-- **`BufferedDecodeHooks<C>`**：供带策略 codec-backed decoder
+- **`TranscodeDecodeHooks<C>`**：供带策略 codec-backed decoder
   共享公共 decode 循环时实现的策略 hook trait。
 - **`DecodeAction<Value>`**：decoder engine hook 在 transcode 阶段返回的策略动作。
-- **`CodecBufferedConverter<D, E>`**：组合一个解码
-  codec 和一个编码 codec，形成无策略的 `BufferedConverter`。
-- **`BufferedDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
+- **`CodecTranscodeConverter<D, E>`**：组合一个解码
+  codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
+- **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
   `decode_into` 驱动调用方传入的 `Codec`；由于 `Codec` 没有 finish 状态，
   `finish_into` 是 no-op。需要状态化 streaming decoder 时使用
   `transcode_into` / `finish_transcode_into`。
-- **`BufferedEncodeOutput<O>`**：持有底层 unit `BufferedOutput`，通过
+- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`，通过
   `encode_from` 驱动调用方传入的 `Codec`；普通 `flush` 只排空 unit
   buffer。状态化 streaming encoder 使用 `transcode_from` 和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
@@ -158,9 +158,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Codec` | 在调用方缓冲区中编码/解码一个值或 quantum | 二进制标量、字符集字符、转义 byte、Base64 quantum |
 | `ValueEncoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
 | `ValueDecoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
-| `BufferedEncoder<Value, Unit>` | 把逻辑值编码进调用方提供的 unit 缓冲区 | Charset 或 binary buffered encoder |
-| `BufferedDecoder<Unit, Value>` | 把编码 unit 解码进调用方提供的 value 缓冲区 | Charset 或 binary buffered decoder |
-| `BufferedConverter<InputUnit, OutputUnit>` | 在两种编码 unit 表示之间转换 | Charset 或 binary buffered converter |
+| `TranscodeEncoder<Value, Unit>` | 把逻辑值编码进调用方提供的 unit 缓冲区 | Charset 或 binary buffered encoder |
+| `TranscodeDecoder<Unit, Value>` | 把编码 unit 解码进调用方提供的 value 缓冲区 | Charset 或 binary buffered decoder |
+| `TranscodeConverter<InputUnit, OutputUnit>` | 在两种编码 unit 表示之间转换 | Charset 或 binary buffered converter |
 
 | 类型 | 用途 |
 |------|------|
@@ -174,23 +174,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `CodecValueEncoder<C>` | 通过 `C: Codec` 把一个借用 `C::Value` 编码成自有 `Vec<C::Unit>`，不要求 `C::Value: Clone` |
 | `CodecValueDecoder<C>` | 通过 `C: Codec` 把恰好一个借用 `[C::Unit]` slice 解码成 `C::Value` |
-| `CodecBufferedEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |
-| `CodecBufferedDecoder<C>` | 通过 `C: Codec` 严格地把 `C::Unit` slice 解码进调用方提供的 `C::Value` 缓冲区 |
-| `CodecBufferedConverter<D, E>` | 先解码 `D::Unit` source unit，再用满足 `E::Value = D::Value` 的 `E` 编码 `E::Unit` target unit |
+| `CodecTranscodeEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |
+| `CodecTranscodeDecoder<C>` | 通过 `C: Codec` 严格地把 `C::Unit` slice 解码进调用方提供的 `C::Value` 缓冲区 |
+| `CodecTranscodeConverter<D, E>` | 先解码 `D::Unit` source unit，再用满足 `E::Value = D::Value` 的 `E` 编码 `E::Unit` target unit |
 
 ### I/O Adapter
 
 | 类型 | 用途 |
 |------|------|
-| `BufferedDecodeInput<I>` | 调用时传入 caller-owned `Codec`，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；状态化 streaming decoder 使用 `transcode_into` 和 `finish_transcode_into` |
-| `BufferedEncodeOutput<O>` | 调用时传入 caller-owned `Codec`，通过 `encode_from` 把 value 编码进 `qubit_io::Output`；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
+| `TranscodeDecodeInput<I>` | 调用时传入 caller-owned `Codec`，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；状态化 streaming decoder 使用 `transcode_into` 和 `finish_transcode_into` |
+| `TranscodeEncodeOutput<O>` | 调用时传入 caller-owned `Codec`，通过 `encode_from` 把 value 编码进 `qubit_io::Output`；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
 
 | 类型 | 用途 |
 |------|------|
-| `BufferedEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
-| `BufferedEncodeHooks<C>` | 准备、写入、重置并完成 encoded output 收尾的 hook 契约 |
+| `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
+| `TranscodeEncodeHooks<C>` | 准备、写入、重置并完成 encoded output 收尾的 hook 契约 |
 | `EncodePlan<P>` | 已准备好的单值容量上界和实现自定义写入 action |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
@@ -198,12 +198,12 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `BufferedDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
-| `BufferedDecodeHooks<C>` | malformed/incomplete decode 策略 hook 契约 |
+| `TranscodeDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
+| `TranscodeDecodeHooks<C>` | malformed/incomplete decode 策略 hook 契约 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeAction<Value>` | transcode 阶段的策略动作：需要输入、跳过输入或输出一个值 |
 
-### `BufferedTranscoder` 操作
+### `Transcoder` 操作
 
 | 方法 | 描述 |
 |------|------|

@@ -17,19 +17,19 @@
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-mod buffered;
 mod byte_order;
-mod codec;
+mod core;
+mod transcode;
 mod value;
 
 pub mod prelude;
-pub use buffered::{
-    BufferedConvertEngine, BufferedConvertHooks, BufferedConverter, BufferedDecodeEngine,
-    BufferedDecodeHooks, BufferedDecodeInput, BufferedDecoder, BufferedEncodeEngine,
-    BufferedEncodeHooks, BufferedEncodeOutput, BufferedEncoder, BufferedTranscoder, CapacityError,
-    CodecBufferedConverter, CodecBufferedDecoder, CodecBufferedEncoder, DecodeAction,
-    DecodeContext, EncodeContext, EncodePlan, FinishError, TranscodeProgress, TranscodeStatus,
-};
 pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
-pub use codec::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError};
+pub use core::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError};
+pub use transcode::{
+    CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
+    DecodeAction, DecodeContext, EncodeContext, EncodePlan, FinishError, TranscodeConvertEngine,
+    TranscodeConvertHooks, TranscodeConverter, TranscodeDecodeEngine, TranscodeDecodeHooks,
+    TranscodeDecodeInput, TranscodeDecoder, TranscodeEncodeEngine, TranscodeEncodeHooks,
+    TranscodeEncodeOutput, TranscodeEncoder, TranscodeProgress, TranscodeStatus, Transcoder,
+};
 pub use value::{CodecValueDecoder, CodecValueEncoder, ValueDecoder, ValueEncoder};

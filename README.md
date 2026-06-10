@@ -19,19 +19,19 @@ implementations.
 This crate provides:
 
 - `Codec` for low-level single-value buffer codecs.
-- `CodecValueEncoder`, `CodecValueDecoder`, `CodecBufferedEncoder`,
-  `CodecBufferedDecoder`, and `CodecBufferedConverter` adapters for explicit
+- `CodecValueEncoder`, `CodecValueDecoder`, `CodecTranscodeEncoder`,
+  `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `BufferedEncodeEngine`, `BufferedEncodeHooks`, `EncodePlan`, and
+- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodePlan`, and
   `EncodeContext` for reusing the common buffered encoding loop in policy-aware
   downstream encoders.
-- `BufferedDecodeEngine`, `BufferedDecodeHooks`, `DecodeAction`, and
+- `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
-- `BufferedTranscoder`, `TranscodeProgress`, and `TranscodeStatus` for
+- `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for
   caller-managed logical-stream conversion.
-- `BufferedEncoder`, `BufferedDecoder`, and `BufferedConverter` marker traits
+- `TranscodeEncoder`, `TranscodeDecoder`, and `TranscodeConverter` marker traits
   for semantic transcoder direction.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
   metadata shared by binary and text codecs.
@@ -73,20 +73,20 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 ### Buffered Transcoder Primitives
 
-- **`BufferedTranscoder<Input, Output>`**: converts input units into output units inside
+- **`Transcoder<Input, Output>`**: converts input units into output units inside
   caller-provided buffers, then finishes internally retained output after the
   caller has handled any incomplete input tail.
-- **`BufferedEncoder<Value, Unit>`**: semantic `BufferedTranscoder` bound for value-to-unit
+- **`TranscodeEncoder<Value, Unit>`**: semantic `Transcoder` bound for value-to-unit
   buffered encoding.
-- **`BufferedDecoder<Unit, Value>`**: semantic `BufferedTranscoder` bound for unit-to-value
+- **`TranscodeDecoder<Unit, Value>`**: semantic `Transcoder` bound for unit-to-value
   buffered decoding.
-- **`BufferedConverter<InputUnit, OutputUnit>`**: semantic `BufferedTranscoder` bound for
+- **`TranscodeConverter<InputUnit, OutputUnit>`**: semantic `Transcoder` bound for
   unit-to-unit buffered conversion.
-- **`CodecBufferedEncoder<C>`**: wraps a `Codec` as a
-  `BufferedEncoder<C::Value, C::Unit>` over caller-provided output buffers.
-- **`BufferedEncodeEngine<C, H>`**: reusable engine that owns a
+- **`CodecTranscodeEncoder<C>`**: wraps a `Codec` as a
+  `TranscodeEncoder<C::Value, C::Unit>` over caller-provided output buffers.
+- **`TranscodeEncodeEngine<C, H>`**: reusable engine that owns a
   codec plus policy hooks and runs the common buffered encoding loop.
-- **`BufferedEncodeHooks<C>`**: policy hook trait used by
+- **`TranscodeEncodeHooks<C>`**: policy hook trait used by
   codec-backed encoders that need custom transcode/finalization behavior while
   sharing the common loop.
 - **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
@@ -94,23 +94,23 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`EncodeContext<'a, Value, Unit>`**: prepared input value, input index,
   output slice, and cursor passed to encode hooks after the engine has verified
   output capacity.
-- **`CodecBufferedDecoder<C>`**: wraps a `Codec` as a
-  strict `BufferedDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
+- **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a
+  strict `TranscodeDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
-- **`BufferedDecodeEngine<C, H>`**: reusable engine that owns a
+- **`TranscodeDecodeEngine<C, H>`**: reusable engine that owns a
   codec, policy hooks, and the common decode loop.
-- **`BufferedDecodeHooks<C>`**: policy hook trait used by
+- **`TranscodeDecodeHooks<C>`**: policy hook trait used by
   codec-backed decoders that need custom malformed/incomplete behavior while
   sharing the common decode loop.
 - **`DecodeAction<Value>`**: hook return value used by decoder engines for
   transcode-stage policy decisions.
-- **`CodecBufferedConverter<D, E>`**: composes a
-  decoding codec and an encoding codec as a policy-free `BufferedConverter`.
-- **`BufferedDecodeInput<I>`**: owns a unit-level `BufferedInput` and decodes
+- **`CodecTranscodeConverter<D, E>`**: composes a
+  decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
+- **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and decodes
   caller-provided `Codec` values through `decode_into`; `finish_into` is a
   no-op because `Codec` has no finish state. Stateful streaming decoders use
   `transcode_into` / `finish_transcode_into`.
-- **`BufferedEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and encodes
+- **`TranscodeEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and encodes
   caller-provided `Codec` values through `encode_from`; ordinary `flush` only
   drains buffered units. Stateful streaming encoders use `transcode_from` and
   `finish`.
@@ -178,9 +178,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Codec` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
 | `ValueEncoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 | `ValueDecoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
-| `BufferedEncoder<Value, Unit>` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
-| `BufferedDecoder<Unit, Value>` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
-| `BufferedConverter<InputUnit, OutputUnit>` | Convert encoded units between representations | Charset or binary buffered converter |
+| `TranscodeEncoder<Value, Unit>` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
+| `TranscodeDecoder<Unit, Value>` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
+| `TranscodeConverter<InputUnit, OutputUnit>` | Convert encoded units between representations | Charset or binary buffered converter |
 
 | Type | Purpose |
 |------|---------|
@@ -194,23 +194,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
 | `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
-| `CodecBufferedEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
-| `CodecBufferedDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
-| `CodecBufferedConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
+| `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
+| `CodecTranscodeDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
+| `CodecTranscodeConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
 
 ### I/O Adapters
 
 | Type | Purpose |
 |------|---------|
-| `BufferedDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned `Codec` to `decode_into`; stateful streaming decoders use `transcode_into` and `finish_transcode_into` |
-| `BufferedEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned `Codec` to `encode_from`; stateful streaming encoders use `transcode_from` and `finish` |
+| `TranscodeDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned `Codec` to `decode_into`; stateful streaming decoders use `transcode_into` and `finish_transcode_into` |
+| `TranscodeEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned `Codec` to `encode_from`; stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
 
 | Type | Purpose |
 |------|---------|
-| `BufferedEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `BufferedEncodeHooks<C>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
+| `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
+| `TranscodeEncodeHooks<C>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
 | `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write action |
 | `EncodeContext<'a, Value, Unit>` | Prepared input value, input index, output slice, and cursor passed to encode hooks |
 
@@ -218,12 +218,12 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `BufferedDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
-| `BufferedDecodeHooks<C>` | Hook contract for malformed/incomplete decode policy |
+| `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
+| `TranscodeDecodeHooks<C>` | Hook contract for malformed/incomplete decode policy |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
 
-### `BufferedTranscoder` Operations
+### `Transcoder` Operations
 
 | Method | Description |
 |--------|-------------|

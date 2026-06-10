@@ -1,0 +1,6 @@
+mod codec_transcode_convert_hooks_tests;
+mod codec_transcode_decode_hooks_tests;
+mod codec_transcode_encode_hooks_tests;
+mod transcode_convert_hooks_tests;
+mod transcode_decode_hooks_tests;
+mod transcode_encode_hooks_tests;

@@ -1,0 +1,119 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Slot that owns the converter's retained decoded value.
+
+use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks, TranscodeProgress};
+use super::{convert_state::ConvertState, pending_encode_step::PendingEncodeStep, pending_value::PendingValue};
+
+/// Slot that owns the converter's retained decoded value.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(in crate::transcode) struct PendingValueSlot<Value> {
+    /// Retained decoded value waiting for output capacity.
+    value: Option<PendingValue<Value>>,
+}
+
+impl<Value> PendingValueSlot<Value> {
+    /// Creates an empty pending-value slot.
+    #[must_use]
+    #[inline(always)]
+    pub(in crate::transcode) const fn empty() -> Self {
+        Self { value: None }
+    }
+
+    /// Returns the target-output bound for the retained value.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `E`: Encoder codec type used to query output bounds.
+    /// - `H`: Encoder hook type used by the encoder engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `engine`: Target encode engine for one-value output bound query.
+    ///
+    /// # Returns
+    ///
+    /// Returns the output unit bound contributed by the retained value.
+    #[must_use = "capacity planning can fail on overflow"]
+    #[inline]
+    pub(in crate::transcode) fn max_output_len<E, H>(
+        &self,
+        engine: &TranscodeEncodeEngine<E, H>,
+    ) -> Result<usize, CapacityError>
+    where
+        E: Codec<Value = Value>,
+        H: TranscodeEncodeHooks<E>,
+    {
+        if self.value.is_some() {
+            engine.max_values_output_len(1)
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Removes any retained decoded value.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`.
+    #[inline(always)]
+    pub(in crate::transcode) fn clear(&mut self) {
+        self.value = None;
+    }
+
+    /// Takes the retained decoded value, if any.
+    ///
+    /// # Returns
+    ///
+    /// Returns the retained value when present, otherwise `None`.
+    #[inline(always)]
+    pub(in crate::transcode) fn take(&mut self) -> Option<PendingValue<Value>> {
+        self.value.take()
+    }
+
+    /// Applies a pending-value encode step to this slot and the current
+    /// conversion state.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Input`: Converter input-unit type carried by conversion state.
+    /// - `Output`: Converter output-unit type carried by conversion state.
+    ///
+    /// # Parameters
+    ///
+    /// - `step`: Pending encode step produced by encoding attempts.
+    /// - `state`: Shared conversion state updated by the step result.
+    ///
+    /// # Returns
+    ///
+    /// Returns:
+    /// - `None` when output has been produced immediately.
+    /// - `Some(progress)` when output progress should stop for missing
+    ///   capacity.
+    #[inline]
+    pub(in crate::transcode) fn apply_pending_encode_step<Input, Output>(
+        &mut self,
+        step: PendingEncodeStep<Value>,
+        state: &mut ConvertState<'_, Input, Output>,
+    ) -> Option<TranscodeProgress> {
+        match step {
+            PendingEncodeStep::Written { written } => {
+                state.advance_output(written);
+                None
+            }
+            PendingEncodeStep::NeedOutput {
+                pending,
+                additional,
+                available,
+            } => {
+                self.value = Some(pending);
+                Some(state.need_output_progress(additional, available))
+            }
+        }
+    }
+}

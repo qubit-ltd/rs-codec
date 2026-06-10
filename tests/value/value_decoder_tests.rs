@@ -28,3 +28,23 @@ fn test_decoder_trait_dispatches_to_implementor() {
 
     assert_eq!("text", decoded);
 }
+
+#[derive(Default)]
+struct LowercaseCodec;
+
+impl ValueDecoder<str> for LowercaseCodec {
+    type Output = String;
+    type Error = core::convert::Infallible;
+
+    fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+        Ok(input.to_ascii_lowercase())
+    }
+}
+
+#[test]
+fn test_codec_types_can_be_used_through_decoder_trait() {
+    let decoded = ValueDecoder::<str>::decode(&mut LowercaseCodec, "ABC")
+        .expect("lowercase decoding should be infallible");
+
+    assert_eq!("abc", decoded);
+}

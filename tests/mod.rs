@@ -7,9 +7,11 @@
 // =============================================================================
 //! Integration tests for qubit-codec.
 
-mod buffered;
 mod byte_order;
-mod codec;
+mod common;
+mod core;
 mod prelude_tests;
-mod trait_tests;
+mod transcode;
 mod value;
+
+pub(crate) use common::nz;

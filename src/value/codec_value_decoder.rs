@@ -8,7 +8,7 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
-use crate::{Codec, CodecDecodeError, codec::assert_unit_bounds};
+use crate::{Codec, CodecDecodeError, core::assert_unit_bounds};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///

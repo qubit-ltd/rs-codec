@@ -13,10 +13,11 @@
 //! transcoder types into scope.
 
 pub use crate::{
-    BigEndian, BufferedConvertEngine, BufferedConvertHooks, BufferedConverter, BufferedDecodeInput,
-    BufferedDecoder, BufferedEncodeOutput, BufferedEncoder, BufferedTranscoder, ByteOrder,
-    ByteOrderSpec, CapacityError, Codec, CodecBufferedConverter, CodecBufferedDecoder,
-    CodecBufferedEncoder, CodecConvertError, CodecDecodeError, CodecEncodeError, CodecValueDecoder,
-    CodecValueEncoder, EncodeContext, EncodePlan, FinishError, LittleEndian, TranscodeProgress,
-    TranscodeStatus, ValueDecoder, ValueEncoder,
+    BigEndian, ByteOrder, ByteOrderSpec, CapacityError, Codec, CodecConvertError,
+    CodecDecodeError, CodecEncodeError, CodecTranscodeConverter, CodecTranscodeDecoder,
+    CodecTranscodeEncoder, CodecValueDecoder, CodecValueEncoder, DecodeContext, EncodeContext,
+    EncodePlan, FinishError, LittleEndian, TranscodeConvertEngine, TranscodeConvertHooks,
+    TranscodeConverter, TranscodeDecodeEngine, TranscodeDecodeHooks, TranscodeDecodeInput,
+    TranscodeDecoder, TranscodeEncodeEngine, TranscodeEncodeHooks, TranscodeEncodeOutput,
+    TranscodeEncoder, TranscodeProgress, TranscodeStatus, Transcoder, ValueDecoder, ValueEncoder,
 };

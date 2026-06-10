@@ -10,7 +10,7 @@
 /// Decodes a borrowed input value into an owned representation.
 ///
 /// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
-/// single-value buffer decoding and [`crate::BufferedTranscoder`] for batch
+/// single-value buffer decoding and [`crate::Transcoder`] for batch
 /// conversion over caller-provided buffers.
 pub trait ValueDecoder<Input: ?Sized> {
     /// Decoded output type.

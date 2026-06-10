@@ -8,7 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{Codec, codec::assert_unit_bounds};
+use crate::{Codec, core::assert_unit_bounds};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
