@@ -9,12 +9,21 @@
 
 use core::num::NonZeroUsize;
 
-use crate::{
-    CapacityError, Codec, DecodeAction, DecodeContext, FinishError, TranscodeDecodeHooks,
-    TranscodeProgress, Transcoder,
+use super::super::internal::{
+    decode_state::DecodeState,
+    decode_step::DecodeStep,
 };
 use crate::core::assert_unit_bounds;
-use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
+use crate::{
+    CapacityError,
+    Codec,
+    DecodeAction,
+    DecodeContext,
+    TranscodeDecodeHooks,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
+};
 
 /// Reusable buffered decoding engine for codec-backed decoders.
 ///
@@ -47,12 +56,13 @@ use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep}
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
-///     TranscodeDecodeEngine,
-///     TranscodeDecodeHooks,
 ///     Codec,
+///     CodecDecodeError,
 ///     DecodeAction,
 ///     DecodeContext,
 ///     TranscodeStatus,
+///     TranscodeDecodeEngine,
+///     TranscodeDecodeHooks,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -106,7 +116,8 @@ use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep}
 /// struct ReplacementHooks;
 ///
 /// impl TranscodeDecodeHooks<ByteCodec> for ReplacementHooks {
-///     type Error = ByteDecodeError;
+///     type Error = CodecDecodeError<ByteDecodeError>;
+///     type ErrorContext = ();
 ///
 ///     fn handle_decode_error(
 ///         &mut self,
@@ -118,28 +129,6 @@ use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep}
 ///             ByteDecodeError::Malformed { consumed } => {
 ///                 Ok(DecodeAction::Emit { value: b'?', consumed })
 ///             }
-///         }
-///     }
-///
-///     fn invalid_input_index(
-///         &mut self,
-///         _codec: &mut ByteCodec,
-///         _index: usize,
-///         _input_len: usize,
-///     ) -> Self::Error {
-///         ByteDecodeError::Malformed {
-///             consumed: NonZeroUsize::MIN,
-///         }
-///     }
-///
-///     fn invalid_output_index(
-///         &mut self,
-///         _codec: &mut ByteCodec,
-///         _index: usize,
-///         _output_len: usize,
-///     ) -> Self::Error {
-///         ByteDecodeError::Malformed {
-///             consumed: NonZeroUsize::MIN,
 ///         }
 ///     }
 /// }
@@ -158,7 +147,7 @@ use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep}
 ///         // Drain `output[..output_index]`, then resume with more output room.
 ///     }
 /// }
-/// # Ok::<(), ByteDecodeError>(())
+/// # Ok::<(), CodecDecodeError<ByteDecodeError>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -194,6 +183,12 @@ where
         Self { codec, hooks }
     }
 
+    /// Returns the context used to construct public contract errors.
+    #[inline(always)]
+    pub fn public_error_context(&self) -> H::ErrorContext {
+        H::error_context(&self.codec)
+    }
+
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     ///
@@ -207,7 +202,10 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
@@ -221,22 +219,50 @@ where
     #[must_use]
     #[inline(always)]
     pub fn max_finish_output_len(&self) -> usize {
-        self.codec.max_decode_flush_values() + self.hooks.max_finish_output_len(&self.codec)
+        self.codec.max_decode_flush_values()
+            + self.hooks.max_finish_output_len(&self.codec)
+    }
+
+    /// Returns the maximum values emitted when resetting stream state.
+    ///
+    /// Decoders do not emit reset output; this bound is always `0`.
+    #[must_use]
+    #[inline(always)]
+    pub fn max_reset_output_len(&self) -> usize {
+        0
     }
 
     /// Resets codec decode state and hook-owned state.
     ///
     /// # Parameters
     ///
-    /// - `self`: Decoder instance whose hook state is reset.
+    /// - `output`: Complete output value slice visible to the decoder.
+    /// - `output_index`: Absolute output value index where writing would start.
     ///
     /// # Returns
     ///
-    /// Returns unit `()`.
+    /// Returns `0` because decoders do not emit stream-start output on reset.
+    ///
+    /// # Errors
+    ///
+    /// Returns hook errors when `output_index` is invalid.
     #[inline(always)]
-    pub fn reset(&mut self) {
+    pub fn reset(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<usize, H::Error> {
+        let ctx = H::error_context(&self.codec);
+        if output_index > output.len() {
+            return Err(H::Error::invalid_output_index(
+                ctx,
+                output_index,
+                output.len(),
+            ));
+        }
         self.codec.reset_decode_state();
         self.hooks.reset(&mut self.codec);
+        Ok(0)
     }
 
     /// Decodes source units into caller-provided output values.
@@ -265,28 +291,34 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, H::Error> {
+        let ctx = H::error_context(&self.codec);
         if input_index > input.len() {
-            return Err(self
-                .hooks
-                .invalid_input_index(&mut self.codec, input_index, input.len()));
+            return Err(H::Error::invalid_input_index(
+                ctx,
+                input_index,
+                input.len(),
+            ));
         }
         if output_index > output.len() {
-            return Err(self.hooks.invalid_output_index(
-                &mut self.codec,
+            return Err(H::Error::invalid_output_index(
+                ctx,
                 output_index,
                 output.len(),
             ));
         }
         assert_unit_bounds::<C>(&self.codec);
-        let mut state = DecodeState::new(input, input_index, output, output_index);
+        let mut state =
+            DecodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             let context = state.context();
             let min_units = self.codec.min_units_per_value().get();
             if context.available < min_units {
-                let additional = NonZeroUsize::new(min_units - context.available)
-                    .expect("missing input is non-zero");
-                return Ok(state.need_input_progress_with(additional, context.available));
+                let additional =
+                    NonZeroUsize::new(min_units - context.available)
+                        .expect("missing input is non-zero");
+                return Ok(state
+                    .need_input_progress_with(additional, context.available));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -318,7 +350,7 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`FinishError`] when the caller provides invalid or insufficient
+    /// Returns hook errors when the caller provides invalid or insufficient
     /// output capacity, or when hook finalization fails.
     ///
     /// # Panics
@@ -329,25 +361,32 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, FinishError<H::Error>> {
+    ) -> Result<usize, H::Error> {
+        let ctx = H::error_context(&self.codec);
         let required = self.max_finish_output_len();
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+        H::Error::ensure_output_capacity(
+            ctx,
+            output.len(),
+            output_index,
+            required,
+        )?;
         let output_end = output_index + required;
         let output = &mut output[..output_end];
         let snapshot = self.codec.decode_state();
-        let flushed =
-            unsafe { self.codec.decode_flush(output, output_index) }.map_err(|error| {
+        let flushed = unsafe { self.codec.decode_flush(output, output_index) }
+            .map_err(|error| {
                 self.codec.set_decode_state(snapshot);
-                FinishError::source(self.hooks.map_decode_flush_error(&mut self.codec, error))
+                self.hooks.map_decode_flush_error(&mut self.codec, error)
             })?;
         assert!(
             flushed <= self.codec.max_decode_flush_values(),
             "Codec::decode_flush wrote beyond its flush bound",
         );
-        let written = self
-            .hooks
-            .finish(&mut self.codec, output, output_index + flushed)
-            .map_err(FinishError::source)?;
+        let written = self.hooks.finish(
+            &mut self.codec,
+            output,
+            output_index + flushed,
+        )?;
         assert!(
             flushed + written <= required,
             "TranscodeDecodeEngine hook wrote beyond its finish bound",
@@ -477,6 +516,12 @@ where
     H: TranscodeDecodeHooks<C>,
 {
     type Error = H::Error;
+    type ErrorContext = H::ErrorContext;
+
+    #[inline(always)]
+    fn error_context(&self) -> Self::ErrorContext {
+        self.public_error_context()
+    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -491,10 +536,20 @@ where
         Ok(TranscodeDecodeEngine::max_finish_output_len(self))
     }
 
+    /// Returns an upper bound for values emitted when resetting stream state.
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(TranscodeDecodeEngine::max_reset_output_len(self))
+    }
+
     /// Resets hook-owned state.
     #[inline(always)]
-    fn reset(&mut self) {
-        TranscodeDecodeEngine::reset(self)
+    fn reset(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
     /// Decodes source units into logical values.
@@ -506,7 +561,13 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> core::result::Result<TranscodeProgress, Self::Error> {
-        TranscodeDecodeEngine::transcode(self, input, input_index, output, output_index)
+        TranscodeDecodeEngine::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -515,7 +576,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> core::result::Result<usize, FinishError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
 }

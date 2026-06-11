@@ -14,33 +14,42 @@ mod decode_context;
 mod encode_context;
 mod encode_plan;
 mod engine;
-mod finish_error;
-mod hooks;
-#[cfg(not(test))]
 mod internal;
-#[cfg(test)]
-pub mod internal;
 mod io;
 mod transcode_converter;
 mod transcode_decoder;
 mod transcode_encoder;
+mod transcode_error;
 mod transcode_progress;
 mod transcode_status;
 mod transcoder;
 
-pub use adapter::{CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder};
+pub use adapter::{
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+};
 pub use capacity_error::CapacityError;
 pub use decode_action::DecodeAction;
 pub use decode_context::DecodeContext;
 pub use encode_context::EncodeContext;
 pub use encode_plan::EncodePlan;
-pub use engine::{TranscodeConvertEngine, TranscodeDecodeEngine, TranscodeEncodeEngine};
-pub use finish_error::FinishError;
-pub use hooks::{TranscodeConvertHooks, TranscodeDecodeHooks, TranscodeEncodeHooks};
-pub use io::{TranscodeDecodeInput, TranscodeEncodeOutput};
+pub use engine::{
+    TranscodeConvertEngine,
+    TranscodeConvertHooks,
+    TranscodeDecodeEngine,
+    TranscodeDecodeHooks,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
+};
+pub use io::{
+    TranscodeDecodeInput,
+    TranscodeEncodeOutput,
+};
 pub use transcode_converter::TranscodeConverter;
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_encoder::TranscodeEncoder;
+pub use transcode_error::TranscodeError;
 pub use transcode_progress::TranscodeProgress;
 pub use transcode_status::TranscodeStatus;
 pub use transcoder::Transcoder;

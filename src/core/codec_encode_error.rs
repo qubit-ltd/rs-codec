@@ -7,6 +7,7 @@
 // =============================================================================
 //! Generic encode error used by codec-backed encoder adapters.
 
+use crate::transcode::TranscodeError;
 use thiserror::Error;
 
 /// Error reported by codec-backed buffered encoder adapters.
@@ -43,6 +44,19 @@ pub enum CodecEncodeError<E> {
         index: usize,
         /// Length of the output slice.
         len: usize,
+    },
+
+    /// The output slice cannot hold all finish or reset output in one call.
+    #[error(
+        "insufficient finish output at index {output_index}: required {required} units, available {available}"
+    )]
+    InsufficientOutput {
+        /// Absolute output index where finalization would start writing.
+        output_index: usize,
+        /// Output units required to finish in one call.
+        required: usize,
+        /// Output units available from `output_index`.
+        available: usize,
     },
 }
 
@@ -96,5 +110,52 @@ impl<E> CodecEncodeError<E> {
     #[inline(always)]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
         Self::InvalidOutputIndex { index, len }
+    }
+
+    /// Creates an insufficient-output error.
+    ///
+    /// # Parameters
+    ///
+    /// - `output_index`: Output index supplied by the caller.
+    /// - `required`: Output units required to finish in one call.
+    /// - `available`: Output units available from `output_index`.
+    ///
+    /// # Returns
+    ///
+    /// Returns an insufficient-output error.
+    #[must_use]
+    #[inline(always)]
+    pub const fn insufficient_output(
+        output_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::InsufficientOutput {
+            output_index,
+            required,
+            available,
+        }
+    }
+}
+
+impl<E> TranscodeError for CodecEncodeError<E> {
+    #[inline(always)]
+    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
+        Self::invalid_input_index(index, len)
+    }
+
+    #[inline(always)]
+    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
+        Self::invalid_output_index(index, len)
+    }
+
+    #[inline(always)]
+    fn insufficient_output(
+        _context: (),
+        output_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::insufficient_output(output_index, required, available)
     }
 }

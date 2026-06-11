@@ -7,11 +7,16 @@
 // =============================================================================
 //! Buffered decoder adapter backed by a low-level codec.
 
+use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError, Codec, CodecDecodeError, FinishError, TranscodeDecodeEngine, TranscodeDecoder,
-    TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    TranscodeDecodeEngine,
+    TranscodeDecoder,
+    TranscodeProgress,
+    Transcoder,
 };
-use super::super::hooks::CodecTranscodeDecodeHooks;
 
 /// Decodes encoded units into caller-provided value buffers by using a
 /// [`Codec`].
@@ -47,7 +52,10 @@ where
     #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
+            engine: TranscodeDecodeEngine::new(
+                codec,
+                CodecTranscodeDecodeHooks,
+            ),
         }
     }
 }
@@ -57,6 +65,7 @@ where
     C: Codec,
 {
     type Error = CodecDecodeError<C::DecodeError>;
+    type ErrorContext = ();
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -84,14 +93,20 @@ where
         Ok(self.engine.max_finish_output_len())
     }
 
-    /// Resets hook-owned state.
-    ///
-    /// # Returns
-    ///
-    /// Returns unit `()`.
+    /// Returns the maximum values emitted when resetting internal state.
     #[inline(always)]
-    fn reset(&mut self) {
-        self.engine.reset();
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(self.engine.max_reset_output_len())
+    }
+
+    /// Resets hook-owned state.
+    #[inline(always)]
+    fn reset(
+        &mut self,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        self.engine.reset(output, output_index)
     }
 
     /// Decodes source units into logical values.
@@ -142,9 +157,12 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, FinishError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
+    C: Codec
+{
+}

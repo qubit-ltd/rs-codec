@@ -13,8 +13,6 @@ mod decode_context_tests;
 mod encode_context_tests;
 mod encode_plan_tests;
 mod engine;
-mod finish_error_tests;
-mod hooks;
 mod internal;
 mod io;
 mod transcode_converter_tests;

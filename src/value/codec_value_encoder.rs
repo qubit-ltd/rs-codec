@@ -8,7 +8,10 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{Codec, core::assert_unit_bounds};
+use crate::{
+    Codec,
+    core::assert_unit_bounds,
+};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -71,7 +74,10 @@ where
     /// Panics when the wrapped codec reports more written units than its
     /// declared [`Codec::max_encode_reset_units`] or
     /// [`Codec::max_units_per_value`] bounds.
-    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
+    fn encode(
+        &mut self,
+        input: &C::Value,
+    ) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
         let reset_units = self.codec.max_encode_reset_units();
         let value_units = self.codec.max_units_per_value().get();

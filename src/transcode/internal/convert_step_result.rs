@@ -7,8 +7,8 @@
 // =============================================================================
 //! Result type for converter steps that may stop with public progress.
 
-use super::convert_error_of::ConvertErrorOf;
 use super::super::transcode_progress::TranscodeProgress;
+use super::convert_error_of::ConvertErrorOf;
 
 /// Result type for converter steps that may stop with public progress.
 ///

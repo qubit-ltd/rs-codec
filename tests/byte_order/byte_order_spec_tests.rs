@@ -1,4 +1,9 @@
-use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
+use qubit_codec::{
+    BigEndian,
+    ByteOrder,
+    ByteOrderSpec,
+    LittleEndian,
+};
 
 #[test]
 fn test_byte_order_spec_exposes_runtime_order() {

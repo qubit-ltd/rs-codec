@@ -25,4 +25,5 @@ use crate::TranscodeProgress;
 /// - `Ok(progress)` when a conversion step advances or completes without error,
 ///   or
 /// - `Err(error)` when conversion cannot continue.
-pub(in crate::transcode) type ConvertProgressResult<D, E, H> = Result<TranscodeProgress, ConvertErrorOf<D, E, H>>;
+pub(in crate::transcode) type ConvertProgressResult<D, E, H> =
+    Result<TranscodeProgress, ConvertErrorOf<D, E, H>>;

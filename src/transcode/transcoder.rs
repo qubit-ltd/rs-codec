@@ -6,7 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError, finish_error::FinishError, transcode_progress::TranscodeProgress,
+    capacity_error::CapacityError,
+    transcode_error::TranscodeError,
+    transcode_progress::TranscodeProgress,
 };
 
 /// Converts one logical stream of input units into one logical stream of output
@@ -22,12 +24,12 @@ use super::{
 ///    available.
 /// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
 ///    the caller-owned input buffer.
-/// 4. Call [`Transcoder::finish`] after the caller knows no more input
-///    remains and has handled any incomplete tail. Size this final output with
+/// 4. Call [`Transcoder::finish`] after the caller knows no more input remains
+///    and has handled any incomplete tail. Size this final output with
 ///    [`Transcoder::max_finish_output_len`].
-/// 5. After [`Transcoder::finish`] succeeds, call
-///    [`Transcoder::reset`] before starting another logical stream with
-///    the same instance.
+/// 5. After [`Transcoder::finish`] succeeds, call [`Transcoder::reset`] with a
+///    buffer sized by [`Transcoder::max_reset_output_len`] before starting
+///    another logical stream with the same instance.
 ///
 /// The method is suitable for:
 /// - pull-style consumers that call conversion repeatedly as buffers arrive;
@@ -39,26 +41,26 @@ use super::{
 /// semantics:
 ///
 /// - Use `Transcoder` directly for custom, policy-free unit transforms.
-/// - Use `Transcoder` when you want to own malformed/unmappable
-///   decisions at the call site.
+/// - Use `Transcoder` when you want to own malformed/unmappable decisions at
+///   the call site.
 ///
 /// # Example: streaming byte-to-word decoder
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;
-/// use qubit_codec::{Transcoder, TranscodeProgress, TranscodeStatus};
+/// use qubit_codec::{
+///     CodecDecodeError,
+///     TranscodeProgress,
+///     TranscodeStatus,
+///     Transcoder,
+/// };
 ///
 /// #[derive(Default)]
 /// struct U16BeBytesDecoder;
 ///
-/// #[derive(Debug, Eq, PartialEq)]
-/// enum U16BeBytesDecodeError {
-///     InvalidInputIndex,
-///     InvalidOutputIndex,
-/// }
-///
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
-///     type Error = U16BeBytesDecodeError;
+///     type Error = CodecDecodeError<core::convert::Infallible>;
+///     type ErrorContext = ();
 ///
 ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
@@ -72,10 +74,10 @@ use super::{
 ///         output_index: usize,
 ///     ) -> Result<TranscodeProgress, Self::Error> {
 ///         if input_index > input.len() {
-///             return Err(U16BeBytesDecodeError::InvalidInputIndex);
+///             return Err(Self::Error::invalid_input_index(input_index, input.len()));
 ///         }
 ///         if output_index > output.len() {
-///             return Err(U16BeBytesDecodeError::InvalidOutputIndex);
+///             return Err(Self::Error::invalid_output_index(output_index, output.len()));
 ///         }
 ///
 ///         let mut read = 0;
@@ -138,11 +140,11 @@ use super::{
 ///
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 2, &mut output, 0),
-///     Err(U16BeBytesDecodeError::InvalidInputIndex),
+///     Err(CodecDecodeError::InvalidInputIndex { .. }),
 /// ));
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 0, &mut output, 3),
-///     Err(U16BeBytesDecodeError::InvalidOutputIndex),
+///     Err(CodecDecodeError::InvalidOutputIndex { .. }),
 /// ));
 /// ```
 ///
@@ -158,7 +160,16 @@ use super::{
 /// - `Output`: Output unit type produced by this transcoder.
 pub trait Transcoder<Input, Output> {
     /// Error reported for semantic conversion failures.
-    type Error;
+    type Error: TranscodeError<Self::ErrorContext>;
+
+    /// Context passed to contract-error factories.
+    type ErrorContext: Copy + Send + Sync + Default + 'static;
+
+    /// Returns the context used to construct contract errors.
+    #[inline(always)]
+    fn error_context(&self) -> Self::ErrorContext {
+        Self::ErrorContext::default()
+    }
 
     /// Returns an upper bound for output units produced from `input_len` units.
     ///
@@ -197,19 +208,61 @@ pub trait Transcoder<Input, Output> {
         Ok(0)
     }
 
-    /// Resets state retained between conversion calls.
+    /// Returns an upper bound for output units emitted when resetting stream
+    /// state.
+    ///
+    /// Stateful encoders may need a stream-start sequence, such as a byte
+    /// order mark, before the first encoded value. Callers use this bound to
+    /// size the output buffer passed to [`Transcoder::reset`].
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
+    /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
+    /// overflows. Stateless transcoders default to `Ok(0)`.
+    #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    /// Resets stream state and emits stream-start output into `output`.
     ///
     /// This starts a new logical stream while keeping configuration such as
     /// byte order, charset policy, replacement values, and cryptographic keys.
     /// Pending input, pending output, and completed-stream state must be
-    /// discarded by stateful implementations. Stateless transcoders may keep
-    /// the default no-op implementation.
+    /// discarded by stateful implementations. The caller must provide enough
+    /// output capacity for [`Transcoder::max_reset_output_len`].
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Complete output unit slice visible to the transcoder.
+    /// - `output_index`: Absolute output unit index where writing starts.
     ///
     /// # Returns
     ///
-    /// Returns unit `()`.
-    #[inline(always)]
-    fn reset(&mut self) {}
+    /// Returns the number of units written while resetting stream state.
+    /// Stateless transcoders return `0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
+    /// when capacity checks fail, or policy errors when reset itself fails.
+    #[inline]
+    fn reset(
+        &mut self,
+        output: &mut [Output],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        let context = self.error_context();
+        Self::Error::ensure_output_capacity(
+            context,
+            output.len(),
+            output_index,
+            0,
+        )?;
+        Ok(0)
+    }
 
     /// Converts available input units into output units.
     ///
@@ -255,20 +308,23 @@ pub trait Transcoder<Input, Output> {
     /// [`Transcoder::max_finish_output_len`].
     ///
     /// After `finish` succeeds, the logical stream is closed. Portable callers
-    /// should call [`Transcoder::reset`] before passing input for
-    /// another logical stream to the same instance.
+    /// should call [`Transcoder::reset`] with a buffer sized by
+    /// [`Transcoder::max_reset_output_len`] before passing input for another
+    /// logical stream to the same instance.
     ///
     /// # Example
     ///
     /// ```rust
     /// use core::num::NonZeroUsize;
-    /// use qubit_codec::{Transcoder, TranscodeStatus};
+    /// use qubit_codec::{CodecConvertError, Transcoder, TranscodeStatus};
     ///
     /// #[derive(Default)]
     /// struct ByteCopy;
     ///
     /// impl Transcoder<u8, u8> for ByteCopy {
-    ///     type Error = core::convert::Infallible;
+    ///     type Error =
+    ///         CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    ///     type ErrorContext = ();
     ///
     ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
     ///         Ok(input_len)
@@ -330,21 +386,22 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Errors
     ///
-    /// Returns [`FinishError`] when `output_index` is invalid, when output
-    /// capacity is insufficient, or when internal state cannot be finished
-    /// according to the transcoder's policy.
+    /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
+    /// when capacity checks fail, or policy errors when finish itself
+    /// fails.
     #[inline]
     fn finish(
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, FinishError<Self::Error>> {
-        if output_index > output.len() {
-            return Err(FinishError::invalid_output_index(
-                output_index,
-                output.len(),
-            ));
-        }
+    ) -> Result<usize, Self::Error> {
+        let context = self.error_context();
+        Self::Error::ensure_output_capacity(
+            context,
+            output.len(),
+            output_index,
+            0,
+        )?;
         Ok(0)
     }
 }

@@ -7,8 +7,15 @@
 // =============================================================================
 //! Policy hooks used by buffered decoder engines.
 
-use super::super::{decode_action::DecodeAction, decode_context::DecodeContext};
-use crate::{CapacityError, Codec};
+use super::super::{
+    decode_action::DecodeAction,
+    decode_context::DecodeContext,
+};
+use crate::{
+    CapacityError,
+    Codec,
+    TranscodeError,
+};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
 ///
@@ -95,6 +102,7 @@ use crate::{CapacityError, Codec};
 ///
 /// impl TranscodeDecodeHooks<MyCodec> for ReplacementHooks {
 ///     type Error = CodecDecodeError<MyDecodeError>;
+///     type ErrorContext = ();
 ///
 ///     fn handle_decode_error(
 ///         &mut self,
@@ -111,24 +119,6 @@ use crate::{CapacityError, Codec};
 ///             }
 ///         }
 ///     }
-///
-///     fn invalid_input_index(
-///         &mut self,
-///         _codec: &mut MyCodec,
-///         index: usize,
-///         input_len: usize,
-///     ) -> Self::Error {
-///         CodecDecodeError::invalid_input_index(index, input_len)
-///     }
-///
-///     fn invalid_output_index(
-///         &mut self,
-///         _codec: &mut MyCodec,
-///         index: usize,
-///         output_len: usize,
-///     ) -> Self::Error {
-///         CodecDecodeError::invalid_output_index(index, output_len)
-///     }
 /// }
 /// ```
 ///
@@ -140,7 +130,16 @@ where
     C: Codec,
 {
     /// Error type returned by the buffered decoder.
-    type Error;
+    type Error: TranscodeError<Self::ErrorContext>;
+
+    /// Context passed to [`TranscodeError`] factories for contract failures.
+    type ErrorContext: Copy + Send + Sync + Default + 'static;
+
+    /// Returns context used to build contract errors for this hook policy.
+    #[inline(always)]
+    fn error_context(_codec: &C) -> Self::ErrorContext {
+        Self::ErrorContext::default()
+    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -156,7 +155,11 @@ where
     /// [`Codec::min_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / codec.min_units_per_value().get())
     }
 
@@ -219,53 +222,15 @@ where
     ///
     /// Returns the hook-specific error.
     #[inline]
-    fn map_decode_flush_error(&mut self, _codec: &mut C, _error: C::DecodeError) -> Self::Error {
+    fn map_decode_flush_error(
+        &mut self,
+        _codec: &mut C,
+        _error: C::DecodeError,
+    ) -> Self::Error {
         panic!(
             "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
         )
     }
-
-    /// Creates an error for a caller-supplied input index outside the input
-    /// slice.
-    ///
-    /// The generic engine detects this before invoking the codec. The hook owns
-    /// the concrete decoder error type, so it also owns the adapter-level error
-    /// construction.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `index`: Invalid input index supplied by the caller.
-    /// - `input_len`: Length of the input slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific error representing `index > input_len`.
-    fn invalid_input_index(&mut self, codec: &mut C, index: usize, input_len: usize)
-    -> Self::Error;
-
-    /// Creates an error for a caller-supplied output index outside the output
-    /// slice.
-    ///
-    /// The generic engine detects this before writing any decoded value. The
-    /// hook owns the concrete decoder error type, so it also owns the
-    /// adapter-level error construction.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `index`: Invalid output index supplied by the caller.
-    /// - `output_len`: Length of the output slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific error representing `index > output_len`.
-    fn invalid_output_index(
-        &mut self,
-        codec: &mut C,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output.
     ///

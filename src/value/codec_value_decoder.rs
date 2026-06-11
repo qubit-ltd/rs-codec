@@ -8,7 +8,11 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
-use crate::{Codec, CodecDecodeError, core::assert_unit_bounds};
+use crate::{
+    Codec,
+    CodecDecodeError,
+    core::assert_unit_bounds,
+};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -74,11 +78,18 @@ where
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when flush output exceeds
     /// [`Codec::max_decode_flush_values`].
-    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
         if input.len() < min_units {
-            return Err(CodecDecodeError::incomplete(0, min_units, input.len()));
+            return Err(CodecDecodeError::incomplete(
+                0,
+                min_units,
+                input.len(),
+            ));
         }
 
         // SAFETY: The input slice has at least the codec's declared minimum
@@ -107,7 +118,9 @@ where
             // SAFETY: The scratch buffer reserves the codec's declared
             // flush-output bound at index zero.
             let flushed = unsafe { self.codec.decode_flush(&mut scratch, 0) }
-                .map_err(|error| CodecDecodeError::decode(error, consumed))?;
+                .map_err(|error| {
+                CodecDecodeError::decode(error, consumed)
+            })?;
             assert!(
                 flushed <= flush_cap,
                 "Codec::decode_flush wrote beyond its flush bound",

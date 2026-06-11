@@ -8,8 +8,12 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    TranscodeDecoder, Transcoder, Codec, CodecTranscodeDecoder, CodecDecodeError,
-    FinishError, TranscodeStatus,
+    Codec,
+    CodecDecodeError,
+    CodecTranscodeDecoder,
+    TranscodeDecoder,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -178,7 +182,7 @@ fn test_codec_transcode_decoder_reports_bounds_and_resets_state() {
     assert_eq!(Ok(3), decoder.max_output_len(3));
     assert_eq!(Ok(0), decoder.max_finish_output_len());
 
-    decoder.reset();
+    decoder.reset(&mut [], 0).expect("reset");
     let written = decoder
         .finish(&mut output, 0)
         .expect("codec decoder has no finish output");
@@ -252,7 +256,10 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
+    assert_eq!(
+        CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error
+    );
 }
 
 #[test]

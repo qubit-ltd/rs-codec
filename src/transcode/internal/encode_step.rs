@@ -9,8 +9,8 @@
 
 use core::num::NonZeroUsize;
 
-use super::encode_state::EncodeState;
 use super::super::transcode_progress::TranscodeProgress;
+use super::encode_state::EncodeState;
 
 /// Result of one prepared value encode attempt.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -55,9 +55,12 @@ impl EncodeStep {
     ///
     /// Returns a step describing the missing output capacity.
     #[inline(always)]
-    pub(in crate::transcode) fn need_output(required: usize, available: usize) -> Self {
-        let additional =
-            NonZeroUsize::new(required - available).expect("missing output is non-zero");
+    pub(in crate::transcode) fn need_output(
+        required: usize,
+        available: usize,
+    ) -> Self {
+        let additional = NonZeroUsize::new(required - available)
+            .expect("missing output is non-zero");
         Self::NeedOutput {
             additional,
             available,

@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    encode_context::EncodeContext,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
@@ -79,7 +82,9 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(in crate::transcode) unsafe fn context_unchecked(&mut self) -> EncodeContext<'_, Value, Unit> {
+    pub(in crate::transcode) unsafe fn context_unchecked(
+        &mut self,
+    ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { self.input.get_unchecked(self.input_cursor) };
         EncodeContext {
@@ -100,43 +105,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         self.output.len().saturating_sub(self.output_cursor)
     }
 
-    /// Returns the current output cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns the absolute output index for the next write.
-    #[inline(always)]
-    pub(in crate::transcode) const fn output_cursor(&self) -> usize {
-        self.output_cursor
-    }
-
-    /// Returns the complete output slice mutably.
-    ///
-    /// # Returns
-    ///
-    /// Returns the mutable output slice visible to this encode call.
-    #[inline(always)]
-    pub(in crate::transcode) fn output_mut(&mut self) -> &mut [Unit] {
-        self.output
-    }
-
-    /// Advances only the output cursor.
-    ///
-    /// Reset output is not associated with one consumed input value, so it
-    /// needs to move the output cursor independently.
-    ///
-    /// # Parameters
-    ///
-    /// - `written`: Output units written by reset output.
-    #[inline(always)]
-    pub(in crate::transcode) fn advance_output(&mut self, written: usize) {
-        assert!(
-            written <= self.available_output(),
-            "encode reset wrote beyond available output",
-        );
-        self.output_cursor += written;
-    }
-
     /// Accepts a completed one-value write and advances both cursors.
     ///
     /// # Parameters
@@ -147,7 +115,10 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
+    pub(in crate::transcode) fn accept_written_value(
+        &mut self,
+        written: usize,
+    ) {
         assert!(
             written <= self.available_output(),
             "encode step wrote beyond available output",

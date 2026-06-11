@@ -8,12 +8,26 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+    Seek,
+    SeekFrom,
+    Write,
+};
 
-use qubit_io::{BufferedOutput, Output};
+use qubit_io::{
+    BufferedOutput,
+    Output,
+};
 
-use crate::{Codec, FinishError, TranscodeStatus, Transcoder};
 use crate::core::assert_unit_bounds;
+use crate::{
+    Codec,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -124,8 +138,8 @@ where
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that `count <= Self::spare_capacity()` and that
-    /// the corresponding units in the returned spare slice have been
+    /// The caller must guarantee that `count <= Self::spare_capacity()` and
+    /// that the corresponding units in the returned spare slice have been
     /// initialized.
     #[inline(always)]
     pub unsafe fn advance_unchecked(&mut self, count: usize) {
@@ -216,7 +230,8 @@ where
         let mut read_total = 0;
         while read_total < count {
             self.output.ensure_spare_capacity(max_units)?;
-            let (units, output_index, available) = self.output.spare_raw_parts_mut();
+            let (units, output_index, available) =
+                self.output.spare_raw_parts_mut();
             debug_assert!(
                 available >= max_units,
                 "insufficient encode capacity reserved in spare output buffer",
@@ -224,10 +239,17 @@ where
             let written = unsafe {
                 // SAFETY: `ensure_spare_capacity` reserved at least
                 // `max_units_per_value` units at `output_index`.
-                encoder.encode(&input[input_index + read_total], units, output_index)
+                encoder.encode(
+                    &input[input_index + read_total],
+                    units,
+                    output_index,
+                )
             }
             .map_err(&mut *map_error)?;
-            assert!(written <= max_units, "Codec::encode wrote beyond its bound",);
+            assert!(
+                written <= max_units,
+                "Codec::encode wrote beyond its bound",
+            );
             unsafe {
                 // SAFETY: The codec-reported written count was checked
                 // against the reserved spare output window.
@@ -336,7 +358,11 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
+    pub fn finish<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
         M: FnMut(E::Error) -> Error,
@@ -345,14 +371,15 @@ where
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",
         );
         let written = encoder
             .finish(units, output_index)
-            .map_err(|e| finish_to_io_error(e, map_error))?;
+            .map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         // SAFETY: The encoder reported initialized units within the spare
         // range that was reserved above.
@@ -434,30 +461,5 @@ where
             .debug_struct("TranscodeEncodeOutput")
             .field("output", &self.output)
             .finish()
-    }
-}
-
-/// Converts a finish failure into an I/O error.
-fn finish_to_io_error<E, M>(error: FinishError<E>, map_error: &mut M) -> Error
-where
-    M: FnMut(E) -> Error,
-{
-    match error {
-        FinishError::Capacity { source } => Error::new(ErrorKind::InvalidData, source),
-        FinishError::InvalidOutputIndex { index, len } => Error::new(
-            ErrorKind::InvalidData,
-            format!("invalid finish output index {index} for output length {len}"),
-        ),
-        FinishError::InsufficientOutput {
-            output_index,
-            required,
-            available,
-        } => Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "insufficient finish output at index {output_index}: required {required} units, available {available}"
-            ),
-        ),
-        FinishError::Source { source } => map_error(source),
     }
 }

@@ -7,7 +7,7 @@
 // =============================================================================
 //! Converter error type alias selected by converter hooks.
 
-use super::super::hooks::TranscodeConvertHooks;
+use super::super::engine::TranscodeConvertHooks;
 
 /// Converter error type selected by hooks for one target output unit type.
 ///
@@ -16,4 +16,5 @@ use super::super::hooks::TranscodeConvertHooks;
 /// - `D`: Source codec type.
 /// - `E`: Target codec type.
 /// - `H`: Converter hook type exposing `Error`.
-pub(in crate::transcode) type ConvertErrorOf<D, E, H> = <H as TranscodeConvertHooks<D, E>>::Error;
+pub(in crate::transcode) type ConvertErrorOf<D, E, H> =
+    <H as TranscodeConvertHooks<D, E>>::Error;

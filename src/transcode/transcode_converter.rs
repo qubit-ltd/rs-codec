@@ -26,4 +26,5 @@ use super::Transcoder;
 pub trait TranscodeConverter<InputUnit, OutputUnit>:
     Transcoder<InputUnit, OutputUnit>
 {
+    //  empty
 }

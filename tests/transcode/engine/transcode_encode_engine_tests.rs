@@ -8,8 +8,14 @@
 //! Tests for the reusable buffered encoder engine.
 
 use qubit_codec::{
-    TranscodeEncodeEngine, TranscodeEncodeHooks, CapacityError, Codec, EncodeContext, EncodePlan,
-    FinishError, TranscodeStatus,
+    CapacityError,
+    Codec,
+    EncodeContext,
+    EncodePlan,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
+    TranscodeError,
+    TranscodeStatus,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -59,10 +65,21 @@ unsafe impl Codec for WideCodec {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 enum EngineError {
+    #[error("invalid input index {index} for input length {input_len}")]
     InvalidInputIndex { index: usize, input_len: usize },
+    #[error("invalid output index {index} for output length {output_len}")]
     InvalidOutputIndex { index: usize, output_len: usize },
+    #[error(
+        "insufficient output at index {output_index}: required {required}, available {available}"
+    )]
+    InsufficientOutput {
+        output_index: usize,
+        required: usize,
+        available: usize,
+    },
+    #[error("rejected input at index {input_index}")]
     Rejected { input_index: usize },
 }
 
@@ -76,11 +93,35 @@ impl EngineError {
     }
 }
 
+impl TranscodeError for EngineError {
+    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
+        Self::invalid_input_index(index, len)
+    }
+
+    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
+        Self::invalid_output_index(index, len)
+    }
+
+    fn insufficient_output(
+        _context: (),
+        output_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::InsufficientOutput {
+            output_index,
+            required,
+            available,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ExactWidthHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for ExactWidthHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -109,27 +150,10 @@ impl TranscodeEncodeHooks<WideCodec> for ExactWidthHooks {
         // SAFETY: The engine checked the one-unit capacity requested by
         // `prepare_encode`.
         unsafe {
-            *output.as_mut_ptr().add(output_index) = input_value.wrapping_add(10);
+            *output.as_mut_ptr().add(output_index) =
+                input_value.wrapping_add(10);
         }
         Ok(1)
-    }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
     }
 }
 
@@ -138,6 +162,7 @@ struct SkippingHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -157,24 +182,6 @@ impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -182,6 +189,7 @@ struct RejectingHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -201,24 +209,6 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
     ) -> Result<usize, Self::Error> {
         unreachable!("prepare_encode rejects every value")
     }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -226,6 +216,7 @@ struct OverreportingWriteHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for OverreportingWriteHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -246,24 +237,6 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingWriteHooks {
         context.output[context.output_index] = *context.input_value;
         Ok(2)
     }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -281,6 +254,7 @@ impl Default for FinishHooks {
 
 impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -306,24 +280,6 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         } = context;
         output[output_index] = *input_value;
         Ok(1)
-    }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -355,6 +311,7 @@ struct OverwritingFinishHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -374,24 +331,6 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
     ) -> Result<usize, Self::Error> {
         context.output[context.output_index] = *context.input_value;
         Ok(1)
-    }
-
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -415,6 +354,7 @@ struct OverreportingFinishHooks;
 
 impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
     type Error = EngineError;
+    type ErrorContext = ();
     type PlanAction = ();
 
     fn prepare_encode(
@@ -436,24 +376,6 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         Ok(1)
     }
 
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_input_index(index, input_len)
-    }
-
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut WideCodec,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        EngineError::invalid_output_index(index, output_len)
-    }
-
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
         1
     }
@@ -471,7 +393,8 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
 #[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
 
     assert_eq!(Ok(8), encoder.max_output_len(2));
     assert_eq!(0, encoder.max_finish_output_len());
@@ -479,21 +402,22 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
         Err(CapacityError::OutputLengthOverflow),
         encoder.max_output_len(usize::MAX),
     );
-    encoder.reset();
+    encoder.reset(&mut [], 0).expect("reset");
 }
 
 #[test]
 fn test_buffered_encode_engine_delegates_finish_to_hooks() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
     assert_eq!(1, encoder.max_finish_output_len());
 
-    let error = encoder
-        .finish(&mut [], 0)
-        .expect_err("finish should reject insufficient output before calling hooks");
+    let error = encoder.finish(&mut [], 0).expect_err(
+        "finish should reject insufficient output before calling hooks",
+    );
     assert_eq!(
-        FinishError::InsufficientOutput {
+        EngineError::InsufficientOutput {
             output_index: 0,
             required: 1,
             available: 0,
@@ -509,24 +433,29 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     assert_eq!([0xee], output);
     assert_eq!(0, encoder.max_finish_output_len());
 
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
-    encoder.reset();
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
+    encoder.reset(&mut [], 0).expect("reset");
     assert_eq!(0, encoder.max_finish_output_len());
 }
 
 #[test]
 #[should_panic]
 fn test_buffered_encode_engine_finish_passes_bounded_output_to_hooks() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, OverwritingFinishHooks);
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, OverwritingFinishHooks);
     let mut output = [0_u8; 2];
 
     let _ = encoder.finish(&mut output, 0);
 }
 
 #[test]
-#[should_panic(expected = "TranscodeEncodeEngine hook wrote beyond its finish bound")]
+#[should_panic(
+    expected = "TranscodeEncodeEngine hook wrote beyond its finish bound"
+)]
 fn test_buffered_encode_engine_finish_panics_when_hook_overreports_bound() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, OverreportingFinishHooks);
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, OverreportingFinishHooks);
     let mut output = [0_u8; 2];
 
     let _ = encoder.finish(&mut output, 0);
@@ -534,26 +463,41 @@ fn test_buffered_encode_engine_finish_panics_when_hook_overreports_bound() {
 
 #[test]
 fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [];
 
     let error = encoder
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
+    assert_eq!(
+        EngineError::InvalidOutputIndex {
+            index: 1,
+            output_len: 0,
+        },
+        error,
+    );
 }
 
 #[test]
-fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer() {
-    let mut encoder = TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer()
+ {
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
     let mut output = [];
 
     let error = encoder
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
+    assert_eq!(
+        EngineError::InvalidOutputIndex {
+            index: 1,
+            output_len: 0,
+        },
+        error,
+    );
 }
 
 #[test]
@@ -561,9 +505,13 @@ fn test_buffered_encode_hooks_default_finish_is_noop() {
     let mut hooks = ExactWidthHooks;
     let mut output = [];
 
-    let written =
-        TranscodeEncodeHooks::<WideCodec>::finish(&mut hooks, &mut WideCodec, &mut output, 1)
-            .expect("default hook finish should be a no-op");
+    let written = TranscodeEncodeHooks::<WideCodec>::finish(
+        &mut hooks,
+        &mut WideCodec,
+        &mut output,
+        1,
+    )
+    .expect("default hook finish should be a no-op");
 
     assert_eq!(0, written);
 }
@@ -624,16 +572,21 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
 }
 
 #[test]
-#[should_panic(expected = "TranscodeEncodeEngine hook wrote beyond its prepared capacity bound")]
-fn test_buffered_encode_engine_panics_when_hook_reports_too_many_written_units() {
-    let mut encoder = TranscodeEncodeEngine::new(WideCodec, OverreportingWriteHooks);
+#[should_panic(
+    expected = "TranscodeEncodeEngine hook wrote beyond its prepared capacity bound"
+)]
+fn test_buffered_encode_engine_panics_when_hook_reports_too_many_written_units()
+{
+    let mut encoder =
+        TranscodeEncodeEngine::new(WideCodec, OverreportingWriteHooks);
     let mut output = [0_u8; 1];
 
     let _ = encoder.transcode(&[1], 0, &mut output, 0);
 }
 
 #[test]
-fn test_buffered_encode_engine_propagates_prepare_error_without_consuming_input() {
+fn test_buffered_encode_engine_propagates_prepare_error_without_consuming_input()
+ {
     let mut encoder = TranscodeEncodeEngine::new(WideCodec, RejectingHooks);
     let mut output = [0_u8; 4];
 

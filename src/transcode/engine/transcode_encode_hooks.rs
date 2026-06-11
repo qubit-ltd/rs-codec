@@ -7,8 +7,15 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
-use crate::{CapacityError, Codec};
+use super::super::{
+    encode_context::EncodeContext,
+    encode_plan::EncodePlan,
+};
+use crate::{
+    CapacityError,
+    Codec,
+    TranscodeError,
+};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -93,6 +100,7 @@ use crate::{CapacityError, Codec};
 ///     C: Codec,
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
+///     type ErrorContext = ();
 ///     type PlanAction = ();
 ///
 ///     fn prepare_encode(
@@ -115,24 +123,6 @@ use crate::{CapacityError, Codec};
 ///         }
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
-///
-///     fn invalid_input_index(
-///         &mut self,
-///         _codec: &mut C,
-///         index: usize,
-///         input_len: usize,
-///     ) -> Self::Error {
-///         CodecEncodeError::invalid_input_index(index, input_len)
-///     }
-///
-///     fn invalid_output_index(
-///         &mut self,
-///         _codec: &mut C,
-///         index: usize,
-///         output_len: usize,
-///     ) -> Self::Error {
-///         CodecEncodeError::invalid_output_index(index, output_len)
-///     }
 /// }
 /// ```
 ///
@@ -144,7 +134,24 @@ where
     C: Codec,
 {
     /// Error type returned by the buffered encoder.
-    type Error;
+    type Error: TranscodeError<Self::ErrorContext>;
+
+    /// Context passed to [`TranscodeError`] factories for contract failures.
+    type ErrorContext: Copy + Send + Sync + Default + 'static;
+
+    /// Returns context used to build contract errors for this hook policy.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns the error context associated with `codec`.
+    #[inline(always)]
+    fn error_context(_codec: &C) -> Self::ErrorContext {
+        Self::ErrorContext::default()
+    }
 
     /// Concrete action stored in [`EncodePlan::action`].
     type PlanAction;
@@ -162,7 +169,11 @@ where
     /// [`Codec::max_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(codec.max_units_per_value().get())
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -264,7 +275,11 @@ where
     ///
     /// Returns the hook-specific error.
     #[inline]
-    fn map_encode_reset_error(&mut self, _codec: &mut C, _error: C::EncodeError) -> Self::Error {
+    fn map_encode_reset_error(
+        &mut self,
+        _codec: &mut C,
+        _error: C::EncodeError,
+    ) -> Self::Error {
         panic!(
             "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
         )
@@ -273,7 +288,8 @@ where
     /// Writes encoder reset output through the wrapped codec.
     ///
     /// The default implementation delegates to [`Codec::encode_reset`] and
-    /// maps errors through [`map_encode_reset_error`](Self::map_encode_reset_error).
+    /// maps errors through
+    /// [`map_encode_reset_error`](Self::map_encode_reset_error).
     ///
     /// # Parameters
     ///
@@ -305,48 +321,6 @@ where
         unsafe { codec.encode_reset(output, output_index) }
             .map_err(|error| self.map_encode_reset_error(codec, error))
     }
-
-    /// Builds an error for a caller-supplied input index outside the input
-    /// slice.
-    ///
-    /// The engine calls this hook before it reads input. Keeping this
-    /// construction in the hook lets codec-backed adapters preserve their own
-    /// concrete error type without a separate public factory trait.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `index`: Invalid absolute input index supplied by the caller.
-    /// - `input_len`: Length of the input slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific invalid-input-index error.
-    fn invalid_input_index(&mut self, codec: &mut C, index: usize, input_len: usize)
-    -> Self::Error;
-
-    /// Builds an error for a caller-supplied output index outside the output
-    /// slice.
-    ///
-    /// The engine calls this hook before it writes output. Keeping this
-    /// construction in the hook lets codec-backed adapters preserve their own
-    /// concrete error type without a separate public factory trait.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `index`: Invalid absolute output index supplied by the caller.
-    /// - `output_len`: Length of the output slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific invalid-output-index error.
-    fn invalid_output_index(
-        &mut self,
-        codec: &mut C,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error;
 
     /// Finishes hook-owned state and writes any retained output units.
     ///

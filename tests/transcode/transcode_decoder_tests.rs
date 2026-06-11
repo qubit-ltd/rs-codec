@@ -7,13 +7,21 @@
 // =============================================================================
 //! Tests for the semantic transcode decoder marker trait.
 
-use qubit_codec::{CapacityError, TranscodeDecoder, TranscodeProgress, Transcoder};
+use qubit_codec::{
+    CapacityError,
+    CodecConvertError,
+    TranscodeDecoder,
+    TranscodeProgress,
+    Transcoder,
+};
 
 #[derive(Default)]
 struct ByteToChar;
 
 impl Transcoder<u8, char> for ByteToChar {
-    type Error = core::convert::Infallible;
+    type Error =
+        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type ErrorContext = ();
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)

@@ -9,14 +9,24 @@
 
 use core::{
     fmt,
-    hash::{Hash, Hasher},
+    hash::{
+        Hash,
+        Hasher,
+    },
 };
 
+use super::CodecTranscodeConvertHooks;
 use crate::{
-    CapacityError, Codec, CodecConvertError, FinishError, TranscodeConvertEngine,
-    TranscodeConverter, TranscodeProgress, TranscodeStatus, Transcoder,
+    CapacityError,
+    Codec,
+    CodecConvertError,
+    TranscodeConvertEngine,
+    TranscodeConverter,
+    TranscodeError,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
 };
-use super::super::hooks::CodecTranscodeConvertHooks;
 
 /// Strict codec-backed converter error type.
 type CodecTranscodeConvertError<D, E> =
@@ -174,7 +184,11 @@ where
     #[inline(always)]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
-            engine: TranscodeConvertEngine::new(decoder, encoder, CodecTranscodeConvertHooks::new()),
+            engine: TranscodeConvertEngine::new(
+                decoder,
+                encoder,
+                CodecTranscodeConvertHooks::new(),
+            ),
         }
     }
 
@@ -192,7 +206,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
@@ -207,14 +224,22 @@ where
         self.engine.max_finish_output_len()
     }
 
-    /// Clears retained pending output and hook state.
-    ///
-    /// # Returns
-    ///
-    /// Returns unit `()`.
+    /// Returns the maximum target units emitted when resetting stream state.
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn reset(&mut self) {
-        self.engine.reset();
+    pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        self.engine.max_reset_output_len()
+    }
+
+    /// Clears retained pending output and hook state and emits stream-start
+    /// encode output.
+    #[inline(always)]
+    pub fn reset(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
+        self.engine.reset(output, output_index)
     }
 
     /// Converts source units into target units.
@@ -273,16 +298,17 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, FinishError<CodecTranscodeConvertError<D, E>>> {
-        let required = self
-            .max_finish_output_len()
-            .map_err(FinishError::capacity)?;
-        FinishError::ensure_output_capacity(output.len(), output_index, required)?;
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
+        let required = self.max_finish_output_len().unwrap_or(usize::MAX);
+        <CodecTranscodeConvertError<D, E> as TranscodeError<()>>::ensure_output_capacity(
+            (),
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let empty_input: &[D::Unit] = &[];
-        let progress = self
-            .transcode(empty_input, 0, output, output_index)
-            .map_err(FinishError::source)?;
+        let progress = self.transcode(empty_input, 0, output, output_index)?;
         match progress.status() {
             TranscodeStatus::Complete => Ok(progress.written()),
             TranscodeStatus::NeedInput { .. } => {
@@ -305,6 +331,7 @@ where
     E: Codec<Value = D::Value>,
 {
     type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
+    type ErrorContext = ();
 
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
@@ -330,14 +357,20 @@ where
         CodecTranscodeConverter::max_finish_output_len(self)
     }
 
-    /// Clears retained pending output.
-    ///
-    /// # Returns
-    ///
-    /// Returns unit `()`.
+    /// Returns the maximum target units emitted when resetting stream state.
     #[inline(always)]
-    fn reset(&mut self) {
-        CodecTranscodeConverter::reset(self);
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        CodecTranscodeConverter::max_reset_output_len(self)
+    }
+
+    /// Clears retained pending output and emits stream-start encode output.
+    #[inline(always)]
+    fn reset(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        CodecTranscodeConverter::reset(self, output, output_index)
     }
 
     /// Converts source units into target units.
@@ -366,7 +399,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -388,12 +427,13 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, FinishError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter<D::Unit, E::Unit>
+    for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,

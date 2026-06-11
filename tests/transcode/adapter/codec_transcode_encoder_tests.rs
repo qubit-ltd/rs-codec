@@ -8,8 +8,13 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    TranscodeEncoder, Transcoder, CapacityError, Codec, CodecTranscodeEncoder,
-    CodecEncodeError, FinishError, TranscodeStatus,
+    CapacityError,
+    Codec,
+    CodecEncodeError,
+    CodecTranscodeEncoder,
+    TranscodeEncoder,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -141,7 +146,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
         Err(CapacityError::OutputLengthOverflow),
         encoder.max_output_len(usize::MAX),
     );
-    encoder.reset();
+    encoder.reset(&mut [], 0).expect("reset");
 }
 
 #[test]
@@ -205,7 +210,10 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(FinishError::InvalidOutputIndex { index: 1, len: 0 }, error);
+    assert_eq!(
+        CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error
+    );
 }
 
 #[test]

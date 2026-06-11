@@ -7,8 +7,18 @@
 // =============================================================================
 //! Slot that owns the converter's retained decoded value.
 
-use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks, TranscodeProgress};
-use super::{convert_state::ConvertState, pending_encode_step::PendingEncodeStep, pending_value::PendingValue};
+use super::{
+    convert_state::ConvertState,
+    pending_encode_step::PendingEncodeStep,
+    pending_value::PendingValue,
+};
+use crate::{
+    CapacityError,
+    Codec,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
+    TranscodeProgress,
+};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

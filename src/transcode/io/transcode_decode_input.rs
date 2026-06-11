@@ -8,12 +8,26 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{BufferedInput, Input};
+use qubit_io::{
+    BufferedInput,
+    Input,
+};
 
-use crate::{Codec, FinishError, TranscodeStatus, Transcoder};
 use crate::core::assert_unit_bounds;
+use crate::{
+    Codec,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -274,11 +288,15 @@ where
         let mut written_total = 0;
 
         while written_total < count {
-            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
+            if self.input.available() < min_units
+                && !self.input.fill_until(min_units)?
+            {
                 return Ok(written_total);
             }
 
-            if self.input.available() < max_units && max_units <= self.input.capacity() {
+            if self.input.available() < max_units
+                && max_units <= self.input.capacity()
+            {
                 let _ = self.input.fill_until(max_units)?;
             }
 
@@ -495,16 +513,39 @@ where
             .max_finish_output_len()
             .map_err(capacity_to_io_error)?;
         if required > count {
-            return Err(finish_to_io_error(
-                FinishError::insufficient_output(output_index, required, count),
-                map_error,
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "insufficient finish output at index {output_index}: required {required} units, available {count}"
+                ),
             ));
         }
-        let output_end = output_index + count;
+        if output_index > output.len() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "invalid finish output index {output_index} for output length {}",
+                    output.len()
+                ),
+            ));
+        }
+        let output_end = match output_index.checked_add(count) {
+            Some(end) if end <= output.len() => end,
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!(
+                        "invalid finish output index {} for output length {}",
+                        output_index,
+                        output.len()
+                    ),
+                ));
+            }
+        };
         let output = &mut output[..output_end];
         let written = decoder
             .finish(output, output_index)
-            .map_err(|error| finish_to_io_error(error, map_error))?;
+            .map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }
@@ -574,29 +615,4 @@ where
 /// Converts a capacity planning failure into an I/O error.
 fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
-}
-
-/// Converts a finish failure into an I/O error.
-fn finish_to_io_error<E, M>(error: FinishError<E>, map_error: &mut M) -> Error
-where
-    M: FnMut(E) -> Error,
-{
-    match error {
-        FinishError::Capacity { source } => capacity_to_io_error(source),
-        FinishError::InvalidOutputIndex { index, len } => Error::new(
-            ErrorKind::InvalidData,
-            format!("invalid finish output index {index} for output length {len}"),
-        ),
-        FinishError::InsufficientOutput {
-            output_index,
-            required,
-            available,
-        } => Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "insufficient finish output at index {output_index}: required {required} units, available {available}"
-            ),
-        ),
-        FinishError::Source { source } => map_error(source),
-    }
 }

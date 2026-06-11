@@ -7,9 +7,15 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
-use super::transcode_encode_hooks::TranscodeEncodeHooks;
-use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
-use crate::{Codec, CodecEncodeError};
+use super::super::{
+    encode_context::EncodeContext,
+    encode_plan::EncodePlan,
+};
+use super::super::engine::TranscodeEncodeHooks;
+use crate::{
+    Codec,
+    CodecEncodeError,
+};
 
 /// Policy hooks for [`crate::CodecTranscodeEncoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -20,7 +26,11 @@ where
     C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
+    type ErrorContext = ();
     type PlanAction = ();
+
+    #[inline(always)]
+    fn error_context(_codec: &C) -> Self::ErrorContext {}
 
     /// Prepares a conservative one-value encoding plan.
     ///
@@ -66,55 +76,23 @@ where
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
-        unsafe { codec.encode(context.input_value, context.output, context.output_index) }
-            .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+        unsafe {
+            codec.encode(
+                context.input_value,
+                context.output,
+                context.output_index,
+            )
+        }
+        .map_err(|error| CodecEncodeError::encode(error, context.input_index))
     }
 
     /// Maps reset errors into generic codec encode errors.
     #[inline(always)]
-    fn map_encode_reset_error(&mut self, _codec: &mut C, error: C::EncodeError) -> Self::Error {
+    fn map_encode_reset_error(
+        &mut self,
+        _codec: &mut C,
+        error: C::EncodeError,
+    ) -> Self::Error {
         CodecEncodeError::encode(error, 0)
-    }
-
-    /// Creates an invalid input index error.
-    ///
-    /// # Parameters
-    ///
-    /// - `_codec`: Low-level codec for context only.
-    /// - `index`: Invalid absolute input index.
-    /// - `input_len`: Length of the input value slice.
-    ///
-    /// # Returns
-    ///
-    /// Returns an encode invalid-input-index error.
-    #[inline(always)]
-    fn invalid_input_index(
-        &mut self,
-        _codec: &mut C,
-        index: usize,
-        input_len: usize,
-    ) -> Self::Error {
-        CodecEncodeError::invalid_input_index(index, input_len)
-    }
-
-    /// Creates an invalid output index error.
-    ///
-    /// # Parameters
-    ///
-    /// - `_codec`: Low-level codec for context only.
-    /// - `index`: Invalid absolute output index.
-    /// - `output_len`: Output slice length.
-    ///
-    /// # Returns
-    ///
-    /// Returns an encode invalid-output-index error.
-    #[inline(always)]
-    fn invalid_output_index(
-        &mut self,
-        _codec: &mut C,
-        index: usize,
-        output_len: usize,
-    ) -> Self::Error {
-        CodecEncodeError::invalid_output_index(index, output_len)
     }
 }

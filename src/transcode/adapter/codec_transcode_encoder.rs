@@ -7,11 +7,16 @@
 // =============================================================================
 //! Buffered encoder adapter backed by a low-level codec.
 
+use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError, Codec, CodecEncodeError, FinishError, TranscodeEncodeEngine, TranscodeEncoder,
-    TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    CodecEncodeError,
+    TranscodeEncodeEngine,
+    TranscodeEncoder,
+    TranscodeProgress,
+    Transcoder,
 };
-use super::super::hooks::CodecTranscodeEncodeHooks;
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
 ///
@@ -48,7 +53,10 @@ where
     #[inline(always)]
     pub const fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
+            engine: TranscodeEncodeEngine::new(
+                codec,
+                CodecTranscodeEncodeHooks,
+            ),
         }
     }
 }
@@ -58,8 +66,9 @@ where
     C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
+    type ErrorContext = ();
 
-    /// Returns the maximum number of output units needed for `input_len`
+    /// Gets the maximum number of output units needed for `input_len`
     /// values.
     ///
     /// # Parameters
@@ -68,30 +77,40 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a conservative upper bound for output units.
+    /// a conservative upper bound for output units.
     #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
-    /// Returns the maximum units emitted by finishing internal state.
+    /// Gets the maximum units emitted when resetting internal state.
     ///
     /// # Returns
     ///
-    /// Returns the number of units that may be emitted by finishing state.
+    /// the maximum units emitted when resetting internal state.
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(self.engine.max_reset_output_len())
+    }
+
+    /// Gets the maximum units emitted by finishing internal state.
+    ///
+    /// # Returns
+    ///
+    /// the number of units that may be emitted by finishing state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(self.engine.max_finish_output_len())
     }
 
-    /// Resets hook-owned state.
-    ///
-    /// # Returns
-    ///
-    /// Returns unit `()`.
+    /// Resets hook-owned state and emits stream-start output.
     #[inline(always)]
-    fn reset(&mut self) {
-        self.engine.reset();
+    fn reset(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        self.engine.reset(output, output_index)
     }
 
     /// Encodes values into the supplied output buffer.
@@ -143,12 +162,16 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, FinishError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C> where C: Codec {}
+impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C> where
+    C: Codec
+{
+    // empty
+}
 
 impl<C> Default for CodecTranscodeEncoder<C>
 where
