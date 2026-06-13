@@ -11,13 +11,7 @@ use super::{
     codec_transcode_decode_hooks::CodecTranscodeDecodeHooks,
     codec_transcode_encode_hooks::CodecTranscodeEncodeHooks,
 };
-use crate::{
-    Codec,
-    CodecConvertError,
-    CodecDecodeError,
-    CodecEncodeError,
-    TranscodeConvertHooks,
-};
+use crate::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError, TranscodeConvertHooks};
 
 /// Policy hooks for [`crate::CodecTranscodeConverter`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -59,11 +53,7 @@ where
     /// Returns decode hooks that map decode failures directly to codec decode
     /// errors.
     #[inline(always)]
-    fn create_decode_hooks(
-        &self,
-        _decode_codec: &D,
-        _encode_codec: &E,
-    ) -> Self::DecodeHooks {
+    fn create_decode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::DecodeHooks {
         CodecTranscodeDecodeHooks
     }
 
@@ -79,11 +69,7 @@ where
     /// Returns encode hooks that map encode failures directly to codec encode
     /// errors.
     #[inline(always)]
-    fn create_encode_hooks(
-        &self,
-        _decode_codec: &D,
-        _encode_codec: &E,
-    ) -> Self::EncodeHooks {
+    fn create_encode_hooks(&self, _decode_codec: &D, _encode_codec: &E) -> Self::EncodeHooks {
         CodecTranscodeEncodeHooks
     }
 

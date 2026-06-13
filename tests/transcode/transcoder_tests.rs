@@ -1,9 +1,5 @@
 use qubit_codec::{
-    CapacityError,
-    CodecConvertError,
-    TranscodeError,
-    TranscodeProgress,
-    TranscodeStatus,
+    CapacityError, CodecConvertError, TranscodeError, TranscodeProgress, TranscodeStatus,
     Transcoder,
 };
 
@@ -11,8 +7,7 @@ use qubit_codec::{
 struct CopyTranscoder;
 
 impl Transcoder<u8, u8> for CopyTranscoder {
-    type Error =
-        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type Error = CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -23,10 +18,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -39,9 +31,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
         let mut read = 0;
         let mut written = 0;
-        while input_index + read < input.len()
-            && output_index + written < output.len()
-        {
+        while input_index + read < input.len() && output_index + written < output.len() {
             output[output_index + written] = input[input_index + read];
             read += 1;
             written += 1;
@@ -63,10 +53,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -77,8 +64,7 @@ struct FinishingTranscoder {
 }
 
 impl Transcoder<u8, u8> for FinishingTranscoder {
-    type Error =
-        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type Error = CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -93,10 +79,7 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
         self.suffix_index = 0;
         Ok(0)
     }
@@ -168,8 +151,7 @@ fn test_transcoder_stateless_reset_and_finish_are_explicit_noops() {
     assert_eq!(Ok(0), transcoder.max_finish_output_len());
     assert_eq!(Ok(0), transcoder.max_reset_output_len());
 
-    Transcoder::<u8, u8>::reset(&mut transcoder, &mut output, 0)
-        .expect("reset is noop");
+    Transcoder::<u8, u8>::reset(&mut transcoder, &mut output, 0).expect("reset is noop");
     let written = transcoder.finish(&mut output, 0).expect("finish is noop");
 
     assert_eq!(0, written);
@@ -214,9 +196,9 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
     let mut output = [0_u8; 2];
-    let written = transcoder.finish(&mut output, 0).expect(
-        "finish should write the whole suffix once capacity is available",
-    );
+    let written = transcoder
+        .finish(&mut output, 0)
+        .expect("finish should write the whole suffix once capacity is available");
 
     assert_eq!(2, written);
     assert_eq!(*b"!\n", output);

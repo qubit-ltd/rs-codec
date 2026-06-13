@@ -9,14 +9,8 @@
 
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-    TranscodeEncodeEngine,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, CodecEncodeError, TranscodeEncodeEngine, TranscodeEncoder,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -51,13 +45,10 @@ where
     ///
     /// Returns a buffered encoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(
-                codec,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
 }

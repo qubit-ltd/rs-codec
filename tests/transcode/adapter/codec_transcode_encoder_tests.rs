@@ -8,14 +8,8 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-    CodecTranscodeEncoder,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
+    CapacityError, Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeEncoder,
+    TranscodeError, TranscodeStatus, Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -52,7 +46,7 @@ unsafe impl Codec for PairByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index + 2 <= output.len());
 
         // SAFETY: The caller guarantees that two bytes are writable from
@@ -61,7 +55,7 @@ unsafe impl Codec for PairByteCodec {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
         }
-        Ok(2)
+        Ok(qubit_codec::nz!(2))
     }
 }
 
@@ -99,7 +93,7 @@ unsafe impl Codec for RejectOddCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         if !value.is_multiple_of(2) {
             return Err("odd value");
         }
@@ -109,7 +103,7 @@ unsafe impl Codec for RejectOddCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 

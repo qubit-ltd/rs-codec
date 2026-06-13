@@ -12,8 +12,7 @@
 ## 概述
 
 Qubit Codec 是 Qubit codec 系列 crate 的领域无关基础层。它只放 binary、
-text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不引入
-`std::io` stream helper，也不放具体格式实现。
+text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不放具体格式实现。
 
 本库提供：
 
@@ -42,7 +41,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - **分层边界清晰**：把领域无关 trait 与 binary、text、misc、stream 实现分开。
 - **公开 API 小而稳定**：只暴露多个 codec crate 都需要共享的基础原语。
-- **不耦合 I/O**：避免引入 `std::io` 依赖，使缓冲区级 codec 可用于非 stream 场景。
 - **策略中立**：charset、畸形输入和线格式规则由领域 crate 自己定义。
 - **零成本标记**：用可复制的类型和值标记表达字节序，不产生运行时分配。
 - **稳定进度报告**：用 `TranscodeProgress` 和 `TranscodeStatus` 明确表达调用方管理缓冲区时的转换进度。
@@ -91,12 +89,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecTranscodeConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
 - **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
-  `decode_into` 驱动调用方传入的 `Codec`；由于 `Codec` 没有 finish 状态，
-  `finish_into` 是 no-op。需要状态化 streaming decoder 时使用
-  `transcode_into` / `finish_transcode_into`。
-- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`，通过
-  `encode_from` 驱动调用方传入的 `Codec`；普通 `flush` 只排空 unit
-  buffer。状态化 streaming encoder 使用 `transcode_from` 和 `finish`。
+  `decode_into` 驱动调用方传入的 `Codec`。需要状态化 streaming decoder 时
+  使用 `transcode_into` / `finish_transcode_into`。
+- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`；普通
+  `flush` 只排空 unit buffer。状态化 streaming encoder 使用 `transcode_from`
+  和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -108,7 +105,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ### 聚焦的公开 API
 
-- **`prelude` 模块**：导入常用核心 trait 和标记类型。
 - **不包含具体格式**：binary、text 和 misc codec 发布在相邻 crate 中。
 
 ## 安装
@@ -117,7 +113,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ```toml
 [dependencies]
-qubit-codec = "0.7"
+qubit-codec = "0.8"
 ```
 
 ## 快速开始
@@ -135,12 +131,13 @@ impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
 
-let encoded = ValueEncoder::<str>::encode(&StringEncoder, "codec")?;
+let mut encoder = StringEncoder;
+let encoded = ValueEncoder::<str>::encode(&mut encoder, "codec")?;
 assert_eq!("codec", encoded);
 
 let progress = TranscodeProgress::complete(3, 4);
@@ -183,7 +180,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeDecodeInput<I>` | 调用时传入 caller-owned `Codec`，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；状态化 streaming decoder 使用 `transcode_into` 和 `finish_transcode_into` |
-| `TranscodeEncodeOutput<O>` | 调用时传入 caller-owned `Codec`，通过 `encode_from` 把 value 编码进 `qubit_io::Output`；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
+| `TranscodeEncodeOutput<O>` | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
 
@@ -232,9 +229,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ## 库边界
 
-`qubit-codec` 不包含具体 binary 格式、字符集、percent/Base64/hex codec，
-也不包含 `std::io` reader/writer adapter。这些能力应放在领域 crate 中，
-让下游只依赖自己需要的层。
+`qubit-codec` 不包含具体 binary 格式、字符集或 percent/Base64/hex codec。
+它面向 I/O 的公开面只保留供下游 stream crate 复用的低层
+`qubit_io::Input` / `qubit_io::Output` bridge 类型。`std::io::Read` /
+`std::io::Write` extension trait 和具体 reader/writer adapter 应放在领域
+crate 中，让下游只依赖自己需要的层。
 
 ## 性能考虑
 
@@ -271,6 +270,7 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 运行时依赖保持很少：
 
 - `thiserror` 提供公共错误类型实现。
+- `qubit-io` 提供 `TranscodeDecodeInput` 和 `TranscodeEncodeOutput` 使用的 `BufferedInput` 与 `BufferedOutput`。
 
 ## 许可证
 

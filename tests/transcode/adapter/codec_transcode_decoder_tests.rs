@@ -8,13 +8,8 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    Codec,
-    CodecDecodeError,
-    CodecTranscodeDecoder,
-    TranscodeDecoder,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
+    Codec, CodecDecodeError, CodecTranscodeDecoder, TranscodeDecoder, TranscodeError,
+    TranscodeStatus, Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -66,11 +61,11 @@ unsafe impl Codec for VariableByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -115,11 +110,11 @@ unsafe impl Codec for FixedPairCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 

@@ -55,12 +55,8 @@ impl EncodeStep {
     ///
     /// Returns a step describing the missing output capacity.
     #[inline(always)]
-    pub(in crate::transcode) fn need_output(
-        required: usize,
-        available: usize,
-    ) -> Self {
-        let additional = NonZeroUsize::new(required - available)
-            .expect("missing output is non-zero");
+    pub(in crate::transcode) fn need_output(required: usize, available: usize) -> Self {
+        let additional = crate::nz!(required - available);
         Self::NeedOutput {
             additional,
             available,

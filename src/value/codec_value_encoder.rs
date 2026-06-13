@@ -8,10 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{
-    Codec,
-    codec::assert_unit_bounds,
-};
+use crate::{Codec, codec::assert_unit_bounds};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -30,7 +27,10 @@ pub struct CodecValueEncoder<C> {
     codec: C,
 }
 
-impl<C> CodecValueEncoder<C> {
+impl<C> CodecValueEncoder<C>
+where
+    C: Codec,
+{
     /// Creates an encoder backed by `codec`.
     ///
     /// # Parameters
@@ -40,9 +40,17 @@ impl<C> CodecValueEncoder<C> {
     /// # Returns
     ///
     /// Returns a value encoder adapter for the supplied codec.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the supplied codec violates the
+    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// invariant. Validating once at construction lets the hot encode path
+    /// skip the check.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
+        assert_unit_bounds::<C>(&codec);
         Self { codec }
     }
 }
@@ -74,11 +82,7 @@ where
     /// Panics when the wrapped codec reports more written units than its
     /// declared [`Codec::max_encode_reset_units`] or
     /// [`Codec::max_units_per_value`] bounds.
-    fn encode(
-        &mut self,
-        input: &C::Value,
-    ) -> Result<Self::Output, Self::Error> {
-        assert_unit_bounds::<C>(&self.codec);
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         let reset_units = self.codec.max_encode_reset_units();
         let value_units = self.codec.max_units_per_value().get();
         let mut output = vec![C::Unit::default(); reset_units + value_units];
@@ -93,8 +97,7 @@ where
 
         // SAFETY: The output buffer reserves the codec's declared maximum
         // value width after any reset output.
-        let value_written =
-            unsafe { self.codec.encode(input, &mut output, reset_written) }?;
+        let value_written = unsafe { self.codec.encode(input, &mut output, reset_written) }?.get();
         assert!(
             value_written <= value_units,
             "Codec::encode wrote beyond allocated output",

@@ -38,8 +38,7 @@ fn test_codec_encode_error_reports_invalid_output_index() {
 
 #[test]
 fn test_codec_encode_error_reports_insufficient_output() {
-    let error =
-        CodecEncodeError::<TestEncodeError>::insufficient_output(2, 4, 1);
+    let error = CodecEncodeError::<TestEncodeError>::insufficient_output(2, 4, 1);
 
     assert_eq!(
         CodecEncodeError::InsufficientOutput {

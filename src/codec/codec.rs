@@ -107,6 +107,37 @@ pub unsafe trait Codec {
     #[must_use]
     fn max_units_per_value(&self) -> NonZeroUsize;
 
+    /// Returns the exact non-zero unit count this codec will write when
+    /// encoding `value`.
+    ///
+    /// The default implementation returns
+    /// [`max_units_per_value`](Self::max_units_per_value), which is the
+    /// conservative bound checked callers already use to prove output
+    /// capacity. Fixed-width codecs do not need to override this method.
+    ///
+    /// Variable-width codecs (LEB128, UTF-8, GB18030, …) should override this
+    /// to report the true encoded length for `value`. Doing so lets buffered
+    /// adapters and stream writers reserve only what is actually needed and
+    /// enables capacity probing without performing the encode. The contract
+    /// requires the returned length to equal the unit count
+    /// [`encode`](Self::encode) writes for the same `value` under the same
+    /// codec state, and to never exceed
+    /// [`max_units_per_value`](Self::max_units_per_value).
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Value whose encoded length is queried.
+    ///
+    /// # Returns
+    ///
+    /// Returns the non-zero unit count [`encode`](Self::encode) will write
+    /// for `value`.
+    #[must_use]
+    #[inline(always)]
+    fn encode_len(&self, _value: &Self::Value) -> NonZeroUsize {
+        self.max_units_per_value()
+    }
+
     /// Returns the maximum unit count emitted when resetting encode state.
     ///
     /// Stateful encoders may need a stream-start sequence, such as a byte order
@@ -181,8 +212,10 @@ pub unsafe trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the number of written units. Implementations may return `0` to
-    /// represent a value that intentionally emits no encoded units.
+    /// Returns the non-zero number of written units. A successful encode
+    /// always emits at least one unit; stateful encoders that need to defer
+    /// output should report that intent through a custom encode error
+    /// instead of returning a zero count.
     ///
     /// # Errors
     ///
@@ -194,14 +227,16 @@ pub unsafe trait Codec {
     ///
     /// The caller must guarantee that the implementation can write up to
     /// [`max_units_per_value`](Self::max_units_per_value) units starting at
-    /// `index`. On success, implementations must return a written unit count no
-    /// larger than [`max_units_per_value`](Self::max_units_per_value).
+    /// `index`. On success, implementations must return a written unit count
+    /// no larger than [`max_units_per_value`](Self::max_units_per_value) and
+    /// must match the value returned by
+    /// [`encode_len`](Self::encode_len) for the same `value` and codec state.
     unsafe fn encode(
         &mut self,
         value: &Self::Value,
         output: &mut [Self::Unit],
         index: usize,
-    ) -> Result<usize, Self::EncodeError>;
+    ) -> Result<NonZeroUsize, Self::EncodeError>;
 
     /// Decodes one value from `input` starting at `index`.
     ///

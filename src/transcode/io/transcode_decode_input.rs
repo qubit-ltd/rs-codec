@@ -8,27 +8,12 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Result,
-    Seek,
-    SeekFrom,
-};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{
-    BufferedInput,
-    Input,
-};
+use qubit_io::{BufferedInput, Input};
 
 use crate::codec::assert_unit_bounds;
-use crate::{
-    Codec,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -37,10 +22,9 @@ use crate::{
 /// buffered input drive different decoders without nesting buffers or storing
 /// codec-specific state in the buffer owner.
 ///
-/// A [`Codec`] has no decoder-owned finish state, so [`Self::finish_into`] is
-/// a no-op retained for API symmetry. Callers that need a stateful streaming
-/// decoder can use [`Self::transcode_into`] and [`Self::finish_transcode_into`]
-/// explicitly.
+/// A [`Codec`] has no decoder-owned finish state. Callers that need a stateful
+/// streaming decoder should use [`Self::transcode_into`] and
+/// [`Self::finish_transcode_into`] instead.
 ///
 /// # Type Parameters
 ///
@@ -289,15 +273,11 @@ where
         let mut written_total = 0;
 
         while written_total < count {
-            if self.input.available() < min_units
-                && !self.input.fill_until(min_units)?
-            {
+            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
                 return Ok(written_total);
             }
 
-            if self.input.available() < max_units
-                && max_units <= self.input.capacity()
-            {
+            if self.input.available() < max_units && max_units <= self.input.capacity() {
                 let _ = self.input.fill_until(max_units)?;
             }
 
@@ -424,50 +404,6 @@ where
                 }
             }
         }
-    }
-
-    /// Finishes a codec decode operation into an indexed output range.
-    ///
-    /// # Parameters
-    ///
-    /// * `decoder` - Codec whose decode operation is being finished.
-    /// * `map_error` - Function mapping decoder errors into I/O errors.
-    /// * `output` - Destination value storage.
-    /// * `output_index` - Start index inside `output`.
-    /// * `count` - Maximum number of finish values to write.
-    ///
-    /// # Returns
-    ///
-    /// The number of values written by the finish operation. Since [`Codec`]
-    /// has no decoder-owned finish state, this method always returns `0`.
-    ///
-    /// # Errors
-    ///
-    /// This method performs no I/O and returns no codec errors.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that `output_index..output_index + count` is
-    /// a valid range inside `output` and that the addition does not overflow.
-    pub unsafe fn finish_into<C, M>(
-        &mut self,
-        _decoder: &C,
-        _map_error: &mut M,
-        output: &mut [C::Value],
-        output_index: usize,
-        count: usize,
-    ) -> Result<usize>
-    where
-        C: Codec<Unit = I::Item>,
-        M: FnMut(C::DecodeError) -> Error,
-    {
-        debug_assert!(
-            output_index
-                .checked_add(count)
-                .is_some_and(|end| end <= output.len()),
-            "unchecked finish output range exceeds destination buffer",
-        );
-        Ok(0)
     }
 
     /// Finishes a streaming decoder into an indexed output range.
@@ -597,8 +533,6 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
 }
 
 /// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(
-    error: TranscodeError<core::convert::Infallible>,
-) -> Error {
+fn transcode_contract_to_io_error(error: TranscodeError<core::convert::Infallible>) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

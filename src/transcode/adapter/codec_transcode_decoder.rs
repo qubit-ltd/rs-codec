@@ -9,14 +9,8 @@
 
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecDecodeError,
-    TranscodeDecodeEngine,
-    TranscodeDecoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, CodecDecodeError, TranscodeDecodeEngine, TranscodeDecoder,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -50,13 +44,10 @@ where
     ///
     /// Returns a buffered decoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(
-                codec,
-                CodecTranscodeDecodeHooks,
-            ),
+            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
         }
     }
 }
@@ -99,7 +90,7 @@ where
         Ok(self.engine.max_reset_output_len())
     }
 
-    /// Resets hook-owned state.
+    /// Resets codec decode state and hook-owned state.
     #[inline(always)]
     fn reset(
         &mut self,
@@ -162,7 +153,4 @@ where
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
-    C: Codec
-{
-}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}

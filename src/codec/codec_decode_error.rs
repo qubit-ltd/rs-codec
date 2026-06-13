@@ -42,9 +42,7 @@ pub enum CodecDecodeError<E> {
     },
 
     /// A whole-value decode succeeded but left trailing input units.
-    #[error(
-        "trailing input after decoded value: consumed {consumed} units, remaining {remaining}"
-    )]
+    #[error("trailing input after decoded value: consumed {consumed} units, remaining {remaining}")]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -117,11 +115,7 @@ impl<E> CodecDecodeError<E> {
     /// Returns an incomplete-input error.
     #[must_use]
     #[inline(always)]
-    pub const fn incomplete(
-        input_index: usize,
-        required_total: usize,
-        available: usize,
-    ) -> Self {
+    pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
         Self::Incomplete {
             input_index,
             required_total,
@@ -195,6 +189,45 @@ impl<E> CodecDecodeError<E> {
         }
     }
 
+    /// Returns whether this error indicates an incomplete input prefix.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` only for the [`Incomplete`](Self::Incomplete) variant.
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_incomplete(&self) -> bool {
+        matches!(self, Self::Incomplete { .. })
+    }
+
+    /// Returns the additional input units needed to make progress.
+    ///
+    /// This is a convenience accessor over the [`Incomplete`](Self::Incomplete)
+    /// variant's fields. Streaming callers can use it to determine how many
+    /// more units they must buffer before retrying a decode.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(needed)` for [`Incomplete`](Self::Incomplete) errors,
+    /// where `needed` is the strictly positive difference between the minimum
+    /// units required and those already available. Returns `None` for all
+    /// other variants.
+    #[must_use]
+    #[inline]
+    pub fn needed_additional(&self) -> Option<core::num::NonZeroUsize> {
+        match *self {
+            Self::Incomplete {
+                required_total,
+                available,
+                ..
+            } => {
+                let needed = required_total.saturating_sub(available);
+                core::num::NonZeroUsize::new(needed)
+            }
+            _ => None,
+        }
+    }
+
     /// Validates that enough input units are available from `input_index`.
     ///
     /// # Parameters
@@ -244,10 +277,7 @@ impl<E> CodecDecodeError<E> {
     /// Returns a trailing-input error when extra units remain after the
     /// decoded value.
     #[inline]
-    pub fn ensure_no_trailing_input(
-        consumed: usize,
-        total: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_no_trailing_input(consumed: usize, total: usize) -> Result<(), Self> {
         let remaining = total.saturating_sub(consumed);
         if remaining != 0 {
             return Err(Self::trailing_input(consumed, remaining));

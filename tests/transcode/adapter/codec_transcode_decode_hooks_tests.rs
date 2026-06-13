@@ -1,10 +1,4 @@
-use qubit_codec::{
-    Codec,
-    CodecDecodeError,
-    CodecTranscodeDecoder,
-    TranscodeError,
-    Transcoder,
-};
+use qubit_codec::{Codec, CodecDecodeError, CodecTranscodeDecoder, TranscodeError, Transcoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
@@ -44,9 +38,9 @@ unsafe impl Codec for FlushFailCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -96,9 +90,9 @@ unsafe impl Codec for InvalidByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 

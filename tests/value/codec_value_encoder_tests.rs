@@ -7,11 +7,7 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec::{
-    Codec,
-    CodecValueEncoder,
-    ValueEncoder,
-};
+use qubit_codec::{Codec, CodecValueEncoder, ValueEncoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
@@ -47,7 +43,7 @@ unsafe impl Codec for PairByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index + 2 <= output.len());
 
         // SAFETY: The caller guarantees that two bytes are writable from
@@ -56,7 +52,7 @@ unsafe impl Codec for PairByteCodec {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
         }
-        Ok(2)
+        Ok(qubit_codec::nz!(2))
     }
 }
 
@@ -94,7 +90,7 @@ unsafe impl Codec for RejectOddCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         if !value.is_multiple_of(2) {
             return Err("odd value");
         }
@@ -104,7 +100,7 @@ unsafe impl Codec for RejectOddCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -140,11 +136,11 @@ unsafe impl Codec for OverreportingEncodeCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(2)
+        Ok(qubit_codec::nz!(2))
     }
 }
 
@@ -174,8 +170,7 @@ unsafe impl Codec for NonCloneValueCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError>
-    {
+    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError> {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -188,14 +183,14 @@ unsafe impl Codec for NonCloneValueCodec {
         value: &NonCloneValue,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
         unsafe {
             *output.as_mut_ptr().add(index) = value.value;
         }
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -237,9 +232,9 @@ unsafe impl Codec for ResetFailLifecycleCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -287,10 +282,10 @@ unsafe impl Codec for StatefulLifecycleCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -306,24 +301,22 @@ unsafe impl Codec for StatefulLifecycleCodec {
 
 #[test]
 fn test_codec_value_encoder_emits_reset_output_before_value() {
-    let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(
-        StatefulLifecycleCodec::default(),
-    );
+    let mut encoder =
+        CodecValueEncoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
 
-    let output = ValueEncoder::<u8>::encode(&mut encoder, &41)
-        .expect("encoding should be infallible");
+    let output =
+        ValueEncoder::<u8>::encode(&mut encoder, &41).expect("encoding should be infallible");
 
     assert_eq!(vec![0xfe, 42], output);
 }
 
 #[test]
 fn test_codec_value_encoder_resets_stream_state_on_each_call() {
-    let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(
-        StatefulLifecycleCodec::default(),
-    );
+    let mut encoder =
+        CodecValueEncoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
 
-    let first = ValueEncoder::<u8>::encode(&mut encoder, &41)
-        .expect("first encoding should be infallible");
+    let first =
+        ValueEncoder::<u8>::encode(&mut encoder, &41).expect("first encoding should be infallible");
     let second = ValueEncoder::<u8>::encode(&mut encoder, &41)
         .expect("second encoding should be infallible");
 
@@ -335,22 +328,18 @@ fn test_codec_value_encoder_resets_stream_state_on_each_call() {
 fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
     let mut encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
 
-    let output = ValueEncoder::<u8>::encode(&mut encoder, &7)
-        .expect("encoding should be infallible");
+    let output =
+        ValueEncoder::<u8>::encode(&mut encoder, &7).expect("encoding should be infallible");
 
     assert_eq!(vec![7, 8], output);
 }
 
 #[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
-    let mut encoder =
-        CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
+    let mut encoder = CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
 
-    let output = ValueEncoder::<NonCloneValue>::encode(
-        &mut encoder,
-        &NonCloneValue { value: 11 },
-    )
-    .expect("encoding should not require cloning the value");
+    let output = ValueEncoder::<NonCloneValue>::encode(&mut encoder, &NonCloneValue { value: 11 })
+        .expect("encoding should not require cloning the value");
 
     assert_eq!(vec![11], output);
 }
@@ -359,8 +348,8 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 fn test_codec_value_encoder_propagates_encode_error() {
     let mut encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
-    let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
-        .expect_err("odd value should be rejected");
+    let error =
+        ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("odd value should be rejected");
 
     assert_eq!("odd value", error);
 }
@@ -368,18 +357,14 @@ fn test_codec_value_encoder_propagates_encode_error() {
 #[test]
 #[should_panic(expected = "Codec::encode wrote beyond allocated output")]
 fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
-    let mut encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(
-        OverreportingEncodeCodec,
-    );
+    let mut encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
 
     let _ = ValueEncoder::<u8>::encode(&mut encoder, &7);
 }
 
 #[test]
 fn test_codec_value_encoder_propagates_encode_reset_error() {
-    let mut encoder = CodecValueEncoder::<ResetFailLifecycleCodec>::new(
-        ResetFailLifecycleCodec,
-    );
+    let mut encoder = CodecValueEncoder::<ResetFailLifecycleCodec>::new(ResetFailLifecycleCodec);
 
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("encode reset failure should propagate");

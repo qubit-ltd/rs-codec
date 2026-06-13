@@ -7,12 +7,7 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
-use qubit_codec::{
-    Codec,
-    CodecDecodeError,
-    CodecValueDecoder,
-    ValueDecoder,
-};
+use qubit_codec::{Codec, CodecDecodeError, CodecValueDecoder, ValueDecoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
@@ -52,14 +47,14 @@ unsafe impl Codec for SingleByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -97,12 +92,12 @@ unsafe impl Codec for FixedPairCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index + 1 < output.len());
 
         output[index] = *value;
         output[index + 1] = value.wrapping_add(1);
-        Ok(2)
+        Ok(qubit_codec::nz!(2))
     }
 }
 
@@ -141,11 +136,11 @@ unsafe impl Codec for OverconsumingCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -185,9 +180,9 @@ unsafe impl Codec for FlushFailStatelessCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -233,9 +228,9 @@ unsafe impl Codec for FlushFailStatefulCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -285,9 +280,9 @@ unsafe impl Codec for StatefulLifecycleCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -303,14 +298,13 @@ unsafe impl Codec for StatefulLifecycleCodec {
 
 #[test]
 fn test_codec_value_decoder_flushes_decode_state_after_success() {
-    let mut decoder = CodecValueDecoder::<StatefulLifecycleCodec>::new(
-        StatefulLifecycleCodec::default(),
-    );
+    let mut decoder =
+        CodecValueDecoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
 
-    let first = ValueDecoder::<[u8]>::decode(&mut decoder, &[42])
-        .expect("first decode should succeed");
-    let second = ValueDecoder::<[u8]>::decode(&mut decoder, &[42])
-        .expect("second decode should succeed");
+    let first =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[42]).expect("first decode should succeed");
+    let second =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[42]).expect("second decode should succeed");
 
     assert_eq!(42, first);
     assert_eq!(42, second);
@@ -318,11 +312,10 @@ fn test_codec_value_decoder_flushes_decode_state_after_success() {
 
 #[test]
 fn test_codec_value_decoder_decodes_exactly_one_value() {
-    let mut decoder =
-        CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let output = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
-        .expect("single byte should decode");
+    let output =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect("single byte should decode");
 
     assert_eq!(7, output);
 }
@@ -331,8 +324,8 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
 fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
     let mut decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
-        .expect_err("one byte is incomplete");
+    let error =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("one byte is incomplete");
 
     assert_eq!(
         CodecDecodeError::Incomplete {
@@ -346,8 +339,7 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
 
 #[test]
 fn test_codec_value_decoder_rejects_trailing_input() {
-    let mut decoder =
-        CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
         .expect_err("trailing input should fail");
@@ -363,11 +355,9 @@ fn test_codec_value_decoder_rejects_trailing_input() {
 
 #[test]
 fn test_codec_value_decoder_wraps_codec_decode_error() {
-    let mut decoder =
-        CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[0xff])
-        .expect_err("0xff should fail");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[0xff]).expect_err("0xff should fail");
 
     assert_eq!(
         CodecDecodeError::Decode {
@@ -381,17 +371,14 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
 #[test]
 #[should_panic(expected = "Codec::decode consumed beyond available input")]
 fn test_codec_value_decoder_panics_when_codec_consumes_beyond_input() {
-    let mut decoder =
-        CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
+    let mut decoder = CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
 
     let _ = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]);
 }
 
 #[test]
 fn test_codec_value_decoder_wraps_stateless_decode_flush_error() {
-    let mut decoder = CodecValueDecoder::<FlushFailStatelessCodec>::new(
-        FlushFailStatelessCodec,
-    );
+    let mut decoder = CodecValueDecoder::<FlushFailStatelessCodec>::new(FlushFailStatelessCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("stateless flush failure should be wrapped");
@@ -407,9 +394,7 @@ fn test_codec_value_decoder_wraps_stateless_decode_flush_error() {
 
 #[test]
 fn test_codec_value_decoder_wraps_stateful_decode_flush_error() {
-    let mut decoder = CodecValueDecoder::<FlushFailStatefulCodec>::new(
-        FlushFailStatefulCodec,
-    );
+    let mut decoder = CodecValueDecoder::<FlushFailStatefulCodec>::new(FlushFailStatefulCodec);
 
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("stateful flush failure should be wrapped");

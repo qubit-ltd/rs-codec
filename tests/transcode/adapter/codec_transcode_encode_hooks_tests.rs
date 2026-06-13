@@ -1,10 +1,4 @@
-use qubit_codec::{
-    Codec,
-    CodecEncodeError,
-    CodecTranscodeEncoder,
-    TranscodeError,
-    Transcoder,
-};
+use qubit_codec::{Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeError, Transcoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -44,9 +38,9 @@ unsafe impl Codec for ResetFailCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -88,12 +82,12 @@ unsafe impl Codec for RejectOddCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         if !value.is_multiple_of(2) {
             return Err("odd value");
         }
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 

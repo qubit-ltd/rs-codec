@@ -6,8 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError,
-    transcode_error::TranscodeError,
+    capacity_error::CapacityError, transcode_error::TranscodeError,
     transcode_progress::TranscodeProgress,
 };
 
@@ -112,7 +111,7 @@ use super::{
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 additional: NonZeroUsize::new(2 - available).expect("missing input is non-zero"),
+///                 additional: qubit_codec::nz!(2 - available),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))

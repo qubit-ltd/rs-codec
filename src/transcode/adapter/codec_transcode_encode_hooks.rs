@@ -7,15 +7,11 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
+use core::num::NonZeroUsize;
+
 use super::super::engine::TranscodeEncodeHooks;
-use super::super::{
-    encode_context::EncodeContext,
-    encode_plan::EncodePlan,
-};
-use crate::{
-    Codec,
-    CodecEncodeError,
-};
+use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
+use crate::{Codec, CodecEncodeError};
 
 /// Policy hooks for [`crate::CodecTranscodeEncoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -72,23 +68,14 @@ where
     ) -> Result<usize, Self::Error> {
         // SAFETY: The engine checked that the prepared max-width capacity is
         // available before calling this method.
-        unsafe {
-            codec.encode(
-                context.input_value,
-                context.output,
-                context.output_index,
-            )
-        }
-        .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+        unsafe { codec.encode(context.input_value, context.output, context.output_index) }
+            .map(NonZeroUsize::get)
+            .map_err(|error| CodecEncodeError::encode(error, context.input_index))
     }
 
     /// Maps reset errors into generic codec encode errors.
     #[inline(always)]
-    fn map_encode_reset_error(
-        &mut self,
-        _codec: &mut C,
-        error: C::EncodeError,
-    ) -> Self::Error {
+    fn map_encode_reset_error(&mut self, _codec: &mut C, error: C::EncodeError) -> Self::Error {
         CodecEncodeError::encode(error, 0)
     }
 }

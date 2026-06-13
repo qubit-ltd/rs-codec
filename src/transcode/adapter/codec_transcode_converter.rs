@@ -9,23 +9,13 @@
 
 use core::{
     fmt,
-    hash::{
-        Hash,
-        Hasher,
-    },
+    hash::{Hash, Hasher},
 };
 
 use super::CodecTranscodeConvertHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecConvertError,
-    TranscodeConvertEngine,
-    TranscodeConverter,
-    TranscodeError,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
+    CapacityError, Codec, CodecConvertError, TranscodeConvertEngine, TranscodeConverter,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Strict codec-backed converter error type.
@@ -206,10 +196,7 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
@@ -270,19 +257,16 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<
-        TranscodeProgress,
-        TranscodeError<CodecTranscodeConvertError<D, E>>,
-    > {
+    ) -> Result<TranscodeProgress, TranscodeError<CodecTranscodeConvertError<D, E>>> {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
     ///
-    /// The strict codec-backed converter has no hook-owned final output. Finish
-    /// drains any retained decoded value through the normal conversion path and
-    /// then completes without requiring `D::Value: Default`.
+    /// Finalization delegates to the reusable converter engine. It drains
+    /// retained pending output, encodes source-side decode flush values, and
+    /// then finishes target-side encode hook state.
     ///
     /// # Parameters
     ///
@@ -302,28 +286,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>> {
-        let required = self.max_finish_output_len().unwrap_or(usize::MAX);
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
-
-        let empty_input: &[D::Unit] = &[];
-        let progress = self.transcode(empty_input, 0, output, output_index)?;
-        match progress.status() {
-            TranscodeStatus::Complete => Ok(progress.written()),
-            TranscodeStatus::NeedInput { .. } => {
-                unreachable!(
-                    "codec converter finish uses empty input and strict no-op decode finish hooks"
-                )
-            }
-            TranscodeStatus::NeedOutput { .. } => {
-                unreachable!(
-                    "codec converter finish reserves the complete pending-output bound before draining"
-                )
-            }
-        }
+        self.engine.finish(output, output_index)
     }
 }
 
@@ -364,7 +327,8 @@ where
         CodecTranscodeConverter::max_reset_output_len(self)
     }
 
-    /// Clears retained pending output and emits stream-start encode output.
+    /// Clears retained pending output, resets component state, and emits
+    /// stream-start encode output.
     #[inline(always)]
     fn reset(
         &mut self,
@@ -400,13 +364,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
-        CodecTranscodeConverter::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -433,8 +391,7 @@ where
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit>
-    for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,

@@ -7,8 +7,7 @@ enum TestDecodeError {
 
 #[test]
 fn test_codec_decode_error_wraps_codec_error() {
-    let error =
-        CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
+    let error = CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7);
 
     assert_eq!(
         CodecDecodeError::Decode {
@@ -68,8 +67,7 @@ fn test_codec_decode_error_reports_invalid_output_index() {
 
 #[test]
 fn test_codec_decode_error_reports_insufficient_output() {
-    let error =
-        CodecDecodeError::<TestDecodeError>::insufficient_output(2, 4, 1);
+    let error = CodecDecodeError::<TestDecodeError>::insufficient_output(2, 4, 1);
 
     assert_eq!(
         CodecDecodeError::InsufficientOutput {
@@ -117,8 +115,7 @@ fn test_codec_decode_error_display_formats_framework_variants() {
 
 #[test]
 fn test_codec_decode_error_ensure_min_input_accepts_sufficient_input() {
-    CodecDecodeError::<TestDecodeError>::ensure_min_input(4, 1, 2)
-        .expect("sufficient input");
+    CodecDecodeError::<TestDecodeError>::ensure_min_input(4, 1, 2).expect("sufficient input");
 }
 
 #[test]
@@ -137,17 +134,14 @@ fn test_codec_decode_error_ensure_min_input_rejects_incomplete_input() {
 }
 
 #[test]
-fn test_codec_decode_error_ensure_no_trailing_input_accepts_exact_consumption()
-{
-    CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(4, 4)
-        .expect("exact consumption");
+fn test_codec_decode_error_ensure_no_trailing_input_accepts_exact_consumption() {
+    CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(4, 4).expect("exact consumption");
 }
 
 #[test]
 fn test_codec_decode_error_ensure_no_trailing_input_rejects_remaining_input() {
-    let error =
-        CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(1, 4)
-            .expect_err("trailing input");
+    let error = CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(1, 4)
+        .expect_err("trailing input");
 
     assert_eq!(
         CodecDecodeError::TrailingInput {

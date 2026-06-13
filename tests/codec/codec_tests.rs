@@ -7,11 +7,7 @@
 // =============================================================================
 //! Tests for the low-level codec trait.
 
-use qubit_codec::{
-    Codec,
-    CodecValueEncoder,
-    ValueEncoder,
-};
+use qubit_codec::{Codec, CodecValueEncoder, ValueEncoder};
 
 #[derive(Default)]
 struct ByteIncrementCodec;
@@ -47,14 +43,14 @@ unsafe impl Codec for ByteIncrementCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
         unsafe {
             *output.as_mut_ptr().add(index) = value.wrapping_add(1);
         }
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -101,10 +97,10 @@ unsafe impl Codec for StatefulLifecycleCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -158,8 +154,8 @@ unsafe impl Codec for InvalidBoundsCodec {
         _value: &u8,
         _output: &mut [u8],
         _index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        Ok(0)
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        Ok(qubit_codec::nz!(1))
     }
 }
 
@@ -168,14 +164,14 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
     let mut codec = ByteIncrementCodec;
     let mut output = [0_u8; 1];
 
-    let written = unsafe { codec.encode(&41, &mut output, 0) }
-        .expect("encoding should be infallible");
-    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &output, 0) }
-        .expect("decoding should be infallible");
+    let written =
+        unsafe { codec.encode(&41, &mut output, 0) }.expect("encoding should be infallible");
+    let (decoded, consumed) =
+        unsafe { Codec::decode(&mut codec, &output, 0) }.expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
-    assert_eq!(1, written);
+    assert_eq!(1, written.get());
     assert_eq!(1, consumed.get());
     assert_eq!(41, decoded);
 }
@@ -186,21 +182,20 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     let mut encoded = [0_u8; 2];
     let mut flushed = [0_u8; 1];
 
-    let reset_written = unsafe { codec.encode_reset(&mut encoded, 0) }
-        .expect("reset should be infallible");
-    let value_written =
-        unsafe { codec.encode(&41, &mut encoded, reset_written) }
-            .expect("encoding should be infallible");
+    let reset_written =
+        unsafe { codec.encode_reset(&mut encoded, 0) }.expect("reset should be infallible");
+    let value_written = unsafe { codec.encode(&41, &mut encoded, reset_written) }
+        .expect("encoding should be infallible");
 
     assert_eq!(1, reset_written);
-    assert_eq!(1, value_written);
+    assert_eq!(1, value_written.get());
     assert_eq!([0xfe, 42], encoded);
     assert_eq!(2, codec.encode_state);
 
-    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[42], 0) }
-        .expect("decoding should be infallible");
-    let flushed_len = unsafe { codec.decode_flush(&mut flushed, 0) }
-        .expect("flush should be infallible");
+    let (decoded, consumed) =
+        unsafe { Codec::decode(&mut codec, &[42], 0) }.expect("decoding should be infallible");
+    let flushed_len =
+        unsafe { codec.decode_flush(&mut flushed, 0) }.expect("flush should be infallible");
 
     assert_eq!(42, decoded);
     assert_eq!(1, consumed.get());

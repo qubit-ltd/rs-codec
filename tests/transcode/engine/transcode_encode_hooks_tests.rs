@@ -1,8 +1,4 @@
-use qubit_codec::{
-    EncodeContext,
-    EncodePlan,
-    TranscodeEncodeHooks,
-};
+use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -42,9 +38,9 @@ unsafe impl qubit_codec::Codec for UnitCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(qubit_codec::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -158,13 +154,8 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeEncodeHooks::<UnitCodec>::finish(
-        &mut hooks,
-        &mut codec,
-        &mut output,
-        0,
-    )
-    .expect("default finish should be a no-op");
+    let written = TranscodeEncodeHooks::<UnitCodec>::finish(&mut hooks, &mut codec, &mut output, 0)
+        .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }
