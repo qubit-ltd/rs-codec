@@ -27,10 +27,10 @@ use core::num::NonZeroUsize;
 /// conservative bound callers normally use to prove that unchecked writes stay
 /// inside the provided output buffer.
 ///
-/// A codec may keep decode-side and encode-side stream state. Buffered engines
-/// snapshot that state before speculative low-level operations and restore it
-/// when an operation cannot be committed. Stateless codecs can use the default
-/// snapshot value `0` and no-op restore methods.
+/// A codec may keep decode-side and encode-side stream state. That state is an
+/// implementation detail owned by the codec. Callers do not snapshot or restore
+/// it; implementations must keep their own state internally consistent across
+/// every public operation, including operations that return `Err`.
 ///
 /// # Associated Types
 ///
@@ -70,12 +70,6 @@ pub unsafe trait Codec {
 
     /// The type of errors reported when encoding an unsupported value.
     type EncodeError;
-
-    /// The type of state for decodeing.
-    type DecodeState: Copy + Default;
-
-    /// The type of state for encoding.
-    type EncodeState: Copy + Default;
 
     /// Returns the minimum possible unit count for one encoded value.
     ///
@@ -146,62 +140,6 @@ pub unsafe trait Codec {
         0
     }
 
-    /// Captures decode-side stream state.
-    ///
-    /// # Returns
-    ///
-    /// Returns an opaque state snapshot understood by this codec.
-    #[must_use]
-    #[inline(always)]
-    fn decode_state(&self) -> Self::DecodeState {
-        Self::DecodeState::default()
-    }
-
-    /// Restores decode-side stream state.
-    ///
-    /// # Parameters
-    ///
-    /// - `state`: Snapshot previously returned by
-    ///   [`decode_state`](Self::decode_state).
-    #[inline(always)]
-    fn set_decode_state(&mut self, _state: Self::DecodeState) {
-        // no-op
-    }
-
-    /// Captures encode-side stream state.
-    ///
-    /// # Returns
-    ///
-    /// Returns an opaque state snapshot understood by this codec.
-    #[must_use]
-    #[inline(always)]
-    fn encode_state(&self) -> Self::EncodeState {
-        Self::EncodeState::default()
-    }
-
-    /// Restores encode-side stream state.
-    ///
-    /// # Parameters
-    ///
-    /// - `state`: Snapshot previously returned by
-    ///   [`encode_state`](Self::encode_state).
-    #[inline(always)]
-    fn set_encode_state(&mut self, _state: Self::EncodeState) {
-        // no-op
-    }
-
-    /// Resets decode-side stream state to the initial state.
-    #[inline(always)]
-    fn reset_decode_state(&mut self) {
-        self.set_decode_state(Self::DecodeState::default());
-    }
-
-    /// Resets encode-side stream state to the initial state.
-    #[inline(always)]
-    fn reset_encode_state(&mut self) {
-        self.set_encode_state(Self::EncodeState::default());
-    }
-
     /// Emits stream-start output and resets encode-side state.
     ///
     /// # Parameters
@@ -216,6 +154,8 @@ pub unsafe trait Codec {
     /// # Errors
     ///
     /// Returns `Self::EncodeError` when reset output cannot be emitted.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
     ///
     /// # Safety
     ///
@@ -228,7 +168,6 @@ pub unsafe trait Codec {
         _output: &mut [Self::Unit],
         _index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        self.reset_encode_state();
         Ok(0)
     }
 
@@ -248,7 +187,8 @@ pub unsafe trait Codec {
     /// # Errors
     ///
     /// Returns `Self::EncodeError` when `value` cannot be represented by this
-    /// codec.
+    /// codec. Implementations must leave their internal state consistent when
+    /// returning an error.
     ///
     /// # Safety
     ///
@@ -278,7 +218,8 @@ pub unsafe trait Codec {
     ///
     /// Returns `Self::DecodeError` when the units are malformed, non-canonical,
     /// incomplete, or otherwise invalid for this codec. The concrete error type
-    /// carries the codec-specific reason and context.
+    /// carries the codec-specific reason and context. Implementations must
+    /// leave their internal state consistent when returning an error.
     ///
     /// # Safety
     ///
@@ -313,7 +254,8 @@ pub unsafe trait Codec {
     /// # Errors
     ///
     /// Returns `Self::DecodeError` when retained decode state is invalid at
-    /// EOF.
+    /// EOF. Implementations must leave their internal state consistent when
+    /// returning an error.
     ///
     /// # Safety
     ///
@@ -326,7 +268,6 @@ pub unsafe trait Codec {
         _output: &mut [Self::Value],
         _index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        self.reset_decode_state();
         Ok(0)
     }
 }

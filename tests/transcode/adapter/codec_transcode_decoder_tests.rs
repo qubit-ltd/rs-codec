@@ -12,6 +12,7 @@ use qubit_codec::{
     CodecDecodeError,
     CodecTranscodeDecoder,
     TranscodeDecoder,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -24,8 +25,6 @@ unsafe impl Codec for VariableByteCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -89,8 +88,6 @@ unsafe impl Codec for FixedPairCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -198,13 +195,13 @@ fn test_codec_transcode_decoder_wraps_variable_width_incomplete_codec_error() {
         .transcode(&[0x80], 0, &mut output, 0)
         .expect_err("strict adapter should not classify codec errors");
     assert_eq!(
-        CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecDecodeError::Decode {
             source: TestDecodeError::Incomplete {
                 required: 2,
                 available: 1,
             },
             input_index: 0,
-        },
+        }),
         error,
     );
 
@@ -227,8 +224,8 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error
     );
 }
 
@@ -242,7 +239,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .expect_err("out-of-range input index should fail");
 
     assert_eq!(
-        CodecDecodeError::InvalidInputIndex { index: 2, len: 1 },
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
         error
     );
 }
@@ -257,7 +254,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        CodecDecodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -296,10 +293,17 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         .expect_err("invalid input should fail");
 
     assert_eq!(
-        CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecDecodeError::Decode {
             source: TestDecodeError::Invalid { consumed: 1 },
             input_index: 0,
-        },
+        }),
         error,
     );
+}
+
+#[test]
+fn test_codec_transcode_decoder_reports_max_reset_output_len() {
+    let decoder = CodecTranscodeDecoder::<FixedPairCodec>::new(FixedPairCodec);
+
+    assert_eq!(Ok(0), Transcoder::max_reset_output_len(&decoder));
 }

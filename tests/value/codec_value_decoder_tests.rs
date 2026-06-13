@@ -22,8 +22,6 @@ unsafe impl Codec for SingleByteCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -73,8 +71,6 @@ unsafe impl Codec for FixedPairCodec {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -118,8 +114,6 @@ unsafe impl Codec for OverconsumingCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -158,20 +152,61 @@ unsafe impl Codec for OverconsumingCodec {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
     Invalid { consumed: usize },
+    FlushFailed,
 }
 
-#[derive(Default)]
-struct StatefulLifecycleCodec {
-    decode_state: usize,
-}
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FlushFailStatelessCodec;
 
-unsafe impl Codec for StatefulLifecycleCodec {
+unsafe impl Codec for FlushFailStatelessCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = usize;
-    type EncodeState = ();
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err(TestDecodeError::FlushFailed)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FlushFailStatefulCodec;
+
+unsafe impl Codec for FlushFailStatefulCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = TestDecodeError;
+    type EncodeError = core::convert::Infallible;
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -185,12 +220,54 @@ unsafe impl Codec for StatefulLifecycleCodec {
         1
     }
 
-    fn decode_state(&self) -> usize {
-        self.decode_state
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
-    fn set_decode_state(&mut self, state: usize) {
-        self.decode_state = state;
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err(TestDecodeError::FlushFailed)
+    }
+}
+
+#[derive(Default)]
+struct StatefulLifecycleCodec {
+    decode_state: usize,
+}
+
+unsafe impl Codec for StatefulLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        1
     }
 
     unsafe fn decode(
@@ -308,4 +385,40 @@ fn test_codec_value_decoder_panics_when_codec_consumes_beyond_input() {
         CodecValueDecoder::<OverconsumingCodec>::new(OverconsumingCodec);
 
     let _ = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]);
+}
+
+#[test]
+fn test_codec_value_decoder_wraps_stateless_decode_flush_error() {
+    let mut decoder = CodecValueDecoder::<FlushFailStatelessCodec>::new(
+        FlushFailStatelessCodec,
+    );
+
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect_err("stateless flush failure should be wrapped");
+
+    assert_eq!(
+        CodecDecodeError::Decode {
+            source: TestDecodeError::FlushFailed,
+            input_index: 1,
+        },
+        error,
+    );
+}
+
+#[test]
+fn test_codec_value_decoder_wraps_stateful_decode_flush_error() {
+    let mut decoder = CodecValueDecoder::<FlushFailStatefulCodec>::new(
+        FlushFailStatefulCodec,
+    );
+
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect_err("stateful flush failure should be wrapped");
+
+    assert_eq!(
+        CodecDecodeError::Decode {
+            source: TestDecodeError::FlushFailed,
+            input_index: 1,
+        },
+        error,
+    );
 }

@@ -22,9 +22,10 @@ use qubit_io::{
     Input,
 };
 
-use crate::core::assert_unit_bounds;
+use crate::codec::assert_unit_bounds;
 use crate::{
     Codec,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -359,7 +360,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(D::Error) -> Error,
+        M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
             output_index
@@ -501,7 +502,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(D::Error) -> Error,
+        M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
             output_index
@@ -512,36 +513,14 @@ where
         let required = decoder
             .max_finish_output_len()
             .map_err(capacity_to_io_error)?;
-        if required > count {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "insufficient finish output at index {output_index}: required {required} units, available {count}"
-                ),
-            ));
-        }
-        if output_index > output.len() {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "invalid finish output index {output_index} for output length {}",
-                    output.len()
-                ),
-            ));
-        }
-        let output_end = match output_index.checked_add(count) {
-            Some(end) if end <= output.len() => end,
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!(
-                        "invalid finish output index {} for output length {}",
-                        output_index,
-                        output.len()
-                    ),
-                ));
-            }
-        };
+        TranscodeError::<core::convert::Infallible>::ensure_output_range(
+            output.len(),
+            output_index,
+            count,
+            required,
+        )
+        .map_err(transcode_contract_to_io_error)?;
+        let output_end = output_index + count;
         let output = &mut output[..output_end];
         let written = decoder
             .finish(output, output_index)
@@ -614,5 +593,12 @@ where
 
 /// Converts a capacity planning failure into an I/O error.
 fn capacity_to_io_error(error: crate::CapacityError) -> Error {
+    Error::new(ErrorKind::InvalidData, error)
+}
+
+/// Converts a framework transcode contract failure into an I/O error.
+fn transcode_contract_to_io_error(
+    error: TranscodeError<core::convert::Infallible>,
+) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

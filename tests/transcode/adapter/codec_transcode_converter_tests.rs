@@ -15,6 +15,7 @@ use qubit_codec::{
     CodecEncodeError,
     CodecTranscodeConverter,
     TranscodeConverter,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -35,8 +36,6 @@ unsafe impl Codec for VariableByteDecoder {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -94,8 +93,6 @@ unsafe impl Codec for PairByteEncoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = TestEncodeError;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -140,8 +137,6 @@ unsafe impl Codec for MinTwoDecoder {
     type Unit = u8;
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -196,8 +191,6 @@ unsafe impl Codec for NonDefaultDecoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -239,8 +232,6 @@ unsafe impl Codec for NonDefaultEncoder {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -433,7 +424,7 @@ fn test_codec_transcode_converter_wraps_variable_width_incomplete_decode_error()
         .transcode(&[0x80], 0, &mut output, 0)
         .expect_err("strict converter should not classify decoder errors");
     assert_eq!(
-        CodecConvertError::Decode {
+        TranscodeError::Domain(CodecConvertError::Decode {
             source: CodecDecodeError::Decode {
                 source: TestDecodeError::Incomplete {
                     required: 2,
@@ -441,7 +432,7 @@ fn test_codec_transcode_converter_wraps_variable_width_incomplete_decode_error()
                 },
                 input_index: 0,
             },
-        },
+        }),
         error,
     );
 
@@ -556,20 +547,16 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
     assert_eq!(
-        CodecConvertError::Decode {
-            source: CodecDecodeError::InvalidInputIndex { index: 2, len: 1 },
-        },
-        error,
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
+        error
     );
 
     let error = converter
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
     assert_eq!(
-        CodecConvertError::Encode {
-            source: CodecEncodeError::InvalidOutputIndex { index: 3, len: 2 },
-        },
-        error,
+        TranscodeError::InvalidOutputIndex { index: 3, len: 2 },
+        error
     );
 }
 
@@ -585,12 +572,12 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[0xff], 0, &mut output, 0)
         .expect_err("invalid decode input should fail");
     assert_eq!(
-        CodecConvertError::Decode {
+        TranscodeError::Domain(CodecConvertError::Decode {
             source: CodecDecodeError::Decode {
                 source: TestDecodeError::Invalid { consumed: 1 },
                 input_index: 0,
             },
-        },
+        }),
         error,
     );
 
@@ -598,12 +585,12 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable value should fail");
     assert_eq!(
-        CodecConvertError::Encode {
+        TranscodeError::Domain(CodecConvertError::Encode {
             source: CodecEncodeError::Encode {
                 source: TestEncodeError,
                 input_index: 0,
             },
-        },
+        }),
         error,
     );
 }
@@ -634,4 +621,41 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
         .expect("codec converter has no finish output");
 
     assert_eq!(0, written);
+}
+
+#[test]
+fn test_codec_transcode_converter_reports_max_reset_output_len() {
+    let converter = CodecTranscodeConverter::<
+        VariableByteDecoder,
+        PairByteEncoder,
+    >::new(VariableByteDecoder, PairByteEncoder);
+
+    assert_eq!(Ok(0), converter.max_reset_output_len());
+    assert_eq!(Ok(0), Transcoder::max_reset_output_len(&converter));
+}
+
+#[test]
+fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
+    let mut converter = CodecTranscodeConverter::<
+        VariableByteDecoder,
+        PairByteEncoder,
+    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut output = [0_u8; 4];
+
+    converter
+        .transcode(&[3, 5, 7], 0, &mut output, 0)
+        .expect("conversion should fill output");
+
+    let error = converter
+        .finish(&mut output, 4)
+        .expect_err("finish should reject insufficient output");
+
+    assert_eq!(
+        TranscodeError::InsufficientOutput {
+            output_index: 4,
+            required: 2,
+            available: 0,
+        },
+        error,
+    );
 }

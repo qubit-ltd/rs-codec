@@ -13,7 +13,6 @@ use super::{
     codec_decode_error::CodecDecodeError,
     codec_encode_error::CodecEncodeError,
 };
-use crate::transcode::TranscodeError;
 
 /// Error reported by codec-backed buffered converters.
 ///
@@ -70,31 +69,5 @@ impl<D, E> CodecConvertError<D, E> {
     #[inline(always)]
     pub const fn encode(source: CodecEncodeError<E>) -> Self {
         Self::Encode { source }
-    }
-}
-
-impl<D, E> TranscodeError for CodecConvertError<D, E> {
-    #[inline(always)]
-    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
-        Self::decode(CodecDecodeError::invalid_input_index(index, len))
-    }
-
-    #[inline(always)]
-    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
-        Self::encode(CodecEncodeError::invalid_output_index(index, len))
-    }
-
-    #[inline(always)]
-    fn insufficient_output(
-        _context: (),
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
-        Self::encode(CodecEncodeError::insufficient_output(
-            output_index,
-            required,
-            available,
-        ))
     }
 }

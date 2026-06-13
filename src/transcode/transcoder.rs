@@ -50,6 +50,7 @@ use super::{
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     CodecDecodeError,
+///     TranscodeError,
 ///     TranscodeProgress,
 ///     TranscodeStatus,
 ///     Transcoder,
@@ -60,10 +61,18 @@ use super::{
 ///
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
 ///     type Error = CodecDecodeError<core::convert::Infallible>;
-///     type ErrorContext = ();
 ///
 ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
+///     }
+///
+///     fn reset(
+///         &mut self,
+///         output: &mut [u16],
+///         output_index: usize,
+///     ) -> Result<usize, TranscodeError<Self::Error>> {
+///         TranscodeError::ensure_output_index(output.len(), output_index)?;
+///         Ok(0)
 ///     }
 ///
 ///     fn transcode(
@@ -72,13 +81,13 @@ use super::{
 ///         input_index: usize,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<TranscodeProgress, Self::Error> {
-///         if input_index > input.len() {
-///             return Err(Self::Error::invalid_input_index(input_index, input.len()));
-///         }
-///         if output_index > output.len() {
-///             return Err(Self::Error::invalid_output_index(output_index, output.len()));
-///         }
+///     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+///         TranscodeError::ensure_transcode_indices(
+///             input.len(),
+///             input_index,
+///             output.len(),
+///             output_index,
+///         )?;
 ///
 ///         let mut read = 0;
 ///         let mut written = 0;
@@ -108,6 +117,15 @@ use super::{
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
 ///         }
+///     }
+///
+///     fn finish(
+///         &mut self,
+///         output: &mut [u16],
+///         output_index: usize,
+///     ) -> Result<usize, TranscodeError<Self::Error>> {
+///         TranscodeError::ensure_output_index(output.len(), output_index)?;
+///         Ok(0)
 ///     }
 /// }
 ///
@@ -140,11 +158,11 @@ use super::{
 ///
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 2, &mut output, 0),
-///     Err(CodecDecodeError::InvalidInputIndex { .. }),
+///     Err(TranscodeError::InvalidInputIndex { .. }),
 /// ));
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 0, &mut output, 3),
-///     Err(CodecDecodeError::InvalidOutputIndex { .. }),
+///     Err(TranscodeError::InvalidOutputIndex { .. }),
 /// ));
 /// ```
 ///
@@ -159,17 +177,8 @@ use super::{
 /// - `Input`: Input unit type accepted by this transcoder.
 /// - `Output`: Output unit type produced by this transcoder.
 pub trait Transcoder<Input, Output> {
-    /// Error reported for semantic conversion failures.
-    type Error: TranscodeError<Self::ErrorContext>;
-
-    /// Context passed to contract-error factories.
-    type ErrorContext: Copy + Send + Sync + Default + 'static;
-
-    /// Returns the context used to construct contract errors.
-    #[inline(always)]
-    fn error_context(&self) -> Self::ErrorContext {
-        Self::ErrorContext::default()
-    }
+    /// Domain error reported by semantic conversion failures.
+    type Error;
 
     /// Returns an upper bound for output units produced from `input_len` units.
     ///
@@ -248,21 +257,11 @@ pub trait Transcoder<Input, Output> {
     ///
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when reset itself fails.
-    #[inline]
     fn reset(
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        let context = self.error_context();
-        Self::Error::ensure_output_capacity(
-            context,
-            output.len(),
-            output_index,
-            0,
-        )?;
-        Ok(0)
-    }
+    ) -> Result<usize, TranscodeError<Self::Error>>;
 
     /// Converts available input units into output units.
     ///
@@ -296,7 +295,7 @@ pub trait Transcoder<Input, Output> {
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error>;
+    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>>;
 
     /// Finishes internally retained output after all input has been supplied.
     ///
@@ -316,7 +315,12 @@ pub trait Transcoder<Input, Output> {
     ///
     /// ```rust
     /// use core::num::NonZeroUsize;
-    /// use qubit_codec::{CodecConvertError, Transcoder, TranscodeStatus};
+    /// use qubit_codec::{
+    ///     CodecConvertError,
+    ///     TranscodeError,
+    ///     Transcoder,
+    ///     TranscodeStatus,
+    /// };
     ///
     /// #[derive(Default)]
     /// struct ByteCopy;
@@ -324,10 +328,18 @@ pub trait Transcoder<Input, Output> {
     /// impl Transcoder<u8, u8> for ByteCopy {
     ///     type Error =
     ///         CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
-    ///     type ErrorContext = ();
     ///
     ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
     ///         Ok(input_len)
+    ///     }
+    ///
+    ///     fn reset(
+    ///         &mut self,
+    ///         output: &mut [u8],
+    ///         output_index: usize,
+    ///     ) -> Result<usize, TranscodeError<Self::Error>> {
+    ///         TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+    ///         Ok(0)
     ///     }
     ///
     ///     fn transcode(
@@ -336,7 +348,7 @@ pub trait Transcoder<Input, Output> {
     ///         input_index: usize,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<qubit_codec::TranscodeProgress, Self::Error> {
+    ///     ) -> Result<qubit_codec::TranscodeProgress, TranscodeError<Self::Error>> {
     ///         let mut read = 0;
     ///         let mut written = 0;
     ///         while input_index + read < input.len() && output_index + written < output.len() {
@@ -358,6 +370,15 @@ pub trait Transcoder<Input, Output> {
     ///                 written,
     ///             ))
     ///         }
+    ///     }
+    ///
+    ///     fn finish(
+    ///         &mut self,
+    ///         output: &mut [u8],
+    ///         output_index: usize,
+    ///     ) -> Result<usize, TranscodeError<Self::Error>> {
+    ///         TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+    ///         Ok(0)
     ///     }
     /// }
     ///
@@ -389,19 +410,9 @@ pub trait Transcoder<Input, Output> {
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when finish itself
     /// fails.
-    #[inline]
     fn finish(
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        let context = self.error_context();
-        Self::Error::ensure_output_capacity(
-            context,
-            output.len(),
-            output_index,
-            0,
-        )?;
-        Ok(0)
-    }
+    ) -> Result<usize, TranscodeError<Self::Error>>;
 }

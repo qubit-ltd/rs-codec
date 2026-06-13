@@ -7,7 +7,6 @@
 // =============================================================================
 //! Generic encode error used by codec-backed encoder adapters.
 
-use crate::transcode::TranscodeError;
 use thiserror::Error;
 
 /// Error reported by codec-backed buffered encoder adapters.
@@ -135,27 +134,5 @@ impl<E> CodecEncodeError<E> {
             required,
             available,
         }
-    }
-}
-
-impl<E> TranscodeError for CodecEncodeError<E> {
-    #[inline(always)]
-    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_input_index(index, len)
-    }
-
-    #[inline(always)]
-    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_output_index(index, len)
-    }
-
-    #[inline(always)]
-    fn insufficient_output(
-        _context: (),
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
-        Self::insufficient_output(output_index, required, available)
     }
 }

@@ -18,6 +18,7 @@ mod io;
 mod transcode_converter_tests;
 mod transcode_decoder_tests;
 mod transcode_encoder_tests;
+mod transcode_error_tests;
 mod transcode_progress_tests;
 mod transcode_status_tests;
 mod transcoder_tests;

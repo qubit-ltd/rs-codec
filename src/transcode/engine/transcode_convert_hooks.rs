@@ -11,10 +11,7 @@ use super::{
     transcode_decode_hooks::TranscodeDecodeHooks,
     transcode_encode_hooks::TranscodeEncodeHooks,
 };
-use crate::{
-    Codec,
-    TranscodeError,
-};
+use crate::Codec;
 
 /// Policy hooks for [`crate::TranscodeConvertEngine`].
 ///
@@ -33,21 +30,14 @@ where
     D: Codec,
     E: Codec<Value = D::Value>,
 {
-    /// Error type returned by the buffered converter.
-    type Error: TranscodeError<Self::ErrorContext>;
-
-    /// Context passed to converter-level contract error factories.
-    type ErrorContext: Copy + Send + Sync + Default + 'static;
+    /// Domain error type returned by the buffered converter.
+    type Error;
 
     /// Error type returned by the selected decode hooks.
-    type DecodeError: TranscodeError<
-        <Self::DecodeHooks as TranscodeDecodeHooks<D>>::ErrorContext,
-    >;
+    type DecodeError;
 
     /// Error type returned by the selected encode hooks.
-    type EncodeError: TranscodeError<
-        <Self::EncodeHooks as TranscodeEncodeHooks<E>>::ErrorContext,
-    >;
+    type EncodeError;
 
     /// Decode policy hooks used by the internal buffered decoder.
     type DecodeHooks: TranscodeDecodeHooks<D, Error = Self::DecodeError>;
@@ -108,16 +98,6 @@ where
     ///
     /// Returns the converter-level error.
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
-
-    /// Returns context used to build converter-level contract errors.
-    #[inline(always)]
-    fn error_context(
-        &self,
-        _decode_codec: &D,
-        _encode_codec: &E,
-    ) -> Self::ErrorContext {
-        Self::ErrorContext::default()
-    }
 
     /// Resets conversion-level hook-owned state.
     ///

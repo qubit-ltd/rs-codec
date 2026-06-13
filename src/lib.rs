@@ -18,7 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod byte_order;
-mod core;
+mod codec;
 mod transcode;
 mod value;
 
@@ -29,7 +29,7 @@ pub use byte_order::{
     ByteOrderSpec,
     LittleEndian,
 };
-pub use core::{
+pub use codec::{
     Codec,
     CodecConvertError,
     CodecDecodeError,

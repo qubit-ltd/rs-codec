@@ -21,8 +21,6 @@ unsafe impl Codec for ByteIncrementCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -71,8 +69,6 @@ unsafe impl Codec for StatefulLifecycleCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = usize;
-    type EncodeState = usize;
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -88,22 +84,6 @@ unsafe impl Codec for StatefulLifecycleCodec {
 
     fn max_decode_flush_values(&self) -> usize {
         1
-    }
-
-    fn decode_state(&self) -> usize {
-        self.decode_state
-    }
-
-    fn set_decode_state(&mut self, state: usize) {
-        self.decode_state = state;
-    }
-
-    fn encode_state(&self) -> usize {
-        self.encode_state
-    }
-
-    fn set_encode_state(&mut self, state: usize) {
-        self.encode_state = state;
     }
 
     unsafe fn decode(
@@ -156,8 +136,6 @@ unsafe impl Codec for InvalidBoundsCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -208,7 +186,6 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     let mut encoded = [0_u8; 2];
     let mut flushed = [0_u8; 1];
 
-    let reset_state = codec.encode_state();
     let reset_written = unsafe { codec.encode_reset(&mut encoded, 0) }
         .expect("reset should be infallible");
     let value_written =
@@ -218,9 +195,7 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     assert_eq!(1, reset_written);
     assert_eq!(1, value_written);
     assert_eq!([0xfe, 42], encoded);
-
-    codec.set_encode_state(reset_state);
-    assert_eq!(0, codec.encode_state());
+    assert_eq!(2, codec.encode_state);
 
     let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[42], 0) }
         .expect("decoding should be infallible");
@@ -231,7 +206,7 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     assert_eq!(1, consumed.get());
     assert_eq!(1, flushed_len);
     assert_eq!([1], flushed);
-    assert_eq!(0, codec.decode_state());
+    assert_eq!(0, codec.decode_state);
 }
 
 #[test]

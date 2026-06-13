@@ -41,7 +41,6 @@ where
     D: Codec,
     E: Codec<Value = D::Value>,
 {
-    type ErrorContext = ();
     type DecodeError = CodecDecodeError<D::DecodeError>;
     type DecodeHooks = CodecTranscodeDecodeHooks;
     type EncodeError = CodecEncodeError<E::EncodeError>;
@@ -114,14 +113,6 @@ where
     #[inline]
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         CodecConvertError::encode(error)
-    }
-
-    #[inline(always)]
-    fn error_context(
-        &self,
-        _decode_codec: &D,
-        _encode_codec: &E,
-    ) -> Self::ErrorContext {
     }
 
     /// Resets stateless codec-backed converter hooks.

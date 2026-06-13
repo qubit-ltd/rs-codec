@@ -7,11 +7,11 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered decoder.
 
+use super::super::engine::TranscodeDecodeHooks;
 use super::super::{
     decode_action::DecodeAction,
     decode_context::DecodeContext,
 };
-use super::super::engine::TranscodeDecodeHooks;
 use crate::{
     Codec,
     CodecDecodeError,
@@ -26,10 +26,6 @@ where
     C: Codec,
 {
     type Error = CodecDecodeError<C::DecodeError>;
-    type ErrorContext = ();
-
-    #[inline(always)]
-    fn error_context(_codec: &C) -> Self::ErrorContext {}
 
     /// Converts codec decode failures into strict buffered decode errors.
     ///

@@ -60,7 +60,7 @@ impl<Value> PendingValueSlot<Value> {
         H: TranscodeEncodeHooks<E>,
     {
         if self.value.is_some() {
-            engine.max_values_output_len(1)
+            engine.max_output_len(1)
         } else {
             Ok(0)
         }

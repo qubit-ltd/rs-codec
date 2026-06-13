@@ -11,7 +11,7 @@ use super::ValueDecoder;
 use crate::{
     Codec,
     CodecDecodeError,
-    core::assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
@@ -84,13 +84,7 @@ where
     ) -> Result<Self::Output, Self::Error> {
         assert_unit_bounds::<C>(&self.codec);
         let min_units = self.codec.min_units_per_value().get();
-        if input.len() < min_units {
-            return Err(CodecDecodeError::incomplete(
-                0,
-                min_units,
-                input.len(),
-            ));
-        }
+        CodecDecodeError::ensure_min_input(input.len(), 0, min_units)?;
 
         // SAFETY: The input slice has at least the codec's declared minimum
         // number of readable units from index zero.
@@ -102,10 +96,7 @@ where
             "Codec::decode consumed beyond available input",
         );
 
-        let remaining = input.len() - consumed;
-        if remaining != 0 {
-            return Err(CodecDecodeError::trailing_input(consumed, remaining));
-        }
+        CodecDecodeError::ensure_no_trailing_input(consumed, input.len())?;
 
         let flush_cap = self.codec.max_decode_flush_values();
         if flush_cap == 0 {

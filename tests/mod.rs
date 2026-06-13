@@ -8,8 +8,8 @@
 //! Integration tests for qubit-codec.
 
 mod byte_order;
+mod codec;
 mod common;
-mod core;
 mod prelude_tests;
 mod transcode;
 mod value;

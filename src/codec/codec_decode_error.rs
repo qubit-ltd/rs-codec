@@ -7,7 +7,6 @@
 // =============================================================================
 //! Generic decode error used by codec adapters.
 
-use crate::transcode::TranscodeError;
 use thiserror::Error;
 
 /// Error reported by codec-backed value and buffered decoder adapters.
@@ -195,26 +194,64 @@ impl<E> CodecDecodeError<E> {
             available,
         }
     }
-}
 
-impl<E> TranscodeError for CodecDecodeError<E> {
-    #[inline(always)]
-    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_input_index(index, len)
+    /// Validates that enough input units are available from `input_index`.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Length of the input slice.
+    /// - `input_index`: Absolute input index where reading starts.
+    /// - `min_required`: Minimum units required from `input_index`.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when at least `min_required` units are available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an incomplete-input error when fewer than `min_required` units
+    /// are available from `input_index`.
+    #[inline]
+    pub fn ensure_min_input(
+        input_len: usize,
+        input_index: usize,
+        min_required: usize,
+    ) -> Result<(), Self> {
+        let available = input_len.saturating_sub(input_index);
+        if available < min_required {
+            return Err(Self::incomplete(
+                input_index,
+                input_index.saturating_add(min_required),
+                available,
+            ));
+        }
+        Ok(())
     }
 
-    #[inline(always)]
-    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_output_index(index, len)
-    }
-
-    #[inline(always)]
-    fn insufficient_output(
-        _context: (),
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
-        Self::insufficient_output(output_index, required, available)
+    /// Validates that decoding consumed the entire input slice.
+    ///
+    /// # Parameters
+    ///
+    /// - `consumed`: Units consumed by the decoded value.
+    /// - `total`: Total units in the input slice.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when `consumed == total`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a trailing-input error when extra units remain after the
+    /// decoded value.
+    #[inline]
+    pub fn ensure_no_trailing_input(
+        consumed: usize,
+        total: usize,
+    ) -> Result<(), Self> {
+        let remaining = total.saturating_sub(consumed);
+        if remaining != 0 {
+            return Err(Self::trailing_input(consumed, remaining));
+        }
+        Ok(())
     }
 }

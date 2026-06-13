@@ -24,5 +24,5 @@ use super::Transcoder;
 /// - `Unit`: Encoded unit type accepted by the decoder.
 /// - `Value`: Logical value type produced by the decoder.
 pub trait TranscodeDecoder<Unit, Value>: Transcoder<Unit, Value> {
-  // empty
+    // empty
 }

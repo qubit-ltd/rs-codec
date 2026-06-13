@@ -21,14 +21,12 @@ use super::{
     transcode_decode_engine::TranscodeDecodeEngine,
     transcode_encode_engine::TranscodeEncodeEngine,
 };
-use crate::core::assert_unit_bounds;
+use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
     EncodeContext,
     TranscodeConvertHooks,
-    TranscodeDecodeHooks,
-    TranscodeEncodeHooks,
     TranscodeError,
 };
 
@@ -155,13 +153,6 @@ where
         &self.encode_engine.codec
     }
 
-    /// Returns the context used to construct converter-level contract errors.
-    #[inline(always)]
-    pub fn public_error_context(&self) -> H::ErrorContext {
-        self.hooks
-            .error_context(self.decode_codec(), self.encode_codec())
-    }
-
     /// Returns an upper bound for target units produced from `input_len` units.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(
@@ -171,7 +162,7 @@ where
         let pending_units = self.pending_output_len()?;
         let decoded_values = self.decode_engine.max_output_len(input_len)?;
         let converted_units =
-            self.encode_engine.max_values_output_len(decoded_values)?;
+            self.encode_engine.max_output_len(decoded_values)?;
         converted_units
             .checked_add(pending_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -188,11 +179,9 @@ where
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len();
-        let decoder_finish_units = self
-            .encode_engine
-            .max_values_output_len(decoder_finish_values)?;
-        let encoder_finish_units =
-            self.encode_engine.max_hook_finish_output_len();
+        let decoder_finish_units =
+            self.encode_engine.max_output_len(decoder_finish_values)?;
+        let encoder_finish_units = self.encode_engine.max_finish_output_len();
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
@@ -226,34 +215,12 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> ConvertProgressResult<D, E, H> {
-        if input_index > input.len() {
-            let context =
-                <H::DecodeHooks as TranscodeDecodeHooks<D>>::error_context(
-                    self.decode_codec(),
-                );
-            return Err(
-                self.hooks
-                    .map_decode_error(<H::DecodeHooks as TranscodeDecodeHooks<
-                    D,
-                >>::Error::invalid_input_index(
-                    context,
-                    input_index,
-                    input.len(),
-                )),
-            );
-        }
-        if output_index > output.len() {
-            let context =
-                <H::EncodeHooks as TranscodeEncodeHooks<E>>::error_context(
-                    self.encode_codec(),
-                );
-            let error = <H::EncodeHooks as TranscodeEncodeHooks<E>>::Error::invalid_output_index(
-                context,
-                output_index,
-                output.len(),
-            );
-            return Err(self.hooks.map_encode_error(error));
-        }
+        TranscodeError::ensure_transcode_indices(
+            input.len(),
+            input_index,
+            output.len(),
+            output_index,
+        )?;
         assert_unit_bounds::<D>(self.decode_codec());
         assert_unit_bounds::<E>(self.encode_codec());
 
@@ -314,9 +281,7 @@ where
         assert_unit_bounds::<D>(self.decode_codec());
         assert_unit_bounds::<E>(self.encode_codec());
         let required = self.max_finish_output_len().unwrap_or(usize::MAX);
-        let context = self.public_error_context();
-        ConvertErrorOf::<D, E, H>::ensure_output_capacity(
-            context,
+        TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -340,7 +305,9 @@ where
         let written = self
             .encode_engine
             .finish(state.output_mut(), output_cursor)
-            .map_err(|error| self.hooks.map_encode_error(error))?;
+            .map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_encode_error(domain))
+            })?;
         state.advance_output(written);
         Ok(state.written())
     }
@@ -367,12 +334,14 @@ where
     ) -> Result<usize, ConvertErrorOf<D, E, H>> {
         self.pending.clear();
         self.hooks.reset();
-        self.decode_engine
-            .reset(&mut [], 0)
-            .map_err(|error| self.hooks.map_decode_error(error))?;
+        self.decode_engine.reset(&mut [], 0).map_err(|error| {
+            error.map_domain(|domain| self.hooks.map_decode_error(domain))
+        })?;
         self.encode_engine
             .reset(output, output_index)
-            .map_err(|error| self.hooks.map_encode_error(error))
+            .map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_encode_error(domain))
+            })
     }
 
     /// Converts one value from the current state cursors.
@@ -384,7 +353,9 @@ where
         let step = self
             .decode_engine
             .decode_step(state.input(), state.decode_context())
-            .map_err(|error| self.hooks.map_decode_error(error))?;
+            .map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+            })?;
         step.apply_to_convert_state(state, |pending, state| {
             self.encode_pending(pending, state)
         })
@@ -420,10 +391,14 @@ where
         let value_count = self.decode_engine.max_finish_output_len();
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
-        let written = self
-            .decode_engine
-            .finish(&mut decoded, 0)
-            .map_err(|error| self.hooks.map_decode_error(error))?;
+        let written =
+            self.decode_engine
+                .finish(&mut decoded, 0)
+                .map_err(|error| {
+                    error.map_domain(|domain| {
+                        self.hooks.map_decode_error(domain)
+                    })
+                })?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self.encode_pending(pending, state)?.is_some() {
@@ -450,10 +425,10 @@ where
             output: state.output_mut(),
             output_index,
         };
-        let step = self
-            .encode_engine
-            .encode_step(context)
-            .map_err(|error| self.hooks.map_encode_error(error))?;
+        let step =
+            self.encode_engine.encode_step(context).map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_encode_error(domain))
+            })?;
         let step = match step {
             EncodeStep::Written { written } => {
                 PendingEncodeStep::written(written)

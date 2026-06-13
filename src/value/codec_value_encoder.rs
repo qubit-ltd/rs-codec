@@ -10,7 +10,7 @@
 use super::ValueEncoder;
 use crate::{
     Codec,
-    core::assert_unit_bounds,
+    codec::assert_unit_bounds,
 };
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].

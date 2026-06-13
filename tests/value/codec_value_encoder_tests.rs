@@ -21,8 +21,6 @@ unsafe impl Codec for PairByteCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -70,8 +68,6 @@ unsafe impl Codec for RejectOddCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -120,8 +116,6 @@ unsafe impl Codec for OverreportingEncodeCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -167,8 +161,6 @@ unsafe impl Codec for NonCloneValueCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -207,18 +199,18 @@ unsafe impl Codec for NonCloneValueCodec {
     }
 }
 
-#[derive(Default)]
-struct StatefulLifecycleCodec {
-    encode_state: usize,
-}
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetFailLifecycleCodec;
 
-unsafe impl Codec for StatefulLifecycleCodec {
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("reset failed")]
+struct ResetFailError;
+
+unsafe impl Codec for ResetFailLifecycleCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = usize;
+    type EncodeError = ResetFailError;
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -232,12 +224,54 @@ unsafe impl Codec for StatefulLifecycleCodec {
         1
     }
 
-    fn encode_state(&self) -> usize {
-        self.encode_state
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
-    fn set_encode_state(&mut self, state: usize) {
-        self.encode_state = state;
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Err(ResetFailError)
+    }
+}
+
+#[derive(Default)]
+struct StatefulLifecycleCodec {
+    encode_state: usize,
+}
+
+unsafe impl Codec for StatefulLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_encode_reset_units(&self) -> usize {
+        1
     }
 
     unsafe fn decode(
@@ -339,4 +373,16 @@ fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
     );
 
     let _ = ValueEncoder::<u8>::encode(&mut encoder, &7);
+}
+
+#[test]
+fn test_codec_value_encoder_propagates_encode_reset_error() {
+    let mut encoder = CodecValueEncoder::<ResetFailLifecycleCodec>::new(
+        ResetFailLifecycleCodec,
+    );
+
+    let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
+        .expect_err("encode reset failure should propagate");
+
+    assert_eq!(ResetFailError, error);
 }

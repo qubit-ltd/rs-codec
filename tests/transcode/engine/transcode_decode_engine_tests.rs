@@ -39,8 +39,6 @@ unsafe impl Codec for PrefixCodec {
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -102,8 +100,6 @@ unsafe impl Codec for OverconsumingCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -139,60 +135,13 @@ unsafe impl Codec for OverconsumingCodec {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
-enum EngineError {
-    #[error("invalid input index {index} for input length {input_len}")]
-    InvalidInputIndex { index: usize, input_len: usize },
-    #[error("invalid output index {index} for output length {output_len}")]
-    InvalidOutputIndex { index: usize, output_len: usize },
-    #[error(
-        "insufficient output at index {output_index}: required {required}, available {available}"
-    )]
-    InsufficientOutput {
-        output_index: usize,
-        required: usize,
-        available: usize,
-    },
-}
-
-impl EngineError {
-    fn invalid_input_index(index: usize, input_len: usize) -> Self {
-        Self::InvalidInputIndex { index, input_len }
-    }
-
-    fn invalid_output_index(index: usize, output_len: usize) -> Self {
-        Self::InvalidOutputIndex { index, output_len }
-    }
-}
-
-impl TranscodeError for EngineError {
-    fn invalid_input_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_input_index(index, len)
-    }
-
-    fn invalid_output_index(_context: (), index: usize, len: usize) -> Self {
-        Self::invalid_output_index(index, len)
-    }
-
-    fn insufficient_output(
-        _context: (),
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
-        Self::InsufficientOutput {
-            output_index,
-            required,
-            available,
-        }
-    }
-}
+enum EngineError {}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct ReplacingHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
     type Error = EngineError;
-    type ErrorContext = ();
     fn handle_decode_error(
         &mut self,
         _codec: &mut PrefixCodec,
@@ -218,7 +167,6 @@ struct OverconsumingHooks;
 
 impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -235,7 +183,6 @@ struct SkippingHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for SkippingHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -271,7 +218,6 @@ impl Default for FinishHooks {
 
 impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -325,7 +271,6 @@ struct InvalidDecodeActionHooks {
 
 impl TranscodeDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -353,7 +298,6 @@ struct OverwritingFinishHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -394,7 +338,6 @@ struct OverreportingFinishHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -437,8 +380,6 @@ unsafe impl Codec for MinTwoCodec {
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::new(2).expect("literal is non-zero")
@@ -475,7 +416,6 @@ unsafe impl Codec for MinTwoCodec {
 
 impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
     type Error = EngineError;
-    type ErrorContext = ();
 
     fn handle_decode_error(
         &mut self,
@@ -525,7 +465,7 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
         "finish should reject insufficient output before calling hooks",
     );
     assert_eq!(
-        EngineError::InsufficientOutput {
+        TranscodeError::InsufficientOutput {
             output_index: 0,
             required: 1,
             available: 0,
@@ -543,13 +483,17 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
 }
 
 #[test]
-#[should_panic]
-fn test_transcode_decode_engine_finish_passes_bounded_output_to_hooks() {
+fn test_transcode_decode_engine_finish_passes_full_output_to_hooks() {
     let mut decoder =
         TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverwritingFinishHooks);
     let mut output = [0_u8; 2];
 
-    let _ = decoder.finish(&mut output, 0);
+    let written = decoder
+        .finish(&mut output, 0)
+        .expect("hook should receive the caller-provided output slice");
+
+    assert_eq!(1, written);
+    assert_eq!([0xee, 0xdd], output);
 }
 
 #[test]
@@ -577,10 +521,7 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        EngineError::InvalidOutputIndex {
-            index: 1,
-            output_len: 0,
-        },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error,
     );
 }
@@ -597,10 +538,7 @@ fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffe
         .expect_err("default finish should reject out-of-range output index");
 
     assert_eq!(
-        EngineError::InvalidOutputIndex {
-            index: 1,
-            output_len: 0,
-        },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error,
     );
 }
@@ -820,10 +758,7 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        EngineError::InvalidOutputIndex {
-            index: 1,
-            output_len: 0,
-        },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error,
     );
 }
@@ -849,10 +784,7 @@ fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
         .expect_err("invalid input index should be rejected");
 
     assert_eq!(
-        EngineError::InvalidInputIndex {
-            index: 2,
-            input_len: 1
-        },
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
         error,
     );
 }
@@ -895,4 +827,165 @@ fn test_transcode_decode_engine_implements_buffered_transcoder() {
     assert_eq!(7, output[0]);
 
     Transcoder::reset(&mut decoder, &mut output, 0).expect("reset");
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FlushFailCodec;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("flush failed")]
+struct FlushFailError;
+
+unsafe impl Codec for FlushFailCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = FlushFailError;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        1
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err(FlushFailError)
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct FlushMappingHooks;
+
+impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
+    type Error = qubit_codec::CodecDecodeError<FlushFailError>;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &mut FlushFailCodec,
+        error: FlushFailError,
+        context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        Err(qubit_codec::CodecDecodeError::decode(
+            error,
+            context.input_index,
+        ))
+    }
+
+    fn map_decode_flush_error(
+        &mut self,
+        _codec: &mut FlushFailCodec,
+        error: FlushFailError,
+    ) -> Self::Error {
+        qubit_codec::CodecDecodeError::decode(error, 0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetFailHooks;
+
+impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
+    type Error = PrefixDecodeError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        error: PrefixDecodeError,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        Err(error)
+    }
+
+    fn reset(&mut self, _codec: &mut PrefixCodec) -> Result<(), Self::Error> {
+        Err(PrefixDecodeError::Invalid { consumed: 0 })
+    }
+}
+
+#[test]
+fn test_transcode_decode_engine_reports_max_reset_output_len() {
+    let decoder = TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(
+        PrefixCodec,
+        ReplacingHooks,
+    );
+
+    assert_eq!(0, decoder.max_reset_output_len());
+    assert_eq!(Ok(0), Transcoder::max_reset_output_len(&decoder));
+}
+
+#[test]
+fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
+    let mut decoder = TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(
+        PrefixCodec,
+        ReplacingHooks,
+    );
+
+    let error = decoder
+        .reset(&mut [], 1)
+        .expect_err("reset should reject invalid output index");
+
+    assert_eq!(
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        error,
+    );
+}
+
+#[test]
+fn test_transcode_decode_engine_reset_maps_hook_reset_errors() {
+    let mut decoder =
+        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ResetFailHooks);
+
+    let error = decoder
+        .reset(&mut [], 0)
+        .expect_err("hook reset errors should be mapped through the engine");
+
+    assert_eq!(
+        TranscodeError::Domain(PrefixDecodeError::Invalid { consumed: 0 }),
+        error,
+    );
+}
+
+#[test]
+fn test_transcode_decode_engine_finish_maps_decode_flush_errors() {
+    let mut decoder =
+        TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
+    let mut output = [0_u8; 1];
+
+    let error = decoder
+        .finish(&mut output, 0)
+        .expect_err("flush errors should be mapped through hooks");
+
+    assert_eq!(
+        TranscodeError::Domain(qubit_codec::CodecDecodeError::Decode {
+            source: FlushFailError,
+            input_index: 0,
+        }),
+        error,
+    );
 }

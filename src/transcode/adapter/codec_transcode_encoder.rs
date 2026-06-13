@@ -14,6 +14,7 @@ use crate::{
     CodecEncodeError,
     TranscodeEncodeEngine,
     TranscodeEncoder,
+    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -66,7 +67,6 @@ where
     C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
-    type ErrorContext = ();
 
     /// Gets the maximum number of output units needed for `input_len`
     /// values.
@@ -109,7 +109,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::Error>> {
         self.engine.reset(output, output_index)
     }
 
@@ -138,7 +138,7 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
@@ -162,13 +162,14 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::Error>> {
         self.engine.finish(output, output_index)
     }
 }
 
-impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C> where
-    C: Codec
+impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
+where
+    C: Codec,
 {
     // empty
 }

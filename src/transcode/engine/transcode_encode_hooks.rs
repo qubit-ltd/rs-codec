@@ -14,7 +14,6 @@ use super::super::{
 use crate::{
     CapacityError,
     Codec,
-    TranscodeError,
 };
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
@@ -63,8 +62,6 @@ use crate::{
 ///     type Unit = u8;
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
-///     type DecodeState = ();
-///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -100,7 +97,6 @@ use crate::{
 ///     C: Codec,
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
-///     type ErrorContext = ();
 ///     type PlanAction = ();
 ///
 ///     fn prepare_encode(
@@ -133,25 +129,8 @@ pub trait TranscodeEncodeHooks<C>
 where
     C: Codec,
 {
-    /// Error type returned by the buffered encoder.
-    type Error: TranscodeError<Self::ErrorContext>;
-
-    /// Context passed to [`TranscodeError`] factories for contract failures.
-    type ErrorContext: Copy + Send + Sync + Default + 'static;
-
-    /// Returns context used to build contract errors for this hook policy.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns the error context associated with `codec`.
-    #[inline(always)]
-    fn error_context(_codec: &C) -> Self::ErrorContext {
-        Self::ErrorContext::default()
-    }
+    /// Domain error type returned by the buffered encoder policy.
+    type Error;
 
     /// Concrete action stored in [`EncodePlan::action`].
     type PlanAction;
@@ -328,9 +307,8 @@ where
     /// Stateful hooks may emit final units such as reset sequences, checksums,
     /// or trailers. The caller must provide at least
     /// [`TranscodeEncodeHooks::max_finish_output_len`] writable units from
-    /// `output_index`. Engines may pass an output slice whose upper bound is
-    /// capped at `output_index + max_finish_output_len`, so implementations
-    /// must not write beyond that declared final-output bound.
+    /// `output_index`. Implementations must not write beyond that declared
+    /// final-output bound.
     ///
     /// # Parameters
     ///

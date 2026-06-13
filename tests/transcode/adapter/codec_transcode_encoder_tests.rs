@@ -13,6 +13,7 @@ use qubit_codec::{
     CodecEncodeError,
     CodecTranscodeEncoder,
     TranscodeEncoder,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -25,8 +26,6 @@ unsafe impl Codec for PairByteCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -74,8 +73,6 @@ unsafe impl Codec for RejectOddCodec {
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
-    type DecodeState = ();
-    type EncodeState = ();
 
     fn min_units_per_value(&self) -> core::num::NonZeroUsize {
         core::num::NonZeroUsize::MIN
@@ -196,7 +193,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -211,7 +208,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -225,7 +222,10 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .transcode(&[3], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
 
-    assert_eq!(CodecEncodeError::invalid_input_index(2, 1), error);
+    assert_eq!(
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
+        error
+    );
 }
 
 #[test]
@@ -238,11 +238,32 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
         .expect_err("odd value should be rejected");
 
     assert_eq!(
-        CodecEncodeError::Encode {
+        TranscodeError::Domain(CodecEncodeError::Encode {
             source: "odd value",
             input_index: 1,
-        },
+        }),
         error,
     );
     assert_eq!([2, 0], output);
+}
+
+#[test]
+fn test_codec_transcode_encoder_reports_max_reset_output_len() {
+    let encoder = CodecTranscodeEncoder::<PairByteCodec>::new(PairByteCodec);
+
+    assert_eq!(Ok(0), Transcoder::max_reset_output_len(&encoder));
+}
+
+#[test]
+fn test_codec_transcode_encoder_default_builds_encoder() {
+    let mut encoder = CodecTranscodeEncoder::<PairByteCodec>::default();
+    let mut output = [0_u8; 2];
+
+    let progress = encoder
+        .transcode(&[7], 0, &mut output, 0)
+        .expect("default encoder should transcode one value");
+
+    assert_eq!(1, progress.read());
+    assert_eq!(2, progress.written());
+    assert_eq!([7, 8], output);
 }

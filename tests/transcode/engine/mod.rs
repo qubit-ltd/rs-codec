@@ -1,6 +1,6 @@
-mod transcode_convert_hooks_tests;
-mod transcode_decode_hooks_tests;
-mod transcode_encode_hooks_tests;
 mod transcode_convert_engine_tests;
+mod transcode_convert_hooks_tests;
 mod transcode_decode_engine_tests;
+mod transcode_decode_hooks_tests;
 mod transcode_encode_engine_tests;
+mod transcode_encode_hooks_tests;

@@ -14,7 +14,6 @@ use super::super::{
 use crate::{
     CapacityError,
     Codec,
-    TranscodeError,
 };
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
@@ -63,8 +62,6 @@ use crate::{
 ///     type Unit = u8;
 ///     type DecodeError = MyDecodeError;
 ///     type EncodeError = core::convert::Infallible;
-///     type DecodeState = ();
-///     type EncodeState = ();
 ///
 ///     fn min_units_per_value(&self) -> NonZeroUsize {
 ///         NonZeroUsize::MIN
@@ -102,7 +99,6 @@ use crate::{
 ///
 /// impl TranscodeDecodeHooks<MyCodec> for ReplacementHooks {
 ///     type Error = CodecDecodeError<MyDecodeError>;
-///     type ErrorContext = ();
 ///
 ///     fn handle_decode_error(
 ///         &mut self,
@@ -129,17 +125,8 @@ pub trait TranscodeDecodeHooks<C>
 where
     C: Codec,
 {
-    /// Error type returned by the buffered decoder.
-    type Error: TranscodeError<Self::ErrorContext>;
-
-    /// Context passed to [`TranscodeError`] factories for contract failures.
-    type ErrorContext: Copy + Send + Sync + Default + 'static;
-
-    /// Returns context used to build contract errors for this hook policy.
-    #[inline(always)]
-    fn error_context(_codec: &C) -> Self::ErrorContext {
-        Self::ErrorContext::default()
-    }
+    /// Domain error type returned by the buffered decoder policy.
+    type Error;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -238,9 +225,8 @@ where
     /// Stateful hooks may emit final values such as checksums, reset markers,
     /// or other trailer data. The caller must provide at least
     /// [`TranscodeDecodeHooks::max_finish_output_len`] writable slots from
-    /// `output_index`. Engines may pass an output slice whose upper bound is
-    /// capped at `output_index + max_finish_output_len`, so implementations
-    /// must not write beyond that declared final-output bound.
+    /// `output_index`. Implementations must not write beyond that declared
+    /// final-output bound.
     ///
     /// # Parameters
     ///
@@ -271,6 +257,12 @@ where
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    #[inline(always)]
-    fn reset(&mut self, _codec: &mut C) {}
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::Error` when hook-owned state cannot be reset.
+    #[inline]
+    fn reset(&mut self, _codec: &mut C) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }

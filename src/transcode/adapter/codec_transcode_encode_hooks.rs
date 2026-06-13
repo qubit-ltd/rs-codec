@@ -7,11 +7,11 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
+use super::super::engine::TranscodeEncodeHooks;
 use super::super::{
     encode_context::EncodeContext,
     encode_plan::EncodePlan,
 };
-use super::super::engine::TranscodeEncodeHooks;
 use crate::{
     Codec,
     CodecEncodeError,
@@ -26,11 +26,7 @@ where
     C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
-    type ErrorContext = ();
     type PlanAction = ();
-
-    #[inline(always)]
-    fn error_context(_codec: &C) -> Self::ErrorContext {}
 
     /// Prepares a conservative one-value encoding plan.
     ///

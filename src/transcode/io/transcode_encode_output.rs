@@ -22,9 +22,10 @@ use qubit_io::{
     Output,
 };
 
-use crate::core::assert_unit_bounds;
+use crate::codec::assert_unit_bounds;
 use crate::{
     Codec,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -293,7 +294,7 @@ where
     ) -> Result<usize>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
+        M: FnMut(TranscodeError<E::Error>) -> Error,
     {
         debug_assert!(
             input_index
@@ -365,7 +366,7 @@ where
     ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
+        M: FnMut(TranscodeError<E::Error>) -> Error,
     {
         let required = encoder
             .max_finish_output_len()
