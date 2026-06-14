@@ -305,7 +305,7 @@ where
     }
 
     /// Converts one value from the current state cursors.
-    #[inline]
+    #[inline(always)]
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -324,7 +324,7 @@ where
     }
 
     /// Writes a retained decoded value before new input is consumed.
-    #[inline]
+    #[inline(always)]
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -360,7 +360,6 @@ where
     }
 
     /// Encodes one pending value and applies output/pending state changes.
-    #[inline]
     fn encode_pending(
         &mut self,
         pending: PendingValue<D::Value>,
