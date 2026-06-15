@@ -26,7 +26,7 @@ mod util;
 mod value;
 
 pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
-pub use codec::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError};
+pub use codec::{Codec, CodecConvertError, CodecDecodeError, CodecDecodeSignal, CodecEncodeError};
 pub use transcode::{
     CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
     DecodeAction, DecodeContext, EncodeContext, EncodePlan, TranscodeConvertEngine,

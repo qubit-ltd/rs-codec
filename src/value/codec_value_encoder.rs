@@ -8,7 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{Codec, codec::assert_unit_bounds};
+use crate::{Codec, CodecEncodeError, codec::assert_unit_bounds};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -60,7 +60,7 @@ where
     C: Codec,
 {
     type Output = Vec<C::Unit>;
-    type Error = C::EncodeError;
+    type Error = CodecEncodeError<C::EncodeError>;
 
     /// Encodes one borrowed value into owned units.
     ///
@@ -83,27 +83,13 @@ where
     /// declared [`Codec::max_encode_reset_units`] or
     /// [`Codec::max_units_per_value`] bounds.
     fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
-        let reset_units = self.codec.max_encode_reset_units();
-        let value_units = self.codec.max_units_per_value().get();
-        let mut output = vec![C::Unit::default(); reset_units + value_units];
-
-        // SAFETY: The output buffer reserves the codec's declared reset-output
-        // bound at index zero.
-        let reset_written = unsafe { self.codec.encode_reset(&mut output, 0) }?;
-        assert!(
-            reset_written <= reset_units,
-            "Codec::encode_reset wrote beyond allocated output",
-        );
-
-        // SAFETY: The output buffer reserves the codec's declared maximum
-        // value width after any reset output.
-        let value_written = unsafe { self.codec.encode(input, &mut output, reset_written) }?.get();
-        assert!(
-            value_written <= value_units,
-            "Codec::encode wrote beyond allocated output",
-        );
-
-        output.truncate(reset_written + value_written);
+        let max_units = self
+            .codec
+            .max_encode_value_units()
+            .map_err(|_| CodecEncodeError::output_length_overflow())?;
+        let mut output = vec![C::Unit::default(); max_units];
+        let written = self.codec.encode_value_with_reset(input, &mut output, 0)?;
+        output.truncate(written);
         Ok(output)
     }
 }

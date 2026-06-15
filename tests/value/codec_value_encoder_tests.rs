@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec::{Codec, CodecValueEncoder, ValueEncoder};
+use qubit_codec::{Codec, CodecEncodeError, CodecValueEncoder, ValueEncoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
@@ -351,11 +351,17 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error =
         ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("odd value should be rejected");
 
-    assert_eq!("odd value", error);
+    assert_eq!(
+        CodecEncodeError::Encode {
+            source: "odd value",
+            input_index: 0,
+        },
+        error,
+    );
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode wrote beyond allocated output")]
+#[should_panic(expected = "Codec::encode wrote beyond its value bound")]
 fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
     let mut encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
 
@@ -369,5 +375,11 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("encode reset failure should propagate");
 
-    assert_eq!(ResetFailError, error);
+    assert_eq!(
+        CodecEncodeError::Encode {
+            source: ResetFailError,
+            input_index: 0,
+        },
+        error,
+    );
 }

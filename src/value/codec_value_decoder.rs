@@ -86,38 +86,16 @@ where
     /// the input slice length, or when flush output exceeds
     /// [`Codec::max_decode_flush_values`].
     fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
-        let min_units = self.codec.min_units_per_value().get();
-        CodecDecodeError::ensure_min_input(input.len(), 0, min_units)?;
-
-        // SAFETY: The input slice has at least the codec's declared minimum
-        // number of readable units from index zero.
-        let (value, consumed) = unsafe { self.codec.decode(input, 0) }
-            .map_err(|error| CodecDecodeError::decode(error, 0))?;
-        let consumed = consumed.get();
-        assert!(
-            consumed <= input.len(),
-            "Codec::decode consumed beyond available input",
-        );
-
-        CodecDecodeError::ensure_no_trailing_input(consumed, input.len())?;
-
         let flush_cap = self.codec.max_decode_flush_values();
-        if flush_cap == 0 {
-            // SAFETY: Stateless codecs write no flush values.
-            let _ = unsafe { self.codec.decode_flush(&mut [], 0) }
-                .map_err(|error| CodecDecodeError::decode(error, consumed))?;
+        let (value, _) = if flush_cap == 0 {
+            self.codec
+                .decode_exact_value_with_flush(input, &mut [], 0)?
         } else {
             let mut scratch = Vec::with_capacity(flush_cap);
             scratch.resize_with(flush_cap, C::Value::default);
-            // SAFETY: The scratch buffer reserves the codec's declared
-            // flush-output bound at index zero.
-            let flushed = unsafe { self.codec.decode_flush(&mut scratch, 0) }
-                .map_err(|error| CodecDecodeError::decode(error, consumed))?;
-            assert!(
-                flushed <= flush_cap,
-                "Codec::decode_flush wrote beyond its flush bound",
-            );
-        }
+            self.codec
+                .decode_exact_value_with_flush(input, &mut scratch, 0)?
+        };
 
         Ok(value)
     }
