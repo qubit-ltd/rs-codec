@@ -154,7 +154,7 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
-        let decoder_finish_values = self.decode_engine.max_finish_output_len();
+        let decoder_finish_values = self.decode_engine.max_finish_output_len()?;
         let decoder_finish_units = self.encode_engine.max_output_len(decoder_finish_values)?;
         let encoder_finish_units = self.encode_engine.max_finish_output_len();
         let pending_and_decoder = pending_units
@@ -250,7 +250,9 @@ where
     where
         D::Value: Default,
     {
-        let required = self.max_finish_output_len().unwrap_or(usize::MAX);
+        let required = self
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
 
         let empty_input: &[D::Unit] = &[];
@@ -344,7 +346,10 @@ where
     where
         D::Value: Default,
     {
-        let value_count = self.decode_engine.max_finish_output_len();
+        let value_count = self
+            .decode_engine
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         let mut decoded: Vec<D::Value> = (0..value_count).map(|_| D::Value::default()).collect();
         let written = self
             .decode_engine

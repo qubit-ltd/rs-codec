@@ -81,7 +81,7 @@ where
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_finish_output_len())
+        self.engine.max_finish_output_len()
     }
 
     /// Returns the maximum values emitted when resetting internal state.

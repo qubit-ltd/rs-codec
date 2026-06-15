@@ -393,6 +393,66 @@ unsafe impl Codec for MinTwoCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverflowFlushCodec;
+
+unsafe impl Codec for OverflowFlushCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        usize::MAX
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(qubit_codec::nz!(1))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverflowFinishHooks;
+
+impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
+    type Error = EngineError;
+
+    fn max_finish_output_len(&self, _codec: &OverflowFlushCodec) -> usize {
+        1
+    }
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &mut OverflowFlushCodec,
+        error: core::convert::Infallible,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match error {}
+    }
+}
+
 impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
     type Error = EngineError;
 
@@ -415,12 +475,28 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
 }
 
 #[test]
+fn test_transcode_decode_engine_reports_finish_bound_overflow() {
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(OverflowFlushCodec, OverflowFinishHooks);
+    let mut output = [0_u8; 1];
+
+    assert_eq!(
+        Err(qubit_codec::CapacityError::OutputLengthOverflow),
+        decoder.max_finish_output_len(),
+    );
+
+    let error = decoder
+        .finish(&mut output, 0)
+        .expect_err("finish should report capacity overflow before writing");
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+}
+
+#[test]
 fn test_transcode_decode_engine_reports_finish_bounds() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(3), decoder.max_output_len(3));
-    assert_eq!(0, decoder.max_finish_output_len());
+    assert_eq!(Ok(0), decoder.max_finish_output_len());
 
     decoder.reset(&mut [], 0).expect("reset");
     let written = decoder
@@ -434,7 +510,7 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
-    assert_eq!(1, decoder.max_finish_output_len());
+    assert_eq!(Ok(1), decoder.max_finish_output_len());
 
     let error = decoder
         .finish(&mut [], 0)
@@ -447,14 +523,14 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
         },
         error,
     );
-    assert_eq!(1, decoder.max_finish_output_len());
+    assert_eq!(Ok(1), decoder.max_finish_output_len());
 
     let written = decoder
         .finish(&mut output, 0)
         .expect("hook should write final output");
     assert_eq!(1, written);
     assert_eq!([0xee], output);
-    assert_eq!(0, decoder.max_finish_output_len());
+    assert_eq!(Ok(0), decoder.max_finish_output_len());
 }
 
 #[test]

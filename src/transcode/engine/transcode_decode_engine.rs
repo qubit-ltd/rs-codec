@@ -205,10 +205,13 @@ where
     /// written by [`Codec::decode_flush`]; hook implementations must not
     /// include that portion in
     /// [`TranscodeDecodeHooks::max_finish_output_len`].
-    #[must_use]
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_finish_output_len(&self) -> usize {
-        self.codec.max_decode_flush_values() + self.hooks.max_finish_output_len(&self.codec)
+    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        self.codec
+            .max_decode_flush_values()
+            .checked_add(self.hooks.max_finish_output_len(&self.codec))
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum values emitted when resetting stream state.
@@ -334,7 +337,9 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self.max_finish_output_len();
+        let required = self
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         let flushed =
             unsafe { self.codec.decode_flush(output, output_index) }.map_err(|error| {
@@ -487,7 +492,7 @@ where
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(TranscodeDecodeEngine::max_finish_output_len(self))
+        TranscodeDecodeEngine::max_finish_output_len(self)
     }
 
     /// Returns an upper bound for values emitted when resetting stream state.

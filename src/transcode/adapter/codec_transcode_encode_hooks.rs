@@ -24,12 +24,12 @@ where
     type Error = CodecEncodeError<C::EncodeError>;
     type PlanAction = ();
 
-    /// Prepares a conservative one-value encoding plan.
+    /// Prepares an exact one-value encoding plan.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec for width calculation.
-    /// - `_input_value`: Input value to be encoded.
+    /// - `input_value`: Input value to be encoded.
     /// - `_input_index`: Absolute index of the input value.
     ///
     /// # Returns
@@ -39,10 +39,10 @@ where
     fn prepare_encode(
         &mut self,
         codec: &mut C,
-        _input_value: &C::Value,
+        input_value: &C::Value,
         _input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
-        Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
+        Ok(EncodePlan::new(codec.encode_len(input_value).get(), ()))
     }
 
     /// Writes one value by delegating to the wrapped codec.
@@ -66,7 +66,7 @@ where
         context: EncodeContext<'_, C::Value, C::Unit>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
-        // SAFETY: The engine checked that the prepared max-width capacity is
+        // SAFETY: The engine checked that the prepared exact-value capacity is
         // available before calling this method.
         unsafe { codec.encode(context.input_value, context.output, context.output_index) }
             .map(NonZeroUsize::get)

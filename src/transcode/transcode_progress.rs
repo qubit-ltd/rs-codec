@@ -129,6 +129,43 @@ impl TranscodeProgress {
         self.status
     }
 
+    /// Returns whether conversion consumed all currently supplied input.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::Complete`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_complete(self) -> bool {
+        matches!(self.status, TranscodeStatus::Complete)
+    }
+
+    /// Returns whether conversion stopped because more input is needed.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::NeedInput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_need_input(self) -> bool {
+        matches!(self.status, TranscodeStatus::NeedInput { .. })
+    }
+
+    /// Returns whether conversion stopped because more output capacity is
+    /// needed.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::NeedOutput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_need_output(self) -> bool {
+        matches!(self.status, TranscodeStatus::NeedOutput { .. })
+    }
+
     /// Returns the number of input units consumed by the call.
     ///
     /// # Returns

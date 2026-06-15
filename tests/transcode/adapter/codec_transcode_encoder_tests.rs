@@ -60,6 +60,63 @@ unsafe impl Codec for PairByteCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct VariableWidthCodec;
+
+unsafe impl Codec for VariableWidthCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        qubit_codec::nz!(3)
+    }
+
+    fn encode_len(&self, value: &u8) -> core::num::NonZeroUsize {
+        match *value {
+            0..=9 => qubit_codec::nz!(1),
+            10..=99 => qubit_codec::nz!(2),
+            _ => qubit_codec::nz!(3),
+        }
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        debug_assert!(index < input.len());
+
+        // SAFETY: The caller guarantees that `index` is readable.
+        let value = unsafe { *input.as_ptr().add(index) };
+        Ok((value, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        let written = self.encode_len(value);
+        debug_assert!(index + written.get() <= output.len());
+
+        for offset in 0..written.get() {
+            // SAFETY: The caller guarantees that `written` units are writable
+            // from `index`.
+            unsafe {
+                *output.as_mut_ptr().add(index + offset) = *value;
+            }
+        }
+        Ok(written)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
 unsafe impl Codec for RejectOddCodec {
@@ -175,6 +232,21 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
+}
+
+#[test]
+fn test_codec_transcode_encoder_uses_encode_len_for_output_capacity() {
+    let mut encoder = CodecTranscodeEncoder::new(VariableWidthCodec);
+    let mut output = [0_u8; 2];
+
+    let progress = encoder
+        .transcode(&[7, 8], 0, &mut output, 0)
+        .expect("short values should fit exactly");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(2, progress.read());
+    assert_eq!(2, progress.written());
+    assert_eq!([7, 8], output);
 }
 
 #[test]

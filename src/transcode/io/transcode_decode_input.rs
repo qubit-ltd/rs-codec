@@ -354,23 +354,11 @@ where
         let output_end = output_index + count;
         let output = &mut output[..output_end];
         let mut written_total = 0;
-        let mut units = Vec::new();
         loop {
             if self.input.available() == 0 && !self.input.fill_more()? {
                 return Ok(written_total);
             }
-            let available = self.input.available();
-            if units.len() < available {
-                units.resize(available, I::Item::default());
-            }
-            // SAFETY: The first `available` slots in `units` are a valid
-            // destination range, and the copied range does not overlap with
-            // the buffered input storage.
-            unsafe {
-                self.input
-                    .copy_unread_to_unchecked(&mut units, 0, available);
-            }
-            let units = &units[..available];
+            let units = self.input.unread();
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;

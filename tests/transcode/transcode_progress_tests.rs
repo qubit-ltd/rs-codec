@@ -70,3 +70,21 @@ fn test_transcoder_progress_constructors_create_expected_progress() {
     assert_eq!(8, need_output.read());
     assert_eq!(9, need_output.written());
 }
+
+#[test]
+fn test_transcoder_progress_predicates_match_status() {
+    let complete = TranscodeProgress::complete(2, 3);
+    assert!(complete.is_complete());
+    assert!(!complete.is_need_input());
+    assert!(!complete.is_need_output());
+
+    let need_input = TranscodeProgress::need_input(4, crate::nz(2), 1, 5, 6);
+    assert!(!need_input.is_complete());
+    assert!(need_input.is_need_input());
+    assert!(!need_input.is_need_output());
+
+    let need_output = TranscodeProgress::need_output(7, crate::nz(3), 0, 8, 9);
+    assert!(!need_output.is_complete());
+    assert!(!need_output.is_need_input());
+    assert!(need_output.is_need_output());
+}
