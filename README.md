@@ -60,6 +60,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors, including invalid buffer
   indices, without hiding codec-specific failures.
+- **`CodecDecodeSignal`**: optional domain-neutral decode-error signals for
+  streaming adapters that need incomplete-input or invalid-consumption hints.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -182,6 +184,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
 | `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
+| `CodecDecodeSignal` | Domain-neutral trait for decode errors that can report incomplete-input requirements or invalid-input consumption hints |
 
 ### Codec Adapters
 
@@ -235,6 +238,25 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Complete` | The current conversion step completed |
 | `NeedInput` | More input units are required; the incomplete tail remains in the caller's input buffer |
 | `NeedOutput` | More output capacity is required |
+
+### Contract Notes
+
+- `min_units_per_value()` is the safety lower bound for calling `Codec::decode`;
+  `max_units_per_value()` is the per-value output/read upper bound. Checked
+  adapters assert `min <= max` before using these values.
+- `encode_len(value)` must equal the number of units `Codec::encode` writes for
+  the same value and codec state, and it must not exceed
+  `max_units_per_value()`.
+- Stateful one-value callers should use `max_encode_value_units()` with
+  `encode_value_with_reset()`, or `decode_exact_value_with_flush()` when the
+  input must contain exactly one encoded value. These helpers keep reset/flush
+  capacity checks and overflow handling in the core layer.
+- `CodecDecodeError` / `CodecEncodeError` are adapter-level wrappers.
+  `TranscodeError` is the streaming framework wrapper. Concrete codec,
+  charset, or policy failures remain the associated domain error.
+- `NeedInput` means the reported tail was not consumed and must remain available
+  when the caller retries with more input. `NeedOutput` means the reported input
+  was not fully consumed because the output slice reached its bound.
 
 ### Byte Order Types
 

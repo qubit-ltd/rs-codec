@@ -53,6 +53,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
   adapter 自己产生的 encode / decode / convert 错误，包括非法缓冲区下标，
   同时保留 codec-specific failure。
+- **`CodecDecodeSignal`**：为 streaming adapter 提供领域无关的 decode-error
+  信号，用于表达不完整输入需求或非法输入可消费数量。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -164,6 +166,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法缓冲区下标 |
 | `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法缓冲区下标或尾随输入 |
 | `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 失败和完整的 encode-side `CodecEncodeError<E>` 失败 |
+| `CodecDecodeSignal` | decode error 的领域无关信号 trait，可报告 incomplete 输入需求或 invalid 输入可消费数量 |
 
 ### Codec Adapter
 
@@ -217,6 +220,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Complete` | 当前转换步骤已完成 |
 | `NeedInput` | 需要更多输入单元；不完整尾部仍留在调用方输入缓冲区中 |
 | `NeedOutput` | 需要更多输出空间 |
+
+### 契约说明
+
+- `min_units_per_value()` 是调用 `Codec::decode` 的安全下界；
+  `max_units_per_value()` 是单值输出/读取上界。checked adapter 在使用前会断言
+  `min <= max`。
+- `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
+  实际写入的 unit 数量，并且不能超过 `max_units_per_value()`。
+- 需要处理状态化单值编码时，应配合使用 `max_encode_value_units()` 与
+  `encode_value_with_reset()`；输入必须恰好是一个编码值时，应使用
+  `decode_exact_value_with_flush()`。这些 helper 把 reset/flush 容量检查和
+  overflow 处理统一放在 core 层。
+- `CodecDecodeError` / `CodecEncodeError` 是 adapter 层 wrapper；
+  `TranscodeError` 是 streaming framework 层 wrapper。具体 codec、charset
+  或策略失败仍由关联的 domain error 表达。
+- `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。
+  `NeedOutput` 表示输出切片到达容量边界，因此输入没有被完全消费。
 
 ### 字节序类型
 
