@@ -12,8 +12,7 @@ use core::num::NonZeroUsize;
 use qubit_codec::{
     CapacityError, Codec, DecodeAction, DecodeContext, EncodeContext, EncodePlan,
     TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeHooks, TranscodeEncodeHooks,
-    TranscodeError, TranscodeStatus,
-    nz,
+    TranscodeError, TranscodeStatus, nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

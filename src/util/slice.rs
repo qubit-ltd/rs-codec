@@ -8,42 +8,23 @@
 //! All helpers in this module avoid bound checks and are intended for call sites
 //! that already validate index and range safety in their own protocol.
 
-/// Returns whether a slice has at least `required_units` readable/writable units
-/// from `index`.
+/// Returns whether a slice has at least `count` readable/writable units from
+/// `start`.
 ///
 /// # Parameters
 ///
 /// - `len`: Slice length.
-/// - `index`: Start index in the slice.
-/// - `required_units`: Number of requested units after `index`.
+/// - `start`: Start index in the slice.
+/// - `count`: Number of requested units after `start`.
 ///
 /// # Returns
 ///
-/// `true` if `index + required_units <= len` and no overflow occurs.
+/// `true` if `start + count <= len` and no overflow occurs.
 #[inline(always)]
-pub const fn has_units(len: usize, index: usize, required_units: usize) -> bool {
-    match index.checked_add(required_units) {
+pub const fn range_fits(len: usize, start: usize, count: usize) -> bool {
+    match start.checked_add(count) {
         Some(end) => len >= end,
         None => false,
-    }
-}
-
-/// Returns `index + required_units`, saturating overflow to `usize::MAX`.
-///
-/// # Parameters
-///
-/// - `index`: Start index.
-/// - `required_units`: Offset to add.
-///
-/// # Returns
-///
-/// `index + required_units` when addition is in-bounds, otherwise
-/// `usize::MAX`.
-#[inline(always)]
-pub const fn required_index(index: usize, required_units: usize) -> usize {
-    match index.checked_add(required_units) {
-        Some(required) => required,
-        None => usize::MAX,
     }
 }
 
@@ -143,5 +124,42 @@ pub unsafe fn copy_nonoverlapping_unchecked<T: Copy>(
             destination.as_mut_ptr().add(destination_index),
             count,
         );
+    }
+}
+
+/// Reads one value from an unchecked unaligned byte slice offset.
+///
+/// # Parameters
+///
+/// - `input`: Source byte buffer.
+/// - `index`: Byte offset in `input`.
+///
+/// # Safety
+///
+/// The caller must guarantee that `index` points to a valid unaligned region
+/// capable of holding one `T`.
+#[inline(always)]
+pub unsafe fn read_ne_unaligned_unchecked<T: Copy>(input: &[u8], index: usize) -> T {
+    // SAFETY: The caller guarantees byte-level validity for this unaligned load.
+    unsafe { core::ptr::read_unaligned(input.as_ptr().add(index).cast::<T>()) }
+}
+
+/// Writes one value to an unchecked unaligned byte slice offset.
+///
+/// # Parameters
+///
+/// - `output`: Destination byte buffer.
+/// - `index`: Byte offset in `output`.
+/// - `value`: Value to write.
+///
+/// # Safety
+///
+/// The caller must guarantee that `index` points to a valid unaligned region
+/// capable of holding one `T`.
+#[inline(always)]
+pub unsafe fn write_ne_unaligned_unchecked<T: Copy>(output: &mut [u8], index: usize, value: T) {
+    // SAFETY: The caller guarantees byte-level validity for this unaligned store.
+    unsafe {
+        core::ptr::write_unaligned(output.as_mut_ptr().add(index).cast::<T>(), value);
     }
 }

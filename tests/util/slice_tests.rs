@@ -4,8 +4,8 @@
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
 use qubit_codec::{
-    copy_nonoverlapping_unchecked, has_units, mut_unchecked, read_unchecked, ref_unchecked,
-    required_index, write_unchecked,
+    copy_nonoverlapping_unchecked, mut_unchecked, range_fits, read_ne_unaligned_unchecked,
+    read_unchecked, ref_unchecked, write_ne_unaligned_unchecked, write_unchecked,
 };
 
 #[test]
@@ -37,15 +37,28 @@ fn mut_unchecked_writes_reference() {
 }
 
 #[test]
-fn has_units_checks_range() {
-    assert!(has_units(8, 2, 6));
-    assert!(!has_units(8, 3, 6));
+fn range_fits_checks_range() {
+    assert!(range_fits(8, 2, 6));
+    assert!(!range_fits(8, 3, 6));
 }
 
 #[test]
-fn required_index_handles_overflow() {
-    assert_eq!(required_index(10, 2), 12);
-    assert_eq!(required_index(usize::MAX, 1), usize::MAX);
+fn index_saturating_add_checks_overflow() {
+    assert_eq!(10usize.saturating_add(2), 12);
+    assert_eq!(usize::MAX.saturating_add(1), usize::MAX);
+}
+
+#[test]
+fn ne_unaligned_unchecked_reads_and_writes() {
+    let mut output = [0_u8; 8];
+    // SAFETY: Writes a little-endian u16 to valid unaligned offset 1.
+    unsafe {
+        write_ne_unaligned_unchecked(&mut output, 1, 0x1234_u16);
+        let value = read_ne_unaligned_unchecked::<u16>(&output, 1);
+        assert_eq!(value, 0x1234_u16);
+    }
+    assert_eq!(output[1], 0x34);
+    assert_eq!(output[2], 0x12);
 }
 
 #[test]

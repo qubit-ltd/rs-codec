@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec::{Codec, CodecEncodeError, nz, CodecValueEncoder, ValueEncoder};
+use qubit_codec::{Codec, CodecEncodeError, CodecValueEncoder, ValueEncoder, nz};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;

@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
-use qubit_codec::{Codec, CodecDecodeError, nz, CodecValueDecoder, ValueDecoder};
+use qubit_codec::{Codec, CodecDecodeError, CodecValueDecoder, ValueDecoder, nz};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;

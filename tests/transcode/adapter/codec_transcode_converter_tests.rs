@@ -9,8 +9,7 @@
 
 use qubit_codec::{
     CapacityError, Codec, CodecConvertError, CodecDecodeError, CodecEncodeError,
-    CodecTranscodeConverter, TranscodeConverter, TranscodeError, TranscodeStatus, Transcoder,
-    nz,
+    CodecTranscodeConverter, TranscodeConverter, TranscodeError, TranscodeStatus, Transcoder, nz,
 };
 
 use std::{

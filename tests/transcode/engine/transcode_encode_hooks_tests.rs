@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodePlan, nz, TranscodeEncodeHooks};
+use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks, nz};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;

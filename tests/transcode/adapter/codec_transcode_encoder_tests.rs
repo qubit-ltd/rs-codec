@@ -9,8 +9,7 @@
 
 use qubit_codec::{
     CapacityError, Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeEncoder,
-    TranscodeError, TranscodeStatus, Transcoder,
-    nz,
+    TranscodeError, TranscodeStatus, Transcoder, nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

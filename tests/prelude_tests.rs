@@ -11,8 +11,7 @@ use qubit_codec::{
     CodecDecodeSignal, CodecEncodeError, CodecTranscodeConverter, CodecTranscodeDecoder,
     CodecTranscodeEncoder, CodecValueDecoder, CodecValueEncoder, EncodeContext, EncodePlan,
     TranscodeConvertHooks, TranscodeConverter, TranscodeDecoder, TranscodeEncoder,
-    TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder,
-    nz,
+    TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder, nz,
 };
 
 #[derive(Default)]

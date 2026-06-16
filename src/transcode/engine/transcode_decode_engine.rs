@@ -11,11 +11,11 @@ use core::num::NonZeroUsize;
 
 use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
 use crate::codec::assert_unit_bounds;
+use crate::nz;
 use crate::{
     CapacityError, Codec, DecodeAction, DecodeContext, TranscodeDecodeHooks, TranscodeError,
     TranscodeProgress, Transcoder,
 };
-use crate::nz;
 
 /// Reusable buffered decoding engine for codec-backed decoders.
 ///

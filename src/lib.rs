@@ -36,7 +36,8 @@ pub use transcode::{
     Transcoder,
 };
 pub use util::{
-    copy_nonoverlapping_unchecked, has_units, mut_unchecked, nz, nz_const, read_unchecked,
-    ref_unchecked, required_index, write_unchecked,
+    copy_nonoverlapping_unchecked, mut_unchecked, nz, nz_const, range_fits,
+    read_ne_unaligned_unchecked, read_unchecked, ref_unchecked, write_ne_unaligned_unchecked,
+    write_unchecked,
 };
 pub use value::{CodecValueDecoder, CodecValueEncoder, ValueDecoder, ValueEncoder};

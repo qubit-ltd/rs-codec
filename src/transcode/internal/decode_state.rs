@@ -10,6 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
+use crate::mut_unchecked;
 
 /// Mutable state for one buffered decode call.
 pub(in crate::transcode) struct DecodeState<'a, Unit, Value> {
@@ -158,7 +159,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         // SAFETY: `needs_output()` returned false, so the output cursor points
         // at a writable slot.
         unsafe {
-            *self.output.get_unchecked_mut(self.output_cursor) = value;
+            *mut_unchecked(self.output, self.output_cursor) = value;
         }
         self.input_cursor += consumed;
         self.output_cursor += 1;

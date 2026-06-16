@@ -8,8 +8,7 @@
 //! Tests for the low-level codec trait.
 
 use qubit_codec::{
-    CapacityError, Codec, CodecDecodeError, CodecEncodeError, CodecValueEncoder, ValueEncoder,
-    nz,
+    CapacityError, Codec, CodecDecodeError, CodecEncodeError, CodecValueEncoder, ValueEncoder, nz,
 };
 
 #[derive(Default)]

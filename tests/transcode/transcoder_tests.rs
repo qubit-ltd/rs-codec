@@ -8,8 +8,7 @@
 
 use qubit_codec::{
     CapacityError, CodecConvertError, TranscodeError, TranscodeProgress, TranscodeStatus,
-    Transcoder,
-    nz,
+    Transcoder, nz,
 };
 
 #[derive(Default)]

@@ -11,8 +11,7 @@ use core::num::NonZeroUsize;
 
 use qubit_codec::{
     Codec, DecodeAction, DecodeContext, TranscodeDecodeEngine, TranscodeDecodeHooks,
-    TranscodeError, TranscodeStatus, Transcoder,
-    nz,
+    TranscodeError, TranscodeStatus, Transcoder, nz,
 };
 
 fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
