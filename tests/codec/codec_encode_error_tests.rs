@@ -27,6 +27,18 @@ fn test_codec_encode_error_reports_invalid_input_index() {
 }
 
 #[test]
+fn test_codec_encode_error_reports_unencodable_value() {
+    let error = CodecEncodeError::<TestEncodeError>::unencodable_value(7);
+
+    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 7 }, error);
+    assert!(
+        CodecEncodeError::<&'static str>::unencodable_value(7)
+            .to_string()
+            .contains("unencodable value")
+    );
+}
+
+#[test]
 fn test_codec_encode_error_reports_invalid_output_index() {
     let error = CodecEncodeError::<TestEncodeError>::invalid_output_index(5, 2);
 

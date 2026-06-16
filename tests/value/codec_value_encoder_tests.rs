@@ -73,6 +73,10 @@ unsafe impl Codec for RejectOddCodec {
         core::num::NonZeroUsize::MIN
     }
 
+    fn can_encode_value(&self, value: &u8) -> bool {
+        value.is_multiple_of(2)
+    }
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -91,9 +95,7 @@ unsafe impl Codec for RejectOddCodec {
         output: &mut [u8],
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        if !value.is_multiple_of(2) {
-            return Err("odd value");
-        }
+        debug_assert!(self.can_encode_value(value));
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
@@ -351,18 +353,12 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error =
         ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("odd value should be rejected");
 
-    assert_eq!(
-        CodecEncodeError::Encode {
-            source: "odd value",
-            input_index: 0,
-        },
-        error,
-    );
+    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 0 }, error);
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode wrote beyond its value bound")]
-fn test_codec_value_encoder_panics_when_codec_reports_too_many_units() {
+#[should_panic(expected = "Codec::encode wrote a different length than Codec::encode_len")]
+fn test_codec_value_encoder_panics_when_codec_reports_wrong_value_width() {
     let mut encoder = CodecValueEncoder::<OverreportingEncodeCodec>::new(OverreportingEncodeCodec);
 
     let _ = ValueEncoder::<u8>::encode(&mut encoder, &7);

@@ -27,6 +27,13 @@ pub enum CodecEncodeError<E> {
         input_index: usize,
     },
 
+    /// The wrapped codec cannot represent the input value.
+    #[error("unencodable value at input index {input_index}")]
+    UnencodableValue {
+        /// Absolute input index of the value being encoded.
+        input_index: usize,
+    },
+
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {len}")]
     InvalidInputIndex {
@@ -81,6 +88,21 @@ impl<E> CodecEncodeError<E> {
             source,
             input_index,
         }
+    }
+
+    /// Creates an unencodable-value error.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_index`: Absolute input index of the value being encoded.
+    ///
+    /// # Returns
+    ///
+    /// Returns an unencodable-value error.
+    #[must_use]
+    #[inline(always)]
+    pub const fn unencodable_value(input_index: usize) -> Self {
+        Self::UnencodableValue { input_index }
     }
 
     /// Creates an invalid-input-index error.

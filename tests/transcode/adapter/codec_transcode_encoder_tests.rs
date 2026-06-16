@@ -133,6 +133,10 @@ unsafe impl Codec for RejectOddCodec {
         core::num::NonZeroUsize::MIN
     }
 
+    fn can_encode_value(&self, value: &u8) -> bool {
+        value.is_multiple_of(2)
+    }
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -151,9 +155,7 @@ unsafe impl Codec for RejectOddCodec {
         output: &mut [u8],
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        if !value.is_multiple_of(2) {
-            return Err("odd value");
-        }
+        debug_assert!(self.can_encode_value(value));
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
@@ -301,13 +303,10 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
 
     let error = encoder
         .transcode(&[2, 3], 0, &mut output, 0)
-        .expect_err("odd value should be rejected");
+        .expect_err("odd value should be rejected before unsafe encode");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::Encode {
-            source: "odd value",
-            input_index: 1,
-        }),
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue { input_index: 1 }),
         error,
     );
     assert_eq!([2, 0], output);

@@ -40,8 +40,11 @@ where
         &mut self,
         codec: &mut C,
         input_value: &C::Value,
-        _input_index: usize,
+        input_index: usize,
     ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
+        if !codec.can_encode_value(input_value) {
+            return Err(CodecEncodeError::unencodable_value(input_index));
+        }
         Ok(EncodePlan::new(codec.encode_len(input_value).get(), ()))
     }
 

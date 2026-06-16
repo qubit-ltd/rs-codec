@@ -21,6 +21,10 @@ unsafe impl Codec for ResetFailCodec {
         core::num::NonZeroUsize::MIN
     }
 
+    fn can_encode_value(&self, value: &u8) -> bool {
+        value.is_multiple_of(2)
+    }
+
     fn max_encode_reset_units(&self) -> usize {
         1
     }
@@ -69,6 +73,10 @@ unsafe impl Codec for RejectOddCodec {
         core::num::NonZeroUsize::MIN
     }
 
+    fn can_encode_value(&self, value: &u8) -> bool {
+        value.is_multiple_of(2)
+    }
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -83,9 +91,7 @@ unsafe impl Codec for RejectOddCodec {
         output: &mut [u8],
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        if !value.is_multiple_of(2) {
-            return Err("odd value");
-        }
+        debug_assert!(self.can_encode_value(value));
         output[index] = *value;
         Ok(qubit_codec::nz!(1))
     }
@@ -98,13 +104,10 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
 
     let error = encoder
         .transcode(&[7], 0, &mut output, 0)
-        .expect_err("strict encode hooks should wrap codec errors");
+        .expect_err("strict encode hooks should reject unencodable values");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::Encode {
-            source: "odd value",
-            input_index: 0,
-        }),
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue { input_index: 0 }),
         error,
     );
 }

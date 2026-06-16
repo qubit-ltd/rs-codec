@@ -111,6 +111,32 @@ pub unsafe trait Codec {
     #[must_use]
     fn max_units_per_value(&self) -> NonZeroUsize;
 
+    /// Returns whether `value` is in this codec's encodable value domain.
+    ///
+    /// The default implementation returns `true`, which is correct for codecs
+    /// whose [`Value`](Self::Value) type contains only values they can encode.
+    /// Codecs whose logical value type is broader than their representation
+    /// domain, such as an ASCII codec with `Value = char`, must override this
+    /// method.
+    ///
+    /// Checked encoder adapters call this method before querying
+    /// [`encode_len`](Self::encode_len) or entering the unsafe
+    /// [`encode`](Self::encode) method. Direct unsafe callers must do the same.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Value whose encodability is queried.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when `value` may be passed to
+    /// [`encode_len`](Self::encode_len) and [`encode`](Self::encode).
+    #[must_use]
+    #[inline(always)]
+    fn can_encode_value(&self, _value: &Self::Value) -> bool {
+        true
+    }
+
     /// Returns the exact non-zero unit count this codec will write when
     /// encoding `value`.
     ///
@@ -120,14 +146,15 @@ pub unsafe trait Codec {
     /// Fixed-width codecs do not need to override this method.
     ///
     /// Variable-width codecs (LEB128, UTF-8, GB18030, …) should override this
-    /// to report the true encoded length for `value`. Doing so lets buffered
-    /// adapters and stream writers reserve only what is actually needed and
-    /// enables capacity probing without performing the encode. Default
-    /// codec-backed encoders use this exact value for per-value output
-    /// capacity. The contract requires the returned length to equal the unit
-    /// count
-    /// [`encode`](Self::encode) writes for the same `value` under the same
-    /// codec state, and to never exceed
+    /// to report the true encoded length for encodable `value`s. Doing so lets
+    /// buffered adapters and stream writers reserve only what is actually
+    /// needed and enables capacity probing without performing the encode.
+    /// Default codec-backed encoders use this exact value for per-value output
+    /// capacity. The contract requires callers to use this method only when
+    /// [`can_encode_value`](Self::can_encode_value) returned `true` for the
+    /// same `value`. Under that precondition, the returned length must equal
+    /// the unit count [`encode`](Self::encode) writes for the same `value`
+    /// under the same codec state, and must never exceed
     /// [`max_units_per_value`](Self::max_units_per_value).
     ///
     /// # Parameters
@@ -136,8 +163,8 @@ pub unsafe trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the non-zero unit count [`encode`](Self::encode) will write
-    /// for `value`.
+    /// Returns the non-zero unit count [`encode`](Self::encode) will write for
+    /// an encodable `value`.
     #[must_use]
     #[inline(always)]
     fn encode_len(&self, _value: &Self::Value) -> NonZeroUsize {
@@ -250,13 +277,18 @@ pub unsafe trait Codec {
     ///
     /// # Errors
     ///
-    /// Returns `Self::EncodeError` when `value` cannot be represented by this
-    /// codec. Implementations must leave their internal state consistent when
-    /// returning an error.
+    /// Returns `Self::EncodeError` for encode-side state or representation
+    /// failures other than a value being outside the codec's encodable domain.
+    /// Checked callers reject values for which
+    /// [`can_encode_value`](Self::can_encode_value) returns `false` before
+    /// entering this unsafe method. Implementations must leave their internal
+    /// state consistent when returning an error.
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that the implementation can write at least
+    /// The caller must guarantee that
+    /// [`can_encode_value`](Self::can_encode_value) returned `true` for
+    /// `value`, and that the implementation can write at least
     /// [`encode_len`](Self::encode_len) units for the same `value` and codec
     /// state starting at `index`. On success, implementations must return that
     /// exact written unit count, and the count must be no larger than
@@ -267,74 +299,6 @@ pub unsafe trait Codec {
         output: &mut [Self::Unit],
         index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError>;
-
-    /// Encodes one value after emitting reset output into a caller buffer.
-    ///
-    /// The method validates the output index and the combined reset-plus-value
-    /// capacity before calling the unchecked codec hooks. It is a convenience
-    /// wrapper for code paths that need one complete value and want to reuse
-    /// caller-owned storage.
-    ///
-    /// # Parameters
-    ///
-    /// - `value`: Value to encode.
-    /// - `output`: Destination unit buffer.
-    /// - `output_index`: Start index in `output`.
-    ///
-    /// # Returns
-    ///
-    /// Returns the total number of reset and value units written.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`CodecEncodeError::InvalidOutputIndex`] when `output_index` is
-    /// outside `output`, [`CodecEncodeError::InsufficientOutput`] when the
-    /// writable suffix cannot hold the codec-declared bound,
-    /// [`CodecEncodeError::OutputLengthOverflow`] when the bound overflows, or
-    /// [`CodecEncodeError::Encode`] when reset or value encoding fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics when the codec writes or reports more units than its declared
-    /// reset or value bound.
-    #[inline]
-    fn encode_value_with_reset(
-        &mut self,
-        value: &Self::Value,
-        output: &mut [Self::Unit],
-        output_index: usize,
-    ) -> Result<usize, CodecEncodeError<Self::EncodeError>> {
-        let required = self
-            .max_encode_value_units()
-            .map_err(|_| CodecEncodeError::output_length_overflow())?;
-        CodecEncodeError::ensure_output_capacity(output.len(), output_index, required)?;
-
-        let reset_units = self.max_encode_reset_units();
-        let reset_written = unsafe {
-            // SAFETY: The capacity check above reserves the combined
-            // reset-plus-value output bound at `output_index`.
-            self.encode_reset(output, output_index)
-        }
-        .map_err(|error| CodecEncodeError::encode(error, 0))?;
-        assert!(
-            reset_written <= reset_units,
-            "Codec::encode_reset wrote beyond its reset bound",
-        );
-
-        let value_units = self.max_units_per_value().get();
-        let value_written = unsafe {
-            // SAFETY: `reset_written <= reset_units` and the earlier combined
-            // capacity check leave the declared value bound writable.
-            self.encode(value, output, output_index + reset_written)
-        }
-        .map_err(|error| CodecEncodeError::encode(error, 0))?
-        .get();
-        assert!(
-            value_written <= value_units,
-            "Codec::encode wrote beyond its value bound",
-        );
-        Ok(reset_written + value_written)
-    }
 
     /// Decodes one value from `input` starting at `index`.
     ///
@@ -402,6 +366,78 @@ pub unsafe trait Codec {
         _index: usize,
     ) -> Result<usize, Self::DecodeError> {
         Ok(0)
+    }
+
+    /// Encodes one value after emitting reset output into a caller buffer.
+    ///
+    /// The method validates the output index and the combined reset-plus-value
+    /// capacity before calling the unchecked codec hooks. It is a convenience
+    /// wrapper for code paths that need one complete value and want to reuse
+    /// caller-owned storage.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Value to encode.
+    /// - `output`: Destination unit buffer.
+    /// - `output_index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the total number of reset and value units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CodecEncodeError::UnencodableValue`] when `value` is outside
+    /// this codec's encodable domain,
+    /// [`CodecEncodeError::InvalidOutputIndex`] when `output_index` is outside
+    /// `output`, [`CodecEncodeError::InsufficientOutput`] when the writable
+    /// suffix cannot hold the reset output plus exact encoded value width,
+    /// [`CodecEncodeError::OutputLengthOverflow`] when the bound overflows, or
+    /// [`CodecEncodeError::Encode`] when reset or value encoding fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the codec writes or reports more units than its declared
+    /// reset or value bound.
+    fn encode_value_with_reset(
+        &mut self,
+        value: &Self::Value,
+        output: &mut [Self::Unit],
+        output_index: usize,
+    ) -> Result<usize, CodecEncodeError<Self::EncodeError>> {
+        if !self.can_encode_value(value) {
+            return Err(CodecEncodeError::unencodable_value(0));
+        }
+        let reset_units = self.max_encode_reset_units();
+        let value_units = self.encode_len(value).get();
+        let required = reset_units
+            .checked_add(value_units)
+            .ok_or_else(CodecEncodeError::output_length_overflow)?;
+        CodecEncodeError::ensure_output_capacity(output.len(), output_index, required)?;
+
+        let reset_written = unsafe {
+            // SAFETY: The capacity check above reserves the combined
+            // reset-plus-value output bound at `output_index`.
+            self.encode_reset(output, output_index)
+        }
+        .map_err(|error| CodecEncodeError::encode(error, 0))?;
+        assert!(
+            reset_written <= reset_units,
+            "Codec::encode_reset wrote beyond its reset bound",
+        );
+
+        let value_written = unsafe {
+            // SAFETY: `reset_written <= reset_units` and the earlier combined
+            // capacity check leave the exact value width writable.
+            self.encode(value, output, output_index + reset_written)
+        }
+        .map_err(|error| CodecEncodeError::encode(error, 0))?
+        .get();
+        assert!(
+            value_written == value_units,
+            "Codec::encode wrote a different length than Codec::encode_len",
+        );
+        Ok(reset_written + value_written)
     }
 
     /// Decodes one value and flushes decode-side state into caller storage.

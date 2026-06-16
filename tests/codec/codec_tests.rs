@@ -127,6 +127,76 @@ unsafe impl Codec for StatefulLifecycleCodec {
 }
 
 #[derive(Default)]
+struct VariableWidthResetCodec;
+
+unsafe impl Codec for VariableWidthResetCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
+    }
+
+    fn encode_len(&self, value: &u8) -> core::num::NonZeroUsize {
+        if *value < 0x80 {
+            core::num::NonZeroUsize::MIN
+        } else {
+            core::num::NonZeroUsize::new(2).expect("literal is non-zero")
+        }
+    }
+
+    fn max_encode_reset_units(&self) -> usize {
+        1
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((input[index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        let required = self.encode_len(value).get();
+        debug_assert!(
+            index
+                .checked_add(required)
+                .is_some_and(|end| end <= output.len())
+        );
+        unsafe {
+            // SAFETY: The caller guarantees that `required` units are writable
+            // from `index`.
+            *output.as_mut_ptr().add(index) = *value;
+            if required == 2 {
+                *output.as_mut_ptr().add(index + 1) = 0;
+            }
+        }
+        Ok(self.encode_len(value))
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[index] = 0xfe;
+        Ok(1)
+    }
+}
+
+#[derive(Default)]
 struct InvalidBoundsCodec;
 
 unsafe impl Codec for InvalidBoundsCodec {
@@ -212,6 +282,7 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
+    assert!(codec.can_encode_value(&41));
     assert_eq!(1, written.get());
     assert_eq!(1, consumed.get());
     assert_eq!(41, decoded);
@@ -273,6 +344,19 @@ fn test_codec_encode_value_with_reset_writes_reset_and_value() {
 
     assert_eq!(2, written);
     assert_eq!([0xfe, 42], output);
+}
+
+#[test]
+fn test_codec_encode_value_with_reset_uses_exact_value_width() {
+    let mut codec = VariableWidthResetCodec;
+    let mut output = [0_u8; 2];
+
+    let written = codec
+        .encode_value_with_reset(&0x41, &mut output, 0)
+        .expect("one-byte value should fit after reset");
+
+    assert_eq!(2, written);
+    assert_eq!([0xfe, 0x41], output);
 }
 
 #[test]

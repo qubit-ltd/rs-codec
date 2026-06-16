@@ -79,15 +79,19 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more written units than its
-    /// declared [`Codec::max_encode_reset_units`] or
-    /// [`Codec::max_units_per_value`] bounds.
+    /// Panics when the wrapped codec reports more reset output than
+    /// [`Codec::max_encode_reset_units`] or a value width different from
+    /// [`Codec::encode_len`].
     fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
-        let max_units = self
+        if !self.codec.can_encode_value(input) {
+            return Err(CodecEncodeError::unencodable_value(0));
+        }
+        let units = self
             .codec
-            .max_encode_value_units()
-            .map_err(|_| CodecEncodeError::output_length_overflow())?;
-        let mut output = vec![C::Unit::default(); max_units];
+            .max_encode_reset_units()
+            .checked_add(self.codec.encode_len(input).get())
+            .ok_or_else(CodecEncodeError::output_length_overflow)?;
+        let mut output = vec![C::Unit::default(); units];
         let written = self.codec.encode_value_with_reset(input, &mut output, 0)?;
         output.truncate(written);
         Ok(output)
