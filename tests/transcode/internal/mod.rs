@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 mod convert_error_of_tests;
 mod convert_progress_result_tests;
 mod convert_state_tests;
