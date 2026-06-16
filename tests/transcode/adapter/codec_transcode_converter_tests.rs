@@ -10,6 +10,7 @@
 use qubit_codec::{
     CapacityError, Codec, CodecConvertError, CodecDecodeError, CodecEncodeError,
     CodecTranscodeConverter, TranscodeConverter, TranscodeError, TranscodeStatus, Transcoder,
+    nz,
 };
 
 use std::{
@@ -70,7 +71,7 @@ unsafe impl Codec for VariableByteDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -114,7 +115,7 @@ unsafe impl Codec for PairByteEncoder {
 
         output[index] = *value;
         output[index + 1] = value.wrapping_add(1);
-        Ok(qubit_codec::nz!(2))
+        Ok(nz!(2))
     }
 }
 
@@ -156,7 +157,7 @@ unsafe impl Codec for MinTwoDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -209,7 +210,7 @@ unsafe impl Codec for FlushValueDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -263,7 +264,7 @@ unsafe impl Codec for NonDefaultDecoder {
         debug_assert!(index < output.len());
 
         output[index] = value.0;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -303,7 +304,7 @@ unsafe impl Codec for NonDefaultEncoder {
         debug_assert!(index < output.len());
 
         output[index] = value.0.wrapping_add(1);
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -400,7 +401,7 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() 
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            additional: crate::nz(2),
+            additional: nz(2),
             available: 0,
         },
         progress.status(),
@@ -499,7 +500,7 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),
@@ -523,7 +524,7 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),
@@ -645,7 +646,7 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),

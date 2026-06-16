@@ -12,6 +12,7 @@ use qubit_codec::{
     CodecTranscodeEncoder, CodecValueDecoder, CodecValueEncoder, EncodeContext, EncodePlan,
     TranscodeConvertHooks, TranscodeConverter, TranscodeDecoder, TranscodeEncoder,
     TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder,
+    nz,
 };
 
 #[derive(Default)]
@@ -73,7 +74,7 @@ unsafe impl Codec for EchoCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 

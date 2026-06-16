@@ -8,7 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::nz;
+use qubit_codec::{nz, nz_const};
 
 #[test]
 fn nz_returns_non_zero() {
@@ -24,6 +24,6 @@ fn nz_zero_panics() {
 
 #[test]
 fn nz_macro_in_const_position() {
-    const VALUE: NonZeroUsize = qubit_codec::nz!(7);
+    const VALUE: NonZeroUsize = nz_const(7);
     assert_eq!(VALUE.get(), 7);
 }

@@ -12,6 +12,7 @@ use core::num::NonZeroUsize;
 use qubit_codec::{
     Codec, DecodeAction, DecodeContext, TranscodeDecodeEngine, TranscodeDecodeHooks,
     TranscodeError, TranscodeStatus, Transcoder,
+    nz,
 };
 
 fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
@@ -77,7 +78,7 @@ unsafe impl Codec for PrefixCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -119,7 +120,7 @@ unsafe impl Codec for OverconsumingCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -389,7 +390,7 @@ unsafe impl Codec for MinTwoCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -429,7 +430,7 @@ unsafe impl Codec for OverflowFlushCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -609,7 +610,7 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),
@@ -639,7 +640,7 @@ fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_ta
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),
@@ -660,7 +661,7 @@ fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output()
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),
@@ -696,7 +697,7 @@ fn test_transcode_decode_engine_reports_need_output_before_policy_emit() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -774,7 +775,7 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() 
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -895,7 +896,7 @@ unsafe impl Codec for FlushFailCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 
     unsafe fn decode_flush(

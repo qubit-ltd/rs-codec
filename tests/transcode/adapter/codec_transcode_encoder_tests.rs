@@ -10,6 +10,7 @@
 use qubit_codec::{
     CapacityError, Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeEncoder,
     TranscodeError, TranscodeStatus, Transcoder,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -55,7 +56,7 @@ unsafe impl Codec for PairByteCodec {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
         }
-        Ok(qubit_codec::nz!(2))
+        Ok(nz!(2))
     }
 }
 
@@ -73,14 +74,14 @@ unsafe impl Codec for VariableWidthCodec {
     }
 
     fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        qubit_codec::nz!(3)
+        nz!(3)
     }
 
     fn encode_len(&self, value: &u8) -> core::num::NonZeroUsize {
         match *value {
-            0..=9 => qubit_codec::nz!(1),
-            10..=99 => qubit_codec::nz!(2),
-            _ => qubit_codec::nz!(3),
+            0..=9 => nz!(1),
+            10..=99 => nz!(2),
+            _ => nz!(3),
         }
     }
 
@@ -162,7 +163,7 @@ unsafe impl Codec for RejectOddCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -182,7 +183,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            additional: crate::nz(2),
+            additional: nz(2),
             available: 0,
         },
         progress.status(),
@@ -226,7 +227,7 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),

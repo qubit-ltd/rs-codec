@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecDecodeError, CodecTranscodeDecoder, TranscodeError, Transcoder};
+use qubit_codec::{Codec, CodecDecodeError, nz, CodecTranscodeDecoder, TranscodeError, Transcoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
@@ -48,7 +48,7 @@ unsafe impl Codec for FlushFailCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -100,7 +100,7 @@ unsafe impl Codec for InvalidByteCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 

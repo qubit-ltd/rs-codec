@@ -8,5 +8,15 @@
 //! Internal utilities shared across the crate.
 
 mod nz;
+mod slice;
 
 pub use nz::{nz, nz_const};
+pub use slice::{
+    copy_nonoverlapping_unchecked,
+    has_units,
+    mut_unchecked,
+    read_unchecked,
+    ref_unchecked,
+    required_index,
+    write_unchecked,
+};

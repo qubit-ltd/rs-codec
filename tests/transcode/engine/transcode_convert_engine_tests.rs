@@ -13,6 +13,7 @@ use qubit_codec::{
     CapacityError, Codec, DecodeAction, DecodeContext, EncodeContext, EncodePlan,
     TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeHooks, TranscodeEncodeHooks,
     TranscodeError, TranscodeStatus,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -78,7 +79,7 @@ unsafe impl Codec for SourceCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -119,7 +120,7 @@ unsafe impl Codec for TargetCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -159,7 +160,7 @@ unsafe impl Codec for ResetEmittingTargetCodec {
         index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -212,7 +213,7 @@ unsafe impl Codec for ResetFailTargetCodec {
         index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -386,7 +387,7 @@ unsafe impl Codec for ErrorSourceCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(qubit_codec::nz!(1))
+        Ok(nz!(1))
     }
 }
 
@@ -1279,7 +1280,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1311,7 +1312,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1324,7 +1325,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1652,7 +1653,7 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(2),
+            additional: nz(2),
             available: 1,
         },
         progress.status(),

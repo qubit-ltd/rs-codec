@@ -9,6 +9,7 @@
 use qubit_codec::{
     CapacityError, CodecConvertError, TranscodeError, TranscodeProgress, TranscodeStatus,
     Transcoder,
+    nz,
 };
 
 #[derive(Default)]
@@ -49,7 +50,7 @@ impl Transcoder<u8, u8> for CopyTranscoder {
         } else {
             let status = TranscodeStatus::NeedOutput {
                 output_index: output_index + written,
-                additional: crate::nz(1),
+                additional: nz(1),
                 available: output.len().saturating_sub(output_index + written),
             };
             Ok(TranscodeProgress::new(status, read, written))
