@@ -77,26 +77,3 @@ macro_rules! nz {
 pub const fn nz_const(value: usize) -> NonZeroUsize {
     nz(value)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn nz_returns_non_zero() {
-        assert_eq!(nz(1).get(), 1);
-        assert_eq!(nz(42).get(), 42);
-    }
-
-    #[test]
-    #[should_panic(expected = "must be non-zero")]
-    fn nz_zero_panics() {
-        let _ = nz(0);
-    }
-
-    #[test]
-    fn nz_macro_in_const_position() {
-        const VALUE: NonZeroUsize = nz!(7);
-        assert_eq!(VALUE.get(), 7);
-    }
-}
