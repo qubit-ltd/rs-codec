@@ -190,7 +190,7 @@ where
         // requirements for the unread copy.
         unsafe {
             self.input
-                .copy_unread_to_unchecked(output, output_index, count);
+                .read_into_unchecked(output, output_index, count);
         }
     }
 
@@ -305,7 +305,7 @@ where
             let (value, consumed) = unsafe {
                 // SAFETY: The unread window contains at least
                 // `min_units_per_value` units from index zero.
-                decoder.decode(self.input.unread(), 0)
+                decoder.decode(self.input.unread_slice(), 0)
             }
             .map_err(&mut *map_error)?;
             let consumed = consumed.get();
@@ -388,7 +388,7 @@ where
             // the buffered input storage.
             unsafe {
                 self.input
-                    .copy_unread_to_unchecked(&mut units, 0, available);
+                    .read_into_unchecked(&mut units, 0, available);
             }
             let units = &units[..available];
             let progress = decoder
