@@ -22,9 +22,10 @@ pub struct EncodePlan<A> {
     /// Output units that must be writable before calling `write_encode`.
     ///
     /// Default codec-backed encoders use [`crate::Codec::encode_len`] for the
-    /// current value. Domain-specific encoders may use another safe bound, such
-    /// as a charset encoder using its exact encoded length probe. A value of
-    /// zero is valid for policies that consume input without producing output.
+    /// current value. Domain-specific encoders may use another safe bound,
+    /// such as a charset encoder using its exact encoded length probe. A
+    /// value of zero is valid for policies that consume input without
+    /// producing output.
     pub max_output_units: usize,
 
     /// Concrete write action interpreted by the encoder implementation.

@@ -7,8 +7,14 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
-use crate::{CapacityError, Codec};
+use super::super::{
+    encode_context::EncodeContext,
+    encode_plan::EncodePlan,
+};
+use crate::{
+    CapacityError,
+    Codec,
+};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -143,7 +149,11 @@ where
     /// [`Codec::max_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(codec.max_units_per_value().get())
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -245,7 +255,11 @@ where
     ///
     /// Returns the hook-specific error.
     #[inline]
-    fn map_encode_reset_error(&mut self, _codec: &mut C, _error: C::EncodeError) -> Self::Error {
+    fn map_encode_reset_error(
+        &mut self,
+        _codec: &mut C,
+        _error: C::EncodeError,
+    ) -> Self::Error {
         panic!(
             "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
         )

@@ -8,11 +8,25 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+    Seek,
+    SeekFrom,
+    Write,
+};
 
-use qubit_io::{BufferedOutput, Output};
+use qubit_io::{
+    BufferedOutput,
+    Output,
+};
 
-use crate::{TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -265,7 +279,11 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
+    pub fn finish<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
         M: FnMut(TranscodeError<E::Error>) -> Error,
@@ -274,7 +292,8 @@ where
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",

@@ -70,11 +70,16 @@ impl<Value> DecodeAction<Value> {
     /// `available`.
     #[must_use]
     #[inline]
-    pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
+    pub(super) fn into_step(
+        self,
+        input_index: usize,
+        available: usize,
+    ) -> DecodeStep<Value> {
         match self {
-            Self::NeedInput { required_total } => {
-                DecodeStep::need_input(Self::missing_input(required_total, available), available)
-            }
+            Self::NeedInput { required_total } => DecodeStep::need_input(
+                Self::missing_input(required_total, available),
+                available,
+            ),
             Self::Skip { consumed } => {
                 DecodeStep::skipped(Self::bound_consumed(consumed, available))
             }
@@ -130,7 +135,10 @@ impl<Value> DecodeAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[must_use]
     #[inline(always)]
-    fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
+    fn bound_consumed(
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> NonZeroUsize {
         assert!(available > 0, "DecodeAction cannot consume empty input");
         assert!(
             consumed.get() <= available,

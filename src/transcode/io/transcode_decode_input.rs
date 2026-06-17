@@ -8,12 +8,27 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{BufferedInput, Input};
+use qubit_io::{
+    BufferedInput,
+    Input,
+};
 
 use crate::codec::assert_unit_bounds;
-use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    Codec,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -107,6 +122,18 @@ where
     #[inline(always)]
     pub fn available(&self) -> usize {
         self.input.available()
+    }
+
+    /// Returns the currently buffered unread units.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared slice over the unread portion of the internal unit
+    /// buffer. The slice is valid until this adapter is mutated.
+    #[must_use]
+    #[inline(always)]
+    pub fn unread(&self) -> &[I::Item] {
+        self.input.unread()
     }
 
     /// Returns the internal unit buffer capacity.
@@ -273,11 +300,15 @@ where
         let mut written_total = 0;
 
         while written_total < count {
-            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
+            if self.input.available() < min_units
+                && !self.input.fill_until(min_units)?
+            {
                 return Ok(written_total);
             }
 
-            if self.input.available() < max_units && max_units <= self.input.capacity() {
+            if self.input.available() < max_units
+                && max_units <= self.input.capacity()
+            {
                 let _ = self.input.fill_until(max_units)?;
             }
 
@@ -521,6 +552,8 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
 }
 
 /// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(error: TranscodeError<core::convert::Infallible>) -> Error {
+fn transcode_contract_to_io_error(
+    error: TranscodeError<core::convert::Infallible>,
+) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

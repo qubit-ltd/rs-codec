@@ -9,8 +9,14 @@
 
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError, Codec, CodecDecodeError, TranscodeDecodeEngine, TranscodeDecoder,
-    TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    TranscodeDecodeEngine,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -47,7 +53,10 @@ where
     #[inline]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
+            engine: TranscodeDecodeEngine::new(
+                codec,
+                CodecTranscodeDecodeHooks,
+            ),
         }
     }
 }
@@ -153,4 +162,7 @@ where
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
+    C: Codec
+{
+}

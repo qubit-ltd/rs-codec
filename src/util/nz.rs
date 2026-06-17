@@ -56,7 +56,7 @@ macro_rules! nz {
     ($value:expr) => {{ $crate::nz_const($value) }};
 }
 
-/// Re-export of [`nz`] under the name expected by [`nz!`].
+/// Re-export of [`nz`] under the name expected by `nz!`.
 ///
 /// The macro qualifies its expansion with `$crate::nz_const` so that callers
 /// can `use qubit_codec::nz;` without also importing the function itself.

@@ -10,9 +10,19 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::{
-    CapacityError, Codec, DecodeAction, DecodeContext, EncodeContext, EncodePlan,
-    TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeHooks, TranscodeEncodeHooks,
-    TranscodeError, TranscodeStatus, nz,
+    CapacityError,
+    Codec,
+    DecodeAction,
+    DecodeContext,
+    EncodeContext,
+    EncodePlan,
+    TranscodeConvertEngine,
+    TranscodeConvertHooks,
+    TranscodeDecodeHooks,
+    TranscodeEncodeHooks,
+    TranscodeError,
+    TranscodeStatus,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -248,14 +258,20 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
     ) -> Result<usize, Self::Error> {
         Ok(unsafe {
             codec
-                .encode(context.input_value, context.output, context.output_index)
+                .encode(
+                    context.input_value,
+                    context.output,
+                    context.output_index,
+                )
                 .expect("infallible target encode")
                 .get()
         })
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, ResetEmittingTargetCodec> for ResetTargetHooks {
+impl TranscodeConvertHooks<SourceCodec, ResetEmittingTargetCodec>
+    for ResetTargetHooks
+{
     type DecodeError = EngineError;
     type DecodeHooks = StrictDecodeHooks;
     type EncodeHooks = ResetTargetHooks;
@@ -309,8 +325,14 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
         context: EncodeContext<'_, u8, u8>,
         _plan: EncodePlan<Self::PlanAction>,
     ) -> Result<usize, Self::Error> {
-        unsafe { codec.encode(context.input_value, context.output, context.output_index) }
-            .map(NonZeroUsize::get)
+        unsafe {
+            codec.encode(
+                context.input_value,
+                context.output,
+                context.output_index,
+            )
+        }
+        .map(NonZeroUsize::get)
     }
 
     fn map_encode_reset_error(
@@ -322,7 +344,9 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, ResetFailTargetCodec> for ResetFailTargetHooks {
+impl TranscodeConvertHooks<SourceCodec, ResetFailTargetCodec>
+    for ResetFailTargetHooks
+{
     type DecodeError = EngineError;
     type DecodeHooks = StrictDecodeHooks;
     type EncodeHooks = ResetFailTargetHooks;
@@ -434,7 +458,8 @@ impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
             ..
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
-        unsafe { codec.encode(input_value, output, output_index) }.map(NonZeroUsize::get)
+        unsafe { codec.encode(input_value, output, output_index) }
+            .map(NonZeroUsize::get)
     }
 }
 
@@ -472,7 +497,8 @@ impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
             return Err(EngineError::Encode);
         }
         unsafe {
-            *context.output.get_unchecked_mut(context.output_index) = *context.input_value;
+            *context.output.get_unchecked_mut(context.output_index) =
+                *context.input_value;
             *context.output.get_unchecked_mut(context.output_index + 1) =
                 context.input_value.wrapping_add(1);
         }
@@ -483,7 +509,9 @@ impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchPendingFinishHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for MismatchPendingFinishHooks {
+impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+    for MismatchPendingFinishHooks
+{
     type DecodeError = EngineError;
     type DecodeHooks = StrictDecodeHooks;
     type EncodeHooks = MismatchCapacityEncodeHooks;
@@ -518,7 +546,9 @@ impl TranscodeConvertHooks<SourceCodec, TargetCodec> for MismatchPendingFinishHo
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchDecoderFinishHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for MismatchDecoderFinishHooks {
+impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+    for MismatchDecoderFinishHooks
+{
     type DecodeError = EngineError;
     type DecodeHooks = FinishDecodeHooks;
     type EncodeHooks = MismatchCapacityEncodeHooks;
@@ -581,7 +611,9 @@ impl TranscodeDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
                 value: 42,
                 consumed: one_consumed(),
             }),
-            RepairAction::NeedInput => Ok(DecodeAction::NeedInput { required_total: 3 }),
+            RepairAction::NeedInput => {
+                Ok(DecodeAction::NeedInput { required_total: 3 })
+            }
             RepairAction::Skip => Ok(DecodeAction::Skip {
                 consumed: one_consumed(),
             }),
@@ -874,7 +906,8 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
             ..
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
-        unsafe { codec.encode(input_value, output, output_index) }.map(NonZeroUsize::get)
+        unsafe { codec.encode(input_value, output, output_index) }
+            .map(NonZeroUsize::get)
     }
 
     fn max_finish_output_len(&self, _codec: &TargetCodec) -> usize {
@@ -1054,7 +1087,9 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     ) -> Result<usize, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::FinishError => Err(EngineError::Encode),
-            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => Ok(0),
+            ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => {
+                Ok(0)
+            }
         }
     }
 }
@@ -1214,8 +1249,11 @@ impl TranscodeConvertHooks<SourceCodec, TargetCodec> for FactoryHooks {
 
 #[test]
 fn test_buffered_convert_engine_reports_bounds_and_resets() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
 
     assert_eq!(Ok(3), engine.max_output_len(3));
     assert_eq!(Ok(0), engine.max_finish_output_len());
@@ -1227,7 +1265,9 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
 
 #[test]
 fn test_buffered_convert_engine_default_builds_engine() {
-    let mut engine = TranscodeConvertEngine::<SourceCodec, TargetCodec, CopyHooks>::default();
+    let mut engine =
+        TranscodeConvertEngine::<SourceCodec, TargetCodec, CopyHooks>::default(
+        );
     let mut output = [0_u8; 1];
 
     let progress = engine
@@ -1268,8 +1308,11 @@ fn test_buffered_convert_engine_new_uses_convert_hook_factories() {
 
 #[test]
 fn test_buffered_convert_engine_owns_pending_value_between_calls() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
 
     let progress = engine
@@ -1301,8 +1344,11 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
 
 #[test]
 fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
 
     let progress = engine
@@ -1318,9 +1364,9 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     );
     assert_eq!((1, 0), (progress.read(), progress.written()));
 
-    let progress = engine
-        .transcode(&[9], 0, &mut empty_output, 0)
-        .expect("conversion should report pending output before reading new input");
+    let progress = engine.transcode(&[9], 0, &mut empty_output, 0).expect(
+        "conversion should report pending output before reading new input",
+    );
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
@@ -1333,9 +1379,9 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(Ok(2), engine.max_output_len(1));
 
     let mut output = [0_u8; 2];
-    let progress = engine
-        .transcode(&[9], 0, &mut output, 0)
-        .expect("conversion should keep pending value after repeated output starvation");
+    let progress = engine.transcode(&[9], 0, &mut output, 0).expect(
+        "conversion should keep pending value after repeated output starvation",
+    );
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 2), (progress.read(), progress.written()));
     assert_eq!([2, 10], output);
@@ -1343,8 +1389,11 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
 
 #[test]
 fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
     let progress = engine
         .transcode(&[12], 0, &mut empty_output, 0)
@@ -1355,9 +1404,9 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
     ));
 
     let mut output = [0_u8; 1];
-    let error = engine
-        .transcode(&[1], 0, &mut output, 0)
-        .expect_err("pending encode error should be mapped before new input is consumed");
+    let error = engine.transcode(&[1], 0, &mut output, 0).expect_err(
+        "pending encode error should be mapped before new input is consumed",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
@@ -1368,8 +1417,11 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
 
 #[test]
 fn test_buffered_convert_engine_reports_invalid_indices() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -1477,9 +1529,9 @@ fn test_buffered_convert_engine_maps_prepare_encode_error() {
     );
     let mut output = [0_u8; 1];
 
-    let error = engine
-        .transcode(&[1], 0, &mut output, 0)
-        .expect_err("prepare encode error should be mapped through convert hooks");
+    let error = engine.transcode(&[1], 0, &mut output, 0).expect_err(
+        "prepare encode error should be mapped through convert hooks",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
@@ -1490,8 +1542,11 @@ fn test_buffered_convert_engine_maps_prepare_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut output = [];
 
     let error = engine
@@ -1517,9 +1572,9 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
     );
     let mut output = [0_u8; 1];
 
-    let error = engine
-        .finish(&mut output, 0)
-        .expect_err("decode finish error should be mapped through convert hooks");
+    let error = engine.finish(&mut output, 0).expect_err(
+        "decode finish error should be mapped through convert hooks",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
@@ -1541,9 +1596,9 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
     );
     let mut output = [0_u8; 1];
 
-    let error = engine
-        .finish(&mut output, 0)
-        .expect_err("encode finish error should be mapped through convert hooks");
+    let error = engine.finish(&mut output, 0).expect_err(
+        "encode finish error should be mapped through convert hooks",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
@@ -1554,8 +1609,11 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
     let progress = engine
         .transcode(&[12], 0, &mut empty_output, 0)
@@ -1579,13 +1637,16 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
 
 #[test]
 fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, FinishHooks { value: 13 });
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        FinishHooks { value: 13 },
+    );
     let mut output = [0_u8; 1];
 
-    let error = engine
-        .finish(&mut output, 0)
-        .expect_err("finish should map encode errors for decoder-emitted values");
+    let error = engine.finish(&mut output, 0).expect_err(
+        "finish should map encode errors for decoder-emitted values",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
@@ -1662,8 +1723,11 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_pending_value() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, CopyHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        CopyHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
     let progress = engine
         .transcode(&[4], 0, &mut empty_output, 0)
@@ -1696,14 +1760,17 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
 
 #[test]
 fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, FinishHooks::default());
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        FinishHooks::default(),
+    );
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
-    let error = engine
-        .finish(&mut empty_output, 0)
-        .expect_err("finish should reject insufficient output before decoder finish");
+    let error = engine.finish(&mut empty_output, 0).expect_err(
+        "finish should reject insufficient output before decoder finish",
+    );
     assert_eq!(
         TranscodeError::InsufficientOutput {
             output_index: 0,
@@ -1725,8 +1792,11 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, BatchFinishHooks);
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        BatchFinishHooks,
+    );
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
@@ -1740,9 +1810,13 @@ fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
 }
 
 #[test]
-fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_output() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, FinishHooks::default());
+fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_output()
+ {
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        FinishHooks::default(),
+    );
     let mut empty_output = [0_u8; 0];
     let progress = engine
         .transcode(&[4], 0, &mut empty_output, 0)
@@ -1769,23 +1843,26 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
-    let written = engine
-        .finish(&mut output, 0)
-        .expect("finish should write pending input value before decoder finish value");
+    let written = engine.finish(&mut output, 0).expect(
+        "finish should write pending input value before decoder finish value",
+    );
     assert_eq!(2, written);
     assert_eq!([5, 40], output);
 }
 
 #[test]
 fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
-    let mut engine =
-        TranscodeConvertEngine::<_, _, _>::new(SourceCodec, TargetCodec, FinishEncodeHooksOnly);
+    let mut engine = TranscodeConvertEngine::<_, _, _>::new(
+        SourceCodec,
+        TargetCodec,
+        FinishEncodeHooksOnly,
+    );
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
-    let error = engine
-        .finish(&mut empty_output, 0)
-        .expect_err("target finish hook should require one-shot output capacity");
+    let error = engine.finish(&mut empty_output, 0).expect_err(
+        "target finish hook should require one-shot output capacity",
+    );
     assert_eq!(
         TranscodeError::InsufficientOutput {
             output_index: 0,
@@ -1827,7 +1904,9 @@ impl TranscodeDecodeHooks<SourceCodec> for ResetFailDecodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailDecodeConvertHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for ResetFailDecodeConvertHooks {
+impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+    for ResetFailDecodeConvertHooks
+{
     type DecodeError = EngineError;
     type DecodeHooks = ResetFailDecodeHooks;
     type EncodeHooks = StrictEncodeHooks;
@@ -1885,9 +1964,9 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_errors() {
         ResetFailDecodeConvertHooks,
     );
 
-    let error = engine
-        .reset(&mut [], 0)
-        .expect_err("decode reset errors should be mapped through convert hooks");
+    let error = engine.reset(&mut [], 0).expect_err(
+        "decode reset errors should be mapped through convert hooks",
+    );
 
     assert_eq!(
         TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
@@ -1904,12 +1983,14 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
     );
     let mut output = [0_u8; 1];
 
-    let error = engine
-        .reset(&mut output, 0)
-        .expect_err("target reset errors should be mapped through convert hooks");
+    let error = engine.reset(&mut output, 0).expect_err(
+        "target reset errors should be mapped through convert hooks",
+    );
 
     assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(TargetResetFailError)),
+        TranscodeError::Domain(ConvertEngineError::Encode(
+            TargetResetFailError
+        )),
         error,
     );
 }
@@ -1934,7 +2015,9 @@ fn test_buffered_convert_engine_reset_rejects_invalid_output_index() {
 }
 
 #[test]
-#[should_panic(expected = "converter finish bound must reserve space for pending values")]
+#[should_panic(
+    expected = "converter finish bound must reserve space for pending values"
+)]
 fn test_buffered_convert_engine_finish_hits_pending_unreachable() {
     let mut engine = TranscodeConvertEngine::<_, _, _>::new(
         SourceCodec,
@@ -1950,7 +2033,9 @@ fn test_buffered_convert_engine_finish_hits_pending_unreachable() {
 }
 
 #[test]
-#[should_panic(expected = "converter finish bound must reserve space for decode finish values")]
+#[should_panic(
+    expected = "converter finish bound must reserve space for decode finish values"
+)]
 fn test_buffered_convert_engine_finish_hits_decoder_finish_unreachable() {
     let mut engine = TranscodeConvertEngine::<_, _, _>::new(
         SourceCodec,

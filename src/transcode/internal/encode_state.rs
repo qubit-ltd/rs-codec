@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    encode_context::EncodeContext,
+    transcode_progress::TranscodeProgress,
+};
 use crate::ref_unchecked;
 
 /// Mutable state for one buffered encode call.
@@ -113,7 +116,10 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
+    pub(in crate::transcode) fn accept_written_value(
+        &mut self,
+        written: usize,
+    ) {
         assert!(
             written <= self.available_output(),
             "encode step wrote beyond available output",
