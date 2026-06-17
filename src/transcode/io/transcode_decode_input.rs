@@ -133,7 +133,7 @@ where
     #[must_use]
     #[inline(always)]
     pub fn unread(&self) -> &[I::Item] {
-        self.input.unread_slice()
+        self.input.unread()
     }
 
     /// Returns the internal unit buffer capacity.
@@ -192,17 +192,17 @@ where
     /// overlap with the unread units stored inside this buffer.
     #[inline(always)]
     pub unsafe fn copy_unread_to_unchecked(
-        &self,
+        &mut self,
         output: &mut [I::Item],
         output_index: usize,
         count: usize,
     ) {
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
-        unsafe {
-            self.input
-                .read_into_unchecked(output, output_index, count);
-        }
+        let unread = self.input.unread();
+        let source = &unread[..count];
+        let destination = &mut output[output_index..output_index + count];
+        destination.copy_from_slice(source);
     }
 
     /// Consumes this adapter and returns its parts.
@@ -316,7 +316,7 @@ where
             let (value, consumed) = unsafe {
                 // SAFETY: The unread window contains at least
                 // `min_units_per_value` units from index zero.
-                decoder.decode(self.input.unread_slice(), 0)
+                decoder.decode(self.input.unread(), 0)
             }
             .map_err(&mut *map_error)?;
             let consumed = consumed.get();
@@ -385,23 +385,11 @@ where
         let output_end = output_index + count;
         let output = &mut output[..output_end];
         let mut written_total = 0;
-        let mut units = Vec::new();
         loop {
             if self.input.available() == 0 && !self.input.fill_more()? {
                 return Ok(written_total);
             }
-            let available = self.input.available();
-            if units.len() < available {
-                units.resize(available, I::Item::default());
-            }
-            // SAFETY: The first `available` slots in `units` are a valid
-            // destination range, and the copied range does not overlap with
-            // the buffered input storage.
-            unsafe {
-                self.input
-                    .read_into_unchecked(&mut units, 0, available);
-            }
-            let units = &units[..available];
+            let units = self.input.unread();
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
