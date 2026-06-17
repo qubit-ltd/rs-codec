@@ -54,6 +54,7 @@ use super::{
 ///     TranscodeProgress,
 ///     TranscodeStatus,
 ///     Transcoder,
+///     nz,
 /// };
 ///
 /// #[derive(Default)]
@@ -112,7 +113,7 @@ use super::{
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 additional: NonZeroUsize::new(2 - available).expect("missing input is non-zero"),
+///                 additional: nz!(2 - available),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))

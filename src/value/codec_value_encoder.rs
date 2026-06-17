@@ -10,6 +10,7 @@
 use super::ValueEncoder;
 use crate::{
     Codec,
+    CodecEncodeError,
     codec::assert_unit_bounds,
 };
 
@@ -30,7 +31,10 @@ pub struct CodecValueEncoder<C> {
     codec: C,
 }
 
-impl<C> CodecValueEncoder<C> {
+impl<C> CodecValueEncoder<C>
+where
+    C: Codec,
+{
     /// Creates an encoder backed by `codec`.
     ///
     /// # Parameters
@@ -40,9 +44,17 @@ impl<C> CodecValueEncoder<C> {
     /// # Returns
     ///
     /// Returns a value encoder adapter for the supplied codec.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the supplied codec violates the
+    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// invariant. Validating once at construction lets the hot encode path
+    /// skip the check.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
+        assert_unit_bounds::<C>(&codec);
         Self { codec }
     }
 }
@@ -52,7 +64,7 @@ where
     C: Codec,
 {
     type Output = Vec<C::Unit>;
-    type Error = C::EncodeError;
+    type Error = CodecEncodeError<C::EncodeError>;
 
     /// Encodes one borrowed value into owned units.
     ///
@@ -71,36 +83,25 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more written units than its
-    /// declared [`Codec::max_encode_reset_units`] or
-    /// [`Codec::max_units_per_value`] bounds.
+    /// Panics when the wrapped codec reports more reset output than
+    /// [`Codec::max_encode_reset_units`] or a value width different from
+    /// [`Codec::encode_len`].
     fn encode(
         &mut self,
         input: &C::Value,
     ) -> Result<Self::Output, Self::Error> {
-        assert_unit_bounds::<C>(&self.codec);
-        let reset_units = self.codec.max_encode_reset_units();
-        let value_units = self.codec.max_units_per_value().get();
-        let mut output = vec![C::Unit::default(); reset_units + value_units];
-
-        // SAFETY: The output buffer reserves the codec's declared reset-output
-        // bound at index zero.
-        let reset_written = unsafe { self.codec.encode_reset(&mut output, 0) }?;
-        assert!(
-            reset_written <= reset_units,
-            "Codec::encode_reset wrote beyond allocated output",
-        );
-
-        // SAFETY: The output buffer reserves the codec's declared maximum
-        // value width after any reset output.
-        let value_written =
-            unsafe { self.codec.encode(input, &mut output, reset_written) }?;
-        assert!(
-            value_written <= value_units,
-            "Codec::encode wrote beyond allocated output",
-        );
-
-        output.truncate(reset_written + value_written);
+        if !self.codec.can_encode_value(input) {
+            return Err(CodecEncodeError::unencodable_value(0));
+        }
+        let units = self
+            .codec
+            .max_encode_reset_units()
+            .checked_add(self.codec.encode_len(input).get())
+            .ok_or_else(CodecEncodeError::output_length_overflow)?;
+        let mut output = vec![C::Unit::default(); units];
+        let written =
+            self.codec.encode_value_with_reset(input, &mut output, 0)?;
+        output.truncate(written);
         Ok(output)
     }
 }

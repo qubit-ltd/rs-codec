@@ -84,9 +84,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<usize, Self::EncodeError> {
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(1)
+///         Ok(NonZeroUsize::MIN)
 ///     }
 /// }
 ///
@@ -117,6 +117,7 @@ use crate::{
 ///         unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
+///         .map(NonZeroUsize::get)
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
 /// }

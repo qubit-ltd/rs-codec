@@ -14,6 +14,7 @@ use super::super::internal::{
     decode_step::DecodeStep,
 };
 use crate::codec::assert_unit_bounds;
+use crate::nz;
 use crate::{
     CapacityError,
     Codec,
@@ -105,9 +106,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<usize, Self::EncodeError> {
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(1)
+///         Ok(NonZeroUsize::MIN)
 ///     }
 /// }
 ///
@@ -174,9 +175,16 @@ where
     /// # Returns
     ///
     /// Returns a buffered decoder engine.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the supplied codec violates the
+    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// invariant.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C, hooks: H) -> Self {
+    #[inline]
+    pub fn new(codec: C, hooks: H) -> Self {
+        assert_unit_bounds::<C>(&codec);
         Self { codec, hooks }
     }
 
@@ -197,7 +205,6 @@ where
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -206,12 +213,18 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the hook-provided final output bound.
-    #[must_use]
+    /// Returns the sum of [`Codec::max_decode_flush_values`] and the
+    /// hook-provided final-output bound. The codec flush portion covers values
+    /// written by [`Codec::decode_flush`]; hook implementations must not
+    /// include that portion in
+    /// [`TranscodeDecodeHooks::max_finish_output_len`].
+    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_finish_output_len(&self) -> usize {
-        self.codec.max_decode_flush_values()
-            + self.hooks.max_finish_output_len(&self.codec)
+    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        self.codec
+            .max_decode_flush_values()
+            .checked_add(self.hooks.max_finish_output_len(&self.codec))
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum values emitted when resetting stream state.
@@ -282,19 +295,18 @@ where
             output.len(),
             output_index,
         )?;
-        assert_unit_bounds::<C>(&self.codec);
+
+        let min_units = self.codec.min_units_per_value().get();
         let mut state =
             DecodeState::new(input, input_index, output, output_index);
-
         while state.has_input() {
             let context = state.context();
-            let min_units = self.codec.min_units_per_value().get();
-            if context.available < min_units {
-                let additional =
-                    NonZeroUsize::new(min_units - context.available)
-                        .expect("missing input is non-zero");
-                return Ok(state
-                    .need_input_progress_with(additional, context.available));
+            if context.available() < min_units {
+                let additional = nz!(min_units - context.available());
+                return Ok(state.need_input_progress_with(
+                    additional,
+                    context.available(),
+                ));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -308,12 +320,13 @@ where
         Ok(state.complete_progress())
     }
 
-    /// Finishes hook-owned output after EOF.
+    /// Finishes codec and hook-owned output after EOF.
     ///
-    /// The engine owns no final output state itself. Hook implementations may
-    /// finish their own retained state and emit final output after the caller
-    /// has handled any incomplete input tail. The caller must provide enough
-    /// output capacity for [`TranscodeDecodeEngine::max_finish_output_len`].
+    /// Finalization first flushes decode-side codec state through
+    /// [`Codec::decode_flush`], then lets hook implementations finish their
+    /// own retained state. The caller must provide enough output capacity for
+    /// [`TranscodeDecodeEngine::max_finish_output_len`], which includes both
+    /// the codec flush bound and the hook-owned finish bound.
     ///
     /// # Parameters
     ///
@@ -327,18 +340,23 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, or when hook finalization fails.
+    /// output capacity, when codec flush errors are mapped by the hooks, or
+    /// when hook finalization fails.
     ///
     /// # Panics
     ///
-    /// Panics when the hook writes or reports more final output values than
-    /// [`TranscodeDecodeEngine::max_finish_output_len`] declared.
+    /// Panics when the codec flush writes beyond
+    /// [`Codec::max_decode_flush_values`] or when the combined codec and hook
+    /// finalization writes beyond
+    /// [`TranscodeDecodeEngine::max_finish_output_len`].
     pub fn finish(
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self.max_finish_output_len();
+        let required = self
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -428,15 +446,14 @@ where
         context: DecodeContext,
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
         let min_units = self.codec.min_units_per_value().get();
-        if context.available < min_units {
-            let additional = NonZeroUsize::new(min_units - context.available)
-                .expect("missing input is non-zero");
-            return Ok(DecodeStep::need_input(additional, context.available));
+        if context.available() < min_units {
+            let additional = nz!(min_units - context.available());
+            return Ok(DecodeStep::need_input(additional, context.available()));
         }
 
         // SAFETY: The context reports at least `min_units_per_value()` source
-        // units available from `context.input_index`.
-        let result = unsafe { self.decode_at(input, context.input_index) };
+        // units available from `context.input_index()`.
+        let result = unsafe { self.decode_at(input, context.input_index()) };
         self.handle_decode_result(context, result)
     }
 
@@ -465,16 +482,16 @@ where
         match result {
             Ok((value, consumed)) => {
                 assert!(
-                    consumed.get() <= context.available,
+                    consumed.get() <= context.available(),
                     "Codec::decode consumed beyond available input",
                 );
-                Ok(DecodeStep::decoded(value, consumed, context.input_index))
+                Ok(DecodeStep::decoded(value, consumed, context.input_index()))
             }
             Err(error) => {
                 let action = self
                     .handle_decode_error(error, context)
                     .map_err(TranscodeError::domain)?;
-                Ok(action.into_step(context.input_index, context.available))
+                Ok(action.into_step(context.input_index(), context.available()))
             }
         }
     }
@@ -494,10 +511,11 @@ where
         TranscodeDecodeEngine::max_output_len(self, input_len)
     }
 
-    /// Returns an upper bound for values produced by finishing hook state.
+    /// Returns an upper bound for values produced by finishing codec and hook
+    /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(TranscodeDecodeEngine::max_finish_output_len(self))
+        TranscodeDecodeEngine::max_finish_output_len(self)
     }
 
     /// Returns an upper bound for values emitted when resetting stream state.
@@ -506,7 +524,7 @@ where
         Ok(TranscodeDecodeEngine::max_reset_output_len(self))
     }
 
-    /// Resets hook-owned state.
+    /// Resets codec decode state and hook-owned state.
     #[inline(always)]
     fn reset(
         &mut self,

@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 use qubit_codec::CodecDecodeError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -122,6 +130,67 @@ fn test_codec_decode_error_ensure_min_input_accepts_sufficient_input() {
 }
 
 #[test]
+fn test_codec_decode_error_ensure_input_index_accepts_valid_index() {
+    CodecDecodeError::<TestDecodeError>::ensure_input_index(4, 2)
+        .expect("valid index");
+}
+
+#[test]
+fn test_codec_decode_error_ensure_input_index_rejects_out_of_range() {
+    let error = CodecDecodeError::<TestDecodeError>::ensure_input_index(2, 5)
+        .expect_err("out-of-range index");
+
+    assert_eq!(CodecDecodeError::invalid_input_index(5, 2), error);
+}
+
+#[test]
+fn test_codec_decode_error_ensure_output_index_accepts_valid_index() {
+    CodecDecodeError::<TestDecodeError>::ensure_output_index(4, 4)
+        .expect("valid index");
+}
+
+#[test]
+fn test_codec_decode_error_ensure_output_index_rejects_out_of_range() {
+    let error = CodecDecodeError::<TestDecodeError>::ensure_output_index(1, 2)
+        .expect_err("out-of-range index");
+
+    assert_eq!(CodecDecodeError::invalid_output_index(2, 1), error);
+}
+
+#[test]
+fn test_codec_decode_error_ensure_output_capacity_accepts_sufficient_capacity()
+{
+    CodecDecodeError::<TestDecodeError>::ensure_output_capacity(4, 1, 2)
+        .expect("sufficient capacity");
+}
+
+#[test]
+fn test_codec_decode_error_ensure_output_capacity_delegates_to_output_index() {
+    let error =
+        CodecDecodeError::<TestDecodeError>::ensure_output_capacity(2, 5, 0)
+            .expect_err("out-of-range index");
+
+    assert_eq!(CodecDecodeError::invalid_output_index(5, 2), error);
+}
+
+#[test]
+fn test_codec_decode_error_ensure_output_capacity_rejects_insufficient_capacity()
+ {
+    let error =
+        CodecDecodeError::<TestDecodeError>::ensure_output_capacity(4, 2, 3)
+            .expect_err("insufficient capacity");
+
+    assert_eq!(
+        CodecDecodeError::InsufficientOutput {
+            output_index: 2,
+            required: 3,
+            available: 2,
+        },
+        error,
+    );
+}
+
+#[test]
 fn test_codec_decode_error_ensure_min_input_rejects_incomplete_input() {
     let error = CodecDecodeError::<TestDecodeError>::ensure_min_input(3, 1, 4)
         .expect_err("incomplete input");
@@ -129,11 +198,12 @@ fn test_codec_decode_error_ensure_min_input_rejects_incomplete_input() {
     assert_eq!(
         CodecDecodeError::Incomplete {
             input_index: 1,
-            required_total: 5,
+            required_total: 4,
             available: 2,
         },
         error,
     );
+    assert_eq!(core::num::NonZeroUsize::new(2), error.needed_additional());
 }
 
 #[test]

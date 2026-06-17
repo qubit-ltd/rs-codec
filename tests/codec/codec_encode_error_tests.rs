@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 use qubit_codec::CodecEncodeError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -23,6 +31,18 @@ fn test_codec_encode_error_reports_invalid_input_index() {
     assert_eq!(
         CodecEncodeError::InvalidInputIndex { index: 5, len: 2 },
         error
+    );
+}
+
+#[test]
+fn test_codec_encode_error_reports_unencodable_value() {
+    let error = CodecEncodeError::<TestEncodeError>::unencodable_value(7);
+
+    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 7 }, error);
+    assert!(
+        CodecEncodeError::<&'static str>::unencodable_value(7)
+            .to_string()
+            .contains("unencodable value")
     );
 }
 
@@ -72,5 +92,66 @@ fn test_codec_encode_error_display_formats_framework_variants() {
         CodecEncodeError::encode("codec failure", 2)
             .to_string()
             .contains("codec encode error")
+    );
+}
+
+#[test]
+fn test_codec_encode_error_ensure_input_index_accepts_valid_index() {
+    CodecEncodeError::<TestEncodeError>::ensure_input_index(4, 2)
+        .expect("valid index");
+}
+
+#[test]
+fn test_codec_encode_error_ensure_input_index_rejects_out_of_range() {
+    let error = CodecEncodeError::<TestEncodeError>::ensure_input_index(2, 5)
+        .expect_err("out-of-range index");
+
+    assert_eq!(CodecEncodeError::invalid_input_index(5, 2), error);
+}
+
+#[test]
+fn test_codec_encode_error_ensure_output_index_accepts_valid_index() {
+    CodecEncodeError::<TestEncodeError>::ensure_output_index(4, 4)
+        .expect("valid index");
+}
+
+#[test]
+fn test_codec_encode_error_ensure_output_index_rejects_out_of_range() {
+    let error = CodecEncodeError::<TestEncodeError>::ensure_output_index(1, 2)
+        .expect_err("out-of-range index");
+
+    assert_eq!(CodecEncodeError::invalid_output_index(2, 1), error);
+}
+
+#[test]
+fn test_codec_encode_error_ensure_output_capacity_accepts_sufficient_capacity()
+{
+    CodecEncodeError::<TestEncodeError>::ensure_output_capacity(4, 1, 2)
+        .expect("sufficient capacity");
+}
+
+#[test]
+fn test_codec_encode_error_ensure_output_capacity_delegates_to_output_index() {
+    let error =
+        CodecEncodeError::<TestEncodeError>::ensure_output_capacity(2, 5, 0)
+            .expect_err("out-of-range index");
+
+    assert_eq!(CodecEncodeError::invalid_output_index(5, 2), error);
+}
+
+#[test]
+fn test_codec_encode_error_ensure_output_capacity_rejects_insufficient_capacity()
+ {
+    let error =
+        CodecEncodeError::<TestEncodeError>::ensure_output_capacity(4, 2, 3)
+            .expect_err("insufficient capacity");
+
+    assert_eq!(
+        CodecEncodeError::InsufficientOutput {
+            output_index: 2,
+            required: 3,
+            available: 2,
+        },
+        error,
     );
 }

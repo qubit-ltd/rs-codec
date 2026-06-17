@@ -118,14 +118,28 @@ unsafe impl Codec for PairCodec {
         value: &u32,
         output: &mut [u16],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         if index + 1 >= output.len() {
             return Err(PairDecodeError::BadOutputIndex);
         }
         output[index] = (value >> 16) as u16;
         output[index + 1] = *value as u16;
-        Ok(2)
+        Ok(nz(2))
     }
+}
+
+#[test]
+fn test_transcode_decode_input_exposes_unread_window() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![1_u16, 2, 3]]),
+        3,
+    );
+
+    assert!(input.fill_until(2).expect("fill should succeed"));
+    assert_eq!(&[1, 2, 3], input.unread());
+
+    input.consume(2);
+    assert_eq!(&[3], input.unread());
 }
 
 impl Transcoder<u16, u32> for PairDecoder {
@@ -704,22 +718,6 @@ fn test_buffered_decode_input_decode_into_accepts_codec_decoder() {
 }
 
 #[test]
-fn test_buffered_decode_input_finish_into_accepts_codec_decoder_as_noop() {
-    let input = ChunkedInput::new(Vec::new());
-    let decoder = PairCodec;
-    let mut input = TranscodeDecodeInput::with_capacity(input, 4);
-    let mut mapper: fn(PairDecodeError) -> Error = map_codec_error;
-    let mut output = [0x1111_u32, 0x2222, 0x3333];
-
-    let written =
-        unsafe { input.finish_into(&decoder, &mut mapper, &mut output, 1, 1) }
-            .expect("codec finish should be a no-op");
-
-    assert_eq!(0, written);
-    assert_eq!([0x1111, 0x2222, 0x3333], output);
-}
-
-#[test]
 fn test_buffered_decode_input_decodes_across_refills() {
     let input =
         ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
@@ -1043,9 +1041,9 @@ unsafe impl Codec for VariableWidthCodec {
         value: &u32,
         output: &mut [u16],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = (*value >> 16) as u16;
-        Ok(1)
+        Ok(nz(1))
     }
 }
 
@@ -1084,10 +1082,10 @@ unsafe impl Codec for RejectingPairCodec {
         value: &u32,
         output: &mut [u16],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = (*value >> 16) as u16;
         output[index + 1] = *value as u16;
-        Ok(2)
+        Ok(nz(2))
     }
 }
 

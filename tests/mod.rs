@@ -12,6 +12,7 @@ mod codec;
 mod common;
 mod prelude_tests;
 mod transcode;
+mod util;
 mod value;
 
 pub(crate) use common::nz;

@@ -45,7 +45,7 @@ where
         error: C::DecodeError,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error> {
-        Err(CodecDecodeError::decode(error, context.input_index))
+        Err(CodecDecodeError::decode(error, context.input_index()))
     }
 
     /// Maps flush errors into generic codec decode errors.

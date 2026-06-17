@@ -11,6 +11,7 @@ use core::num::NonZeroUsize;
 
 use super::super::transcode_progress::TranscodeProgress;
 use super::encode_state::EncodeState;
+use crate::nz;
 
 /// Result of one prepared value encode attempt.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -59,8 +60,7 @@ impl EncodeStep {
         required: usize,
         available: usize,
     ) -> Self {
-        let additional = NonZeroUsize::new(required - available)
-            .expect("missing output is non-zero");
+        let additional = nz!(required - available);
         Self::NeedOutput {
             additional,
             available,

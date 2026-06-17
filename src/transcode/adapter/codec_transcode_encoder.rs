@@ -24,8 +24,8 @@ use crate::{
 /// `CodecTranscodeEncoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the buffered [`Transcoder`] and
 /// [`TranscodeEncoder`] contracts. It encodes complete values only; when the
-/// remaining output capacity is smaller than `codec.max_units_per_value()`, it
-/// stops before consuming the next input value and reports
+/// remaining output capacity is smaller than `codec.encode_len(value)`, it
+/// stops before consuming that input value and reports
 /// [`crate::TranscodeStatus::NeedOutput`].
 ///
 /// # Type Parameters
@@ -51,8 +51,8 @@ where
     ///
     /// Returns a buffered encoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
         Self {
             engine: TranscodeEncodeEngine::new(
                 codec,

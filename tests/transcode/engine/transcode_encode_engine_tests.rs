@@ -16,6 +16,7 @@ use qubit_codec::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeStatus,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -52,14 +53,14 @@ unsafe impl Codec for WideCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -472,7 +473,7 @@ fn test_buffered_encode_engine_uses_plan_capacity_instead_of_codec_max_width() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -591,9 +592,9 @@ unsafe impl Codec for ResetEmittingCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -644,9 +645,9 @@ unsafe impl Codec for ResetFailCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(

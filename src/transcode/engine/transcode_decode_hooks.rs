@@ -89,9 +89,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<usize, Self::EncodeError> {
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(1)
+///         Ok(NonZeroUsize::MIN)
 ///     }
 /// }
 ///
@@ -181,10 +181,10 @@ where
     ///
     /// Returns the action selected by this hook policy.
     ///
-    /// Returned actions must be consistent with `context.available`:
-    /// - `NeedInput.required_total` must be greater than `context.available`;
+    /// Returned actions must be consistent with `context.available()`:
+    /// - `NeedInput.required_total` must be greater than `context.available()`;
     /// - `Skip.consumed` and `Emit.consumed` must not exceed
-    ///   `context.available`.
+    ///   `context.available()`.
     ///
     /// The engine treats violations as hook bugs and panics.
     ///

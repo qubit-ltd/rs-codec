@@ -13,8 +13,7 @@ Core codec traits and buffer conversion primitives for Rust.
 
 Qubit Codec is the domain-neutral foundation for Qubit codec crates. It contains
 small traits and value types that are shared by binary, text, misc, and I/O
-adapter crates without pulling in `std::io` stream helpers or concrete format
-implementations.
+adapter crates, without concrete format implementations.
 
 This crate provides:
 
@@ -45,8 +44,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   misc, and stream-specific implementations.
 - **Small Public Surface**: expose only the primitives that multiple codec
   crates need to share.
-- **No I/O Coupling**: avoid `std::io` dependencies so buffer codecs can remain
-  usable in non-stream contexts.
 - **Policy Neutrality**: leave charset, malformed-input, and wire-format rules to
   domain crates.
 - **Zero-Cost Markers**: represent byte order as copyable type/value markers
@@ -63,6 +60,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors, including invalid buffer
   indices, without hiding codec-specific failures.
+- **`CodecDecodeSignal`**: optional domain-neutral decode-error signals for
+  streaming adapters that need incomplete-input or invalid-consumption hints.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -106,14 +105,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   transcode-stage policy decisions.
 - **`CodecTranscodeConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
-- **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and decodes
-  caller-provided `Codec` values through `decode_into`; `finish_into` is a
-  no-op because `Codec` has no finish state. Stateful streaming decoders use
-  `transcode_into` / `finish_transcode_into`.
-- **`TranscodeEncodeOutput<O>`**: owns a unit-level `BufferedOutput` and encodes
-  caller-provided `Codec` values through `encode_from`; ordinary `flush` only
-  drains buffered units. Stateful streaming encoders use `transcode_from` and
-  `finish`.
+- **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
+  caller-provided `Codec` decoders through `decode_into`. Stateful streaming
+  decoders use `transcode_into` / `finish_transcode_into`.
+- **`TranscodeEncodeOutput<O>`**: owns a unit-level `BufferedOutput`; ordinary
+  `flush` drains buffered units. Stateful streaming encoders use `transcode_from`
+  and `finish`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -127,7 +124,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 ### Focused Public API
 
-- **`prelude` module**: imports the commonly used core traits and markers.
 - **No concrete formats**: binary, text, and miscellaneous codecs are published
   in sibling crates.
 
@@ -137,7 +133,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.7"
+qubit-codec = "0.8"
 ```
 
 ## Quick Start
@@ -155,12 +151,13 @@ impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
 
-let encoded = ValueEncoder::<str>::encode(&StringEncoder, "codec")?;
+let mut encoder = StringEncoder;
+let encoded = ValueEncoder::<str>::encode(&mut encoder, "codec")?;
 assert_eq!("codec", encoded);
 
 let progress = TranscodeProgress::complete(3, 4);
@@ -187,6 +184,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
 | `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
+| `CodecDecodeSignal` | Domain-neutral trait for decode errors that can report incomplete-input requirements or invalid-input consumption hints |
 
 ### Codec Adapters
 
@@ -203,7 +201,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned `Codec` to `decode_into`; stateful streaming decoders use `transcode_into` and `finish_transcode_into` |
-| `TranscodeEncodeOutput<O>` | Encode values into a `qubit_io::Output` by passing a caller-owned `Codec` to `encode_from`; stateful streaming encoders use `transcode_from` and `finish` |
+| `TranscodeEncodeOutput<O>` | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
 
@@ -241,6 +239,25 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `NeedInput` | More input units are required; the incomplete tail remains in the caller's input buffer |
 | `NeedOutput` | More output capacity is required |
 
+### Contract Notes
+
+- `min_units_per_value()` is the safety lower bound for calling `Codec::decode`;
+  `max_units_per_value()` is the per-value output/read upper bound. Checked
+  adapters assert `min <= max` before using these values.
+- `encode_len(value)` must equal the number of units `Codec::encode` writes for
+  the same value and codec state, and it must not exceed
+  `max_units_per_value()`.
+- Stateful one-value callers should use `max_encode_value_units()` with
+  `encode_value_with_reset()`, or `decode_exact_value_with_flush()` when the
+  input must contain exactly one encoded value. These helpers keep reset/flush
+  capacity checks and overflow handling in the core layer.
+- `CodecDecodeError` / `CodecEncodeError` are adapter-level wrappers.
+  `TranscodeError` is the streaming framework wrapper. Concrete codec,
+  charset, or policy failures remain the associated domain error.
+- `NeedInput` means the reported tail was not consumed and must remain available
+  when the caller retries with more input. `NeedOutput` means the reported input
+  was not fully consumed because the output slice reached its bound.
+
 ### Byte Order Types
 
 | Type | Use Case |
@@ -252,9 +269,12 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ## Crate Boundary
 
-`qubit-codec` does not contain concrete binary formats, character sets,
-percent/Base64/hex codecs, or `std::io` reader/writer adapters. Keep those in
-domain crates so downstream users can depend on only the layers they need.
+`qubit-codec` does not contain concrete binary formats, character sets, or
+percent/Base64/hex codecs. Its I/O-facing surface is limited to low-level
+`qubit_io::Input` / `qubit_io::Output` bridge types used by downstream stream
+crates. Keep `std::io::Read` / `std::io::Write` extension traits and concrete
+reader/writer adapters in domain crates so downstream users can depend on only
+the layers they need.
 
 ## Performance Considerations
 
@@ -293,6 +313,7 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 Runtime dependencies are intentionally small:
 
 - `thiserror` provides public error type implementations.
+- `qubit-io` provides `BufferedInput` and `BufferedOutput` used by `TranscodeDecodeInput` and `TranscodeEncodeOutput`.
 
 ## License
 

@@ -6,13 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::prelude::{
+use qubit_codec::{
     BigEndian,
     ByteOrder,
     ByteOrderSpec,
     Codec,
     CodecConvertError,
     CodecDecodeError,
+    CodecDecodeSignal,
     CodecEncodeError,
     CodecTranscodeConverter,
     CodecTranscodeDecoder,
@@ -29,6 +30,7 @@ use qubit_codec::prelude::{
     TranscodeStatus,
     ValueDecoder,
     ValueEncoder,
+    nz,
 };
 
 #[derive(Default)]
@@ -83,14 +85,14 @@ unsafe impl Codec for EchoCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         // SAFETY: The caller guarantees that `index` is writable.
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -104,6 +106,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     fn _accept_codec_transcode_encoder<T: TranscodeEncoder<u8, u8>>() {}
     fn _accept_codec_transcode_decoder<T: TranscodeDecoder<u8, u8>>() {}
     fn _accept_codec_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
+    fn _accept_codec_decode_signal<T: CodecDecodeSignal>() {}
     fn _accept_transcode_decode_engine<T>() {}
     fn _accept_transcode_encode_engine<T>() {}
     fn _accept_transcode_convert_engine<T>() {}
@@ -128,6 +131,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_transcode_converter::<
         CodecTranscodeConverter<EchoCodec, EchoCodec>,
     >();
+    _accept_codec_decode_signal::<core::convert::Infallible>();
     _accept_transcode_decode_engine::<
         qubit_codec::TranscodeDecodeEngine<EchoCodec, ()>,
     >();

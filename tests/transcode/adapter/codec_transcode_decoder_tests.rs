@@ -15,6 +15,7 @@ use qubit_codec::{
     TranscodeError,
     TranscodeStatus,
     Transcoder,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -66,11 +67,11 @@ unsafe impl Codec for VariableByteCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -115,11 +116,11 @@ unsafe impl Codec for FixedPairCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -139,7 +140,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 2,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -161,7 +162,7 @@ fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -270,7 +271,7 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 1,
         },
         progress.status(),

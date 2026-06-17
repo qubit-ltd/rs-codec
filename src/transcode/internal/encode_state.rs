@@ -13,6 +13,7 @@ use super::super::{
     encode_context::EncodeContext,
     transcode_progress::TranscodeProgress,
 };
+use crate::ref_unchecked;
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
@@ -86,7 +87,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         &mut self,
     ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
-        let value = unsafe { self.input.get_unchecked(self.input_cursor) };
+        let value = unsafe { ref_unchecked(self.input, self.input_cursor) };
         EncodeContext {
             input_value: value,
             input_index: self.input_cursor,

@@ -88,15 +88,28 @@ where
     /// # Returns
     ///
     /// Returns a buffered converter engine.
+    /// # Panics
+    ///
+    /// Panics when either codec violates the
+    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// invariant.
     #[must_use]
     #[inline]
     pub fn new(decoder: D, encoder: E, hooks: H) -> Self {
+        assert_unit_bounds::<D>(&decoder);
+        assert_unit_bounds::<E>(&encoder);
         let decode_hooks = hooks.create_decode_hooks(&decoder, &encoder);
         let encode_hooks = hooks.create_encode_hooks(&decoder, &encoder);
         Self::from_parts(decoder, encoder, hooks, decode_hooks, encode_hooks)
     }
 
     /// Builds the engine from already-created component hooks.
+    ///
+    /// Callers that use [`new`](Self::new) do not need to call this directly;
+    /// bounds validation is performed once in `new`. This method is provided
+    /// for advanced cases where decode and encode hooks are constructed
+    /// externally. The caller is responsible for ensuring both codecs satisfy
+    /// the [`Codec`] unit-bound invariant.
     ///
     /// # Type Parameters
     ///
@@ -115,8 +128,8 @@ where
     /// # Returns
     ///
     /// Returns an engine assembled from the provided codecs and hooks.
-    #[inline(always)]
-    const fn from_parts(
+    #[inline]
+    pub fn from_parts(
         decoder: D,
         encoder: E,
         hooks: H,
@@ -129,28 +142,6 @@ where
             hooks,
             pending: PendingValueSlot::empty(),
         }
-    }
-
-    /// Returns the source-side decode codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns the reference to the internal decode codec.
-    #[must_use]
-    #[inline(always)]
-    fn decode_codec(&self) -> &D {
-        &self.decode_engine.codec
-    }
-
-    /// Returns the target-side encode codec.
-    ///
-    /// # Returns
-    ///
-    /// Returns the reference to the internal encode codec.
-    #[must_use]
-    #[inline(always)]
-    fn encode_codec(&self) -> &E {
-        &self.encode_engine.codec
     }
 
     /// Returns an upper bound for target units produced from `input_len` units.
@@ -178,7 +169,8 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
-        let decoder_finish_values = self.decode_engine.max_finish_output_len();
+        let decoder_finish_values =
+            self.decode_engine.max_finish_output_len()?;
         let decoder_finish_units =
             self.encode_engine.max_output_len(decoder_finish_values)?;
         let encoder_finish_units = self.encode_engine.max_finish_output_len();
@@ -221,8 +213,6 @@ where
             output.len(),
             output_index,
         )?;
-        assert_unit_bounds::<D>(self.decode_codec());
-        assert_unit_bounds::<E>(self.encode_codec());
 
         let mut state =
             ConvertState::new(input, input_index, output, output_index);
@@ -278,9 +268,9 @@ where
     where
         D::Value: Default,
     {
-        assert_unit_bounds::<D>(self.decode_codec());
-        assert_unit_bounds::<E>(self.encode_codec());
-        let required = self.max_finish_output_len().unwrap_or(usize::MAX);
+        let required = self
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -345,7 +335,7 @@ where
     }
 
     /// Converts one value from the current state cursors.
-    #[inline]
+    #[inline(always)]
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -368,7 +358,7 @@ where
     }
 
     /// Writes a retained decoded value before new input is consumed.
-    #[inline]
+    #[inline(always)]
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -388,7 +378,10 @@ where
     where
         D::Value: Default,
     {
-        let value_count = self.decode_engine.max_finish_output_len();
+        let value_count = self
+            .decode_engine
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written =
@@ -411,7 +404,6 @@ where
     }
 
     /// Encodes one pending value and applies output/pending state changes.
-    #[inline]
     fn encode_pending(
         &mut self,
         pending: PendingValue<D::Value>,

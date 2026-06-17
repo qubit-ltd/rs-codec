@@ -11,8 +11,10 @@
 //!
 //! This crate contains only domain-neutral building blocks such as value
 //! codecs, owned value encoder/decoder helpers, byte-order markers, and
-//! progress-oriented buffer transcoders. Concrete binary, text, misc, and I/O
-//! adapters live in sibling crates.
+//! progress-oriented buffer transcoders. The only I/O-facing types are the
+//! low-level `qubit_io::Input`/`qubit_io::Output` bridges used by downstream
+//! stream crates. Concrete binary, text, misc, and `std::io` adapters live in
+//! sibling crates.
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -20,9 +22,9 @@
 mod byte_order;
 mod codec;
 mod transcode;
+mod util;
 mod value;
 
-pub mod prelude;
 pub use byte_order::{
     BigEndian,
     ByteOrder,
@@ -33,6 +35,7 @@ pub use codec::{
     Codec,
     CodecConvertError,
     CodecDecodeError,
+    CodecDecodeSignal,
     CodecEncodeError,
 };
 pub use transcode::{
@@ -59,6 +62,18 @@ pub use transcode::{
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
+};
+pub use util::{
+    copy_nonoverlapping_unchecked,
+    mut_unchecked,
+    nz,
+    nz_const,
+    range_fits,
+    read_ne_unaligned_unchecked,
+    read_unchecked,
+    ref_unchecked,
+    write_ne_unaligned_unchecked,
+    write_unchecked,
 };
 pub use value::{
     CodecValueDecoder,

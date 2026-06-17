@@ -12,8 +12,7 @@
 ## 概述
 
 Qubit Codec 是 Qubit codec 系列 crate 的领域无关基础层。它只放 binary、
-text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不引入
-`std::io` stream helper，也不放具体格式实现。
+text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不放具体格式实现。
 
 本库提供：
 
@@ -42,7 +41,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - **分层边界清晰**：把领域无关 trait 与 binary、text、misc、stream 实现分开。
 - **公开 API 小而稳定**：只暴露多个 codec crate 都需要共享的基础原语。
-- **不耦合 I/O**：避免引入 `std::io` 依赖，使缓冲区级 codec 可用于非 stream 场景。
 - **策略中立**：charset、畸形输入和线格式规则由领域 crate 自己定义。
 - **零成本标记**：用可复制的类型和值标记表达字节序，不产生运行时分配。
 - **稳定进度报告**：用 `TranscodeProgress` 和 `TranscodeStatus` 明确表达调用方管理缓冲区时的转换进度。
@@ -55,6 +53,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
   adapter 自己产生的 encode / decode / convert 错误，包括非法缓冲区下标，
   同时保留 codec-specific failure。
+- **`CodecDecodeSignal`**：为 streaming adapter 提供领域无关的 decode-error
+  信号，用于表达不完整输入需求或非法输入可消费数量。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -91,12 +91,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecTranscodeConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
 - **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
-  `decode_into` 驱动调用方传入的 `Codec`；由于 `Codec` 没有 finish 状态，
-  `finish_into` 是 no-op。需要状态化 streaming decoder 时使用
-  `transcode_into` / `finish_transcode_into`。
-- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`，通过
-  `encode_from` 驱动调用方传入的 `Codec`；普通 `flush` 只排空 unit
-  buffer。状态化 streaming encoder 使用 `transcode_from` 和 `finish`。
+  `decode_into` 驱动调用方传入的 `Codec`。需要状态化 streaming decoder 时
+  使用 `transcode_into` / `finish_transcode_into`。
+- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`；普通
+  `flush` 只排空 unit buffer。状态化 streaming encoder 使用 `transcode_from`
+  和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 
@@ -108,7 +107,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ### 聚焦的公开 API
 
-- **`prelude` 模块**：导入常用核心 trait 和标记类型。
 - **不包含具体格式**：binary、text 和 misc codec 发布在相邻 crate 中。
 
 ## 安装
@@ -117,7 +115,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ```toml
 [dependencies]
-qubit-codec = "0.7"
+qubit-codec = "0.8"
 ```
 
 ## 快速开始
@@ -135,12 +133,13 @@ impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
-    fn encode(&self, input: &str) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
     }
 }
 
-let encoded = ValueEncoder::<str>::encode(&StringEncoder, "codec")?;
+let mut encoder = StringEncoder;
+let encoded = ValueEncoder::<str>::encode(&mut encoder, "codec")?;
 assert_eq!("codec", encoded);
 
 let progress = TranscodeProgress::complete(3, 4);
@@ -167,6 +166,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法缓冲区下标 |
 | `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法缓冲区下标或尾随输入 |
 | `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 失败和完整的 encode-side `CodecEncodeError<E>` 失败 |
+| `CodecDecodeSignal` | decode error 的领域无关信号 trait，可报告 incomplete 输入需求或 invalid 输入可消费数量 |
 
 ### Codec Adapter
 
@@ -183,7 +183,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeDecodeInput<I>` | 调用时传入 caller-owned `Codec`，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；状态化 streaming decoder 使用 `transcode_into` 和 `finish_transcode_into` |
-| `TranscodeEncodeOutput<O>` | 调用时传入 caller-owned `Codec`，通过 `encode_from` 把 value 编码进 `qubit_io::Output`；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
+| `TranscodeEncodeOutput<O>` | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
 
@@ -221,6 +221,23 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `NeedInput` | 需要更多输入单元；不完整尾部仍留在调用方输入缓冲区中 |
 | `NeedOutput` | 需要更多输出空间 |
 
+### 契约说明
+
+- `min_units_per_value()` 是调用 `Codec::decode` 的安全下界；
+  `max_units_per_value()` 是单值输出/读取上界。checked adapter 在使用前会断言
+  `min <= max`。
+- `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
+  实际写入的 unit 数量，并且不能超过 `max_units_per_value()`。
+- 需要处理状态化单值编码时，应配合使用 `max_encode_value_units()` 与
+  `encode_value_with_reset()`；输入必须恰好是一个编码值时，应使用
+  `decode_exact_value_with_flush()`。这些 helper 把 reset/flush 容量检查和
+  overflow 处理统一放在 core 层。
+- `CodecDecodeError` / `CodecEncodeError` 是 adapter 层 wrapper；
+  `TranscodeError` 是 streaming framework 层 wrapper。具体 codec、charset
+  或策略失败仍由关联的 domain error 表达。
+- `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。
+  `NeedOutput` 表示输出切片到达容量边界，因此输入没有被完全消费。
+
 ### 字节序类型
 
 | 类型 | 使用场景 |
@@ -232,9 +249,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ## 库边界
 
-`qubit-codec` 不包含具体 binary 格式、字符集、percent/Base64/hex codec，
-也不包含 `std::io` reader/writer adapter。这些能力应放在领域 crate 中，
-让下游只依赖自己需要的层。
+`qubit-codec` 不包含具体 binary 格式、字符集或 percent/Base64/hex codec。
+它面向 I/O 的公开面只保留供下游 stream crate 复用的低层
+`qubit_io::Input` / `qubit_io::Output` bridge 类型。`std::io::Read` /
+`std::io::Write` extension trait 和具体 reader/writer adapter 应放在领域
+crate 中，让下游只依赖自己需要的层。
 
 ## 性能考虑
 
@@ -271,6 +290,7 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 运行时依赖保持很少：
 
 - `thiserror` 提供公共错误类型实现。
+- `qubit-io` 提供 `TranscodeDecodeInput` 和 `TranscodeEncodeOutput` 使用的 `BufferedInput` 与 `BufferedOutput`。
 
 ## 许可证
 

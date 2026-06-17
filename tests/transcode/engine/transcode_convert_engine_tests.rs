@@ -22,6 +22,7 @@ use qubit_codec::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeStatus,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -82,12 +83,12 @@ unsafe impl Codec for SourceCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -120,7 +121,7 @@ unsafe impl Codec for TargetCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
         if *value == 13 {
             return Err(EngineError::Encode);
         }
@@ -128,7 +129,7 @@ unsafe impl Codec for TargetCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -166,9 +167,9 @@ unsafe impl Codec for ResetEmittingTargetCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -219,9 +220,9 @@ unsafe impl Codec for ResetFailTargetCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(1)
+        Ok(nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -263,6 +264,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
                     context.output_index,
                 )
                 .expect("infallible target encode")
+                .get()
         })
     }
 }
@@ -330,6 +332,7 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
                 context.output_index,
             )
         }
+        .map(NonZeroUsize::get)
     }
 
     fn map_encode_reset_error(
@@ -402,12 +405,12 @@ unsafe impl Codec for ErrorSourceCodec {
         value: &u8,
         output: &mut [u8],
         index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(1)
+        Ok(nz!(1))
     }
 }
 
@@ -456,6 +459,7 @@ impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
         unsafe { codec.encode(input_value, output, output_index) }
+            .map(NonZeroUsize::get)
     }
 }
 
@@ -903,6 +907,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
         } = context;
         // SAFETY: The engine checked the prepared output capacity.
         unsafe { codec.encode(input_value, output, output_index) }
+            .map(NonZeroUsize::get)
     }
 
     fn max_finish_output_len(&self, _codec: &TargetCodec) -> usize {
@@ -1317,7 +1322,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1352,7 +1357,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1365,7 +1370,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: crate::nz(1),
+            additional: nz(1),
             available: 0,
         },
         progress.status(),
@@ -1708,7 +1713,7 @@ fn test_buffered_convert_engine_applies_decode_policy_need_input() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: crate::nz(2),
+            additional: nz(2),
             available: 1,
         },
         progress.status(),

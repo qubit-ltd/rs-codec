@@ -24,7 +24,6 @@ use crate::{
     TranscodeConverter,
     TranscodeError,
     TranscodeProgress,
-    TranscodeStatus,
     Transcoder,
 };
 
@@ -280,9 +279,9 @@ where
 
     /// Finishes internally retained output after EOF.
     ///
-    /// The strict codec-backed converter has no hook-owned final output. Finish
-    /// drains any retained decoded value through the normal conversion path and
-    /// then completes without requiring `D::Value: Default`.
+    /// Finalization delegates to the reusable converter engine. It drains
+    /// retained pending output, encodes source-side decode flush values, and
+    /// then finishes target-side encode hook state.
     ///
     /// # Parameters
     ///
@@ -302,28 +301,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>> {
-        let required = self.max_finish_output_len().unwrap_or(usize::MAX);
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
-
-        let empty_input: &[D::Unit] = &[];
-        let progress = self.transcode(empty_input, 0, output, output_index)?;
-        match progress.status() {
-            TranscodeStatus::Complete => Ok(progress.written()),
-            TranscodeStatus::NeedInput { .. } => {
-                unreachable!(
-                    "codec converter finish uses empty input and strict no-op decode finish hooks"
-                )
-            }
-            TranscodeStatus::NeedOutput { .. } => {
-                unreachable!(
-                    "codec converter finish reserves the complete pending-output bound before draining"
-                )
-            }
-        }
+        self.engine.finish(output, output_index)
     }
 }
 
@@ -364,7 +342,8 @@ where
         CodecTranscodeConverter::max_reset_output_len(self)
     }
 
-    /// Clears retained pending output and emits stream-start encode output.
+    /// Clears retained pending output, resets component state, and emits
+    /// stream-start encode output.
     #[inline(always)]
     fn reset(
         &mut self,

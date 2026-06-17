@@ -50,8 +50,8 @@ where
     ///
     /// Returns a buffered decoder adapter for the supplied codec.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C) -> Self {
+    #[inline]
+    pub fn new(codec: C) -> Self {
         Self {
             engine: TranscodeDecodeEngine::new(
                 codec,
@@ -90,7 +90,7 @@ where
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_finish_output_len())
+        self.engine.max_finish_output_len()
     }
 
     /// Returns the maximum values emitted when resetting internal state.
@@ -99,7 +99,7 @@ where
         Ok(self.engine.max_reset_output_len())
     }
 
-    /// Resets hook-owned state.
+    /// Resets codec decode state and hook-owned state.
     #[inline(always)]
     fn reset(
         &mut self,

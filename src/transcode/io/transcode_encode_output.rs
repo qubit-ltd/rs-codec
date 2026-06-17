@@ -22,9 +22,7 @@ use qubit_io::{
     Output,
 };
 
-use crate::codec::assert_unit_bounds;
 use crate::{
-    Codec,
     TranscodeError,
     TranscodeStatus,
     Transcoder,
@@ -33,9 +31,9 @@ use crate::{
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
 /// This type owns only the unit-level [`qubit_io::BufferedOutput`]. Callers
-/// pass a [`Codec`] and error mapper to each encode operation, which lets one
-/// buffered output drive different encoders without nesting buffers or storing
-/// codec-specific state in the buffer owner.
+/// pass a [`crate::Codec`] and error mapper to each encode operation, which
+/// lets one buffered output drive different encoders without nesting buffers or
+/// storing codec-specific state in the buffer owner.
 ///
 /// [`Self::flush`] only drains already buffered units. State-aware streaming
 /// encoders can use [`Self::transcode_from`] and [`Self::finish`] explicitly.
@@ -181,84 +179,6 @@ where
     #[inline]
     pub fn flush(&mut self) -> Result<()> {
         self.output.flush()
-    }
-
-    /// Encodes values from an indexed input range using a [`Codec`].
-    ///
-    /// # Parameters
-    ///
-    /// * `encoder` - Codec used for this operation.
-    /// * `map_error` - Function mapping encoder errors into I/O errors.
-    /// * `input` - Source values.
-    /// * `input_index` - Start index inside `input`.
-    /// * `count` - Maximum number of values to encode.
-    ///
-    /// # Returns
-    ///
-    /// The number of source values consumed.
-    ///
-    /// # Errors
-    ///
-    /// Returns capacity, encoder, or output errors.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that `input_index..input_index + count` is
-    /// a valid range inside `input` and that the addition does not overflow.
-    pub unsafe fn encode_from<C, M>(
-        &mut self,
-        encoder: &mut C,
-        map_error: &mut M,
-        input: &[C::Value],
-        input_index: usize,
-        count: usize,
-    ) -> Result<usize>
-    where
-        C: Codec<Unit = O::Item>,
-        M: FnMut(C::EncodeError) -> Error,
-    {
-        debug_assert!(
-            input_index
-                .checked_add(count)
-                .is_some_and(|end| end <= input.len()),
-            "unchecked encode input range exceeds source buffer",
-        );
-        if count == 0 {
-            return Ok(0);
-        }
-        assert_unit_bounds::<C>(encoder);
-        let max_units = encoder.max_units_per_value().get();
-        let mut read_total = 0;
-        while read_total < count {
-            self.output.ensure_spare_capacity(max_units)?;
-            let (units, output_index, available) =
-                self.output.spare_raw_parts_mut();
-            debug_assert!(
-                available >= max_units,
-                "insufficient encode capacity reserved in spare output buffer",
-            );
-            let written = unsafe {
-                // SAFETY: `ensure_spare_capacity` reserved at least
-                // `max_units_per_value` units at `output_index`.
-                encoder.encode(
-                    &input[input_index + read_total],
-                    units,
-                    output_index,
-                )
-            }
-            .map_err(&mut *map_error)?;
-            assert!(
-                written <= max_units,
-                "Codec::encode wrote beyond its bound",
-            );
-            unsafe {
-                // SAFETY: The codec-reported written count was checked
-                // against the reserved spare output window.
-                self.output.advance_unchecked(written);
-            }
-            read_total += 1;
-        }
-        Ok(read_total)
     }
 
     /// Encodes values from an indexed input range using a streaming

@@ -17,7 +17,6 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
-    Codec,
     TranscodeEncodeOutput,
     TranscodeError,
     TranscodeProgress,
@@ -81,51 +80,6 @@ macro_rules! noop_finish {
 
 #[derive(Debug, Default)]
 struct PairEncoder;
-
-#[derive(Debug, Default)]
-struct PairCodec;
-
-unsafe impl Codec for PairCodec {
-    type DecodeError = PairEncodeError;
-    type EncodeError = PairEncodeError;
-    type Unit = u16;
-    type Value = u32;
-
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        nz(2)
-    }
-
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        nz(2)
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u16],
-        index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), Self::DecodeError> {
-        if index + 1 >= input.len() {
-            return Err(PairEncodeError::BadInputIndex);
-        }
-        let high = input[index] as u32;
-        let low = input[index + 1] as u32;
-        Ok(((high << 16) | low, nz(2)))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        value: &u32,
-        output: &mut [u16],
-        index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        if index + 1 >= output.len() {
-            return Err(PairEncodeError::BadOutputIndex);
-        }
-        output[index] = (value >> 16) as u16;
-        output[index + 1] = *value as u16;
-        Ok(2)
-    }
-}
 
 impl Transcoder<u32, u16> for PairEncoder {
     type Error = PairEncodeError;
@@ -513,52 +467,6 @@ impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
     noop_finish!(u16);
 }
 
-#[derive(Debug, Default)]
-struct RejectingPairCodec;
-
-unsafe impl Codec for RejectingPairCodec {
-    type DecodeError = PairEncodeError;
-    type EncodeError = PairEncodeError;
-    type Unit = u16;
-    type Value = u32;
-
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        nz(2)
-    }
-
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        nz(2)
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u16],
-        index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), Self::DecodeError> {
-        if input[index] == 0xffff {
-            return Err(PairEncodeError::BadInputIndex);
-        }
-        Ok((
-            (input[index] as u32) << 16 | u32::from(input[index + 1]),
-            nz(2),
-        ))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        value: &u32,
-        output: &mut [u16],
-        index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        if *value == u32::MAX {
-            return Err(PairEncodeError::BadInputIndex);
-        }
-        output[index] = (*value >> 16) as u16;
-        output[index + 1] = *value as u16;
-        Ok(2)
-    }
-}
-
 #[derive(Debug)]
 struct FixedCapacityOutput {
     units: Vec<u16>,
@@ -602,10 +510,6 @@ impl Output for FixedCapacityOutput {
 }
 
 fn map_error(error: TranscodeError<PairEncodeError>) -> Error {
-    Error::new(ErrorKind::InvalidData, format!("{error:?}"))
-}
-
-fn map_codec_error(error: PairEncodeError) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
@@ -700,7 +604,7 @@ fn test_buffered_encode_output_returns_zero_for_zero_count() {
 }
 
 #[test]
-fn test_buffered_encode_output_encode_from_respects_input_range() {
+fn test_buffered_encode_output_transcode_from_respects_input_range() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
@@ -715,26 +619,6 @@ fn test_buffered_encode_output_encode_from_respects_input_range() {
 
     assert_eq!(1, written);
     assert_eq!(&[1, 2], output.inner().units.as_slice());
-}
-
-#[test]
-fn test_buffered_encode_output_encode_from_accepts_codec_encoder() {
-    let output = UnitOutput::default();
-    let mut encoder = PairCodec;
-    let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
-    let mut mapper: fn(PairEncodeError) -> Error = map_codec_error;
-    let input = [0x1111_2222, 0x0001_0002, 0x0003_0004];
-
-    let written =
-        unsafe { output.encode_from(&mut encoder, &mut mapper, &input, 1, 2) }
-            .expect(
-                "codec encoder should write directly through the output buffer",
-            );
-
-    output.flush().expect("flush should drain encoded units");
-
-    assert_eq!(2, written);
-    assert_eq!(&[1, 2, 3, 4], output.inner().units.as_slice());
 }
 
 #[test]
@@ -996,36 +880,6 @@ fn test_buffered_encode_output_exposes_spare_buffer_api() {
         .expect("spare capacity should remain available");
     output.flush().expect("flush should drain spare units");
     assert_eq!(&[0x00aa, 0x00bb], output.inner().units.as_slice());
-}
-
-#[test]
-fn test_buffered_encode_output_encode_from_zero_count_is_noop() {
-    let output = UnitOutput::default();
-    let mut encoder = PairCodec;
-    let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
-    let mut mapper: fn(PairEncodeError) -> Error = map_codec_error;
-
-    let written = unsafe {
-        output.encode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 0)
-    }
-    .expect("zero-count encode should be a no-op");
-
-    assert_eq!(0, written);
-}
-
-#[test]
-fn test_buffered_encode_output_encode_from_maps_codec_errors() {
-    let output = UnitOutput::default();
-    let mut encoder = RejectingPairCodec;
-    let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
-    let mut mapper: fn(PairEncodeError) -> Error = map_codec_error;
-
-    let error = unsafe {
-        output.encode_from(&mut encoder, &mut mapper, &[u32::MAX], 0, 1)
-    }
-    .expect_err("codec encode errors should be mapped");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
 #[test]

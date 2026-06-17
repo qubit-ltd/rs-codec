@@ -11,15 +11,15 @@
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DecodeContext {
     /// Absolute source index where this `transcode` call starts.
-    pub input_start: usize,
+    input_start: usize,
     /// Absolute source index where the attempted value starts.
-    pub input_index: usize,
+    input_index: usize,
     /// Absolute output index where this `transcode` call starts.
-    pub output_start: usize,
+    output_start: usize,
     /// Absolute output index where the next decoded value would be written.
-    pub output_index: usize,
+    output_index: usize,
     /// Units visible to the codec from `input_index`.
-    pub available: usize,
+    available: usize,
 }
 
 impl DecodeContext {
@@ -39,6 +39,11 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns a decode context.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `input_index < input_start` or
+    /// `output_index < output_start`.
     #[must_use]
     #[inline(always)]
     pub const fn new(
@@ -48,6 +53,14 @@ impl DecodeContext {
         output_index: usize,
         available: usize,
     ) -> Self {
+        assert!(
+            input_start <= input_index,
+            "decode context input index must not precede input start",
+        );
+        assert!(
+            output_start <= output_index,
+            "decode context output index must not precede output start",
+        );
         Self {
             input_start,
             input_index,
@@ -55,6 +68,62 @@ impl DecodeContext {
             output_index,
             available,
         }
+    }
+
+    /// Returns the absolute source index where this `transcode` call starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the input start index.
+    #[must_use]
+    #[inline(always)]
+    pub const fn input_start(self) -> usize {
+        self.input_start
+    }
+
+    /// Returns the absolute source index where the attempted value starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current input index.
+    #[must_use]
+    #[inline(always)]
+    pub const fn input_index(self) -> usize {
+        self.input_index
+    }
+
+    /// Returns the absolute output index where this `transcode` call starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the output start index.
+    #[must_use]
+    #[inline(always)]
+    pub const fn output_start(self) -> usize {
+        self.output_start
+    }
+
+    /// Returns the absolute output index where the next decoded value would be
+    /// written.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current output index.
+    #[must_use]
+    #[inline(always)]
+    pub const fn output_index(self) -> usize {
+        self.output_index
+    }
+
+    /// Returns units visible to the codec from [`Self::input_index`].
+    ///
+    /// # Returns
+    ///
+    /// Returns the available input-unit count.
+    #[must_use]
+    #[inline(always)]
+    pub const fn available(self) -> usize {
+        self.available
     }
 
     /// Returns input units consumed since this `transcode` call started.

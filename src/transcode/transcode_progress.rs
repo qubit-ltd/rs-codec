@@ -133,6 +133,43 @@ impl TranscodeProgress {
         self.status
     }
 
+    /// Returns whether conversion consumed all currently supplied input.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::Complete`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_complete(self) -> bool {
+        matches!(self.status, TranscodeStatus::Complete)
+    }
+
+    /// Returns whether conversion stopped because more input is needed.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::NeedInput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_need_input(self) -> bool {
+        matches!(self.status, TranscodeStatus::NeedInput { .. })
+    }
+
+    /// Returns whether conversion stopped because more output capacity is
+    /// needed.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the stored status is
+    /// [`TranscodeStatus::NeedOutput`].
+    #[must_use]
+    #[inline(always)]
+    pub const fn is_need_output(self) -> bool {
+        matches!(self.status, TranscodeStatus::NeedOutput { .. })
+    }
+
     /// Returns the number of input units consumed by the call.
     ///
     /// # Returns
@@ -155,104 +192,5 @@ impl TranscodeProgress {
     #[inline(always)]
     pub const fn written(self) -> usize {
         self.written
-    }
-
-    /// Rebases `read` and `written` onto `self` while preserving its stop
-    /// reason.
-    ///
-    /// Nested engines report progress scoped to one sub-step. Callers that
-    /// orchestrate several sub-steps must replace those counters with totals
-    /// relative to the outer call while keeping boundary fields from the
-    /// sub-step status.
-    ///
-    /// # Parameters
-    ///
-    /// - `read`: Input units consumed relative to the outer call's input index.
-    /// - `written`: Output units written relative to the outer call's output
-    ///   index.
-    ///
-    /// # Returns
-    ///
-    /// Returns progress with the same status as `self` and the supplied
-    /// counters.
-    #[must_use]
-    #[inline(always)]
-    pub const fn with_counters(self, read: usize, written: usize) -> Self {
-        match self.status {
-            TranscodeStatus::Complete => Self::complete(read, written),
-            TranscodeStatus::NeedInput {
-                input_index,
-                additional,
-                available,
-            } => Self::need_input(
-                input_index,
-                additional,
-                available,
-                read,
-                written,
-            ),
-            TranscodeStatus::NeedOutput {
-                output_index,
-                additional,
-                available,
-            } => Self::need_output(
-                output_index,
-                additional,
-                available,
-                read,
-                written,
-            ),
-        }
-    }
-
-    /// Returns the additional unit count required by the reported status.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some` with a non-zero count when conversion needs more input or
-    /// output. Returns `None` when conversion completed.
-    #[must_use]
-    #[inline(always)]
-    pub const fn additional(self) -> Option<NonZeroUsize> {
-        match self.status {
-            TranscodeStatus::Complete => None,
-            TranscodeStatus::NeedInput { additional, .. } => Some(additional),
-            TranscodeStatus::NeedOutput { additional, .. } => Some(additional),
-        }
-    }
-
-    /// Returns the absolute boundary index associated with this status, if any.
-    ///
-    /// - For [`TranscodeStatus::NeedInput`], returns `input_index`.
-    /// - For [`TranscodeStatus::NeedOutput`], returns `output_index`.
-    /// - For [`TranscodeStatus::Complete`], returns `None`.
-    /// # Returns
-    ///
-    /// Returns the boundary index for non-complete status values.
-    #[must_use]
-    #[inline(always)]
-    pub const fn index(self) -> Option<usize> {
-        match self.status {
-            TranscodeStatus::Complete => None,
-            TranscodeStatus::NeedInput { input_index, .. } => Some(input_index),
-            TranscodeStatus::NeedOutput { output_index, .. } => {
-                Some(output_index)
-            }
-        }
-    }
-
-    /// Returns the number of available units at the reported status boundary.
-    ///
-    /// # Returns
-    ///
-    /// Returns `0` when conversion completed.
-    #[must_use]
-    #[inline(always)]
-    pub const fn available(self) -> usize {
-        match self.status {
-            TranscodeStatus::Complete => 0,
-            TranscodeStatus::NeedInput { available, .. } => available,
-            TranscodeStatus::NeedOutput { available, .. } => available,
-        }
     }
 }

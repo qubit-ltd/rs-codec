@@ -88,9 +88,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<usize, Self::EncodeError> {
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(1)
+///         Ok(NonZeroUsize::MIN)
 ///     }
 /// }
 ///
@@ -118,6 +118,7 @@ use crate::{
 ///         unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
+///         .map(NonZeroUsize::get)
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
 ///     }
 /// }
@@ -167,9 +168,16 @@ where
     /// # Returns
     ///
     /// Returns a buffered encoder engine.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the supplied codec violates the
+    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// invariant.
     #[must_use]
-    #[inline(always)]
-    pub const fn new(codec: C, hooks: H) -> Self {
+    #[inline]
+    pub fn new(codec: C, hooks: H) -> Self {
+        assert_unit_bounds::<C>(&codec);
         Self { codec, hooks }
     }
 
@@ -190,7 +198,6 @@ where
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        assert_unit_bounds::<C>(&self.codec);
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -292,7 +299,6 @@ where
             output.len(),
             output_index,
         )?;
-        assert_unit_bounds::<C>(&self.codec);
         let mut state =
             EncodeState::new(input, input_index, output, output_index);
 
