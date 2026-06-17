@@ -36,11 +36,7 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
     #[inline(always)]
-    pub const fn new(
-        status: TranscodeStatus,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self {
             status,
             read,

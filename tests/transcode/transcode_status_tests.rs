@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    TranscodeStatus,
-    nz,
-};
+use qubit_codec::{TranscodeStatus, nz};
 
 #[test]
 fn test_transcoder_status_variants_are_distinct() {

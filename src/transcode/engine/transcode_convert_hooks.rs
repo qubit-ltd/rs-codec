@@ -8,8 +8,7 @@
 //! Policy hooks used by buffered convert engines.
 
 use super::{
-    transcode_decode_hooks::TranscodeDecodeHooks,
-    transcode_encode_hooks::TranscodeEncodeHooks,
+    transcode_decode_hooks::TranscodeDecodeHooks, transcode_encode_hooks::TranscodeEncodeHooks,
 };
 use crate::Codec;
 
@@ -55,11 +54,7 @@ where
     /// # Returns
     ///
     /// Returns the decode hooks used by the internal buffered decoder.
-    fn create_decode_hooks(
-        &self,
-        decode_codec: &D,
-        encode_codec: &E,
-    ) -> Self::DecodeHooks;
+    fn create_decode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::DecodeHooks;
 
     /// Creates encode policy hooks for the internal buffered encoder.
     ///
@@ -71,11 +66,7 @@ where
     /// # Returns
     ///
     /// Returns the encode hooks used by the internal buffered encoder.
-    fn create_encode_hooks(
-        &self,
-        decode_codec: &D,
-        encode_codec: &E,
-    ) -> Self::EncodeHooks;
+    fn create_encode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::EncodeHooks;
 
     /// Maps a decode-engine error into the converter error type.
     ///

@@ -56,11 +56,7 @@ pub unsafe fn read_unchecked<T: Copy>(input: &[T], index: usize) -> T {
 ///
 /// The caller must guarantee that `index < output.len()`.
 #[inline(always)]
-pub unsafe fn write_unchecked<T: Copy>(
-    output: &mut [T],
-    index: usize,
-    value: T,
-) {
+pub unsafe fn write_unchecked<T: Copy>(output: &mut [T], index: usize, value: T) {
     // SAFETY: The caller guarantees that `index` is in-bounds.
     unsafe {
         *output.as_mut_ptr().add(index) = value;
@@ -144,10 +140,7 @@ pub unsafe fn copy_nonoverlapping_unchecked<T: Copy>(
 /// The caller must guarantee that `index` points to a valid unaligned region
 /// capable of holding one `T`.
 #[inline(always)]
-pub unsafe fn read_ne_unaligned_unchecked<T: Copy>(
-    input: &[u8],
-    index: usize,
-) -> T {
+pub unsafe fn read_ne_unaligned_unchecked<T: Copy>(input: &[u8], index: usize) -> T {
     // SAFETY: The caller guarantees byte-level validity for this unaligned
     // load.
     unsafe { core::ptr::read_unaligned(input.as_ptr().add(index).cast::<T>()) }
@@ -166,17 +159,10 @@ pub unsafe fn read_ne_unaligned_unchecked<T: Copy>(
 /// The caller must guarantee that `index` points to a valid unaligned region
 /// capable of holding one `T`.
 #[inline(always)]
-pub unsafe fn write_ne_unaligned_unchecked<T: Copy>(
-    output: &mut [u8],
-    index: usize,
-    value: T,
-) {
+pub unsafe fn write_ne_unaligned_unchecked<T: Copy>(output: &mut [u8], index: usize, value: T) {
     // SAFETY: The caller guarantees byte-level validity for this unaligned
     // store.
     unsafe {
-        core::ptr::write_unaligned(
-            output.as_mut_ptr().add(index).cast::<T>(),
-            value,
-        );
+        core::ptr::write_unaligned(output.as_mut_ptr().add(index).cast::<T>(), value);
     }
 }

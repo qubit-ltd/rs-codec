@@ -4,14 +4,8 @@
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
 use qubit_codec::{
-    copy_nonoverlapping_unchecked,
-    mut_unchecked,
-    range_fits,
-    read_ne_unaligned_unchecked,
-    read_unchecked,
-    ref_unchecked,
-    write_ne_unaligned_unchecked,
-    write_unchecked,
+    copy_nonoverlapping_unchecked, mut_unchecked, range_fits, read_ne_unaligned_unchecked,
+    read_unchecked, ref_unchecked, write_ne_unaligned_unchecked, write_unchecked,
 };
 
 #[test]

@@ -189,10 +189,7 @@ impl<E> CodecEncodeError<E> {
     /// Returns an invalid-input-index error when `input_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
         if input_index > input_len {
             return Err(Self::invalid_input_index(input_index, input_len));
         }
@@ -215,10 +212,7 @@ impl<E> CodecEncodeError<E> {
     /// Returns an invalid-output-index error when `output_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
         if output_index > output_len {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
@@ -251,11 +245,7 @@ impl<E> CodecEncodeError<E> {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(
-                output_index,
-                required,
-                available,
-            ));
+            return Err(Self::insufficient_output(output_index, required, available));
         }
         Ok(())
     }

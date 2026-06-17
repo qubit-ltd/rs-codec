@@ -25,59 +25,19 @@ mod transcode;
 mod util;
 mod value;
 
-pub use byte_order::{
-    BigEndian,
-    ByteOrder,
-    ByteOrderSpec,
-    LittleEndian,
-};
-pub use codec::{
-    Codec,
-    CodecConvertError,
-    CodecDecodeError,
-    CodecDecodeSignal,
-    CodecEncodeError,
-};
+pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
+pub use codec::{Codec, CodecConvertError, CodecDecodeError, CodecDecodeSignal, CodecEncodeError};
 pub use transcode::{
-    CapacityError,
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-    DecodeAction,
-    DecodeContext,
-    EncodeContext,
-    EncodePlan,
-    TranscodeConvertEngine,
-    TranscodeConvertHooks,
-    TranscodeConverter,
-    TranscodeDecodeEngine,
-    TranscodeDecodeHooks,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeProgress,
-    TranscodeStatus,
+    CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
+    DecodeAction, DecodeContext, EncodeContext, EncodePlan, TranscodeConvertEngine,
+    TranscodeConvertHooks, TranscodeConverter, TranscodeDecodeEngine, TranscodeDecodeHooks,
+    TranscodeDecodeInput, TranscodeDecoder, TranscodeEncodeEngine, TranscodeEncodeHooks,
+    TranscodeEncodeOutput, TranscodeEncoder, TranscodeError, TranscodeProgress, TranscodeStatus,
     Transcoder,
 };
 pub use util::{
-    copy_nonoverlapping_unchecked,
-    mut_unchecked,
-    nz,
-    nz_const,
-    range_fits,
-    read_ne_unaligned_unchecked,
-    read_unchecked,
-    ref_unchecked,
-    write_ne_unaligned_unchecked,
+    copy_nonoverlapping_unchecked, mut_unchecked, nz, nz_const, range_fits,
+    read_ne_unaligned_unchecked, read_unchecked, ref_unchecked, write_ne_unaligned_unchecked,
     write_unchecked,
 };
-pub use value::{
-    CodecValueDecoder,
-    CodecValueEncoder,
-    ValueDecoder,
-    ValueEncoder,
-};
+pub use value::{CodecValueDecoder, CodecValueEncoder, ValueDecoder, ValueEncoder};

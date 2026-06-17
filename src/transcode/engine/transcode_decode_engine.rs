@@ -9,21 +9,12 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    decode_state::DecodeState,
-    decode_step::DecodeStep,
-};
+use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
 use crate::codec::assert_unit_bounds;
 use crate::nz;
 use crate::{
-    CapacityError,
-    Codec,
-    DecodeAction,
-    DecodeContext,
-    TranscodeDecodeHooks,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, DecodeAction, DecodeContext, TranscodeDecodeHooks, TranscodeError,
+    TranscodeProgress, Transcoder,
 };
 
 /// Reusable buffered decoding engine for codec-backed decoders.
@@ -201,10 +192,7 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -297,16 +285,12 @@ where
         )?;
 
         let min_units = self.codec.min_units_per_value().get();
-        let mut state =
-            DecodeState::new(input, input_index, output, output_index);
+        let mut state = DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
             if context.available() < min_units {
                 let additional = nz!(min_units - context.available());
-                return Ok(state.need_input_progress_with(
-                    additional,
-                    context.available(),
-                ));
+                return Ok(state.need_input_progress_with(additional, context.available()));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -357,16 +341,10 @@ where
         let required = self
             .max_finish_output_len()
             .map_err(|_| TranscodeError::OutputLengthOverflow)?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
-        let flushed = unsafe { self.codec.decode_flush(output, output_index) }
-            .map_err(|error| {
-                TranscodeError::domain(
-                    self.hooks.map_decode_flush_error(&mut self.codec, error),
-                )
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        let flushed =
+            unsafe { self.codec.decode_flush(output, output_index) }.map_err(|error| {
+                TranscodeError::domain(self.hooks.map_decode_flush_error(&mut self.codec, error))
             })?;
         assert!(
             flushed <= self.codec.max_decode_flush_values(),
@@ -542,15 +520,8 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> core::result::Result<TranscodeProgress, TranscodeError<Self::Error>>
-    {
-        TranscodeDecodeEngine::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+    ) -> core::result::Result<TranscodeProgress, TranscodeError<Self::Error>> {
+        TranscodeDecodeEngine::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.

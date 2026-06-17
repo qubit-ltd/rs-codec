@@ -8,27 +8,12 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Result,
-    Seek,
-    SeekFrom,
-};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{
-    BufferedInput,
-    Input,
-};
+use qubit_io::{BufferedInput, Input};
 
 use crate::codec::assert_unit_bounds;
-use crate::{
-    Codec,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
+use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -173,7 +158,14 @@ where
     /// Panics when `count` exceeds [`Self::available`].
     #[inline(always)]
     pub fn consume(&mut self, count: usize) {
-        self.input.consume(count)
+        assert!(
+            count <= self.available(),
+            "cannot consume beyond buffered input",
+        );
+        // SAFETY: The assertion above validates the unread input range.
+        unsafe {
+            self.input.consume(count);
+        }
     }
 
     /// Copies unread units into an indexed output range without consuming them.
@@ -191,7 +183,7 @@ where
     /// `count <= self.available()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
     #[inline(always)]
-    pub unsafe fn copy_unread_to_unchecked(
+    pub unsafe fn copy_unread_to(
         &mut self,
         output: &mut [I::Item],
         output_index: usize,
@@ -238,14 +230,14 @@ where
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
     #[inline(always)]
-    pub unsafe fn read_into_unchecked(
+    pub unsafe fn read_into(
         &mut self,
         output: &mut [I::Item],
         output_index: usize,
         count: usize,
     ) -> Result<usize> {
         // SAFETY: The caller guarantees the destination range is valid.
-        unsafe { self.input.read_into_unchecked(output, output_index, count) }
+        unsafe { self.input.read_into(output, output_index, count) }
     }
 
     /// Decodes values into an indexed output range using a [`Codec`].
@@ -300,15 +292,11 @@ where
         let mut written_total = 0;
 
         while written_total < count {
-            if self.input.available() < min_units
-                && !self.input.fill_until(min_units)?
-            {
+            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
                 return Ok(written_total);
             }
 
-            if self.input.available() < max_units
-                && max_units <= self.input.capacity()
-            {
+            if self.input.available() < max_units && max_units <= self.input.capacity() {
                 let _ = self.input.fill_until(max_units)?;
             }
 
@@ -328,7 +316,7 @@ where
             unsafe {
                 // SAFETY: The codec-reported consumed count was checked
                 // against the current unread input window.
-                self.input.consume_unchecked(consumed);
+                self.input.consume(consumed);
             }
             written_total += 1;
         }
@@ -398,7 +386,7 @@ where
             // SAFETY: The decoder reported consumed units from the currently
             // unread input window.
             unsafe {
-                self.input.consume_unchecked(consumed);
+                self.input.consume(consumed);
             }
             written_total += written;
             match progress.status() {
@@ -516,7 +504,7 @@ where
     #[inline]
     fn read(&mut self, output: &mut [u8]) -> Result<usize> {
         // SAFETY: The full output slice is a valid destination range.
-        unsafe { self.input.read_into_unchecked(output, 0, output.len()) }
+        unsafe { self.input.read_into(output, 0, output.len()) }
     }
 }
 
@@ -552,8 +540,6 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
 }
 
 /// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(
-    error: TranscodeError<core::convert::Infallible>,
-) -> Error {
+fn transcode_contract_to_io_error(error: TranscodeError<core::convert::Infallible>) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

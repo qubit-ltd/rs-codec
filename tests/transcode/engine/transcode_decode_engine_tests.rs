@@ -10,20 +10,12 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::{
-    Codec,
-    DecodeAction,
-    DecodeContext,
-    TranscodeDecodeEngine,
-    TranscodeDecodeHooks,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-    nz,
+    Codec, DecodeAction, DecodeContext, TranscodeDecodeEngine, TranscodeDecodeHooks,
+    TranscodeError, TranscodeStatus, Transcoder, nz,
 };
 
 fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
-    NonZeroUsize::new(consumed)
-        .expect("decode policy must consume at least one source unit")
+    NonZeroUsize::new(consumed).expect("decode policy must consume at least one source unit")
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -59,18 +51,14 @@ unsafe impl Codec for PrefixCodec {
         // SAFETY: The caller guarantees that `index` is readable.
         let first = unsafe { *input.as_ptr().add(index) };
         match first {
-            0xfe if input.len() - index < 2 => {
-                Err(PrefixDecodeError::Incomplete {
-                    required: 2,
-                    available: input.len() - index,
-                })
-            }
+            0xfe if input.len() - index < 2 => Err(PrefixDecodeError::Incomplete {
+                required: 2,
+                available: input.len() - index,
+            }),
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(index + 1) };
-                Ok((value, unsafe {
-                    core::num::NonZeroUsize::new_unchecked(2)
-                }))
+                Ok((value, unsafe { core::num::NonZeroUsize::new_unchecked(2) }))
             }
             0xff => Err(PrefixDecodeError::Invalid { consumed: 1 }),
             value => Ok((value, core::num::NonZeroUsize::MIN)),
@@ -150,11 +138,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
@@ -192,11 +178,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for SkippingHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -227,11 +211,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -307,11 +289,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -347,11 +327,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -485,11 +463,9 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
+            PrefixDecodeError::Incomplete { required, .. } => Ok(DecodeAction::NeedInput {
+                required_total: required,
+            }),
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
@@ -500,10 +476,7 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
 
 #[test]
 fn test_transcode_decode_engine_reports_finish_bound_overflow() {
-    let mut decoder = TranscodeDecodeEngine::<_, _>::new(
-        OverflowFlushCodec,
-        OverflowFinishHooks,
-    );
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(OverflowFlushCodec, OverflowFinishHooks);
     let mut output = [0_u8; 1];
 
     assert_eq!(
@@ -519,8 +492,7 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
 
 #[test]
 fn test_transcode_decode_engine_reports_finish_bounds() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(3), decoder.max_output_len(3));
@@ -535,15 +507,14 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
 
 #[test]
 fn test_transcode_decode_engine_delegates_finish_to_hooks() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(1), decoder.max_finish_output_len());
 
-    let error = decoder.finish(&mut [], 0).expect_err(
-        "finish should reject insufficient output before calling hooks",
-    );
+    let error = decoder
+        .finish(&mut [], 0)
+        .expect_err("finish should reject insufficient output before calling hooks");
     assert_eq!(
         TranscodeError::InsufficientOutput {
             output_index: 0,
@@ -564,8 +535,7 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
 
 #[test]
 fn test_transcode_decode_engine_finish_passes_full_output_to_hooks() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverwritingFinishHooks);
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverwritingFinishHooks);
     let mut output = [0_u8; 2];
 
     let written = decoder
@@ -577,14 +547,9 @@ fn test_transcode_decode_engine_finish_passes_full_output_to_hooks() {
 }
 
 #[test]
-#[should_panic(
-    expected = "TranscodeDecodeEngine hook wrote beyond its finish bound"
-)]
+#[should_panic(expected = "TranscodeDecodeEngine hook wrote beyond its finish bound")]
 fn test_transcode_decode_engine_finish_panics_when_hook_overreports_bound() {
-    let mut decoder = TranscodeDecodeEngine::<_, _>::new(
-        PrefixCodec,
-        OverreportingFinishHooks,
-    );
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverreportingFinishHooks);
     let mut output = [0_u8; 2];
 
     let _ = decoder.finish(&mut output, 0);
@@ -592,8 +557,7 @@ fn test_transcode_decode_engine_finish_panics_when_hook_overreports_bound() {
 
 #[test]
 fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
     let mut output = [];
 
     let error = decoder
@@ -607,10 +571,8 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
 }
 
 #[test]
-fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffer()
- {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
+fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffer() {
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 
     let error = decoder
@@ -628,13 +590,9 @@ fn test_buffered_decode_hooks_default_finish_is_noop() {
     let mut hooks = ReplacingHooks;
     let mut output = [];
 
-    let written = TranscodeDecodeHooks::<PrefixCodec>::finish(
-        &mut hooks,
-        &mut PrefixCodec,
-        &mut output,
-        1,
-    )
-    .expect("default hook finish should be a no-op");
+    let written =
+        TranscodeDecodeHooks::<PrefixCodec>::finish(&mut hooks, &mut PrefixCodec, &mut output, 1)
+            .expect("default hook finish should be a no-op");
 
     assert_eq!(0, written);
 }
@@ -670,8 +628,7 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
 }
 
 #[test]
-fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_tail()
- {
+fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_tail() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
     let mut output = [0_u8; 1];
 
@@ -692,14 +649,13 @@ fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_ta
 }
 
 #[test]
-fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output()
-{
+fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
     let mut output = [];
 
-    let progress = decoder.transcode(&[7], 0, &mut output, 0).expect(
-        "short input should request another unit before output capacity",
-    );
+    let progress = decoder
+        .transcode(&[7], 0, &mut output, 0)
+        .expect("short input should request another unit before output capacity");
 
     assert_eq!(
         TranscodeStatus::NeedInput {
@@ -765,9 +721,7 @@ fn test_transcode_decode_engine_allows_policy_skip_for_invalid_input() {
 }
 
 #[test]
-#[should_panic(
-    expected = "DecodeAction::NeedInput required_total must exceed available input"
-)]
+#[should_panic(expected = "DecodeAction::NeedInput required_total must exceed available input")]
 fn test_transcode_decode_engine_panics_on_invalid_need_input_action() {
     let mut decoder = TranscodeDecodeEngine::new(
         PrefixCodec,
@@ -781,9 +735,7 @@ fn test_transcode_decode_engine_panics_on_invalid_need_input_action() {
 }
 
 #[test]
-#[should_panic(
-    expected = "DecodeAction consumed units must not exceed available input"
-)]
+#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
 fn test_transcode_decode_engine_panics_on_invalid_skip_action() {
     let mut decoder = TranscodeDecodeEngine::new(
         PrefixCodec,
@@ -797,9 +749,7 @@ fn test_transcode_decode_engine_panics_on_invalid_skip_action() {
 }
 
 #[test]
-#[should_panic(
-    expected = "DecodeAction consumed units must not exceed available input"
-)]
+#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
 fn test_transcode_decode_engine_panics_on_invalid_emit_action() {
     let mut decoder = TranscodeDecodeEngine::new(
         PrefixCodec,
@@ -813,8 +763,7 @@ fn test_transcode_decode_engine_panics_on_invalid_emit_action() {
 }
 
 #[test]
-fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
-{
+fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
     let mut output = [];
 
@@ -845,10 +794,8 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
 
 #[test]
 #[should_panic(expected = "Codec::decode consumed beyond available input")]
-fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_available_input()
- {
-    let mut decoder =
-        TranscodeDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
+fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_available_input() {
+    let mut decoder = TranscodeDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[1], 0, &mut output, 0);
@@ -882,12 +829,11 @@ fn test_transcode_decode_engine_implements_buffered_transcoder() {
     assert_eq!(1, available);
 
     let mut output = [0_u8; 1];
-    let progress =
-        <Decoder as Transcoder<
-            <PrefixCodec as Codec>::Unit,
-            <PrefixCodec as Codec>::Value,
-        >>::transcode(&mut decoder, &[0xfe, 7], 0, &mut output, 0)
-        .expect("trait transcode should decode a prefixed value");
+    let progress = <Decoder as Transcoder<
+        <PrefixCodec as Codec>::Unit,
+        <PrefixCodec as Codec>::Value,
+    >>::transcode(&mut decoder, &[0xfe, 7], 0, &mut output, 0)
+    .expect("trait transcode should decode a prefixed value");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(2, progress.read());
@@ -1010,10 +956,8 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
 
 #[test]
 fn test_transcode_decode_engine_reports_max_reset_output_len() {
-    let decoder = TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(
-        PrefixCodec,
-        ReplacingHooks,
-    );
+    let decoder =
+        TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(PrefixCodec, ReplacingHooks);
 
     assert_eq!(0, decoder.max_reset_output_len());
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&decoder));
@@ -1021,10 +965,8 @@ fn test_transcode_decode_engine_reports_max_reset_output_len() {
 
 #[test]
 fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
-    let mut decoder = TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(
-        PrefixCodec,
-        ReplacingHooks,
-    );
+    let mut decoder =
+        TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(PrefixCodec, ReplacingHooks);
 
     let error = decoder
         .reset(&mut [], 1)
@@ -1038,8 +980,7 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
 
 #[test]
 fn test_transcode_decode_engine_reset_maps_hook_reset_errors() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ResetFailHooks);
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ResetFailHooks);
 
     let error = decoder
         .reset(&mut [], 0)
@@ -1053,8 +994,7 @@ fn test_transcode_decode_engine_reset_maps_hook_reset_errors() {
 
 #[test]
 fn test_transcode_decode_engine_finish_maps_decode_flush_errors() {
-    let mut decoder =
-        TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
     let mut output = [0_u8; 1];
 
     let error = decoder
