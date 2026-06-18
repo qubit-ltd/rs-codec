@@ -236,7 +236,7 @@ struct UnitOutput {
 impl Output for UnitOutput {
     type Item = u16;
 
-    unsafe fn write(
+    unsafe fn write_from(
         &mut self,
         input: &[u16],
         index: usize,
@@ -246,7 +246,7 @@ impl Output for UnitOutput {
         Ok(count)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush_pending(&mut self) -> std::io::Result<()> {
         self.flushed = true;
         Ok(())
     }
@@ -456,7 +456,7 @@ impl FixedCapacityOutput {
 impl Output for FixedCapacityOutput {
     type Item = u16;
 
-    unsafe fn write(
+    unsafe fn write_from(
         &mut self,
         input: &[u16],
         index: usize,
@@ -472,7 +472,7 @@ impl Output for FixedCapacityOutput {
         Ok(count)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush_pending(&mut self) -> std::io::Result<()> {
         self.flushed = true;
         Ok(())
     }

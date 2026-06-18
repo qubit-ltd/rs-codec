@@ -10,7 +10,7 @@
 use core::fmt;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{BufferedInput, Input};
+use qubit_io::{Buffer, BufferedInput, Input};
 
 use crate::codec::assert_unit_bounds;
 use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
@@ -209,10 +209,10 @@ where
     ///
     /// # Returns
     ///
-    /// The wrapped input and unread units.
+    /// The wrapped input and the buffer holding unread units.
     #[must_use]
     #[inline]
-    pub fn into_parts(self) -> (I, Vec<I::Item>) {
+    pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
     }
 

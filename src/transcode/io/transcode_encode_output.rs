@@ -10,7 +10,7 @@
 use core::fmt;
 use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{BufferedOutput, Output};
+use qubit_io::{Buffer, BufferedOutput, Output};
 
 use crate::{TranscodeError, TranscodeStatus, Transcoder};
 
@@ -150,10 +150,10 @@ where
     ///
     /// # Returns
     ///
-    /// The wrapped output and pending units.
+    /// The wrapped output and the buffer holding pending units.
     #[must_use]
     #[inline]
-    pub fn into_parts(self) -> (O, Vec<O::Item>) {
+    pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }
 
@@ -321,14 +321,14 @@ where
     #[inline]
     fn write(&mut self, input: &[u8]) -> Result<usize> {
         // SAFETY: The full input slice is a valid source range.
-        unsafe { self.output.write(input, 0, input.len()) }
+        unsafe { self.output.write_from(input, 0, input.len()) }
     }
 
     /// Writes all raw bytes through the internal buffer.
     #[inline]
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
         // SAFETY: The full input slice is a valid source range.
-        unsafe { self.output.write_all(input, 0, input.len()) }
+        unsafe { self.output.write_all_from(input, 0, input.len()) }
     }
 
     /// Flushes buffered bytes to the wrapped output.

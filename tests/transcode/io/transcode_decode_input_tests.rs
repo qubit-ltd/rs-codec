@@ -299,7 +299,7 @@ impl ChunkedInput {
 impl Input for ChunkedInput {
     type Item = u16;
 
-    unsafe fn read(
+    unsafe fn read_into(
         &mut self,
         output: &mut [u16],
         index: usize,
@@ -477,7 +477,7 @@ struct FailingInput;
 impl Input for FailingInput {
     type Item = u16;
 
-    unsafe fn read(
+    unsafe fn read_into(
         &mut self,
         _output: &mut [u16],
         _index: usize,
@@ -501,7 +501,7 @@ impl Default for ErrorAfterFirstReadInput {
 impl Input for ErrorAfterFirstReadInput {
     type Item = u16;
 
-    unsafe fn read(
+    unsafe fn read_into(
         &mut self,
         output: &mut [u16],
         index: usize,
