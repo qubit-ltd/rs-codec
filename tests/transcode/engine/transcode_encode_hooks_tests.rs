@@ -6,7 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks, nz};
+use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks};
+use qubit_io::nz;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -48,7 +49,7 @@ unsafe impl qubit_codec::Codec for UnitCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(

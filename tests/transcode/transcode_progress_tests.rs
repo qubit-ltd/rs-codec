@@ -6,7 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{TranscodeProgress, TranscodeStatus, nz};
+use qubit_codec::{TranscodeProgress, TranscodeStatus};
+use qubit_io::nz;
 
 #[test]
 fn test_transcoder_progress_exposes_status_and_counts() {

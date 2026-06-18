@@ -77,7 +77,7 @@ unsafe impl Codec for PrefixCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -119,7 +119,7 @@ unsafe impl Codec for OverconsumingCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -389,7 +389,7 @@ unsafe impl Codec for MinTwoCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -429,7 +429,7 @@ unsafe impl Codec for OverflowFlushCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -895,7 +895,7 @@ unsafe impl Codec for FlushFailCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(

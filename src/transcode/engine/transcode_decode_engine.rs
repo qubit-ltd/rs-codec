@@ -11,7 +11,6 @@ use core::num::NonZeroUsize;
 
 use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
 use crate::codec::assert_unit_bounds;
-use crate::nz;
 use crate::{
     CapacityError, Codec, DecodeAction, DecodeContext, TranscodeDecodeHooks, TranscodeError,
     TranscodeProgress, Transcoder,
@@ -289,7 +288,7 @@ where
         while state.has_input() {
             let context = state.context();
             if context.available() < min_units {
-                let additional = nz!(min_units - context.available());
+                let additional = qubit_io::nz!(min_units - context.available());
                 return Ok(state.need_input_progress_with(additional, context.available()));
             }
             if state.needs_output() {
@@ -425,7 +424,7 @@ where
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
         let min_units = self.codec.min_units_per_value().get();
         if context.available() < min_units {
-            let additional = nz!(min_units - context.available());
+            let additional = qubit_io::nz!(min_units - context.available());
             return Ok(DecodeStep::need_input(additional, context.available()));
         }
 

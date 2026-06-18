@@ -192,9 +192,17 @@ where
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
         let unread = self.input.unread();
-        let source = &unread[..count];
-        let destination = &mut output[output_index..output_index + count];
-        destination.copy_from_slice(source);
+        debug_assert!(
+            qubit_io::UncheckedSlice::range_fits(unread.len(), 0, count),
+            "unchecked unread copy range exceeds unread source",
+        );
+        debug_assert!(
+            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            "unchecked copy destination range exceeds output buffer",
+        );
+        unsafe {
+            qubit_io::UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
+        }
     }
 
     /// Consumes this adapter and returns its parts.
@@ -278,9 +286,7 @@ where
         M: FnMut(C::DecodeError) -> Error,
     {
         debug_assert!(
-            output_index
-                .checked_add(count)
-                .is_some_and(|end| end <= output.len()),
+            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
             "unchecked decoded output range exceeds destination buffer",
         );
         if count == 0 {
@@ -362,9 +368,7 @@ where
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
-            output_index
-                .checked_add(count)
-                .is_some_and(|end| end <= output.len()),
+            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
             "unchecked decoded output range exceeds destination buffer",
         );
         if count == 0 {
@@ -448,9 +452,7 @@ where
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
-            output_index
-                .checked_add(count)
-                .is_some_and(|end| end <= output.len()),
+            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
             "unchecked finish output range exceeds destination buffer",
         );
         let required = decoder

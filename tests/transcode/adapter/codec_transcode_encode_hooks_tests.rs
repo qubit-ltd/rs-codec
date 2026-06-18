@@ -6,7 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeError, Transcoder, nz};
+use qubit_codec::{Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeError, Transcoder};
+use qubit_io::nz;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -52,7 +53,7 @@ unsafe impl Codec for ResetFailCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -101,7 +102,7 @@ unsafe impl Codec for RejectOddCodec {
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(self.can_encode_value(value));
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

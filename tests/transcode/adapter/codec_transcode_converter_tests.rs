@@ -70,7 +70,7 @@ unsafe impl Codec for VariableByteDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -114,7 +114,7 @@ unsafe impl Codec for PairByteEncoder {
 
         output[index] = *value;
         output[index + 1] = value.wrapping_add(1);
-        Ok(nz!(2))
+        Ok(qubit_io::nz!(2))
     }
 }
 
@@ -156,7 +156,7 @@ unsafe impl Codec for MinTwoDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -209,7 +209,7 @@ unsafe impl Codec for FlushValueDecoder {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -263,7 +263,7 @@ unsafe impl Codec for NonDefaultDecoder {
         debug_assert!(index < output.len());
 
         output[index] = value.0;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -303,7 +303,7 @@ unsafe impl Codec for NonDefaultEncoder {
         debug_assert!(index < output.len());
 
         output[index] = value.0.wrapping_add(1);
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

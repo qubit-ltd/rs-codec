@@ -53,7 +53,7 @@ unsafe impl Codec for WideCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -567,7 +567,7 @@ unsafe impl Codec for ResetEmittingCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -620,7 +620,7 @@ unsafe impl Codec for ResetFailCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(

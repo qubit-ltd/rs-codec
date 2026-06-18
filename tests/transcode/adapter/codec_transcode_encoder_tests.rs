@@ -55,7 +55,7 @@ unsafe impl Codec for PairByteCodec {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
         }
-        Ok(nz!(2))
+        Ok(qubit_io::nz!(2))
     }
 }
 
@@ -73,14 +73,14 @@ unsafe impl Codec for VariableWidthCodec {
     }
 
     fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        nz!(3)
+        qubit_io::nz!(3)
     }
 
     fn encode_len(&self, value: &u8) -> core::num::NonZeroUsize {
         match *value {
-            0..=9 => nz!(1),
-            10..=99 => nz!(2),
-            _ => nz!(3),
+            0..=9 => qubit_io::nz!(1),
+            10..=99 => qubit_io::nz!(2),
+            _ => qubit_io::nz!(3),
         }
     }
 
@@ -162,7 +162,7 @@ unsafe impl Codec for RejectOddCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

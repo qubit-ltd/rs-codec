@@ -203,9 +203,7 @@ where
         M: FnMut(TranscodeError<E::Error>) -> Error,
     {
         debug_assert!(
-            input_index
-                .checked_add(count)
-                .is_some_and(|end| end <= input.len()),
+            qubit_io::UncheckedSlice::range_fits(input.len(), input_index, count),
             "unchecked encode input range exceeds source buffer",
         );
         if count == 0 {

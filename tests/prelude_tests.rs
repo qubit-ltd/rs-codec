@@ -73,7 +73,7 @@ unsafe impl Codec for EchoCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

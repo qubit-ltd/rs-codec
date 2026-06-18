@@ -109,8 +109,7 @@ impl<Value> DecodeAction<Value> {
             "DecodeAction::NeedInput required_total must exceed available input",
         );
         let additional = required_total - available;
-        // SAFETY: The assertion above guarantees a positive difference.
-        unsafe { NonZeroUsize::new_unchecked(additional) }
+        qubit_io::nz(additional)
     }
 
     /// Validates a policy-reported consumed source-unit count against available

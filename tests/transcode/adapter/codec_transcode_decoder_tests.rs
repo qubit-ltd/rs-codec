@@ -65,7 +65,7 @@ unsafe impl Codec for VariableByteCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -114,7 +114,7 @@ unsafe impl Codec for FixedPairCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

@@ -7,7 +7,8 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec::{Codec, CodecEncodeError, CodecValueEncoder, ValueEncoder, nz};
+use qubit_codec::{Codec, CodecEncodeError, CodecValueEncoder, ValueEncoder};
+use qubit_io::nz;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
@@ -52,7 +53,7 @@ unsafe impl Codec for PairByteCodec {
             *output.as_mut_ptr().add(index) = *value;
             *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
         }
-        Ok(nz!(2))
+        Ok(qubit_io::nz!(2))
     }
 }
 
@@ -102,7 +103,7 @@ unsafe impl Codec for RejectOddCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -142,7 +143,7 @@ unsafe impl Codec for OverreportingEncodeCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(2))
+        Ok(qubit_io::nz!(2))
     }
 }
 
@@ -192,7 +193,7 @@ unsafe impl Codec for NonCloneValueCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = value.value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -236,7 +237,7 @@ unsafe impl Codec for ResetFailLifecycleCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -287,7 +288,7 @@ unsafe impl Codec for StatefulLifecycleCodec {
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(

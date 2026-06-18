@@ -112,7 +112,7 @@ use super::{
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 additional: nz!(2 - available),
+///                 additional: qubit_io::nz!(2 - available),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))

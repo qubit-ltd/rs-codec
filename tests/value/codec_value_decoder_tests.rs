@@ -7,7 +7,8 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
-use qubit_codec::{Codec, CodecDecodeError, CodecValueDecoder, ValueDecoder, nz};
+use qubit_codec::{Codec, CodecDecodeError, CodecValueDecoder, ValueDecoder};
+use qubit_io::nz;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
@@ -54,7 +55,7 @@ unsafe impl Codec for SingleByteCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -97,7 +98,7 @@ unsafe impl Codec for FixedPairCodec {
 
         output[index] = *value;
         output[index + 1] = value.wrapping_add(1);
-        Ok(nz!(2))
+        Ok(qubit_io::nz!(2))
     }
 }
 
@@ -140,7 +141,7 @@ unsafe impl Codec for OverconsumingCodec {
         debug_assert!(index < output.len());
 
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -182,7 +183,7 @@ unsafe impl Codec for FlushFailStatelessCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -230,7 +231,7 @@ unsafe impl Codec for FlushFailStatefulCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(
@@ -282,7 +283,7 @@ unsafe impl Codec for StatefulLifecycleCodec {
         index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(

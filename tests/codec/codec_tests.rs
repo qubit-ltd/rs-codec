@@ -52,7 +52,7 @@ unsafe impl Codec for ByteIncrementCodec {
         unsafe {
             *output.as_mut_ptr().add(index) = value.wrapping_add(1);
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -102,7 +102,7 @@ unsafe impl Codec for StatefulLifecycleCodec {
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         output[index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -227,7 +227,7 @@ unsafe impl Codec for InvalidBoundsCodec {
         _output: &mut [u8],
         _index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -266,7 +266,7 @@ unsafe impl Codec for OverflowEncodeBoundCodec {
         _output: &mut [u8],
         _index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 

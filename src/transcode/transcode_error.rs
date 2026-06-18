@@ -315,10 +315,7 @@ impl<E> TranscodeError<E> {
         required: usize,
     ) -> Result<(), Self> {
         Self::ensure_output_index(output_len, output_index)?;
-        if output_index
-            .checked_add(range_len)
-            .is_none_or(|end| end > output_len)
-        {
+        if !qubit_io::UncheckedSlice::range_fits(output_len, output_index, range_len) {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
         if range_len < required {

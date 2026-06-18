@@ -78,7 +78,7 @@ unsafe impl Codec for SourceCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -119,7 +119,7 @@ unsafe impl Codec for TargetCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
@@ -159,7 +159,7 @@ unsafe impl Codec for ResetEmittingTargetCodec {
         index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -212,7 +212,7 @@ unsafe impl Codec for ResetFailTargetCodec {
         index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         output[index] = *value;
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
@@ -386,7 +386,7 @@ unsafe impl Codec for ErrorSourceCodec {
         unsafe {
             *output.get_unchecked_mut(index) = *value;
         }
-        Ok(nz!(1))
+        Ok(qubit_io::nz!(1))
     }
 }
 
