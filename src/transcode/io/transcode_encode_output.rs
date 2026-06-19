@@ -10,7 +10,7 @@
 use core::fmt;
 use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{Buffer, BufferedOutput, Output, OutputExt, Seekable};
+use qubit_io::{Buffer, BufferedOutput, Output, Seekable};
 
 use crate::{TranscodeError, TranscodeStatus, Transcoder};
 
@@ -213,9 +213,11 @@ where
         let input = &input[..input_end];
         let mut read_total = 0;
         while read_total < count {
-            if self.output.spare_capacity() == 0 {
-                self.output.flush_buffer()?;
-            }
+            // Each encoder step writes into the spare output window. When the
+            // buffer is full of pending units, spare capacity drops to zero and
+            // `transcode` cannot make progress. Reserving one spare slot drains
+            // pending units to the wrapped output only when needed.
+            self.output.ensure_spare_capacity(1)?;
             let (units, output_index, _) = self.output.spare_raw_parts_mut();
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
@@ -235,12 +237,12 @@ where
                     available,
                     ..
                 } => {
+                    // `available + additional` is the spare window size the
+                    // encoder needs before it can continue. Drain pending units
+                    // to the wrapped output only when the current spare window
+                    // is smaller than that requirement.
                     let required = available + additional.get();
-                    if read == 0 && written == 0 {
-                        self.output.ensure_spare_capacity(required)?;
-                    } else {
-                        self.output.flush_buffer()?;
-                    }
+                    self.output.ensure_spare_capacity(required)?;
                 }
                 TranscodeStatus::NeedInput { .. } => {
                     return Err(Error::new(
