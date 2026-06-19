@@ -6,8 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecDecodeError, CodecTranscodeDecoder, TranscodeError, Transcoder};
-use qubit_io::nz;
+use qubit_codec::{
+    Codec,
+    CodecDecodeError,
+    CodecTranscodeDecoder,
+    TranscodeError,
+    Transcoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;

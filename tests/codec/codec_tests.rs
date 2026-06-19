@@ -8,7 +8,12 @@
 //! Tests for the low-level codec trait.
 
 use qubit_codec::{
-    CapacityError, Codec, CodecDecodeError, CodecEncodeError, CodecValueEncoder, ValueEncoder, nz,
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    CodecEncodeError,
+    CodecValueEncoder,
+    ValueEncoder,
 };
 
 #[derive(Default)]
@@ -270,15 +275,101 @@ unsafe impl Codec for OverflowEncodeBoundCodec {
     }
 }
 
+#[derive(Default)]
+struct RejectingCodec;
+
+unsafe impl Codec for RejectingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn can_encode_value(&self, _value: &u8) -> bool {
+        false
+    }
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Ok((0, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        Ok(core::num::NonZeroUsize::MIN)
+    }
+}
+
+#[derive(Default)]
+struct FallibleCodec;
+
+unsafe impl Codec for FallibleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = &'static str;
+    type EncodeError = &'static str;
+
+    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+        core::num::NonZeroUsize::MIN
+    }
+
+    fn max_decode_flush_values(&self) -> usize {
+        1
+    }
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+        Err("decode failure")
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        Err("encode failure")
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err("flush failure")
+    }
+}
+
 #[test]
 fn test_codec_trait_encodes_and_decodes_one_value() {
     let mut codec = ByteIncrementCodec;
     let mut output = [0_u8; 1];
 
-    let written =
-        unsafe { codec.encode(&41, &mut output, 0) }.expect("encoding should be infallible");
-    let (decoded, consumed) =
-        unsafe { Codec::decode(&mut codec, &output, 0) }.expect("decoding should be infallible");
+    let written = unsafe { codec.encode(&41, &mut output, 0) }
+        .expect("encoding should be infallible");
+    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &output, 0) }
+        .expect("decoding should be infallible");
 
     assert_eq!(1, codec.min_units_per_value().get());
     assert_eq!(1, codec.max_units_per_value().get());
@@ -289,25 +380,46 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
 }
 
 #[test]
+fn test_codec_trait_default_lifecycle_methods_are_noop() {
+    let mut codec = ByteIncrementCodec;
+    let mut reset_output = [0_u8; 1];
+    let mut flush_output = [0_u8; 1];
+
+    let reset_written = unsafe { codec.encode_reset(&mut reset_output, 0) }
+        .expect("default reset should be infallible");
+    let flushed = unsafe { codec.decode_flush(&mut flush_output, 0) }
+        .expect("default flush should be infallible");
+
+    assert_eq!(1, codec.encode_len(&41).get());
+    assert_eq!(0, codec.max_encode_reset_units());
+    assert_eq!(0, codec.max_decode_flush_values());
+    assert_eq!(0, reset_written);
+    assert_eq!(0, flushed);
+    assert_eq!([0], reset_output);
+    assert_eq!([0], flush_output);
+}
+
+#[test]
 fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     let mut codec = StatefulLifecycleCodec::default();
     let mut encoded = [0_u8; 2];
     let mut flushed = [0_u8; 1];
 
-    let reset_written =
-        unsafe { codec.encode_reset(&mut encoded, 0) }.expect("reset should be infallible");
-    let value_written = unsafe { codec.encode(&41, &mut encoded, reset_written) }
-        .expect("encoding should be infallible");
+    let reset_written = unsafe { codec.encode_reset(&mut encoded, 0) }
+        .expect("reset should be infallible");
+    let value_written =
+        unsafe { codec.encode(&41, &mut encoded, reset_written) }
+            .expect("encoding should be infallible");
 
     assert_eq!(1, reset_written);
     assert_eq!(1, value_written.get());
     assert_eq!([0xfe, 42], encoded);
     assert_eq!(2, codec.encode_state);
 
-    let (decoded, consumed) =
-        unsafe { Codec::decode(&mut codec, &[42], 0) }.expect("decoding should be infallible");
-    let flushed_len =
-        unsafe { codec.decode_flush(&mut flushed, 0) }.expect("flush should be infallible");
+    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[42], 0) }
+        .expect("decoding should be infallible");
+    let flushed_len = unsafe { codec.decode_flush(&mut flushed, 0) }
+        .expect("flush should be infallible");
 
     assert_eq!(42, decoded);
     assert_eq!(1, consumed.get());
@@ -394,6 +506,48 @@ fn test_codec_encode_value_with_reset_rejects_insufficient_output() {
 }
 
 #[test]
+fn test_codec_encode_value_with_reset_rejects_unencodable_value() {
+    let mut codec = RejectingCodec;
+    let mut output = [0_u8; 1];
+
+    let error = codec
+        .encode_value_with_reset(&41, &mut output, 0)
+        .expect_err("unencodable values should be rejected before encoding");
+
+    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 0 }, error);
+}
+
+#[test]
+fn test_codec_encode_value_with_reset_rejects_output_length_overflow() {
+    let mut codec = OverflowEncodeBoundCodec;
+    let mut output = [0_u8; 1];
+
+    let error = codec
+        .encode_value_with_reset(&41, &mut output, 0)
+        .expect_err("reset plus value bound should overflow");
+
+    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
+}
+
+#[test]
+fn test_codec_encode_value_with_reset_wraps_encode_error() {
+    let mut codec = FallibleCodec;
+    let mut output = [0_u8; 1];
+
+    let error = codec
+        .encode_value_with_reset(&41, &mut output, 0)
+        .expect_err("codec encode errors should be wrapped");
+
+    assert_eq!(
+        CodecEncodeError::Encode {
+            source: "encode failure",
+            input_index: 0,
+        },
+        error,
+    );
+}
+
+#[test]
 fn test_codec_decode_value_with_flush_returns_value_consumed_and_flushed() {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
@@ -409,6 +563,109 @@ fn test_codec_decode_value_with_flush_returns_value_consumed_and_flushed() {
 }
 
 #[test]
+fn test_codec_decode_value_with_flush_rejects_incomplete_input() {
+    let mut codec = StatefulLifecycleCodec::default();
+    let mut flushed = [0_u8; 1];
+
+    let error = codec
+        .decode_value_with_flush(&[], 0, &mut flushed, 0)
+        .expect_err(
+            "closed input shorter than the codec minimum is incomplete",
+        );
+
+    assert_eq!(
+        CodecDecodeError::Incomplete {
+            input_index: 0,
+            required_total: 1,
+            available: 0,
+        },
+        error,
+    );
+}
+
+#[test]
+fn test_codec_decode_value_with_flush_wraps_decode_error() {
+    let mut codec = FallibleCodec;
+    let mut flushed = [0_u8; 1];
+
+    let error = codec
+        .decode_value_with_flush(&[42], 0, &mut flushed, 0)
+        .expect_err("codec decode errors should be wrapped");
+
+    assert_eq!(
+        CodecDecodeError::Decode {
+            source: "decode failure",
+            input_index: 0,
+        },
+        error,
+    );
+}
+
+#[test]
+fn test_codec_decode_value_with_flush_wraps_flush_error() {
+    struct FlushOnlyFallibleCodec;
+
+    unsafe impl Codec for FlushOnlyFallibleCodec {
+        type Value = u8;
+        type Unit = u8;
+        type DecodeError = &'static str;
+        type EncodeError = core::convert::Infallible;
+
+        fn min_units_per_value(&self) -> core::num::NonZeroUsize {
+            core::num::NonZeroUsize::MIN
+        }
+
+        fn max_units_per_value(&self) -> core::num::NonZeroUsize {
+            core::num::NonZeroUsize::MIN
+        }
+
+        fn max_decode_flush_values(&self) -> usize {
+            1
+        }
+
+        unsafe fn decode(
+            &mut self,
+            input: &[u8],
+            index: usize,
+        ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+            Ok((input[index], core::num::NonZeroUsize::MIN))
+        }
+
+        unsafe fn encode(
+            &mut self,
+            _value: &u8,
+            _output: &mut [u8],
+            _index: usize,
+        ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+            Ok(core::num::NonZeroUsize::MIN)
+        }
+
+        unsafe fn decode_flush(
+            &mut self,
+            _output: &mut [u8],
+            _index: usize,
+        ) -> Result<usize, Self::DecodeError> {
+            Err("flush failure")
+        }
+    }
+
+    let mut codec = FlushOnlyFallibleCodec;
+    let mut flushed = [0_u8; 1];
+
+    let error = codec
+        .decode_value_with_flush(&[42], 0, &mut flushed, 0)
+        .expect_err("decode flush errors should be wrapped after consumption");
+
+    assert_eq!(
+        CodecDecodeError::Decode {
+            source: "flush failure",
+            input_index: 1,
+        },
+        error,
+    );
+}
+
+#[test]
 fn test_codec_decode_exact_value_with_flush_returns_value_and_flushed() {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
@@ -420,6 +677,26 @@ fn test_codec_decode_exact_value_with_flush_returns_value_and_flushed() {
     assert_eq!(42, value);
     assert_eq!(1, flushed_len);
     assert_eq!([1], flushed);
+}
+
+#[test]
+fn test_codec_decode_exact_value_with_flush_rejects_insufficient_flush_output()
+{
+    let mut codec = StatefulLifecycleCodec::default();
+    let mut flushed = [];
+
+    let error = codec
+        .decode_exact_value_with_flush(&[42], &mut flushed, 0)
+        .expect_err("flush output must reserve the codec flush bound");
+
+    assert_eq!(
+        CodecDecodeError::InsufficientOutput {
+            output_index: 0,
+            required: 1,
+            available: 0,
+        },
+        error,
+    );
 }
 
 #[test]

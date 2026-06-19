@@ -8,12 +8,29 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{Buffer, BufferedInput, Input, Seekable};
+use qubit_io::{
+    Buffer,
+    BufferedInput,
+    Input,
+    Seekable,
+};
 
 use crate::codec::assert_unit_bounds;
-use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    Codec,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -197,11 +214,21 @@ where
             "unchecked unread copy range exceeds unread source",
         );
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            qubit_io::UncheckedSlice::range_fits(
+                output.len(),
+                output_index,
+                count
+            ),
             "unchecked copy destination range exceeds output buffer",
         );
         unsafe {
-            qubit_io::UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
+            qubit_io::UncheckedSlice::copy_nonoverlapping(
+                unread,
+                0,
+                output,
+                output_index,
+                count,
+            );
         }
     }
 
@@ -286,7 +313,11 @@ where
         M: FnMut(C::DecodeError) -> Error,
     {
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            qubit_io::UncheckedSlice::range_fits(
+                output.len(),
+                output_index,
+                count
+            ),
             "unchecked decoded output range exceeds destination buffer",
         );
         if count == 0 {
@@ -298,11 +329,15 @@ where
         let mut written_total = 0;
 
         while written_total < count {
-            if self.input.available() < min_units && !self.input.fill_until(min_units)? {
+            if self.input.available() < min_units
+                && !self.input.fill_until(min_units)?
+            {
                 return Ok(written_total);
             }
 
-            if self.input.available() < max_units && max_units <= self.input.capacity() {
+            if self.input.available() < max_units
+                && max_units <= self.input.capacity()
+            {
                 let _ = self.input.fill_until(max_units)?;
             }
 
@@ -368,7 +403,11 @@ where
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            qubit_io::UncheckedSlice::range_fits(
+                output.len(),
+                output_index,
+                count
+            ),
             "unchecked decoded output range exceeds destination buffer",
         );
         if count == 0 {
@@ -452,7 +491,11 @@ where
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            qubit_io::UncheckedSlice::range_fits(
+                output.len(),
+                output_index,
+                count
+            ),
             "unchecked finish output range exceeds destination buffer",
         );
         let required = decoder
@@ -542,6 +585,8 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
 }
 
 /// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(error: TranscodeError<core::convert::Infallible>) -> Error {
+fn transcode_contract_to_io_error(
+    error: TranscodeError<core::convert::Infallible>,
+) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

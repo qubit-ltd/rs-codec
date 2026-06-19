@@ -8,8 +8,15 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    CapacityError, Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeEncoder,
-    TranscodeError, TranscodeStatus, Transcoder, nz,
+    CapacityError,
+    Codec,
+    CodecEncodeError,
+    CodecTranscodeEncoder,
+    TranscodeEncoder,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+    nz,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -306,7 +313,9 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
         .expect_err("odd value should be rejected before unsafe encode");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::UnencodableValue { input_index: 1 }),
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
+            input_index: 1
+        }),
         error,
     );
     assert_eq!([2, 0], output);

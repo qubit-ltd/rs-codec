@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    decode_context::DecodeContext,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Mutable state for one buffered conversion call.
 ///

@@ -7,8 +7,14 @@
 // =============================================================================
 //! Policy hooks used by buffered decoder engines.
 
-use super::super::{decode_action::DecodeAction, decode_context::DecodeContext};
-use crate::{CapacityError, Codec};
+use super::super::{
+    decode_action::DecodeAction,
+    decode_context::DecodeContext,
+};
+use crate::{
+    CapacityError,
+    Codec,
+};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
 ///
@@ -136,7 +142,11 @@ where
     /// [`Codec::min_units_per_value`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_output_len(&self, codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / codec.min_units_per_value().get())
     }
 
@@ -199,7 +209,11 @@ where
     ///
     /// Returns the hook-specific error.
     #[inline]
-    fn map_decode_flush_error(&mut self, _codec: &mut C, _error: C::DecodeError) -> Self::Error {
+    fn map_decode_flush_error(
+        &mut self,
+        _codec: &mut C,
+        _error: C::DecodeError,
+    ) -> Self::Error {
         panic!(
             "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
         )

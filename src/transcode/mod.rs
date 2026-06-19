@@ -24,17 +24,28 @@ mod transcode_progress;
 mod transcode_status;
 mod transcoder;
 
-pub use adapter::{CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder};
+pub use adapter::{
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+};
 pub use capacity_error::CapacityError;
 pub use decode_action::DecodeAction;
 pub use decode_context::DecodeContext;
 pub use encode_context::EncodeContext;
 pub use encode_plan::EncodePlan;
 pub use engine::{
-    TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeEngine, TranscodeDecodeHooks,
-    TranscodeEncodeEngine, TranscodeEncodeHooks,
+    TranscodeConvertEngine,
+    TranscodeConvertHooks,
+    TranscodeDecodeEngine,
+    TranscodeDecodeHooks,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
 };
-pub use io::{TranscodeDecodeInput, TranscodeEncodeOutput};
+pub use io::{
+    TranscodeDecodeInput,
+    TranscodeEncodeOutput,
+};
 pub use transcode_converter::TranscodeConverter;
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_encoder::TranscodeEncoder;

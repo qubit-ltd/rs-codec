@@ -6,8 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks};
-use qubit_io::nz;
+use qubit_codec::{
+    EncodeContext,
+    EncodePlan,
+    TranscodeEncodeHooks,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -163,8 +166,13 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeEncodeHooks::<UnitCodec>::finish(&mut hooks, &mut codec, &mut output, 0)
-        .expect("default finish should be a no-op");
+    let written = TranscodeEncodeHooks::<UnitCodec>::finish(
+        &mut hooks,
+        &mut codec,
+        &mut output,
+        0,
+    )
+    .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }
