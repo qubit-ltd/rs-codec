@@ -10,7 +10,7 @@
 use core::fmt;
 use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{Buffer, BufferedOutput, Output};
+use qubit_io::{Buffer, BufferedOutput, Output, OutputExt, Seekable};
 
 use crate::{TranscodeError, TranscodeStatus, Transcoder};
 
@@ -164,7 +164,7 @@ where
     /// Returns errors from the wrapped output while flushing pending units.
     #[inline]
     pub fn flush(&mut self) -> Result<()> {
-        self.output.flush()
+        self.output.flush_pending()
     }
 
     /// Encodes values from an indexed input range using a streaming
@@ -286,13 +286,13 @@ where
         unsafe {
             self.output.advance(written);
         }
-        self.output.flush()
+        self.output.flush_pending()
     }
 }
 
 impl<O> TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seek,
+    O: Output<Item = u8> + Seekable<Item = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     ///
@@ -309,7 +309,7 @@ where
     /// Returns flush or seek errors from the wrapped output.
     #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        Seek::seek(&mut self.output, position)
+        self.output.seek_to(position)
     }
 }
 
@@ -320,15 +320,13 @@ where
     /// Writes raw bytes through the internal buffer.
     #[inline]
     fn write(&mut self, input: &[u8]) -> Result<usize> {
-        // SAFETY: The full input slice is a valid source range.
-        unsafe { self.output.write_from(input, 0, input.len()) }
+        Output::write(&mut self.output, input)
     }
 
     /// Writes all raw bytes through the internal buffer.
     #[inline]
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
-        // SAFETY: The full input slice is a valid source range.
-        unsafe { self.output.write_all_from(input, 0, input.len()) }
+        self.output.write_all(input)
     }
 
     /// Flushes buffered bytes to the wrapped output.
@@ -340,7 +338,7 @@ where
 
 impl<O> Seek for TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seek,
+    O: Output<Item = u8> + Seekable<Item = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     #[inline]

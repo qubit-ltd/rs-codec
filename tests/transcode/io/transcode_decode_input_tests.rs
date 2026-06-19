@@ -299,7 +299,7 @@ impl ChunkedInput {
 impl Input for ChunkedInput {
     type Item = u16;
 
-    unsafe fn read_into(
+    unsafe fn read_unchecked(
         &mut self,
         output: &mut [u16],
         index: usize,
@@ -477,7 +477,7 @@ struct FailingInput;
 impl Input for FailingInput {
     type Item = u16;
 
-    unsafe fn read_into(
+    unsafe fn read_unchecked(
         &mut self,
         _output: &mut [u16],
         _index: usize,
@@ -501,7 +501,7 @@ impl Default for ErrorAfterFirstReadInput {
 impl Input for ErrorAfterFirstReadInput {
     type Item = u16;
 
-    unsafe fn read_into(
+    unsafe fn read_unchecked(
         &mut self,
         output: &mut [u16],
         index: usize,
@@ -1029,7 +1029,7 @@ fn test_buffered_decode_input_exposes_buffer_capacity_and_fill_until() {
 }
 
 #[test]
-fn test_buffered_decode_input_copy_unread_and_read_into() {
+fn test_buffered_decode_input_copy_unread_and_read_unchecked() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     assert!(input.fill_until(3).expect("fill should succeed"));
@@ -1045,7 +1045,7 @@ fn test_buffered_decode_input_copy_unread_and_read_into() {
     let mut read = [0_u16; 2];
     // SAFETY: The destination range is valid.
     let read_count =
-        unsafe { input.read_into(&mut read, 0, 2) }.expect("read should copy unread units");
+        unsafe { input.read_unchecked(&mut read, 0, 2) }.expect("read should copy unread units");
     assert_eq!(2, read_count);
     assert_eq!([0x0001, 0x0002], read);
     assert_eq!(1, input.available());

@@ -236,7 +236,7 @@ struct UnitOutput {
 impl Output for UnitOutput {
     type Item = u16;
 
-    unsafe fn write_from(
+    unsafe fn write_unchecked(
         &mut self,
         input: &[u16],
         index: usize,
@@ -456,7 +456,7 @@ impl FixedCapacityOutput {
 impl Output for FixedCapacityOutput {
     type Item = u16;
 
-    unsafe fn write_from(
+    unsafe fn write_unchecked(
         &mut self,
         input: &[u16],
         index: usize,

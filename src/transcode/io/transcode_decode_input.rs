@@ -10,7 +10,7 @@
 use core::fmt;
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{Buffer, BufferedInput, Input};
+use qubit_io::{Buffer, BufferedInput, Input, Seekable};
 
 use crate::codec::assert_unit_bounds;
 use crate::{Codec, TranscodeError, TranscodeStatus, Transcoder};
@@ -238,14 +238,14 @@ where
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
     #[inline(always)]
-    pub unsafe fn read_into(
+    pub unsafe fn read_unchecked(
         &mut self,
         output: &mut [I::Item],
         output_index: usize,
         count: usize,
     ) -> Result<usize> {
         // SAFETY: The caller guarantees the destination range is valid.
-        unsafe { self.input.read_into(output, output_index, count) }
+        unsafe { self.input.read_unchecked(output, output_index, count) }
     }
 
     /// Decodes values into an indexed output range using a [`Codec`].
@@ -477,7 +477,7 @@ where
 
 impl<I> TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seek,
+    I: Input<Item = u8> + Seekable<Item = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     ///
@@ -494,7 +494,7 @@ where
     /// Returns seek errors from the wrapped input.
     #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        Seek::seek(&mut self.input, position)
+        self.input.seek_to(position)
     }
 }
 
@@ -506,13 +506,13 @@ where
     #[inline]
     fn read(&mut self, output: &mut [u8]) -> Result<usize> {
         // SAFETY: The full output slice is a valid destination range.
-        unsafe { self.input.read_into(output, 0, output.len()) }
+        unsafe { self.input.read_unchecked(output, 0, output.len()) }
     }
 }
 
 impl<I> Seek for TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seek,
+    I: Input<Item = u8> + Seekable<Item = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     #[inline]
