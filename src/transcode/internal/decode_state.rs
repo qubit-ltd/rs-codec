@@ -9,10 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{
-    decode_context::DecodeContext,
-    transcode_progress::TranscodeProgress,
-};
+use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
 
 /// Mutable state for one buffered decode call.
 pub(in crate::transcode) struct DecodeState<'a, Unit, Value> {
@@ -148,11 +145,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns unit `()`.
     #[inline(always)]
-    pub(in crate::transcode) fn emit(
-        &mut self,
-        value: Value,
-        consumed: NonZeroUsize,
-    ) {
+    pub(in crate::transcode) fn emit(&mut self, value: Value, consumed: NonZeroUsize) {
         let consumed = consumed.get();
         assert!(
             consumed <= self.available(),
@@ -165,10 +158,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         // SAFETY: `needs_output()` returned false, so the output cursor points
         // at a writable slot.
         unsafe {
-            *qubit_io::UncheckedSlice::get_mut(
-                self.output,
-                self.output_cursor,
-            ) = value;
+            *qubit_io::UncheckedSlice::get_mut(self.output, self.output_cursor) = value;
         }
         self.input_cursor += consumed;
         self.output_cursor += 1;
@@ -193,9 +183,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
-    pub(in crate::transcode) fn need_output_progress(
-        &self,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
         let context = self.context();
         TranscodeProgress::need_output(
             context.output_index(),

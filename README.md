@@ -18,7 +18,8 @@ adapter crates, without concrete format implementations.
 This crate provides:
 
 - `Codec` for low-level single-value buffer codecs.
-- `CodecValueEncoder`, `CodecValueDecoder`, `CodecTranscodeEncoder`,
+- `CodecValueExt`, `CodecValueEncoder`, `CodecValueDecoder`,
+  `CodecTranscodeEncoder`,
   `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
 - `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodePlan`, and
@@ -60,7 +61,7 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors, including invalid buffer
   indices, without hiding codec-specific failures.
-- **`CodecDecodeSignal`**: optional domain-neutral decode-error signals for
+- **`CodecDecodeErrorSignal`**: optional domain-neutral decode-error signals for
   streaming adapters that need incomplete-input or invalid-consumption hints.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
@@ -69,6 +70,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   `ValueEncoder<C::Value>` that returns owned `Vec<C::Unit>` output.
 - **`CodecValueDecoder<C>`**: wraps a `Codec` as a
   `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
+- **`CodecValueExt`**: extension trait for checked one-value codec helpers such
+  as reset-prefixed encode and exact decode with flush handling.
 
 ### Buffered Transcoder Primitives
 
@@ -184,12 +187,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
 | `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
-| `CodecDecodeSignal` | Domain-neutral trait for decode errors that can report incomplete-input requirements or invalid-input consumption hints |
+| `CodecDecodeErrorSignal` | Domain-neutral trait for decode errors that can report incomplete-input requirements or invalid-input consumption hints |
 
 ### Codec Adapters
 
 | Type | Purpose |
 |------|---------|
+| `CodecValueExt` | Provide checked one-value helper methods for all `C: Codec` without expanding the low-level `Codec` contract |
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
 | `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
 | `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
@@ -247,10 +251,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - `encode_len(value)` must equal the number of units `Codec::encode` writes for
   the same value and codec state, and it must not exceed
   `max_units_per_value()`.
-- Stateful one-value callers should use `max_encode_value_units()` with
-  `encode_value_with_reset()`, or `decode_exact_value_with_flush()` when the
-  input must contain exactly one encoded value. These helpers keep reset/flush
-  capacity checks and overflow handling in the core layer.
+- Stateful one-value callers should use `CodecValueExt::max_encode_value_units()`
+  with `CodecValueExt::encode_value_with_reset()`, or
+  `CodecValueExt::decode_exact_value_with_flush()` when the input must contain
+  exactly one encoded value. These helpers keep reset/flush capacity checks and
+  overflow handling in the value adapter layer.
 - `CodecDecodeError` / `CodecEncodeError` are adapter-level wrappers.
   `TranscodeError` is the streaming framework wrapper. Concrete codec,
   charset, or policy failures remain the associated domain error.

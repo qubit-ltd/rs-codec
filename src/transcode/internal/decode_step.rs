@@ -10,11 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::transcode_progress::TranscodeProgress;
-use super::{
-    convert_state::ConvertState,
-    decode_state::DecodeState,
-    pending_value::PendingValue,
-};
+use super::{convert_state::ConvertState, decode_state::DecodeState, pending_value::PendingValue};
 
 /// Result of one decode step in the converter loop.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -132,12 +128,7 @@ impl<Value> DecodeStep<Value> {
     /// - `Ok(None)` when conversion can continue, or
     /// - `Err(error)` when emitting the decoded value fails.
     #[inline]
-    pub(in crate::transcode) fn apply_to_convert_state<
-        Input,
-        Output,
-        Error,
-        F,
-    >(
+    pub(in crate::transcode) fn apply_to_convert_state<Input, Output, Error, F>(
         self,
         state: &mut ConvertState<'_, Input, Output>,
         mut encode: F,

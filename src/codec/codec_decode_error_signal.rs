@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Domain-neutral stream decode error signals.
+//! Domain-neutral codec decode error signals.
 
 use core::num::NonZeroUsize;
 
@@ -15,7 +15,7 @@ use core::num::NonZeroUsize;
 /// failure. This trait only standardizes the small amount of control-flow
 /// information that streaming adapters need when deciding whether to read more
 /// input or consume invalid units before reporting an error.
-pub trait CodecDecodeSignal {
+pub trait CodecDecodeErrorSignal {
     /// Returns the total input units required from the current value start.
     ///
     /// # Returns
@@ -42,4 +42,4 @@ pub trait CodecDecodeSignal {
     }
 }
 
-impl CodecDecodeSignal for core::convert::Infallible {}
+impl CodecDecodeErrorSignal for core::convert::Infallible {}

@@ -5,16 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Tests for stream decode error signals.
+//! Tests for codec decode error signals.
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::CodecDecodeSignal;
+use qubit_codec::CodecDecodeErrorSignal;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct OpaqueDecodeError;
 
-impl CodecDecodeSignal for OpaqueDecodeError {}
+impl CodecDecodeErrorSignal for OpaqueDecodeError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SignaledDecodeError {
@@ -22,7 +22,7 @@ enum SignaledDecodeError {
     Invalid { consumed: NonZeroUsize },
 }
 
-impl CodecDecodeSignal for SignaledDecodeError {
+impl CodecDecodeErrorSignal for SignaledDecodeError {
     fn required_total(&self) -> Option<usize> {
         match *self {
             Self::Incomplete { required } => Some(required),
@@ -39,7 +39,7 @@ impl CodecDecodeSignal for SignaledDecodeError {
 }
 
 #[test]
-fn test_codec_decode_signal_defaults_to_no_stream_context() {
+fn test_codec_decode_error_signal_defaults_to_no_stream_context() {
     let error = OpaqueDecodeError;
 
     assert_eq!(None, error.required_total());
@@ -47,7 +47,7 @@ fn test_codec_decode_signal_defaults_to_no_stream_context() {
 }
 
 #[test]
-fn test_codec_decode_signal_reports_incomplete_requirement() {
+fn test_codec_decode_error_signal_reports_incomplete_requirement() {
     let error = SignaledDecodeError::Incomplete { required: 4 };
 
     assert_eq!(Some(4), error.required_total());
@@ -55,7 +55,7 @@ fn test_codec_decode_signal_reports_incomplete_requirement() {
 }
 
 #[test]
-fn test_codec_decode_signal_reports_invalid_consumption() {
+fn test_codec_decode_error_signal_reports_invalid_consumption() {
     let consumed = NonZeroUsize::new(2).expect("literal is non-zero");
     let error = SignaledDecodeError::Invalid { consumed };
 

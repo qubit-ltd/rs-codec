@@ -199,10 +199,7 @@ impl<E> TranscodeError<E> {
     /// Returns an invalid-input-index error when `input_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
         if input_index > input_len {
             return Err(Self::invalid_input_index(input_index, input_len));
         }
@@ -225,10 +222,7 @@ impl<E> TranscodeError<E> {
     /// Returns an invalid-output-index error when `output_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
         if output_index > output_len {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
@@ -289,11 +283,7 @@ impl<E> TranscodeError<E> {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(
-                output_index,
-                required,
-                available,
-            ));
+            return Err(Self::insufficient_output(output_index, required, available));
         }
         Ok(())
     }
@@ -325,19 +315,11 @@ impl<E> TranscodeError<E> {
         required: usize,
     ) -> Result<(), Self> {
         Self::ensure_output_index(output_len, output_index)?;
-        if !qubit_io::UncheckedSlice::range_fits(
-            output_len,
-            output_index,
-            range_len,
-        ) {
+        if !qubit_io::UncheckedSlice::range_fits(output_len, output_index, range_len) {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
         if range_len < required {
-            return Err(Self::insufficient_output(
-                output_index,
-                required,
-                range_len,
-            ));
+            return Err(Self::insufficient_output(output_index, required, range_len));
         }
         Ok(())
     }
@@ -378,10 +360,7 @@ where
                 write!(f, "invalid input index {index}; input length is {len}")
             }
             Self::InvalidOutputIndex { index, len } => {
-                write!(
-                    f,
-                    "invalid output index {index}; output length is {len}"
-                )
+                write!(f, "invalid output index {index}; output length is {len}")
             }
             Self::InsufficientOutput {
                 output_index,
@@ -391,9 +370,7 @@ where
                 f,
                 "insufficient output at index {output_index}; required {required}, available {available}"
             ),
-            Self::OutputLengthOverflow => {
-                f.write_str("output length arithmetic overflow")
-            }
+            Self::OutputLengthOverflow => f.write_str("output length arithmetic overflow"),
             Self::Domain(error) => error.fmt(f),
         }
     }
