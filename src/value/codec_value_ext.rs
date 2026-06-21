@@ -9,7 +9,12 @@
 
 use core::num::NonZeroUsize;
 
-use crate::{CapacityError, Codec, CodecDecodeError, CodecEncodeError};
+use crate::{
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    CodecEncodeError,
+};
 
 /// Extension trait for checked one-value codec operations.
 ///
@@ -87,7 +92,11 @@ pub trait CodecValueExt: Codec {
         let required = reset_units
             .checked_add(value_units)
             .ok_or_else(CodecEncodeError::output_length_overflow)?;
-        CodecEncodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        CodecEncodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let reset_written = unsafe {
             // SAFETY: The capacity check above reserves the combined
@@ -151,10 +160,17 @@ pub trait CodecValueExt: Codec {
         input_index: usize,
         flush_output: &mut [Self::Value],
         flush_output_index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize, usize), CodecDecodeError<Self::DecodeError>> {
+    ) -> Result<
+        (Self::Value, NonZeroUsize, usize),
+        CodecDecodeError<Self::DecodeError>,
+    > {
         CodecDecodeError::ensure_input_index(input.len(), input_index)?;
         let min_units = self.min_units_per_value().get();
-        CodecDecodeError::ensure_min_input(input.len(), input_index, min_units)?;
+        CodecDecodeError::ensure_min_input(
+            input.len(),
+            input_index,
+            min_units,
+        )?;
 
         let flush_cap = self.max_decode_flush_values();
         CodecDecodeError::ensure_output_capacity(
@@ -180,7 +196,9 @@ pub trait CodecValueExt: Codec {
             // output bound at `flush_output_index`.
             self.decode_flush(flush_output, flush_output_index)
         }
-        .map_err(|error| CodecDecodeError::decode(error, input_index + consumed.get()))?;
+        .map_err(|error| {
+            CodecDecodeError::decode(error, input_index + consumed.get())
+        })?;
         assert!(
             flushed <= flush_cap,
             "Codec::decode_flush wrote beyond its flush bound",
@@ -244,7 +262,10 @@ pub trait CodecValueExt: Codec {
             consumed.get() <= input.len(),
             "Codec::decode consumed beyond available input",
         );
-        CodecDecodeError::ensure_no_trailing_input(consumed.get(), input.len())?;
+        CodecDecodeError::ensure_no_trailing_input(
+            consumed.get(),
+            input.len(),
+        )?;
 
         let flushed = unsafe {
             // SAFETY: The flush-output checks above reserve the declared flush

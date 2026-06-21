@@ -7,7 +7,13 @@
 // =============================================================================
 //! Tests for the value-level codec extension trait.
 
-use qubit_codec::{CapacityError, Codec, CodecDecodeError, CodecEncodeError, CodecValueExt};
+use qubit_codec::{
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    CodecEncodeError,
+    CodecValueExt,
+};
 
 #[derive(Default)]
 struct ResetByteCodec;
@@ -434,7 +440,8 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_unencodable_value() {
 }
 
 #[test]
-fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow() {
+fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow()
+{
     let mut codec = OverflowEncodeBoundCodec;
     let mut output = [0_u8; 1];
 
@@ -464,7 +471,8 @@ fn test_codec_value_ext_encode_value_with_reset_wraps_encode_error() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_value_with_flush_returns_value_consumed_and_flushed() {
+fn test_codec_value_ext_decode_value_with_flush_returns_value_consumed_and_flushed()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -485,7 +493,9 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_incomplete_input() {
 
     let error = codec
         .decode_value_with_flush(&[], 0, &mut flushed, 0)
-        .expect_err("closed input shorter than the codec minimum is incomplete");
+        .expect_err(
+            "closed input shorter than the codec minimum is incomplete",
+        );
 
     assert_eq!(
         CodecDecodeError::Incomplete {
@@ -580,7 +590,8 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed() {
+fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -594,7 +605,8 @@ fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed(
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush_output() {
+fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush_output()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [];
 
@@ -613,7 +625,8 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_flush() {
+fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_flush()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -648,7 +661,8 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_invalid_input_index() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_output() {
+fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_output()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [];
 
