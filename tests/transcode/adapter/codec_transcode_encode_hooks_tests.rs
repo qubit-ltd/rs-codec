@@ -6,7 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeError, Transcoder};
+use qubit_codec::{
+    Codec,
+    CodecEncodeError,
+    CodecTranscodeEncoder,
+    TranscodeError,
+    Transcoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -115,7 +121,9 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
         .expect_err("strict encode hooks should reject unencodable values");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::UnencodableValue { input_index: 0 }),
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
+            input_index: 0
+        }),
         error,
     );
 }

@@ -8,7 +8,11 @@
 //! Tests for the semantic transcode encoder marker trait.
 
 use qubit_codec::{
-    CapacityError, CodecConvertError, TranscodeEncoder, TranscodeError, TranscodeProgress,
+    CapacityError,
+    CodecConvertError,
+    TranscodeEncoder,
+    TranscodeError,
+    TranscodeProgress,
     Transcoder,
 };
 
@@ -16,7 +20,8 @@ use qubit_codec::{
 struct CharToByte;
 
 impl Transcoder<char, u8> for CharToByte {
-    type Error = CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type Error =
+        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -27,7 +32,10 @@ impl Transcoder<char, u8> for CharToByte {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+        TranscodeError::<Self::Error>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -52,7 +60,10 @@ impl Transcoder<char, u8> for CharToByte {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+        TranscodeError::<Self::Error>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 }

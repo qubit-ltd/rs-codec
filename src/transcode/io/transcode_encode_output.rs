@@ -8,11 +8,27 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+    Seek,
+    SeekFrom,
+    Write,
+};
 
-use qubit_io::{Buffer, BufferedOutput, Output, Seekable};
+use qubit_io::{
+    Buffer,
+    BufferedOutput,
+    Output,
+    Seekable,
+};
 
-use crate::{TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -203,7 +219,11 @@ where
         M: FnMut(TranscodeError<E::Error>) -> Error,
     {
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(input.len(), input_index, count),
+            qubit_io::UncheckedSlice::range_fits(
+                input.len(),
+                input_index,
+                count
+            ),
             "unchecked encode input range exceeds source buffer",
         );
         if count == 0 {
@@ -218,7 +238,8 @@ where
             // `transcode` cannot make progress. Reserving one spare slot drains
             // pending units to the wrapped output only when needed.
             self.output.ensure_spare_capacity(1)?;
-            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
+            let (units, output_index, available_output) =
+                self.output.spare_raw_parts_mut();
             let remaining_input = count - read_total;
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
@@ -261,12 +282,14 @@ where
                     // encoder needs before it can continue. Drain pending units
                     // to the wrapped output only when the current spare window
                     // is smaller than that requirement.
-                    let required = available.checked_add(additional.get()).ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder output requirement overflowed",
-                        )
-                    })?;
+                    let required = available
+                        .checked_add(additional.get())
+                        .ok_or_else(|| {
+                            Error::new(
+                                ErrorKind::InvalidData,
+                                "transcoder output requirement overflowed",
+                            )
+                        })?;
                     self.output.ensure_spare_capacity(required)?;
                 }
                 TranscodeStatus::NeedInput { .. } => {
@@ -290,7 +313,11 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
+    pub fn finish<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
         M: FnMut(TranscodeError<E::Error>) -> Error,
@@ -299,7 +326,8 @@ where
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",

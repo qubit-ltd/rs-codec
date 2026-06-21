@@ -6,7 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError, transcode_error::TranscodeError,
+    capacity_error::CapacityError,
+    transcode_error::TranscodeError,
     transcode_progress::TranscodeProgress,
 };
 

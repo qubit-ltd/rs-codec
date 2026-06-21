@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    encode_context::EncodeContext,
+    transcode_progress::TranscodeProgress,
+};
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
@@ -83,7 +86,9 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         &mut self,
     ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
-        let value = unsafe { qubit_io::UncheckedSlice::get(self.input, self.input_cursor) };
+        let value = unsafe {
+            qubit_io::UncheckedSlice::get(self.input, self.input_cursor)
+        };
         EncodeContext {
             input_value: value,
             input_index: self.input_cursor,
@@ -112,7 +117,10 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
+    pub(in crate::transcode) fn accept_written_value(
+        &mut self,
+        written: usize,
+    ) {
         assert!(
             written <= self.available_output(),
             "encode step wrote beyond available output",

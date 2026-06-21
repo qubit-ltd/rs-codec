@@ -55,7 +55,10 @@ impl EncodeStep {
     ///
     /// Returns a step describing the missing output capacity.
     #[inline(always)]
-    pub(in crate::transcode) fn need_output(required: usize, available: usize) -> Self {
+    pub(in crate::transcode) fn need_output(
+        required: usize,
+        available: usize,
+    ) -> Self {
         let additional = qubit_io::nz!(required - available);
         Self::NeedOutput {
             additional,
