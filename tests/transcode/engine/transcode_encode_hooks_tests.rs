@@ -19,7 +19,7 @@ struct UnitCodec;
 #[error("encode failed")]
 struct UnitEncodeError;
 
-unsafe impl qubit_codec::Codec for UnitCodec {
+impl qubit_codec::Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -41,7 +41,10 @@ unsafe impl qubit_codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 

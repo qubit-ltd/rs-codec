@@ -17,7 +17,7 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
 
-unsafe impl Codec for PairByteCodec {
+impl Codec for PairByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -35,7 +35,10 @@ unsafe impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -64,7 +67,7 @@ unsafe impl Codec for PairByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
-unsafe impl Codec for RejectOddCodec {
+impl Codec for RejectOddCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -86,7 +89,10 @@ unsafe impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -114,7 +120,7 @@ unsafe impl Codec for RejectOddCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverreportingEncodeCodec;
 
-unsafe impl Codec for OverreportingEncodeCodec {
+impl Codec for OverreportingEncodeCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -132,7 +138,10 @@ unsafe impl Codec for OverreportingEncodeCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         Ok((input[index], core::num::NonZeroUsize::MIN))
@@ -159,7 +168,7 @@ struct NonCloneValue {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct NonCloneValueCodec;
 
-unsafe impl Codec for NonCloneValueCodec {
+impl Codec for NonCloneValueCodec {
     type Value = NonCloneValue;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -177,8 +186,10 @@ unsafe impl Codec for NonCloneValueCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), Self::DecodeError>
-    {
+    ) -> Result<
+        (NonCloneValue, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -209,7 +220,7 @@ struct ResetFailLifecycleCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
-unsafe impl Codec for ResetFailLifecycleCodec {
+impl Codec for ResetFailLifecycleCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -231,7 +242,10 @@ unsafe impl Codec for ResetFailLifecycleCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -257,7 +271,7 @@ unsafe impl Codec for ResetFailLifecycleCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverflowEncodeBoundCodec;
 
-unsafe impl Codec for OverflowEncodeBoundCodec {
+impl Codec for OverflowEncodeBoundCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -279,7 +293,10 @@ unsafe impl Codec for OverflowEncodeBoundCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -299,7 +316,7 @@ struct StatefulLifecycleCodec {
     encode_state: usize,
 }
 
-unsafe impl Codec for StatefulLifecycleCodec {
+impl Codec for StatefulLifecycleCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -321,7 +338,10 @@ unsafe impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -417,7 +437,12 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
+    assert_eq!(
+        CodecEncodeError::Buffer(
+            qubit_codec::BufferContractError::OutputLengthOverflow
+        ),
+        error
+    );
 }
 
 #[test]

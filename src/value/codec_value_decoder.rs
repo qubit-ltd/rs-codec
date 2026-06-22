@@ -63,6 +63,7 @@ where
 impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
 where
     C: Codec,
+    C::Value: Default,
 {
     type Output = C::Value;
     type Error = CodecDecodeError<C::DecodeError>;

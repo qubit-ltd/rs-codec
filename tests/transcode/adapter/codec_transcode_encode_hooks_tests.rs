@@ -21,7 +21,7 @@ struct ResetFailCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
-unsafe impl Codec for ResetFailCodec {
+impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -47,7 +47,10 @@ unsafe impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -73,7 +76,7 @@ unsafe impl Codec for ResetFailCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
-unsafe impl Codec for RejectOddCodec {
+impl Codec for RejectOddCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -95,7 +98,10 @@ unsafe impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 

@@ -17,7 +17,7 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
 
-unsafe impl Codec for SingleByteCodec {
+impl Codec for SingleByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
@@ -35,13 +35,19 @@ unsafe impl Codec for SingleByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
         let value = unsafe { *input.as_ptr().add(index) };
         if value == 0xff {
-            Err(TestDecodeError::Invalid { consumed: 1 })
+            Err(qubit_codec::CodecDecodeFailure::invalid(
+                TestDecodeError::Invalid { consumed: 1 },
+                core::num::NonZeroUsize::MIN,
+            ))
         } else {
             Ok((value, core::num::NonZeroUsize::MIN))
         }
@@ -66,7 +72,7 @@ unsafe impl Codec for SingleByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FixedPairCodec;
 
-unsafe impl Codec for FixedPairCodec {
+impl Codec for FixedPairCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
@@ -84,7 +90,10 @@ unsafe impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index + 1 < input.len());
 
         Ok((input[index].wrapping_add(input[index + 1]), unsafe {
@@ -109,7 +118,7 @@ unsafe impl Codec for FixedPairCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverconsumingCodec;
 
-unsafe impl Codec for OverconsumingCodec {
+impl Codec for OverconsumingCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -127,7 +136,10 @@ unsafe impl Codec for OverconsumingCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         Ok((
@@ -158,7 +170,7 @@ enum TestDecodeError {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailStatelessCodec;
 
-unsafe impl Codec for FlushFailStatelessCodec {
+impl Codec for FlushFailStatelessCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
@@ -176,7 +188,10 @@ unsafe impl Codec for FlushFailStatelessCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -202,7 +217,7 @@ unsafe impl Codec for FlushFailStatelessCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailStatefulCodec;
 
-unsafe impl Codec for FlushFailStatefulCodec {
+impl Codec for FlushFailStatefulCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
@@ -224,7 +239,10 @@ unsafe impl Codec for FlushFailStatefulCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -252,7 +270,7 @@ struct StatefulLifecycleCodec {
     decode_state: usize,
 }
 
-unsafe impl Codec for StatefulLifecycleCodec {
+impl Codec for StatefulLifecycleCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -274,7 +292,10 @@ unsafe impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         let decoded = input[index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
         Ok((decoded, core::num::NonZeroUsize::MIN))

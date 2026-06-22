@@ -8,7 +8,7 @@
 //! Tests for low-level codec contracts and adapter errors.
 
 mod codec_convert_error_tests;
-mod codec_decode_error_signal_tests;
 mod codec_decode_error_tests;
+mod codec_decode_failure_tests;
 mod codec_encode_error_tests;
 mod codec_tests;

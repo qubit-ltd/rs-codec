@@ -216,6 +216,46 @@ impl Transcoder<u32, u16> for FinishEncoder {
 }
 
 #[derive(Debug, Default)]
+struct TwoUnitFinishEncoder;
+
+impl Transcoder<u32, u16> for TwoUnitFinishEncoder {
+    type Error = PairEncodeError;
+
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(2)
+    }
+
+    noop_reset!(u16);
+
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+        if input_index > input.len() {
+            return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
+        }
+        Ok(TranscodeProgress::complete(0, 0))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        output[output_index] = 0xaaaa;
+        output[output_index + 1] = 0xbbbb;
+        Ok(2)
+    }
+}
+
+#[derive(Debug, Default)]
 struct ZeroWidthFailingFinishEncoder;
 
 impl Transcoder<u32, u16> for ZeroWidthFailingFinishEncoder {
@@ -797,6 +837,29 @@ fn test_buffered_encode_output_flushes_full_buffer_before_next_write() {
 }
 
 #[test]
+fn test_buffered_encode_output_transcode_from_reports_entry_flush_error() {
+    let output = FixedCapacityOutput::new(0);
+    let mut encoder = FinishEncoder::default();
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
+    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+
+    let written = unsafe {
+        output.transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
+    }
+    .expect("first value should remain pending in the internal buffer");
+    assert_eq!(1, written);
+    assert_eq!(0, output.spare_capacity());
+
+    let error = unsafe {
+        output.transcode_from(&mut encoder, &mut mapper, &[0x5678], 0, 1)
+    }
+    .expect_err("entry spare-capacity reservation should flush and fail");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert!(error.to_string().contains("fixed output capacity exceeded"));
+}
+
+#[test]
 fn test_buffered_encode_output_reports_no_progress_need_output_capacity() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
@@ -1122,4 +1185,19 @@ fn test_buffered_encode_output_finish_reports_spare_capacity_error() {
         .expect_err("finish should report spare-capacity errors");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_encode_output_finish_reports_required_spare_capacity_error() {
+    let output = UnitOutput::default();
+    let mut encoder = TwoUnitFinishEncoder;
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
+    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+
+    let error = output
+        .finish(&mut encoder, &mut mapper)
+        .expect_err("finish should reserve its full bound before writing");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert!(error.to_string().contains("spare capacity"));
 }

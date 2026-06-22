@@ -54,8 +54,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
   adapter 自己产生的 encode / decode / convert 错误，包括非法缓冲区下标，
   同时保留 codec-specific failure。
-- **`CodecDecodeErrorSignal`**：为 streaming adapter 提供领域无关的 decode-error
-  信号，用于表达不完整输入需求或非法输入可消费数量。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -118,7 +116,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ```toml
 [dependencies]
-qubit-codec = "0.8"
+qubit-codec = "0.9"
 ```
 
 ## 快速开始
@@ -169,7 +167,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法缓冲区下标 |
 | `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法缓冲区下标或尾随输入 |
 | `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 失败和完整的 encode-side `CodecEncodeError<E>` 失败 |
-| `CodecDecodeErrorSignal` | decode error 的领域无关信号 trait，可报告 incomplete 输入需求或 invalid 输入可消费数量 |
 
 ### Codec Adapter
 

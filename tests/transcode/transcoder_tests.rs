@@ -195,7 +195,12 @@ fn test_transcoder_explicit_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error
     );
 }
@@ -212,11 +217,13 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
         .expect_err("finish should reject partial output capacity");
 
     assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 2,
-            available: 1,
-        },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InsufficientOutput {
+                output_index: 0,
+                required: 2,
+                available: 1,
+            }
+        ),
         error,
     );
     assert_eq!([0], output);

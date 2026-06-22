@@ -206,6 +206,7 @@ where
     ///
     /// The caller must guarantee that `input_index..input_index + count` is
     /// a valid range inside `input` and that the addition does not overflow.
+    #[inline]
     pub unsafe fn transcode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -313,6 +314,7 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
+    #[inline]
     pub fn finish<E, M, Value>(
         &mut self,
         encoder: &mut E,

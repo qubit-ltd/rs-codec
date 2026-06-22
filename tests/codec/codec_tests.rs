@@ -16,7 +16,7 @@ use qubit_codec::{
 #[derive(Default)]
 struct ByteIncrementCodec;
 
-unsafe impl Codec for ByteIncrementCodec {
+impl Codec for ByteIncrementCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -34,7 +34,10 @@ unsafe impl Codec for ByteIncrementCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -64,7 +67,7 @@ struct StatefulLifecycleCodec {
     encode_state: usize,
 }
 
-unsafe impl Codec for StatefulLifecycleCodec {
+impl Codec for StatefulLifecycleCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -90,7 +93,10 @@ unsafe impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         let decoded = input[index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
         Ok((decoded, core::num::NonZeroUsize::MIN))
@@ -131,7 +137,7 @@ unsafe impl Codec for StatefulLifecycleCodec {
 #[derive(Default)]
 struct InvalidBoundsCodec;
 
-unsafe impl Codec for InvalidBoundsCodec {
+impl Codec for InvalidBoundsCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -149,7 +155,10 @@ unsafe impl Codec for InvalidBoundsCodec {
         &mut self,
         _input: &[u8],
         _index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
 

@@ -13,6 +13,7 @@ use crate::{
     CapacityError,
     Codec,
     CodecDecodeError,
+    CodecDecodeFailure,
     CodecEncodeError,
 };
 
@@ -68,11 +69,13 @@ pub trait CodecValueExt: Codec {
     ///
     /// Returns [`CodecEncodeError::UnencodableValue`] when `value` is outside
     /// this codec's encodable domain,
-    /// [`CodecEncodeError::InvalidOutputIndex`] when `output_index` is outside
-    /// `output`, [`CodecEncodeError::InsufficientOutput`] when the writable
+    /// [`crate::BufferContractError::InvalidOutputIndex`] when `output_index`
+    /// is outside `output`,
+    /// [`crate::BufferContractError::InsufficientOutput`] when the writable
     /// suffix cannot hold the reset output plus exact encoded value width,
-    /// [`CodecEncodeError::OutputLengthOverflow`] when the bound overflows, or
-    /// [`CodecEncodeError::Encode`] when reset or value encoding fails.
+    /// [`crate::BufferContractError::OutputLengthOverflow`] when the bound
+    /// overflows, or [`CodecEncodeError::Encode`] when reset or value encoding
+    /// fails.
     ///
     /// # Panics
     ///
@@ -142,13 +145,14 @@ pub trait CodecValueExt: Codec {
     ///
     /// # Errors
     ///
-    /// Returns [`CodecDecodeError::InvalidInputIndex`] when `input_index` is
-    /// outside `input`, [`CodecDecodeError::Incomplete`] when fewer than
+    /// Returns [`crate::BufferContractError::InvalidInputIndex`] when
+    /// `input_index` is outside `input`, [`CodecDecodeError::Incomplete`] when
+    /// fewer than
     /// [`Codec::min_units_per_value`] units are readable,
-    /// [`CodecDecodeError::InvalidOutputIndex`] or
-    /// [`CodecDecodeError::InsufficientOutput`] when flush output cannot hold
-    /// [`Codec::max_decode_flush_values`], or [`CodecDecodeError::Decode`]
-    /// when decoding or flushing fails.
+    /// [`crate::BufferContractError::InvalidOutputIndex`] or
+    /// [`crate::BufferContractError::InsufficientOutput`] when flush output
+    /// cannot hold [`Codec::max_decode_flush_values`], or
+    /// [`CodecDecodeError::Decode`] when decoding or flushing fails.
     ///
     /// # Panics
     ///
@@ -184,7 +188,9 @@ pub trait CodecValueExt: Codec {
             // units required by `Codec::decode`.
             self.decode(input, input_index)
         }
-        .map_err(|error| CodecDecodeError::decode(error, input_index))?;
+        .map_err(|failure| {
+            map_decode_failure(failure, input_index, input.len() - input_index)
+        })?;
         let available = input.len() - input_index;
         assert!(
             consumed.get() <= available,
@@ -257,7 +263,7 @@ pub trait CodecValueExt: Codec {
             // units required by `Codec::decode` at index 0.
             self.decode(input, 0)
         }
-        .map_err(|error| CodecDecodeError::decode(error, 0))?;
+        .map_err(|failure| map_decode_failure(failure, 0, input.len()))?;
         assert!(
             consumed.get() <= input.len(),
             "Codec::decode consumed beyond available input",
@@ -282,3 +288,19 @@ pub trait CodecValueExt: Codec {
 }
 
 impl<C> CodecValueExt for C where C: Codec + ?Sized {}
+
+#[inline]
+fn map_decode_failure<E>(
+    failure: CodecDecodeFailure<E>,
+    input_index: usize,
+    available: usize,
+) -> CodecDecodeError<E> {
+    match failure {
+        CodecDecodeFailure::Incomplete { required_total } => {
+            CodecDecodeError::incomplete(input_index, required_total, available)
+        }
+        CodecDecodeFailure::Invalid { source, .. } => {
+            CodecDecodeError::decode(source, input_index)
+        }
+    }
+}

@@ -27,6 +27,7 @@ use qubit_io::{
 use crate::codec::assert_unit_bounds;
 use crate::{
     Codec,
+    CodecDecodeFailure,
     TranscodeError,
     TranscodeStatus,
     Transcoder,
@@ -300,6 +301,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
+    #[inline]
     pub unsafe fn decode_into<C, M>(
         &mut self,
         decoder: &mut C,
@@ -342,12 +344,35 @@ where
             }
 
             let available = self.input.available();
-            let (value, consumed) = unsafe {
+            let decoded = unsafe {
                 // SAFETY: The unread window contains at least
                 // `min_units_per_value` units from index zero.
                 decoder.decode(self.input.unread(), 0)
-            }
-            .map_err(&mut *map_error)?;
+            };
+            let (value, consumed) = match decoded {
+                Ok(decoded) => decoded,
+                Err(CodecDecodeFailure::Incomplete { required_total }) => {
+                    if required_total <= available {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "codec reported incomplete input without requiring more units",
+                        ));
+                    }
+                    if required_total > self.input.capacity() {
+                        return Err(Error::new(
+                            ErrorKind::InvalidInput,
+                            "codec decode requires more units than the input buffer can hold",
+                        ));
+                    }
+                    if self.input.fill_until(required_total)? {
+                        continue;
+                    }
+                    return Ok(written_total);
+                }
+                Err(CodecDecodeFailure::Invalid { source, .. }) => {
+                    return Err(map_error(source));
+                }
+            };
             let consumed = consumed.get();
             assert!(
                 consumed <= available,
@@ -390,6 +415,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
+    #[inline]
     pub unsafe fn transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -515,6 +541,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
+    #[inline]
     pub unsafe fn finish_transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,

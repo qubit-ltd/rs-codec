@@ -7,6 +7,7 @@
 // =============================================================================
 
 mod adapter;
+mod buffer_contract_error_tests;
 mod capacity_error_tests;
 mod decode_action_tests;
 mod decode_context_tests;

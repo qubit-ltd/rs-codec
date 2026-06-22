@@ -8,6 +8,7 @@
 //! Progress-oriented streaming transcode traits, adapters, and status types.
 
 mod adapter;
+mod buffer_contract_error;
 mod capacity_error;
 mod decode_action;
 mod decode_context;
@@ -29,6 +30,7 @@ pub use adapter::{
     CodecTranscodeDecoder,
     CodecTranscodeEncoder,
 };
+pub use buffer_contract_error::BufferContractError;
 pub use capacity_error::CapacityError;
 pub use decode_action::DecodeAction;
 pub use decode_context::DecodeContext;

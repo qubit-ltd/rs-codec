@@ -11,12 +11,12 @@
 mod codec;
 mod codec_convert_error;
 mod codec_decode_error;
-mod codec_decode_error_signal;
+mod codec_decode_failure;
 mod codec_encode_error;
 
 pub use codec::Codec;
 pub(crate) use codec::assert_unit_bounds;
 pub use codec_convert_error::CodecConvertError;
 pub use codec_decode_error::CodecDecodeError;
-pub use codec_decode_error_signal::CodecDecodeErrorSignal;
+pub use codec_decode_failure::CodecDecodeFailure;
 pub use codec_encode_error::CodecEncodeError;

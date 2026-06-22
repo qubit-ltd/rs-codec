@@ -21,7 +21,7 @@ struct FlushFailCodec;
 #[error("flush failed")]
 struct FlushFailError;
 
-unsafe impl Codec for FlushFailCodec {
+impl Codec for FlushFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = FlushFailError;
@@ -43,7 +43,10 @@ unsafe impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -73,7 +76,7 @@ struct InvalidByteCodec;
 #[error("invalid byte")]
 struct InvalidByteError;
 
-unsafe impl Codec for InvalidByteCodec {
+impl Codec for InvalidByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = InvalidByteError;
@@ -91,9 +94,15 @@ unsafe impl Codec for InvalidByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         if input[index] == 0xff {
-            Err(InvalidByteError)
+            Err(qubit_codec::CodecDecodeFailure::invalid(
+                InvalidByteError,
+                core::num::NonZeroUsize::MIN,
+            ))
         } else {
             Ok((input[index], core::num::NonZeroUsize::MIN))
         }

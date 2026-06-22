@@ -13,7 +13,6 @@ use qubit_codec::{
     Codec,
     CodecConvertError,
     CodecDecodeError,
-    CodecDecodeErrorSignal,
     CodecEncodeError,
     CodecTranscodeConverter,
     CodecTranscodeDecoder,
@@ -54,7 +53,7 @@ impl ValueDecoder<str> for EchoCodec {
     }
 }
 
-unsafe impl Codec for EchoCodec {
+impl Codec for EchoCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -72,7 +71,10 @@ unsafe impl Codec for EchoCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -107,7 +109,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     fn _accept_codec_transcode_encoder<T: TranscodeEncoder<u8, u8>>() {}
     fn _accept_codec_transcode_decoder<T: TranscodeDecoder<u8, u8>>() {}
     fn _accept_codec_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
-    fn _accept_codec_decode_error_signal<T: CodecDecodeErrorSignal>() {}
     fn _accept_transcode_decode_engine<T>() {}
     fn _accept_transcode_encode_engine<T>() {}
     fn _accept_transcode_convert_engine<T>() {}
@@ -133,7 +134,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_transcode_converter::<
         CodecTranscodeConverter<EchoCodec, EchoCodec>,
     >();
-    _accept_codec_decode_error_signal::<core::convert::Infallible>();
     _accept_transcode_decode_engine::<
         qubit_codec::TranscodeDecodeEngine<EchoCodec, ()>,
     >();
@@ -156,10 +156,12 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
                 core::convert::Infallible,
                 core::convert::Infallible,
             >,
-        >::InvalidOutputIndex {
-            index: 1,
-            len: 0
-        },
+        >::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0,
+            }
+        ),
         qubit_codec::TranscodeError::invalid_output_index(1, 0),
     );
 
@@ -186,7 +188,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         );
     assert!(matches!(
         encode_error,
-        CodecEncodeError::InvalidOutputIndex { .. }
+        CodecEncodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex { .. }
+        )
     ));
     let convert_error = CodecConvertError::<
         core::convert::Infallible,
@@ -195,7 +199,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert!(matches!(
         convert_error,
         CodecConvertError::Encode {
-            source: CodecEncodeError::InvalidOutputIndex { .. },
+            source: CodecEncodeError::Buffer(
+                qubit_codec::BufferContractError::InvalidOutputIndex { .. }
+            ),
         },
     ));
 

@@ -7,6 +7,8 @@
 // =============================================================================
 //! Policy hooks used by buffered decoder engines.
 
+use core::num::NonZeroUsize;
+
 use super::super::{
     decode_action::DecodeAction,
     decode_context::DecodeContext,
@@ -35,14 +37,16 @@ use crate::{
 ///
 /// # Example
 ///
-/// This hook maps incomplete codec errors to `NeedInput`, replaces malformed
-/// units with `b'?'`, and otherwise lets the engine keep decoding.
+/// This hook replaces malformed units with `b'?'` and otherwise lets the engine
+/// keep decoding. Incomplete input is reported by
+/// [`crate::CodecDecodeFailure`] before policy hooks are called.
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     TranscodeDecodeHooks,
 ///     Codec,
+///     CodecDecodeFailure,
 ///     CodecDecodeError,
 ///     DecodeAction,
 ///     DecodeContext,
@@ -53,11 +57,10 @@ use crate::{
 ///
 /// #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// enum MyDecodeError {
-///     Incomplete { required_total: usize },
 ///     Malformed { consumed: NonZeroUsize },
 /// }
 ///
-/// unsafe impl Codec for MyCodec {
+/// impl Codec for MyCodec {
 ///     type Value = u8;
 ///     type Unit = u8;
 ///     type DecodeError = MyDecodeError;
@@ -75,11 +78,14 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
 ///         match input[index] {
-///             0xff => Err(MyDecodeError::Malformed {
-///                 consumed: NonZeroUsize::MIN,
-///             }),
+///             0xff => Err(CodecDecodeFailure::invalid(
+///                 MyDecodeError::Malformed {
+///                     consumed: NonZeroUsize::MIN,
+///                 },
+///                 NonZeroUsize::MIN,
+///             )),
 ///             value => Ok((value, NonZeroUsize::MIN)),
 ///         }
 ///     }
@@ -104,14 +110,15 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut MyCodec,
 ///         error: MyDecodeError,
+///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
 ///     ) -> Result<DecodeAction<u8>, Self::Error> {
 ///         match error {
-///             MyDecodeError::Incomplete { required_total } => {
-///                 Ok(DecodeAction::NeedInput { required_total })
-///             }
-///             MyDecodeError::Malformed { consumed } => {
-///                 Ok(DecodeAction::Emit { value: b'?', consumed })
+///             MyDecodeError::Malformed { .. } => {
+///                 Ok(DecodeAction::Emit {
+///                     value: b'?',
+///                     consumed: consumed.expect("codec reported malformed width"),
+///                 })
 ///             }
 ///         }
 ///     }
@@ -169,12 +176,14 @@ where
         0
     }
 
-    /// Handles a codec decode error during `transcode`.
+    /// Handles a codec-domain invalid decode error during `transcode`.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `error`: Error returned by the codec.
+    /// - `error`: Invalid domain error returned by the codec.
+    /// - `consumed`: Invalid input units that may be consumed by non-strict
+    ///   policies.
     /// - `context`: Decode attempt context.
     ///
     /// # Returns
@@ -195,6 +204,7 @@ where
         &mut self,
         codec: &mut C,
         error: C::DecodeError,
+        consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error>;
 

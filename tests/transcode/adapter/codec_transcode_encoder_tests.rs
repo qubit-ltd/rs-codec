@@ -22,7 +22,7 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
 
-unsafe impl Codec for PairByteCodec {
+impl Codec for PairByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -40,7 +40,10 @@ unsafe impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -69,7 +72,7 @@ unsafe impl Codec for PairByteCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableWidthCodec;
 
-unsafe impl Codec for VariableWidthCodec {
+impl Codec for VariableWidthCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -95,7 +98,10 @@ unsafe impl Codec for VariableWidthCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -126,7 +132,7 @@ unsafe impl Codec for VariableWidthCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
-unsafe impl Codec for RejectOddCodec {
+impl Codec for RejectOddCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -148,7 +154,10 @@ unsafe impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -268,7 +277,12 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error
     );
 }
@@ -283,7 +297,12 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error
     );
 }
@@ -298,7 +317,12 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .expect_err("invalid input index should fail");
 
     assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidInputIndex {
+                index: 2,
+                len: 1
+            }
+        ),
         error
     );
 }

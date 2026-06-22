@@ -63,6 +63,7 @@ where
 impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
 where
     C: Codec,
+    C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
     type Error = CodecEncodeError<C::EncodeError>;
@@ -99,7 +100,8 @@ where
             .max_encode_reset_units()
             .checked_add(self.codec.encode_len(input).get())
             .ok_or_else(CodecEncodeError::output_length_overflow)?;
-        let mut output = vec![C::Unit::default(); units];
+        let mut output = Vec::with_capacity(units);
+        output.resize_with(units, C::Unit::default);
         let written =
             self.codec.encode_value_with_reset(input, &mut output, 0)?;
         output.truncate(written);

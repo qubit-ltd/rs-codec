@@ -31,11 +31,10 @@ struct PrefixCodec;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PrefixDecodeError {
-    Incomplete { required: usize, available: usize },
     Invalid { consumed: usize },
 }
 
-unsafe impl Codec for PrefixCodec {
+impl Codec for PrefixCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
@@ -53,17 +52,17 @@ unsafe impl Codec for PrefixCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
         let first = unsafe { *input.as_ptr().add(index) };
         match first {
             0xfe if input.len() - index < 2 => {
-                Err(PrefixDecodeError::Incomplete {
-                    required: 2,
-                    available: input.len() - index,
-                })
+                Err(qubit_codec::CodecDecodeFailure::incomplete(2))
             }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
@@ -72,7 +71,10 @@ unsafe impl Codec for PrefixCodec {
                     core::num::NonZeroUsize::new_unchecked(2)
                 }))
             }
-            0xff => Err(PrefixDecodeError::Invalid { consumed: 1 }),
+            0xff => Err(qubit_codec::CodecDecodeFailure::invalid(
+                PrefixDecodeError::Invalid { consumed: 1 },
+                core::num::NonZeroUsize::MIN,
+            )),
             value => Ok((value, core::num::NonZeroUsize::MIN)),
         }
     }
@@ -94,9 +96,63 @@ unsafe impl Codec for PrefixCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct HintOnlyCodec;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HintOnlyDecodeError {
+    Invalid,
+}
+
+impl Codec for HintOnlyCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = HintOnlyDecodeError;
+    type EncodeError = core::convert::Infallible;
+
+    fn min_units_per_value(&self) -> NonZeroUsize {
+        NonZeroUsize::MIN
+    }
+
+    fn max_units_per_value(&self) -> NonZeroUsize {
+        non_zero_consumed(2)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<
+        (u8, NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
+        debug_assert!(index < input.len());
+
+        match input[index] {
+            0xaa => Err(qubit_codec::CodecDecodeFailure::invalid(
+                HintOnlyDecodeError::Invalid,
+                non_zero_consumed(2),
+            )),
+            value => Ok((value, NonZeroUsize::MIN)),
+        }
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
+        debug_assert!(index < output.len());
+
+        output[index] = *value;
+        Ok(NonZeroUsize::MIN)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverconsumingCodec;
 
-unsafe impl Codec for OverconsumingCodec {
+impl Codec for OverconsumingCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -114,7 +170,10 @@ unsafe impl Codec for OverconsumingCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         Ok((input[index], unsafe {
@@ -147,14 +206,10 @@ impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
@@ -173,6 +228,7 @@ impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
         &mut self,
         _codec: &mut OverconsumingCodec,
         error: core::convert::Infallible,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {}
@@ -189,16 +245,33 @@ impl TranscodeDecodeHooks<PrefixCodec> for SkippingHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct HintOnlySkippingHooks;
+
+impl TranscodeDecodeHooks<HintOnlyCodec> for HintOnlySkippingHooks {
+    type Error = EngineError;
+
+    fn handle_decode_error(
+        &mut self,
+        _codec: &mut HintOnlyCodec,
+        error: HintOnlyDecodeError,
+        consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeAction<u8>, Self::Error> {
+        match error {
+            HintOnlyDecodeError::Invalid => Ok(DecodeAction::Skip {
+                consumed: consumed.expect("codec should report invalid width"),
             }),
         }
     }
@@ -224,14 +297,10 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -277,6 +346,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         _error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match self.kind {
@@ -304,14 +374,10 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -344,14 +410,10 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
@@ -376,7 +438,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MinTwoCodec;
 
-unsafe impl Codec for MinTwoCodec {
+impl Codec for MinTwoCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
@@ -394,7 +456,10 @@ unsafe impl Codec for MinTwoCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index + 1 < input.len());
 
         Ok((input[index].wrapping_add(input[index + 1]), unsafe {
@@ -418,7 +483,7 @@ unsafe impl Codec for MinTwoCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverflowFlushCodec;
 
-unsafe impl Codec for OverflowFlushCodec {
+impl Codec for OverflowFlushCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -440,7 +505,10 @@ unsafe impl Codec for OverflowFlushCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -469,6 +537,7 @@ impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
         &mut self,
         _codec: &mut OverflowFlushCodec,
         error: core::convert::Infallible,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {}
@@ -482,14 +551,10 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
         &mut self,
         _codec: &mut MinTwoCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Incomplete { required, .. } => {
-                Ok(DecodeAction::NeedInput {
-                    required_total: required,
-                })
-            }
             PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
@@ -514,7 +579,12 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let error = decoder
         .finish(&mut output, 0)
         .expect_err("finish should report capacity overflow before writing");
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::OutputLengthOverflow
+        ),
+        error
+    );
 }
 
 #[test]
@@ -545,11 +615,13 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
         "finish should reject insufficient output before calling hooks",
     );
     assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InsufficientOutput {
+                output_index: 0,
+                required: 1,
+                available: 0,
+            }
+        ),
         error,
     );
     assert_eq!(Ok(1), decoder.max_finish_output_len());
@@ -601,7 +673,12 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -618,7 +695,12 @@ fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffe
         .expect_err("default finish should reject out-of-range output index");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -765,6 +847,22 @@ fn test_transcode_decode_engine_allows_policy_skip_for_invalid_input() {
 }
 
 #[test]
+fn test_transcode_decode_engine_passes_invalid_consumed_hint_to_hooks() {
+    let mut decoder =
+        TranscodeDecodeEngine::new(HintOnlyCodec, HintOnlySkippingHooks);
+    let mut output = [0_u8; 1];
+
+    let progress = decoder
+        .transcode(&[0xaa, 0xbb, 1], 0, &mut output, 0)
+        .expect("policy should skip invalid width from failure hint");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(3, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([1], output);
+}
+
+#[test]
 #[should_panic(
     expected = "DecodeAction::NeedInput required_total must exceed available input"
 )]
@@ -777,7 +875,7 @@ fn test_transcode_decode_engine_panics_on_invalid_need_input_action() {
     );
     let mut output = [0_u8; 1];
 
-    let _ = decoder.transcode(&[0xfe], 0, &mut output, 0);
+    let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
 }
 
 #[test]
@@ -838,7 +936,12 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -864,7 +967,12 @@ fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
         .expect_err("invalid input index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidInputIndex {
+                index: 2,
+                len: 1
+            }
+        ),
         error,
     );
 }
@@ -916,7 +1024,7 @@ struct FlushFailCodec;
 #[error("flush failed")]
 struct FlushFailError;
 
-unsafe impl Codec for FlushFailCodec {
+impl Codec for FlushFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = FlushFailError;
@@ -938,7 +1046,10 @@ unsafe impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -971,6 +1082,7 @@ impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
         &mut self,
         _codec: &mut FlushFailCodec,
         error: FlushFailError,
+        _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         Err(qubit_codec::CodecDecodeError::decode(
@@ -998,6 +1110,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         Err(error)
@@ -1031,7 +1144,12 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
         .expect_err("reset should reject invalid output index");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }

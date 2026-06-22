@@ -34,11 +34,12 @@ pub use codec::{
     Codec,
     CodecConvertError,
     CodecDecodeError,
-    CodecDecodeErrorSignal,
+    CodecDecodeFailure,
     CodecEncodeError,
 };
 pub use qubit_io::nz;
 pub use transcode::{
+    BufferContractError,
     CapacityError,
     CodecTranscodeConverter,
     CodecTranscodeDecoder,

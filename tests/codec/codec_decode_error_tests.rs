@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::CodecDecodeError;
+use qubit_codec::{
+    BufferContractError,
+    CodecDecodeError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
@@ -60,7 +63,10 @@ fn test_codec_decode_error_reports_invalid_input_index() {
     let error = CodecDecodeError::<TestDecodeError>::invalid_input_index(5, 2);
 
     assert_eq!(
-        CodecDecodeError::InvalidInputIndex { index: 5, len: 2 },
+        CodecDecodeError::Buffer(BufferContractError::InvalidInputIndex {
+            index: 5,
+            len: 2,
+        }),
         error
     );
     assert!(!error.is_incomplete());
@@ -72,7 +78,10 @@ fn test_codec_decode_error_reports_invalid_output_index() {
     let error = CodecDecodeError::<TestDecodeError>::invalid_output_index(5, 2);
 
     assert_eq!(
-        CodecDecodeError::InvalidOutputIndex { index: 5, len: 2 },
+        CodecDecodeError::Buffer(BufferContractError::InvalidOutputIndex {
+            index: 5,
+            len: 2,
+        }),
         error
     );
 }
@@ -83,11 +92,11 @@ fn test_codec_decode_error_reports_insufficient_output() {
         CodecDecodeError::<TestDecodeError>::insufficient_output(2, 4, 1);
 
     assert_eq!(
-        CodecDecodeError::InsufficientOutput {
+        CodecDecodeError::Buffer(BufferContractError::InsufficientOutput {
             output_index: 2,
             required: 4,
             available: 1,
-        },
+        }),
         error,
     );
     assert!(
@@ -184,11 +193,11 @@ fn test_codec_decode_error_ensure_output_capacity_rejects_insufficient_capacity(
             .expect_err("insufficient capacity");
 
     assert_eq!(
-        CodecDecodeError::InsufficientOutput {
+        CodecDecodeError::Buffer(BufferContractError::InsufficientOutput {
             output_index: 2,
             required: 3,
             available: 2,
-        },
+        }),
         error,
     );
 }

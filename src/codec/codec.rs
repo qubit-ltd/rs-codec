@@ -9,6 +9,8 @@
 
 use core::num::NonZeroUsize;
 
+use super::codec_decode_failure::CodecDecodeFailure;
+
 /// Encodes and decodes one value or codec quantum against a unit buffer.
 ///
 /// `Codec` is the lowest-level abstraction in the codec stack. It is intended
@@ -36,27 +38,21 @@ use core::num::NonZeroUsize;
 /// # Associated Types
 ///
 /// - `Value`: Logical value decoded from or encoded into the buffer. This may
-///   be a scalar such as `u8`, `u16`, `u64`, a `char`, or a fixed quantum such
-///   as `[u8; 3]`. The trait can model other small value objects, but it is
-///   intentionally aimed at copyable value-domain types rather than owned
-///   resource handles or heap-backed aggregates. Implementations must provide
-///   [`Copy`] and [`Default`] so checked adapters can pass values by copy and
-///   allocate flush scratch buffers.
+///   be a scalar such as `u8`, `u16`, `u64`, a `char`, a fixed quantum such as
+///   `[u8; 3]`, or an owned value such as `String`/`Vec<u8>`. Adapters that
+///   need scratch initialization add their own bounds at the use site.
 /// - `Unit`: Buffer unit used by the encoded representation. Implementations
 ///   are typically scalar storage units such as `u8`, `u16`, or `char`.
-///   Implementations must provide [`Copy`] and [`Default`] so checked adapters
-///   can allocate output unit buffers and initialize caller-owned scratch
-///   storage.
-///
-/// # Safety
+///   Adapters that allocate owned output add their own initialization bounds at
+///   the use site.
 ///
 /// Implementors must uphold the safety contract documented by
 /// [`decode`](Self::decode), [`encode`](Self::encode),
 /// [`encode_reset`](Self::encode_reset), and
-/// [`decode_flush`](Self::decode_flush). In particular, unchecked
-/// implementations must not read or write outside the caller-provided ranges.
-/// Implementations should use `debug_assert!` to state the expected buffer
-/// bounds at the unchecked entry point.
+/// [`decode_flush`](Self::decode_flush). Unchecked implementations must not
+/// read or write outside the caller-provided ranges. Implementations should use
+/// `debug_assert!` to state the expected buffer bounds at the unchecked entry
+/// point.
 ///
 /// Implementations must also guarantee that
 /// [`min_units_per_value`](Self::min_units_per_value) is less than or equal to
@@ -64,12 +60,12 @@ use core::num::NonZeroUsize;
 /// by type, and `max_units_per_value` must be a valid upper bound for one
 /// complete encoded value or codec quantum. Checked adapters assert this
 /// invariant before using codec-provided bounds.
-pub unsafe trait Codec {
+pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
-    type Value: Copy + Default;
+    type Value;
 
     /// The type of buffer units used by the encoded representation.
-    type Unit: Copy + Default;
+    type Unit;
 
     /// The type of errors reported when decoding malformed units.
     type DecodeError;
@@ -292,10 +288,13 @@ pub unsafe trait Codec {
     ///
     /// # Errors
     ///
-    /// Returns `Self::DecodeError` when the units are malformed, non-canonical,
-    /// incomplete, or otherwise invalid for this codec. The concrete error type
-    /// carries the codec-specific reason and context. Implementations must
-    /// leave their internal state consistent when returning an error.
+    /// Returns [`CodecDecodeFailure::Incomplete`] when the visible input is a
+    /// valid prefix but more units are needed to decide or complete a value.
+    /// Returns [`CodecDecodeFailure::Invalid`] when the units are malformed,
+    /// non-canonical, unmappable, or otherwise invalid for this codec. The
+    /// concrete error type carries only codec-domain invalidity.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
     ///
     /// # Safety
     ///
@@ -303,8 +302,8 @@ pub unsafe trait Codec {
     /// and that at least [`min_units_per_value`](Self::min_units_per_value)
     /// units are readable from `index`. Implementations must not read beyond
     /// the currently available units under that precondition. They may
-    /// return `Self::DecodeError` when those units are a valid but
-    /// incomplete prefix.
+    /// return [`CodecDecodeFailure::Incomplete`] when those units are a valid
+    /// but incomplete prefix.
     ///
     /// On success, implementations must return a consumed unit count no larger
     /// than the available input. The return type guarantees that successful
@@ -315,7 +314,10 @@ pub unsafe trait Codec {
         &mut self,
         input: &[Self::Unit],
         index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize), Self::DecodeError>;
+    ) -> Result<
+        (Self::Value, NonZeroUsize),
+        CodecDecodeFailure<Self::DecodeError>,
+    >;
 
     /// Flushes decode-side EOF state into `output`.
     ///
@@ -364,6 +366,7 @@ pub unsafe trait Codec {
 ///
 /// Panics when [`Codec::min_units_per_value`] is greater than
 /// [`Codec::max_units_per_value`].
+#[inline(always)]
 pub(crate) fn assert_unit_bounds<C>(codec: &C)
 where
     C: Codec,

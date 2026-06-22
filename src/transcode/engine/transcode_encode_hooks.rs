@@ -49,6 +49,7 @@ use crate::{
 /// use qubit_codec::{
 ///     TranscodeEncodeHooks,
 ///     Codec,
+///     CodecDecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
 ///     EncodePlan,
@@ -57,7 +58,7 @@ use crate::{
 /// #[derive(Clone, Copy)]
 /// struct ByteCodec;
 ///
-/// unsafe impl Codec for ByteCodec {
+/// impl Codec for ByteCodec {
 ///     type Value = u8;
 ///     type Unit = u8;
 ///     type DecodeError = Infallible;
@@ -75,7 +76,7 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
 ///         Ok((input[index], NonZeroUsize::MIN))
 ///     }
 ///

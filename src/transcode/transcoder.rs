@@ -49,6 +49,7 @@ use super::{
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
+///     BufferContractError,
 ///     CodecDecodeError,
 ///     TranscodeError,
 ///     TranscodeProgress,
@@ -159,11 +160,11 @@ use super::{
 ///
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 2, &mut output, 0),
-///     Err(TranscodeError::InvalidInputIndex { .. }),
+///     Err(TranscodeError::Buffer(BufferContractError::InvalidInputIndex { .. })),
 /// ));
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 0, &mut output, 3),
-///     Err(TranscodeError::InvalidOutputIndex { .. }),
+///     Err(TranscodeError::Buffer(BufferContractError::InvalidOutputIndex { .. })),
 /// ));
 /// ```
 ///

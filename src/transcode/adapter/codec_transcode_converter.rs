@@ -300,7 +300,10 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>> {
+    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>>
+    where
+        D::Value: Default,
+    {
         self.engine.finish(output, output_index)
     }
 }
@@ -309,6 +312,7 @@ impl<D, E> Transcoder<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
+    D::Value: Default,
 {
     type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
 
@@ -417,5 +421,6 @@ impl<D, E> TranscodeConverter<D::Unit, E::Unit>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
+    D::Value: Default,
 {
 }

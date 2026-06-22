@@ -61,8 +61,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
   adapter-level encode, decode, and conversion errors, including invalid buffer
   indices, without hiding codec-specific failures.
-- **`CodecDecodeErrorSignal`**: optional domain-neutral decode-error signals for
-  streaming adapters that need incomplete-input or invalid-consumption hints.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -136,7 +134,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.8"
+qubit-codec = "0.9"
 ```
 
 ## Quick Start
@@ -187,7 +185,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
 | `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
-| `CodecDecodeErrorSignal` | Domain-neutral trait for decode errors that can report incomplete-input requirements or invalid-input consumption hints |
 
 ### Codec Adapters
 

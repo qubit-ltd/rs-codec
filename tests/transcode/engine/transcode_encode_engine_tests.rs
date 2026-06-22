@@ -22,7 +22,7 @@ use qubit_codec::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct WideCodec;
 
-unsafe impl Codec for WideCodec {
+impl Codec for WideCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -40,7 +40,10 @@ unsafe impl Codec for WideCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -364,11 +367,13 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
         "finish should reject insufficient output before calling hooks",
     );
     assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InsufficientOutput {
+                output_index: 0,
+                required: 1,
+                available: 0,
+            }
+        ),
         error,
     );
     assert_eq!(1, encoder.max_finish_output_len());
@@ -423,7 +428,12 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -440,7 +450,12 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
         .expect_err("default finish should reject out-of-range output index");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -508,7 +523,12 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidOutputIndex {
+                index: 1,
+                len: 0
+            }
+        ),
         error,
     );
 }
@@ -553,7 +573,12 @@ fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
         .expect_err("invalid input index should be rejected");
 
     assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
+        TranscodeError::Buffer(
+            qubit_codec::BufferContractError::InvalidInputIndex {
+                index: 2,
+                len: 1
+            }
+        ),
         error,
     );
 }
@@ -561,7 +586,7 @@ fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetEmittingCodec;
 
-unsafe impl Codec for ResetEmittingCodec {
+impl Codec for ResetEmittingCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -583,7 +608,10 @@ unsafe impl Codec for ResetEmittingCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -614,7 +642,7 @@ struct ResetFailCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
-unsafe impl Codec for ResetFailCodec {
+impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -636,7 +664,10 @@ unsafe impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 

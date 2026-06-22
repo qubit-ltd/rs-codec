@@ -12,6 +12,8 @@ use super::super::{
     decode_action::DecodeAction,
     decode_context::DecodeContext,
 };
+use core::num::NonZeroUsize;
+
 use crate::{
     Codec,
     CodecDecodeError,
@@ -32,7 +34,8 @@ where
     /// # Parameters
     ///
     /// - `_codec`: Low-level codec instance.
-    /// - `error`: Decode error produced by the low-level codec.
+    /// - `error`: Invalid domain error produced by the low-level codec.
+    /// - `_consumed`: Invalid units that a non-strict policy may consume.
     /// - `context`: Decoding context carrying input position.
     ///
     /// # Returns
@@ -43,6 +46,7 @@ where
         &mut self,
         _codec: &mut C,
         error: C::DecodeError,
+        _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, Self::Error> {
         Err(CodecDecodeError::decode(error, context.input_index()))

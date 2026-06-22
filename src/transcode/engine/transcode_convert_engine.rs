@@ -276,7 +276,7 @@ where
     {
         let required = self
             .max_finish_output_len()
-            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -328,9 +328,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<usize, ConvertErrorOf<D, E, H>> {
-        let required = self
-            .max_reset_output_len()
-            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
+        let required = self.encode_engine.max_reset_output_len();
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -396,7 +394,7 @@ where
         let value_count = self
             .decode_engine
             .max_finish_output_len()
-            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written =

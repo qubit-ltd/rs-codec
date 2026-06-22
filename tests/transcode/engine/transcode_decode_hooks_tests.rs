@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::num::NonZeroUsize;
+
 use qubit_codec::{
     DecodeAction,
     DecodeContext,
@@ -19,7 +21,7 @@ struct UnitCodec;
 #[error("decode failed")]
 struct UnitDecodeError;
 
-unsafe impl qubit_codec::Codec for UnitCodec {
+impl qubit_codec::Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = UnitDecodeError;
@@ -37,7 +39,10 @@ unsafe impl qubit_codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), Self::DecodeError> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -62,6 +67,7 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         &mut self,
         _codec: &mut UnitCodec,
         error: UnitDecodeError,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeAction<u8>, Self::Error> {
         Err(error)

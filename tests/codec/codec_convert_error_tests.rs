@@ -20,7 +20,12 @@ fn test_codec_convert_error_wraps_decode_error_explicitly() {
     assert!(matches!(
         error,
         CodecConvertError::Decode {
-            source: CodecDecodeError::InvalidInputIndex { index: 4, len: 1 },
+            source: CodecDecodeError::Buffer(
+                qubit_codec::BufferContractError::InvalidInputIndex {
+                    index: 4,
+                    len: 1
+                }
+            ),
         },
     ));
 }
@@ -48,7 +53,12 @@ fn test_codec_convert_error_wraps_invalid_output_index() {
 
     assert_eq!(
         CodecConvertError::Encode {
-            source: CodecEncodeError::InvalidOutputIndex { index: 5, len: 2 },
+            source: CodecEncodeError::Buffer(
+                qubit_codec::BufferContractError::InvalidOutputIndex {
+                    index: 5,
+                    len: 2
+                }
+            ),
         },
         error,
     );

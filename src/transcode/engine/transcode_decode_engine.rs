@@ -9,6 +9,8 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_io::nz;
+
 use super::super::internal::{
     decode_state::DecodeState,
     decode_step::DecodeStep,
@@ -17,6 +19,7 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecDecodeFailure,
     DecodeAction,
     DecodeContext,
     TranscodeDecodeHooks,
@@ -57,6 +60,7 @@ use crate::{
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     Codec,
+///     CodecDecodeFailure,
 ///     CodecDecodeError,
 ///     DecodeAction,
 ///     DecodeContext,
@@ -73,7 +77,7 @@ use crate::{
 ///     Malformed { consumed: NonZeroUsize },
 /// }
 ///
-/// unsafe impl Codec for ByteCodec {
+/// impl Codec for ByteCodec {
 ///     type Value = u8;
 ///     type Unit = u8;
 ///     type DecodeError = ByteDecodeError;
@@ -91,11 +95,14 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), Self::DecodeError> {
+///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
 ///         match input[index] {
-///             0xff => Err(ByteDecodeError::Malformed {
-///                 consumed: NonZeroUsize::MIN,
-///             }),
+///             0xff => Err(CodecDecodeFailure::invalid(
+///                 ByteDecodeError::Malformed {
+///                     consumed: NonZeroUsize::MIN,
+///                 },
+///                 NonZeroUsize::MIN,
+///             )),
 ///             value => Ok((value, NonZeroUsize::MIN)),
 ///         }
 ///     }
@@ -120,11 +127,15 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
 ///         error: ByteDecodeError,
+///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
 ///     ) -> Result<DecodeAction<u8>, Self::Error> {
 ///         match error {
-///             ByteDecodeError::Malformed { consumed } => {
-///                 Ok(DecodeAction::Emit { value: b'?', consumed })
+///             ByteDecodeError::Malformed { .. } => {
+///                 Ok(DecodeAction::Emit {
+///                     value: b'?',
+///                     consumed: consumed.expect("codec reported malformed width"),
+///                 })
 ///             }
 ///         }
 ///     }
@@ -300,12 +311,10 @@ where
             DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
-            if context.available() < min_units {
-                let additional = qubit_io::nz!(min_units - context.available());
-                return Ok(state.need_input_progress_with(
-                    additional,
-                    context.available(),
-                ));
+            let available = context.available();
+            if available < min_units {
+                let additional = nz!(min_units - available);
+                return Ok(state.need_input_progress_with(additional, available));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -355,7 +364,7 @@ where
     ) -> Result<usize, TranscodeError<H::Error>> {
         let required = self
             .max_finish_output_len()
-            .map_err(|_| TranscodeError::OutputLengthOverflow)?;
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -393,7 +402,8 @@ where
         &mut self,
         input: &[C::Unit],
         input_index: usize,
-    ) -> Result<(C::Value, NonZeroUsize), C::DecodeError> {
+    ) -> Result<(C::Value, NonZeroUsize), CodecDecodeFailure<C::DecodeError>>
+    {
         // SAFETY: Forwarded from this method's safety contract.
         unsafe { self.codec.decode(input, input_index) }
     }
@@ -416,10 +426,15 @@ where
     pub(crate) fn handle_decode_error(
         &mut self,
         error: C::DecodeError,
+        consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeAction<C::Value>, H::Error> {
-        self.hooks
-            .handle_decode_error(&mut self.codec, error, context)
+        self.hooks.handle_decode_error(
+            &mut self.codec,
+            error,
+            consumed,
+            context,
+        )
     }
 
     /// Decodes one source value attempt into a normalized decode step.
@@ -445,9 +460,10 @@ where
         context: DecodeContext,
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
         let min_units = self.codec.min_units_per_value().get();
-        if context.available() < min_units {
-            let additional = qubit_io::nz!(min_units - context.available());
-            return Ok(DecodeStep::need_input(additional, context.available()));
+        let available = context.available();
+        if available < min_units {
+            let additional = nz!(min_units - available);
+            return Ok(DecodeStep::need_input(additional, available));
         }
 
         // SAFETY: The context reports at least `min_units_per_value()` source
@@ -476,7 +492,10 @@ where
     fn handle_decode_result(
         &mut self,
         context: DecodeContext,
-        result: Result<(C::Value, NonZeroUsize), C::DecodeError>,
+        result: Result<
+            (C::Value, NonZeroUsize),
+            CodecDecodeFailure<C::DecodeError>,
+        >,
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
         match result {
             Ok((value, consumed)) => {
@@ -486,9 +505,13 @@ where
                 );
                 Ok(DecodeStep::decoded(value, consumed, context.input_index()))
             }
-            Err(error) => {
+            Err(CodecDecodeFailure::Incomplete { required_total }) => {
+                let action = DecodeAction::NeedInput { required_total };
+                Ok(action.into_step(context.input_index(), context.available()))
+            }
+            Err(CodecDecodeFailure::Invalid { source, consumed }) => {
                 let action = self
-                    .handle_decode_error(error, context)
+                    .handle_decode_error(source, consumed, context)
                     .map_err(TranscodeError::domain)?;
                 Ok(action.into_step(context.input_index(), context.available()))
             }

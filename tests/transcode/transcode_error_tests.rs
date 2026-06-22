@@ -8,7 +8,10 @@
 
 use core::error::Error;
 
-use qubit_codec::TranscodeError;
+use qubit_codec::{
+    BufferContractError,
+    TranscodeError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain failure")]
@@ -26,41 +29,44 @@ fn test_transcode_error_domain_helpers() {
 }
 
 #[test]
-fn test_transcode_error_from_wraps_domain() {
-    let error: TranscodeError<&'static str> = "wrapped".into();
-    assert_eq!(TranscodeError::Domain("wrapped"), error);
-}
-
-#[test]
 fn test_transcode_error_map_domain_preserves_framework_errors() {
     let mapped = TranscodeError::invalid_input_index(3, 1)
         .map_domain(|error: &'static str| format!("mapped {error}"));
     assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 3, len: 1 },
+        TranscodeError::Buffer(BufferContractError::InvalidInputIndex {
+            index: 3,
+            len: 1,
+        }),
         mapped
     );
 
     let mapped = TranscodeError::invalid_output_index(4, 2)
         .map_domain(|error: &'static str| format!("mapped {error}"));
     assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 4, len: 2 },
+        TranscodeError::Buffer(BufferContractError::InvalidOutputIndex {
+            index: 4,
+            len: 2,
+        }),
         mapped
     );
 
     let mapped = TranscodeError::insufficient_output(1, 3, 2)
         .map_domain(|error: &'static str| format!("mapped {error}"));
     assert_eq!(
-        TranscodeError::InsufficientOutput {
+        TranscodeError::Buffer(BufferContractError::InsufficientOutput {
             output_index: 1,
             required: 3,
             available: 2,
-        },
+        }),
         mapped,
     );
 
-    let mapped = TranscodeError::<&'static str>::OutputLengthOverflow
+    let mapped = TranscodeError::<&'static str>::output_length_overflow()
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(TranscodeError::OutputLengthOverflow, mapped);
+    assert_eq!(
+        TranscodeError::Buffer(BufferContractError::OutputLengthOverflow),
+        mapped
+    );
 
     let mapped = TranscodeError::<String>::domain("inner".to_string())
         .map_domain(|error| format!("mapped {error}"));
@@ -70,20 +76,20 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
 #[test]
 fn test_transcode_error_display_formats_all_variants() {
     assert_eq!(
-        "invalid input index 3; input length is 1",
+        "invalid input index 3 for input length 1",
         TranscodeError::<DomainError>::invalid_input_index(3, 1).to_string(),
     );
     assert_eq!(
-        "invalid output index 4; output length is 2",
+        "invalid output index 4 for output length 2",
         TranscodeError::<DomainError>::invalid_output_index(4, 2).to_string(),
     );
     assert_eq!(
-        "insufficient output at index 1; required 3, available 2",
+        "insufficient output at index 1: required 3 units, available 2",
         TranscodeError::<DomainError>::insufficient_output(1, 3, 2).to_string(),
     );
     assert_eq!(
         "output length arithmetic overflow",
-        TranscodeError::<DomainError>::OutputLengthOverflow.to_string(),
+        TranscodeError::<DomainError>::output_length_overflow().to_string(),
     );
     assert_eq!(
         "domain failure",
