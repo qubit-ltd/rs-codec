@@ -9,14 +9,8 @@
 
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-    TranscodeEncodeEngine,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, CodecEncodeError, TranscodeEncodeEngine, TranscodeEncoder,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -31,7 +25,7 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode values.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CodecTranscodeEncoder<C> {
     /// Common buffered encoding engine.
     engine: TranscodeEncodeEngine<C, CodecTranscodeEncodeHooks>,
@@ -54,10 +48,7 @@ where
     #[inline]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(
-                codec,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
 }

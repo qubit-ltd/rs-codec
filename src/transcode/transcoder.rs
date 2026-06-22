@@ -6,8 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError,
-    transcode_error::TranscodeError,
+    capacity_error::CapacityError, transcode_error::TranscodeError,
     transcode_progress::TranscodeProgress,
 };
 
@@ -49,13 +48,11 @@ use super::{
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
-///     BufferContractError,
 ///     CodecDecodeError,
 ///     TranscodeError,
 ///     TranscodeProgress,
 ///     TranscodeStatus,
 ///     Transcoder,
-///     nz,
 /// };
 ///
 /// #[derive(Default)]
@@ -97,7 +94,7 @@ use super::{
 ///             if output_index + written == output.len() {
 ///                 let status = TranscodeStatus::NeedOutput {
 ///                     output_index: output_index + written,
-///                     additional: NonZeroUsize::MIN,
+///                     required: NonZeroUsize::MIN,
 ///                     available: 0,
 ///                 };
 ///                 return Ok(TranscodeProgress::new(status, read, written));
@@ -114,7 +111,7 @@ use super::{
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 additional: qubit_io::nz!(2 - available),
+///                 required: qubit_io::nz!(2),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
@@ -138,7 +135,7 @@ use super::{
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedOutput {
 ///     output_index: 1,
-///     additional: NonZeroUsize::MIN,
+///     required: NonZeroUsize::MIN,
 ///     available: 0,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -151,7 +148,7 @@ use super::{
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedInput {
 ///     input_index: 2,
-///     additional: NonZeroUsize::MIN,
+///     required: qubit_io::nz!(2),
 ///     available: 1,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
@@ -160,11 +157,11 @@ use super::{
 ///
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 2, &mut output, 0),
-///     Err(TranscodeError::Buffer(BufferContractError::InvalidInputIndex { .. })),
+///     Err(TranscodeError::InvalidInputIndex { .. }),
 /// ));
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 0, &mut output, 3),
-///     Err(TranscodeError::Buffer(BufferContractError::InvalidOutputIndex { .. })),
+///     Err(TranscodeError::InvalidOutputIndex { .. }),
 /// ));
 /// ```
 ///
@@ -363,7 +360,7 @@ pub trait Transcoder<Input, Output> {
     ///         } else {
     ///             let status = qubit_codec::TranscodeStatus::NeedOutput {
     ///                 output_index: output_index + written,
-    ///                 additional: NonZeroUsize::MIN,
+    ///                 required: NonZeroUsize::MIN,
     ///                 available: output.len().saturating_sub(output_index + written),
     ///             };
     ///             Ok(qubit_codec::TranscodeProgress::new(

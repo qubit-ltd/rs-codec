@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    BufferContractError,
-    CodecEncodeError,
-};
+use qubit_codec::CodecEncodeError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
@@ -32,10 +29,7 @@ fn test_codec_encode_error_reports_invalid_input_index() {
     let error = CodecEncodeError::<TestEncodeError>::invalid_input_index(5, 2);
 
     assert_eq!(
-        CodecEncodeError::Buffer(BufferContractError::InvalidInputIndex {
-            index: 5,
-            len: 2,
-        }),
+        CodecEncodeError::InvalidInputIndex { index: 5, len: 2 },
         error
     );
 }
@@ -57,25 +51,21 @@ fn test_codec_encode_error_reports_invalid_output_index() {
     let error = CodecEncodeError::<TestEncodeError>::invalid_output_index(5, 2);
 
     assert_eq!(
-        CodecEncodeError::Buffer(BufferContractError::InvalidOutputIndex {
-            index: 5,
-            len: 2,
-        }),
+        CodecEncodeError::InvalidOutputIndex { index: 5, len: 2 },
         error
     );
 }
 
 #[test]
 fn test_codec_encode_error_reports_insufficient_output() {
-    let error =
-        CodecEncodeError::<TestEncodeError>::insufficient_output(2, 4, 1);
+    let error = CodecEncodeError::<TestEncodeError>::insufficient_output(2, 4, 1);
 
     assert_eq!(
-        CodecEncodeError::Buffer(BufferContractError::InsufficientOutput {
+        CodecEncodeError::InsufficientOutput {
             output_index: 2,
             required: 4,
             available: 1,
-        }),
+        },
         error,
     );
     assert!(
@@ -89,10 +79,7 @@ fn test_codec_encode_error_reports_insufficient_output() {
 fn test_codec_encode_error_reports_output_length_overflow() {
     let error = CodecEncodeError::<TestEncodeError>::output_length_overflow();
 
-    assert_eq!(
-        CodecEncodeError::Buffer(BufferContractError::OutputLengthOverflow),
-        error
-    );
+    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
     assert!(
         CodecEncodeError::<&'static str>::output_length_overflow()
             .to_string()
@@ -121,8 +108,7 @@ fn test_codec_encode_error_display_formats_framework_variants() {
 
 #[test]
 fn test_codec_encode_error_ensure_input_index_accepts_valid_index() {
-    CodecEncodeError::<TestEncodeError>::ensure_input_index(4, 2)
-        .expect("valid index");
+    CodecEncodeError::<TestEncodeError>::ensure_input_index(4, 2).expect("valid index");
 }
 
 #[test]
@@ -135,8 +121,7 @@ fn test_codec_encode_error_ensure_input_index_rejects_out_of_range() {
 
 #[test]
 fn test_codec_encode_error_ensure_output_index_accepts_valid_index() {
-    CodecEncodeError::<TestEncodeError>::ensure_output_index(4, 4)
-        .expect("valid index");
+    CodecEncodeError::<TestEncodeError>::ensure_output_index(4, 4).expect("valid index");
 }
 
 #[test]
@@ -148,34 +133,30 @@ fn test_codec_encode_error_ensure_output_index_rejects_out_of_range() {
 }
 
 #[test]
-fn test_codec_encode_error_ensure_output_capacity_accepts_sufficient_capacity()
-{
+fn test_codec_encode_error_ensure_output_capacity_accepts_sufficient_capacity() {
     CodecEncodeError::<TestEncodeError>::ensure_output_capacity(4, 1, 2)
         .expect("sufficient capacity");
 }
 
 #[test]
 fn test_codec_encode_error_ensure_output_capacity_delegates_to_output_index() {
-    let error =
-        CodecEncodeError::<TestEncodeError>::ensure_output_capacity(2, 5, 0)
-            .expect_err("out-of-range index");
+    let error = CodecEncodeError::<TestEncodeError>::ensure_output_capacity(2, 5, 0)
+        .expect_err("out-of-range index");
 
     assert_eq!(CodecEncodeError::invalid_output_index(5, 2), error);
 }
 
 #[test]
-fn test_codec_encode_error_ensure_output_capacity_rejects_insufficient_capacity()
- {
-    let error =
-        CodecEncodeError::<TestEncodeError>::ensure_output_capacity(4, 2, 3)
-            .expect_err("insufficient capacity");
+fn test_codec_encode_error_ensure_output_capacity_rejects_insufficient_capacity() {
+    let error = CodecEncodeError::<TestEncodeError>::ensure_output_capacity(4, 2, 3)
+        .expect_err("insufficient capacity");
 
     assert_eq!(
-        CodecEncodeError::Buffer(BufferContractError::InsufficientOutput {
+        CodecEncodeError::InsufficientOutput {
             output_index: 2,
             required: 3,
             available: 2,
-        }),
+        },
         error,
     );
 }

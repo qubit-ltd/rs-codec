@@ -70,14 +70,10 @@ impl<Value> DecodeAction<Value> {
     /// `available`.
     #[must_use]
     #[inline]
-    pub(super) fn into_step(
-        self,
-        input_index: usize,
-        available: usize,
-    ) -> DecodeStep<Value> {
+    pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
         match self {
             Self::NeedInput { required_total } => DecodeStep::need_input(
-                Self::missing_input(required_total, available),
+                Self::bound_required_total(required_total, available),
                 available,
             ),
             Self::Skip { consumed } => {
@@ -91,7 +87,8 @@ impl<Value> DecodeAction<Value> {
         }
     }
 
-    /// Returns the additional source units required by a need-input action.
+    /// Validates and returns the total source units required by a need-input
+    /// action.
     ///
     /// # Parameters
     ///
@@ -101,20 +98,19 @@ impl<Value> DecodeAction<Value> {
     ///
     /// # Returns
     ///
-    /// Returns a non-zero additional source-unit count.
+    /// Returns a non-zero total source-unit count.
     ///
     /// # Panics
     ///
     /// Panics when `required_total <= available`.
     #[must_use]
     #[inline(always)]
-    fn missing_input(required_total: usize, available: usize) -> NonZeroUsize {
+    fn bound_required_total(required_total: usize, available: usize) -> NonZeroUsize {
         assert!(
             required_total > available,
             "DecodeAction::NeedInput required_total must exceed available input",
         );
-        let additional = required_total - available;
-        qubit_io::nz(additional)
+        qubit_io::nz(required_total)
     }
 
     /// Validates a policy-reported consumed source-unit count against available
@@ -134,10 +130,7 @@ impl<Value> DecodeAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[must_use]
     #[inline(always)]
-    fn bound_consumed(
-        consumed: NonZeroUsize,
-        available: usize,
-    ) -> NonZeroUsize {
+    fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
         assert!(available > 0, "DecodeAction cannot consume empty input");
         assert!(
             consumed.get() <= available,

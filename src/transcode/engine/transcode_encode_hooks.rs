@@ -7,14 +7,8 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::super::{
-    encode_context::EncodeContext,
-    encode_plan::EncodePlan,
-};
-use crate::{
-    CapacityError,
-    Codec,
-};
+use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
+use crate::{CapacityError, Codec};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -64,13 +58,8 @@ use crate::{
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
-///     fn min_units_per_value(&self) -> NonZeroUsize {
-///         NonZeroUsize::MIN
-///     }
-///
-///     fn max_units_per_value(&self) -> NonZeroUsize {
-///         NonZeroUsize::MIN
-///     }
+///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -106,7 +95,7 @@ use crate::{
 ///         _value: &C::Value,
 ///         _input_index: usize,
 ///     ) -> Result<EncodePlan<()>, Self::Error> {
-///         Ok(EncodePlan::new(codec.max_units_per_value().get(), ()))
+///         Ok(EncodePlan::new(C::MAX_UNITS_PER_VALUE.get(), ()))
 ///     }
 ///
 ///     unsafe fn write_encode(
@@ -147,16 +136,12 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound derived from the codec's
-    /// [`Codec::max_units_per_value`].
-    #[must_use = "capacity planning can fail on overflow"]
+    /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
-    fn max_output_len(
-        &self,
-        codec: &C,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    #[must_use = "capacity planning can fail on overflow"]
+    fn max_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         input_len
-            .checked_mul(codec.max_units_per_value().get())
+            .checked_mul(C::MAX_UNITS_PER_VALUE.get())
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
@@ -173,8 +158,8 @@ where
     /// # Returns
     ///
     /// Returns the finite final-output upper bound.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
         0
     }
@@ -263,11 +248,7 @@ where
     /// is appropriate only when reset is infallible or unreachable for the
     /// codec and hook pairing.
     #[inline]
-    fn map_encode_reset_error(
-        &mut self,
-        _codec: &mut C,
-        _error: C::EncodeError,
-    ) -> Self::Error {
+    fn map_encode_reset_error(&mut self, _codec: &mut C, _error: C::EncodeError) -> Self::Error {
         panic!(
             "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
         )
@@ -296,7 +277,7 @@ where
     /// # Safety
     ///
     /// The caller must guarantee that at least
-    /// [`Codec::max_encode_reset_units`] units are writable from
+    /// [`Codec::MAX_ENCODE_RESET_UNITS`] units are writable from
     /// `output_index`.
     #[inline]
     unsafe fn write_encode_reset(

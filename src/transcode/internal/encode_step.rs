@@ -9,9 +9,6 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::transcode_progress::TranscodeProgress;
-use super::encode_state::EncodeState;
-
 /// Result of one prepared value encode attempt.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::transcode) enum EncodeStep {
@@ -22,8 +19,8 @@ pub(in crate::transcode) enum EncodeStep {
     },
     /// The value could not be written because output capacity is insufficient.
     NeedOutput {
-        /// Additional output units required to continue.
-        additional: NonZeroUsize,
+        /// Total output units required from the current output position.
+        required: NonZeroUsize,
         /// Output units available at the stop boundary.
         available: usize,
     },
@@ -53,42 +50,12 @@ impl EncodeStep {
     ///
     /// # Returns
     ///
-    /// Returns a step describing the missing output capacity.
+    /// Returns a step describing the required output capacity.
     #[inline(always)]
-    pub(in crate::transcode) fn need_output(
-        required: usize,
-        available: usize,
-    ) -> Self {
-        let additional = qubit_io::nz!(required - available);
+    pub(in crate::transcode) fn need_output(required: usize, available: usize) -> Self {
         Self::NeedOutput {
-            additional,
+            required: qubit_io::nz!(required),
             available,
-        }
-    }
-
-    /// Applies this step to the current encode state.
-    ///
-    /// # Parameters
-    ///
-    /// - `state`: Active encode call state.
-    ///
-    /// # Returns
-    ///
-    /// Returns stop progress when more output is required, otherwise `None`.
-    #[inline]
-    pub(in crate::transcode) fn apply_to_state<Value, Unit>(
-        self,
-        state: &mut EncodeState<'_, Value, Unit>,
-    ) -> Option<TranscodeProgress> {
-        match self {
-            Self::Written { written } => {
-                state.accept_written_value(written);
-                None
-            }
-            Self::NeedOutput {
-                additional,
-                available,
-            } => Some(state.need_output_progress_with(additional, available)),
         }
     }
 }

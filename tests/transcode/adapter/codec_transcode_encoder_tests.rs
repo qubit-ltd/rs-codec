@@ -8,15 +8,8 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-    CodecTranscodeEncoder,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-    nz,
+    CapacityError, Codec, CodecEncodeError, CodecTranscodeEncoder, TranscodeEncoder,
+    TranscodeError, TranscodeStatus, Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -28,22 +21,16 @@ impl Codec for PairByteCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        unsafe { core::num::NonZeroUsize::new_unchecked(2) }
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -78,13 +65,9 @@ impl Codec for VariableWidthCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        qubit_io::nz!(3)
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(3);
 
     fn encode_len(&self, value: &u8) -> core::num::NonZeroUsize {
         match *value {
@@ -98,10 +81,8 @@ impl Codec for VariableWidthCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -138,13 +119,9 @@ impl Codec for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -154,10 +131,8 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(index < input.len());
 
         // SAFETY: The caller guarantees that `index` is readable.
@@ -198,7 +173,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 4,
-            additional: nz(2),
+            required: crate::nz(2),
             available: 0,
         },
         progress.status(),
@@ -242,7 +217,7 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 0,
-            additional: nz(1),
+            required: crate::nz(2),
             available: 1,
         },
         progress.status(),
@@ -277,12 +252,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidOutputIndex {
-                index: 1,
-                len: 0
-            }
-        ),
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -297,12 +267,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidOutputIndex {
-                index: 1,
-                len: 0
-            }
-        ),
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -317,12 +282,7 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .expect_err("invalid input index should fail");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidInputIndex {
-                index: 2,
-                len: 1
-            }
-        ),
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
         error
     );
 }
@@ -337,9 +297,7 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
         .expect_err("odd value should be rejected before unsafe encode");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
-            input_index: 1
-        }),
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue { input_index: 1 }),
         error,
     );
     assert_eq!([2, 0], output);

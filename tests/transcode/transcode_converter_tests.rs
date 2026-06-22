@@ -8,11 +8,7 @@
 //! Tests for the semantic transcode converter marker trait.
 
 use qubit_codec::{
-    CapacityError,
-    CodecConvertError,
-    TranscodeConverter,
-    TranscodeError,
-    TranscodeProgress,
+    CapacityError, CodecConvertError, TranscodeConverter, TranscodeError, TranscodeProgress,
     Transcoder,
 };
 
@@ -20,8 +16,7 @@ use qubit_codec::{
 struct ByteToWord;
 
 impl Transcoder<u8, u16> for ByteToWord {
-    type Error =
-        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type Error = CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
 
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -32,10 +27,7 @@ impl Transcoder<u8, u16> for ByteToWord {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -60,10 +52,7 @@ impl Transcoder<u8, u16> for ByteToWord {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }

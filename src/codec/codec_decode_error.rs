@@ -9,8 +9,6 @@
 
 use thiserror::Error;
 
-use crate::BufferContractError;
-
 /// Error reported by codec-backed value and buffered decoder adapters.
 ///
 /// The wrapped codec remains responsible for domain-specific decode failures.
@@ -44,9 +42,7 @@ pub enum CodecDecodeError<E> {
     },
 
     /// A whole-value decode succeeded but left trailing input units.
-    #[error(
-        "trailing input after decoded value: consumed {consumed} units, remaining {remaining}"
-    )]
+    #[error("trailing input after decoded value: consumed {consumed} units, remaining {remaining}")]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -54,9 +50,36 @@ pub enum CodecDecodeError<E> {
         remaining: usize,
     },
 
-    /// The caller-provided input or output buffer contract was violated.
-    #[error(transparent)]
-    Buffer(#[from] BufferContractError),
+    /// The caller supplied an input index outside the input slice.
+    #[error("invalid input index {index} for input length {len}")]
+    InvalidInputIndex {
+        /// Invalid input index supplied by the caller.
+        index: usize,
+        /// Length of the input slice.
+        len: usize,
+    },
+
+    /// The caller supplied an output index outside the output slice.
+    #[error("invalid output index {index} for output length {len}")]
+    InvalidOutputIndex {
+        /// Invalid output index supplied by the caller.
+        index: usize,
+        /// Length of the output slice.
+        len: usize,
+    },
+
+    /// The output slice cannot hold all required output.
+    #[error(
+        "insufficient output at index {output_index}: required {required} units, available {available}"
+    )]
+    InsufficientOutput {
+        /// Absolute output index where writing would start.
+        output_index: usize,
+        /// Output units required from `output_index`.
+        required: usize,
+        /// Output units available from `output_index`.
+        available: usize,
+    },
 }
 
 impl<E> CodecDecodeError<E> {
@@ -92,11 +115,7 @@ impl<E> CodecDecodeError<E> {
     /// Returns an incomplete-input error.
     #[must_use]
     #[inline(always)]
-    pub const fn incomplete(
-        input_index: usize,
-        required_total: usize,
-        available: usize,
-    ) -> Self {
+    pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
         Self::Incomplete {
             input_index,
             required_total,
@@ -136,7 +155,7 @@ impl<E> CodecDecodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_input_index(index, len))
+        Self::InvalidInputIndex { index, len }
     }
 
     /// Creates an invalid-output-index error.
@@ -152,7 +171,7 @@ impl<E> CodecDecodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_output_index(index, len))
+        Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
@@ -163,11 +182,11 @@ impl<E> CodecDecodeError<E> {
         required: usize,
         available: usize,
     ) -> Self {
-        Self::Buffer(BufferContractError::insufficient_output(
+        Self::InsufficientOutput {
             output_index,
             required,
             available,
-        ))
+        }
     }
 
     /// Returns whether this error indicates an incomplete input prefix.
@@ -225,12 +244,11 @@ impl<E> CodecDecodeError<E> {
     /// Returns an invalid-input-index error when `input_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_input_index(input_len, input_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+        if input_index > input_len {
+            return Err(Self::invalid_input_index(input_index, input_len));
+        }
+        Ok(())
     }
 
     /// Validates that `output_index` is within an output slice.
@@ -249,12 +267,11 @@ impl<E> CodecDecodeError<E> {
     /// Returns an invalid-output-index error when `output_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_output_index(output_len, output_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+        if output_index > output_len {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        Ok(())
     }
 
     /// Validates that an output slice can hold required adapter output.
@@ -280,12 +297,12 @@ impl<E> CodecDecodeError<E> {
         output_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        BufferContractError::ensure_output_capacity(
-            output_len,
-            output_index,
-            required,
-        )
-        .map_err(Self::Buffer)
+        Self::ensure_output_index(output_len, output_index)?;
+        let available = output_len - output_index;
+        if available < required {
+            return Err(Self::insufficient_output(output_index, required, available));
+        }
+        Ok(())
     }
 
     /// Validates that enough input units are available from `input_index`.
@@ -333,10 +350,7 @@ impl<E> CodecDecodeError<E> {
     /// Returns a trailing-input error when extra units remain after the
     /// decoded value.
     #[inline]
-    pub fn ensure_no_trailing_input(
-        consumed: usize,
-        total: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_no_trailing_input(consumed: usize, total: usize) -> Result<(), Self> {
         let remaining = total.saturating_sub(consumed);
         if remaining != 0 {
             return Err(Self::trailing_input(consumed, remaining));

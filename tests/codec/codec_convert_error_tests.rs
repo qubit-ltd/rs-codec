@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CodecConvertError,
-    CodecDecodeError,
-    CodecEncodeError,
-};
+use qubit_codec::{CodecConvertError, CodecDecodeError, CodecEncodeError};
 
 #[test]
 fn test_codec_convert_error_wraps_decode_error_explicitly() {
@@ -20,12 +16,7 @@ fn test_codec_convert_error_wraps_decode_error_explicitly() {
     assert!(matches!(
         error,
         CodecConvertError::Decode {
-            source: CodecDecodeError::Buffer(
-                qubit_codec::BufferContractError::InvalidInputIndex {
-                    index: 4,
-                    len: 1
-                }
-            ),
+            source: CodecDecodeError::InvalidInputIndex { index: 4, len: 1 },
         },
     ));
 }
@@ -53,12 +44,7 @@ fn test_codec_convert_error_wraps_invalid_output_index() {
 
     assert_eq!(
         CodecConvertError::Encode {
-            source: CodecEncodeError::Buffer(
-                qubit_codec::BufferContractError::InvalidOutputIndex {
-                    index: 5,
-                    len: 2
-                }
-            ),
+            source: CodecEncodeError::InvalidOutputIndex { index: 5, len: 2 },
         },
         error,
     );

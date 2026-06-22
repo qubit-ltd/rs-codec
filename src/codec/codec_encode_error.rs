@@ -9,8 +9,6 @@
 
 use thiserror::Error;
 
-use crate::BufferContractError;
-
 /// Error reported by codec-backed buffered encoder adapters.
 ///
 /// The wrapped codec remains responsible for domain-specific encode failures.
@@ -36,9 +34,40 @@ pub enum CodecEncodeError<E> {
         input_index: usize,
     },
 
-    /// The caller-provided input or output buffer contract was violated.
-    #[error(transparent)]
-    Buffer(#[from] BufferContractError),
+    /// The caller supplied an input index outside the input slice.
+    #[error("invalid input index {index} for input length {len}")]
+    InvalidInputIndex {
+        /// Invalid input index supplied by the caller.
+        index: usize,
+        /// Length of the input slice.
+        len: usize,
+    },
+
+    /// The caller supplied an output index outside the output slice.
+    #[error("invalid output index {index} for output length {len}")]
+    InvalidOutputIndex {
+        /// Invalid output index supplied by the caller.
+        index: usize,
+        /// Length of the output slice.
+        len: usize,
+    },
+
+    /// The output slice cannot hold all required output.
+    #[error(
+        "insufficient output at index {output_index}: required {required} units, available {available}"
+    )]
+    InsufficientOutput {
+        /// Absolute output index where writing would start.
+        output_index: usize,
+        /// Output units required from `output_index`.
+        required: usize,
+        /// Output units available from `output_index`.
+        available: usize,
+    },
+
+    /// Output length arithmetic overflowed.
+    #[error("output length arithmetic overflow")]
+    OutputLengthOverflow,
 }
 
 impl<E> CodecEncodeError<E> {
@@ -89,7 +118,7 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_input_index(index, len))
+        Self::InvalidInputIndex { index, len }
     }
 
     /// Creates an invalid-output-index error.
@@ -105,7 +134,7 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_output_index(index, len))
+        Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
@@ -126,11 +155,11 @@ impl<E> CodecEncodeError<E> {
         required: usize,
         available: usize,
     ) -> Self {
-        Self::Buffer(BufferContractError::insufficient_output(
+        Self::InsufficientOutput {
             output_index,
             required,
             available,
-        ))
+        }
     }
 
     /// Creates an output-length-overflow error.
@@ -141,7 +170,7 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn output_length_overflow() -> Self {
-        Self::Buffer(BufferContractError::output_length_overflow())
+        Self::OutputLengthOverflow
     }
 
     /// Validates that `input_index` is within an input slice.
@@ -160,12 +189,11 @@ impl<E> CodecEncodeError<E> {
     /// Returns an invalid-input-index error when `input_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_input_index(input_len, input_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+        if input_index > input_len {
+            return Err(Self::invalid_input_index(input_index, input_len));
+        }
+        Ok(())
     }
 
     /// Validates that `output_index` is within an output slice.
@@ -184,12 +212,11 @@ impl<E> CodecEncodeError<E> {
     /// Returns an invalid-output-index error when `output_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_output_index(output_len, output_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+        if output_index > output_len {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        Ok(())
     }
 
     /// Validates that an output slice can hold required adapter output.
@@ -215,11 +242,11 @@ impl<E> CodecEncodeError<E> {
         output_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        BufferContractError::ensure_output_capacity(
-            output_len,
-            output_index,
-            required,
-        )
-        .map_err(Self::Buffer)
+        Self::ensure_output_index(output_len, output_index)?;
+        let available = output_len - output_index;
+        if available < required {
+            return Err(Self::insufficient_output(output_index, required, available));
+        }
+        Ok(())
     }
 }

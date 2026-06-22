@@ -23,8 +23,8 @@ pub(in crate::transcode) enum PendingEncodeStep<Value> {
     NeedOutput {
         /// Retained value to write later.
         pending: PendingValue<Value>,
-        /// Additional target units required to continue.
-        additional: NonZeroUsize,
+        /// Total target units required from the current output position.
+        required: NonZeroUsize,
         /// Target units available at the output boundary.
         available: usize,
     },
@@ -50,7 +50,8 @@ impl<Value> PendingEncodeStep<Value> {
     /// # Parameters
     ///
     /// - `pending`: Decoded value that must remain retained.
-    /// - `additional`: Additional output capacity required to continue.
+    /// - `required`: Total output capacity required from the current output
+    ///   position.
     /// - `available`: Output capacity currently available.
     ///
     /// # Returns
@@ -59,12 +60,12 @@ impl<Value> PendingEncodeStep<Value> {
     #[inline(always)]
     pub(in crate::transcode) const fn need_output(
         pending: PendingValue<Value>,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
     ) -> Self {
         Self::NeedOutput {
             pending,
-            additional,
+            required,
             available,
         }
     }

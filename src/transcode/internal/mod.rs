@@ -11,6 +11,7 @@ pub(in crate::transcode) mod convert_error_of;
 pub(in crate::transcode) mod convert_progress_result;
 pub(in crate::transcode) mod convert_state;
 pub(in crate::transcode) mod convert_step_result;
+pub(in crate::transcode) mod cursor_state;
 pub(in crate::transcode) mod decode_state;
 pub(in crate::transcode) mod decode_step;
 pub(in crate::transcode) mod encode_state;

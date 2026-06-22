@@ -107,8 +107,8 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecTranscodeConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
 - **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
-  caller-provided `Codec` decoders through `decode_into`. Stateful streaming
-  decoders use `transcode_into` / `finish_transcode_into`.
+  caller-provided streaming decoders through `transcode_into` /
+  `finish_transcode_into`.
 - **`TranscodeEncodeOutput<O>`**: owns a unit-level `BufferedOutput`; ordinary
   `flush` drains buffered units. Stateful streaming encoders use `transcode_from`
   and `finish`.
@@ -201,7 +201,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `TranscodeDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned `Codec` to `decode_into`; stateful streaming decoders use `transcode_into` and `finish_transcode_into` |
+| `TranscodeDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned streaming decoder to `transcode_into` and `finish_transcode_into` |
 | `TranscodeEncodeOutput<O>` | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
@@ -242,12 +242,12 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ### Contract Notes
 
-- `min_units_per_value()` is the safety lower bound for calling `Codec::decode`;
-  `max_units_per_value()` is the per-value output/read upper bound. Checked
+- `Codec::MIN_UNITS_PER_VALUE` is the safety lower bound for calling `Codec::decode`;
+  `Codec::MAX_UNITS_PER_VALUE` is the per-value output/read upper bound. Checked
   adapters assert `min <= max` before using these values.
 - `encode_len(value)` must equal the number of units `Codec::encode` writes for
   the same value and codec state, and it must not exceed
-  `max_units_per_value()`.
+  `Codec::MAX_UNITS_PER_VALUE`.
 - Stateful one-value callers should use `CodecValueExt::max_encode_value_units()`
   with `CodecValueExt::encode_value_with_reset()`, or
   `CodecValueExt::decode_exact_value_with_flush()` when the input must contain

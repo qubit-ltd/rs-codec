@@ -21,14 +21,15 @@ pub enum TranscodeStatus {
     /// source is closed.
     ///
     /// - `input_index`: Absolute input index where input ended while decoding.
-    /// - `additional`: Number of additional input units required to continue.
+    /// - `required`: Total input units required from the current input
+    ///   position.
     /// - `available`: Number of input units currently available from the
     ///   current input position.
     NeedInput {
         /// Absolute input index where input ended.
         input_index: usize,
-        /// Number of additional input units required to continue.
-        additional: NonZeroUsize,
+        /// Total input units required from the current input position.
+        required: NonZeroUsize,
         /// Number of input units currently available.
         available: usize,
     },
@@ -37,14 +38,15 @@ pub enum TranscodeStatus {
     ///
     /// - `output_index`: Absolute output index where output ended while
     ///   decoding.
-    /// - `additional`: Number of additional output units required to continue.
+    /// - `required`: Total output units required from the current output
+    ///   position.
     /// - `available`: Number of output units currently available from the
     ///   current output position.
     NeedOutput {
         /// Absolute output index where output ended.
         output_index: usize,
-        /// Number of additional output units required to continue.
-        additional: NonZeroUsize,
+        /// Total output units required from the current output position.
+        required: NonZeroUsize,
         /// Number of output units currently available.
         available: usize,
     },
@@ -56,7 +58,8 @@ impl TranscodeStatus {
     /// # Parameters
     ///
     /// - `input_index`: Absolute input boundary where conversion stopped.
-    /// - `additional`: Additional input units required to continue.
+    /// - `required`: Total input units required from the current input
+    ///   position.
     /// - `available`: Input units currently available at the boundary.
     ///
     /// # Returns
@@ -64,14 +67,10 @@ impl TranscodeStatus {
     /// Returns a [`TranscodeStatus::NeedInput`] value.
     #[must_use]
     #[inline(always)]
-    pub const fn need_input(
-        input_index: usize,
-        additional: NonZeroUsize,
-        available: usize,
-    ) -> Self {
+    pub const fn need_input(input_index: usize, required: NonZeroUsize, available: usize) -> Self {
         Self::NeedInput {
             input_index,
-            additional,
+            required,
             available,
         }
     }
@@ -81,7 +80,8 @@ impl TranscodeStatus {
     /// # Parameters
     ///
     /// - `output_index`: Absolute output boundary where conversion stopped.
-    /// - `additional`: Additional output units required to continue.
+    /// - `required`: Total output units required from the current output
+    ///   position.
     /// - `available`: Output units currently available at the boundary.
     ///
     /// # Returns
@@ -91,12 +91,12 @@ impl TranscodeStatus {
     #[inline(always)]
     pub const fn need_output(
         output_index: usize,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
     ) -> Self {
         Self::NeedOutput {
             output_index,
-            additional,
+            required,
             available,
         }
     }

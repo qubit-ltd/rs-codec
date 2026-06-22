@@ -9,21 +9,51 @@
 
 use thiserror::Error;
 
-use super::buffer_contract_error::BufferContractError;
-
 /// Error reported by a transcode operation.
 ///
-/// Buffer contract failures are framework errors owned by the transcode layer.
-/// Codec-, charset-, or policy-specific failures are carried as domain errors.
+/// Buffer contract failures are framework errors owned by the transcode layer
+/// and are represented directly by this enum. Codec-, charset-, or
+/// policy-specific failures are carried as domain errors.
 ///
 /// # Type Parameters
 ///
 /// - `E`: Domain error reported by the concrete transcoder.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 pub enum TranscodeError<E> {
-    /// The caller-provided input or output buffer contract was violated.
-    #[error(transparent)]
-    Buffer(#[from] BufferContractError),
+    /// The caller supplied an input index outside the input slice.
+    #[error("invalid input index {index} for input length {len}")]
+    InvalidInputIndex {
+        /// Invalid input index supplied by the caller.
+        index: usize,
+        /// Length of the input slice.
+        len: usize,
+    },
+
+    /// The caller supplied an output index outside the output slice.
+    #[error("invalid output index {index} for output length {len}")]
+    InvalidOutputIndex {
+        /// Invalid output index supplied by the caller.
+        index: usize,
+        /// Length of the output slice.
+        len: usize,
+    },
+
+    /// The output slice cannot hold all required output.
+    #[error(
+        "insufficient output at index {output_index}: required {required} units, available {available}"
+    )]
+    InsufficientOutput {
+        /// Absolute output index where writing would start.
+        output_index: usize,
+        /// Output units required from `output_index`.
+        required: usize,
+        /// Output units available from `output_index`.
+        available: usize,
+    },
+
+    /// Output length arithmetic overflowed.
+    #[error("output length arithmetic overflow")]
+    OutputLengthOverflow,
 
     /// Domain-specific codec, charset, or policy error.
     #[error("{0}")]
@@ -49,14 +79,14 @@ impl<E> TranscodeError<E> {
     #[must_use]
     #[inline(always)]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_input_index(index, len))
+        Self::InvalidInputIndex { index, len }
     }
 
     /// Creates an invalid-output-index error.
     #[must_use]
     #[inline(always)]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
-        Self::Buffer(BufferContractError::invalid_output_index(index, len))
+        Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
@@ -67,18 +97,18 @@ impl<E> TranscodeError<E> {
         required: usize,
         available: usize,
     ) -> Self {
-        Self::Buffer(BufferContractError::insufficient_output(
+        Self::InsufficientOutput {
             output_index,
             required,
             available,
-        ))
+        }
     }
 
     /// Creates an output-length-overflow error.
     #[must_use]
     #[inline(always)]
     pub const fn output_length_overflow() -> Self {
-        Self::Buffer(BufferContractError::output_length_overflow())
+        Self::OutputLengthOverflow
     }
 
     /// Returns whether this error wraps a domain error.
@@ -103,7 +133,10 @@ impl<E> TranscodeError<E> {
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
             Self::Domain(error) => Some(error),
-            Self::Buffer(_) => None,
+            Self::InvalidInputIndex { .. }
+            | Self::InvalidOutputIndex { .. }
+            | Self::InsufficientOutput { .. }
+            | Self::OutputLengthOverflow => None,
         }
     }
 
@@ -127,29 +160,42 @@ impl<E> TranscodeError<E> {
         F: FnOnce(E) -> T,
     {
         match self {
-            Self::Buffer(error) => TranscodeError::Buffer(error),
+            Self::InvalidInputIndex { index, len } => {
+                TranscodeError::InvalidInputIndex { index, len }
+            }
+            Self::InvalidOutputIndex { index, len } => {
+                TranscodeError::InvalidOutputIndex { index, len }
+            }
+            Self::InsufficientOutput {
+                output_index,
+                required,
+                available,
+            } => TranscodeError::InsufficientOutput {
+                output_index,
+                required,
+                available,
+            },
+            Self::OutputLengthOverflow => TranscodeError::OutputLengthOverflow,
             Self::Domain(error) => TranscodeError::Domain(f(error)),
         }
     }
 
     /// Validates that `input_index` is within an input slice.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_input_index(input_len, input_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+        if input_index > input_len {
+            return Err(Self::invalid_input_index(input_index, input_len));
+        }
+        Ok(())
     }
 
     /// Validates that `output_index` is within an output slice.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        BufferContractError::ensure_output_index(output_len, output_index)
-            .map_err(Self::Buffer)
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+        if output_index > output_len {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        Ok(())
     }
 
     /// Validates input and output start indices for a transcode call.
@@ -160,13 +206,8 @@ impl<E> TranscodeError<E> {
         output_len: usize,
         output_index: usize,
     ) -> Result<(), Self> {
-        BufferContractError::ensure_transcode_indices(
-            input_len,
-            input_index,
-            output_len,
-            output_index,
-        )
-        .map_err(Self::Buffer)
+        Self::ensure_input_index(input_len, input_index)?;
+        Self::ensure_output_index(output_len, output_index)
     }
 
     /// Validates that an output slice can hold one-shot finalization output.
@@ -176,12 +217,12 @@ impl<E> TranscodeError<E> {
         output_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        BufferContractError::ensure_output_capacity(
-            output_len,
-            output_index,
-            required,
-        )
-        .map_err(Self::Buffer)
+        Self::ensure_output_index(output_len, output_index)?;
+        let available = output_len - output_index;
+        if available < required {
+            return Err(Self::insufficient_output(output_index, required, available));
+        }
+        Ok(())
     }
 
     /// Validates an indexed output range and its minimum writable capacity.
@@ -192,12 +233,13 @@ impl<E> TranscodeError<E> {
         range_len: usize,
         required: usize,
     ) -> Result<(), Self> {
-        BufferContractError::ensure_output_range(
-            output_len,
-            output_index,
-            range_len,
-            required,
-        )
-        .map_err(Self::Buffer)
+        Self::ensure_output_index(output_len, output_index)?;
+        if !qubit_io::UncheckedSlice::range_fits(output_len, output_index, range_len) {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        if range_len < required {
+            return Err(Self::insufficient_output(output_index, required, range_len));
+        }
+        Ok(())
     }
 }

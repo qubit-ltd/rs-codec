@@ -224,11 +224,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 ### 契约说明
 
-- `min_units_per_value()` 是调用 `Codec::decode` 的安全下界；
-  `max_units_per_value()` 是单值输出/读取上界。checked adapter 在使用前会断言
+- `Codec::MIN_UNITS_PER_VALUE` 是调用 `Codec::decode` 的安全下界；
+  `Codec::MAX_UNITS_PER_VALUE` 是单值输出/读取上界。checked adapter 在使用前会断言
   `min <= max`。
 - `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
-  实际写入的 unit 数量，并且不能超过 `max_units_per_value()`。
+  实际写入的 unit 数量，并且不能超过 `Codec::MAX_UNITS_PER_VALUE`。
 - 需要处理状态化单值编码时，应配合使用
   `CodecValueExt::max_encode_value_units()` 与
   `CodecValueExt::encode_value_with_reset()`；输入必须恰好是一个编码值时，

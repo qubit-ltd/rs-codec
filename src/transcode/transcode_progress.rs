@@ -36,11 +36,7 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[must_use]
     #[inline(always)]
-    pub const fn new(
-        status: TranscodeStatus,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self {
             status,
             read,
@@ -69,7 +65,8 @@ impl TranscodeProgress {
     /// # Parameters
     ///
     /// - `input_index`: Absolute input boundary where conversion stopped.
-    /// - `additional`: Additional input units required to continue.
+    /// - `required`: Total input units required from the current input
+    ///   position.
     /// - `available`: Input units currently available at the boundary.
     /// - `read`: Number of consumed input units.
     /// - `written`: Number of produced output units.
@@ -81,13 +78,13 @@ impl TranscodeProgress {
     #[inline(always)]
     pub const fn need_input(
         input_index: usize,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
         read: usize,
         written: usize,
     ) -> Self {
         Self::new(
-            TranscodeStatus::need_input(input_index, additional, available),
+            TranscodeStatus::need_input(input_index, required, available),
             read,
             written,
         )
@@ -98,7 +95,8 @@ impl TranscodeProgress {
     /// # Parameters
     ///
     /// - `output_index`: Absolute output boundary where conversion stopped.
-    /// - `additional`: Additional output units required to continue.
+    /// - `required`: Total output units required from the current output
+    ///   position.
     /// - `available`: Output units currently available at the boundary.
     /// - `read`: Number of consumed input units.
     /// - `written`: Number of produced output units.
@@ -110,13 +108,13 @@ impl TranscodeProgress {
     #[inline(always)]
     pub const fn need_output(
         output_index: usize,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
         read: usize,
         written: usize,
     ) -> Self {
         Self::new(
-            TranscodeStatus::need_output(output_index, additional, available),
+            TranscodeStatus::need_output(output_index, required, available),
             read,
             written,
         )

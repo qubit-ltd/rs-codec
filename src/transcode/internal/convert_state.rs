@@ -9,10 +9,9 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{
-    decode_context::DecodeContext,
-    transcode_progress::TranscodeProgress,
-};
+use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
+use super::cursor_state::CursorState;
+use super::{decode_step::DecodeStep, pending_value::PendingValue};
 
 /// Mutable state for one buffered conversion call.
 ///
@@ -22,16 +21,10 @@ use super::super::{
 pub(crate) struct ConvertState<'a, Input, Output> {
     /// Complete input unit slice visible to the converter.
     input: &'a [Input],
-    /// Absolute input index where this call starts.
-    input_start: usize,
     /// Complete output unit slice visible to the converter.
     output: &'a mut [Output],
-    /// Absolute output index where this call starts.
-    output_start: usize,
-    /// Absolute input index for the next conversion step.
-    input_cursor: usize,
-    /// Absolute output index for the next write.
-    output_cursor: usize,
+    /// Shared absolute input/output cursors.
+    cursor: CursorState,
 }
 
 impl<'a, Input, Output> ConvertState<'a, Input, Output> {
@@ -62,11 +55,8 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         );
         Self {
             input,
-            input_start: input_index,
             output,
-            output_start: output_index,
-            input_cursor: input_index,
-            output_cursor: output_index,
+            cursor: CursorState::new(input_index, output_index),
         }
     }
 
@@ -104,7 +94,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) const fn output_cursor(&self) -> usize {
-        self.output_cursor
+        self.cursor.output_cursor()
     }
 
     /// Returns whether there is still input to convert.
@@ -115,7 +105,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) fn has_input(&self) -> bool {
-        self.input_cursor < self.input.len()
+        self.cursor.input_cursor() < self.input.len()
     }
 
     /// Returns input units visible from the current input cursor.
@@ -126,7 +116,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) fn available_input(&self) -> usize {
-        self.input.len() - self.input_cursor
+        self.input.len() - self.cursor.input_cursor()
     }
 
     /// Returns writable output units visible from the current output cursor.
@@ -137,7 +127,9 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) fn available_output(&self) -> usize {
-        self.output.len().saturating_sub(self.output_cursor)
+        self.output
+            .len()
+            .saturating_sub(self.cursor.output_cursor())
     }
 
     /// Returns a public decode context snapshot at the current cursors.
@@ -149,10 +141,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[inline(always)]
     pub(crate) fn decode_context(&self) -> DecodeContext {
         DecodeContext::new(
-            self.input_start,
-            self.input_cursor,
-            self.output_start,
-            self.output_cursor,
+            self.cursor.input_start(),
+            self.cursor.input_cursor(),
+            self.cursor.output_start(),
+            self.cursor.output_cursor(),
             self.available_input(),
         )
     }
@@ -168,7 +160,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
             read <= self.available_input(),
             "conversion step read beyond input"
         );
-        self.input_cursor += read;
+        self.cursor.advance_input(read);
     }
 
     /// Advances the output cursor.
@@ -182,7 +174,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
             written <= self.available_output(),
             "conversion step wrote beyond output",
         );
-        self.output_cursor += written;
+        self.cursor.advance_output(written);
     }
 
     /// Returns input units consumed since this call started.
@@ -193,7 +185,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) const fn read(&self) -> usize {
-        self.input_cursor - self.input_start
+        self.cursor.read()
     }
 
     /// Returns output units written since this call started.
@@ -204,7 +196,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[must_use]
     #[inline(always)]
     pub(crate) const fn written(&self) -> usize {
-        self.output_cursor - self.output_start
+        self.cursor.written()
     }
 
     /// Returns completed progress for the current cursors.
@@ -222,7 +214,8 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// # Parameters
     ///
-    /// - `additional`: Additional input units required to continue.
+    /// - `required`: Total input units required from the current input
+    ///   position.
     /// - `available`: Input units currently available at the stop boundary.
     ///
     /// # Returns
@@ -232,12 +225,12 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[inline(always)]
     pub(crate) fn need_input_progress(
         &self,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
     ) -> TranscodeProgress {
         TranscodeProgress::need_input(
-            self.input_cursor,
-            additional,
+            self.cursor.input_cursor(),
+            required,
             available,
             self.read(),
             self.written(),
@@ -248,7 +241,8 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// # Parameters
     ///
-    /// - `additional`: Additional output units required to continue.
+    /// - `required`: Total output units required from the current output
+    ///   position.
     /// - `available`: Output units currently available at the stop boundary.
     ///
     /// # Returns
@@ -258,15 +252,64 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     #[inline(always)]
     pub(crate) fn need_output_progress(
         &self,
-        additional: NonZeroUsize,
+        required: NonZeroUsize,
         available: usize,
     ) -> TranscodeProgress {
         TranscodeProgress::need_output(
-            self.output_cursor,
-            additional,
+            self.cursor.output_cursor(),
+            required,
             available,
             self.read(),
             self.written(),
         )
+    }
+
+    /// Applies one normalized decode step to this conversion state.
+    ///
+    /// # Parameters
+    ///
+    /// - `step`: Decoded step produced by the decode engine.
+    /// - `encode`: Callback to encode a decoded value into the target side.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Value`: Decoded logical value type.
+    /// - `Error`: Error type produced by the encode callback.
+    /// - `F`: Callback type that consumes one decoded value.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Some(progress))` when conversion must stop and `Ok(None)`
+    /// when it can continue.
+    #[inline]
+    pub(crate) fn apply_decode_step<Value, Error, F>(
+        &mut self,
+        step: DecodeStep<Value>,
+        mut encode: F,
+    ) -> Result<Option<TranscodeProgress>, Error>
+    where
+        F: FnMut(
+            PendingValue<Value>,
+            &mut ConvertState<'_, Input, Output>,
+        ) -> Result<Option<TranscodeProgress>, Error>,
+    {
+        match step {
+            DecodeStep::Decoded {
+                value,
+                consumed,
+                input_index,
+            } => {
+                self.advance_input(consumed.get());
+                encode(PendingValue::new(value, input_index), self)
+            }
+            DecodeStep::Skipped { consumed } => {
+                self.advance_input(consumed.get());
+                Ok(None)
+            }
+            DecodeStep::NeedInput {
+                required,
+                available,
+            } => Ok(Some(self.need_input_progress(required, available))),
+        }
     }
 }

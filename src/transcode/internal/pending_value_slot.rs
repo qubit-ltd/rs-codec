@@ -8,17 +8,10 @@
 //! Slot that owns the converter's retained decoded value.
 
 use super::{
-    convert_state::ConvertState,
-    pending_encode_step::PendingEncodeStep,
+    convert_state::ConvertState, pending_encode_step::PendingEncodeStep,
     pending_value::PendingValue,
 };
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
-    TranscodeProgress,
-};
+use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks, TranscodeProgress};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -118,11 +111,11 @@ impl<Value> PendingValueSlot<Value> {
             }
             PendingEncodeStep::NeedOutput {
                 pending,
-                additional,
+                required,
                 available,
             } => {
                 self.value = Some(pending);
-                Some(state.need_output_progress(additional, available))
+                Some(state.need_output_progress(required, available))
             }
         }
     }

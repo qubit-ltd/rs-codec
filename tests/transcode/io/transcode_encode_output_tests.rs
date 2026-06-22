@@ -6,25 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Cursor,
-    Error,
-    ErrorKind,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use std::io::{Cursor, Error, ErrorKind, Seek, SeekFrom, Write};
 
 use qubit_codec::{
-    CapacityError,
-    TranscodeEncodeOutput,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, TranscodeEncodeOutput, TranscodeError, TranscodeProgress, Transcoder,
 };
 use qubit_io::Output;
-
-use crate::nz;
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 enum PairEncodeError {
@@ -53,10 +40,7 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::Error>> {
-            TranscodeError::<Self::Error>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };
@@ -69,10 +53,7 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::Error>> {
-            TranscodeError::<Self::Error>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };
@@ -103,23 +84,19 @@ impl Transcoder<u32, u16> for PairEncoder {
             return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
         }
         if output_index > output.len() {
-            return Err(TranscodeError::Domain(
-                PairEncodeError::BadOutputIndex,
-            ));
+            return Err(TranscodeError::Domain(PairEncodeError::BadOutputIndex));
         }
         let mut read = 0;
         let mut written = 0;
         while input_index + read < input.len() {
             if input[input_index + read] == u32::MAX {
-                return Err(TranscodeError::Domain(
-                    PairEncodeError::BadInputIndex,
-                ));
+                return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
             }
             if output_index + written + 2 > output.len() {
                 let available = output.len() - (output_index + written);
                 return Ok(TranscodeProgress::need_output(
                     output_index + written,
-                    nz(2 - available),
+                    crate::nz(2),
                     available,
                     read,
                     written,
@@ -172,9 +149,7 @@ impl Transcoder<u32, u16> for FinishEncoder {
             return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
         }
         if output_index > output.len() {
-            return Err(TranscodeError::Domain(
-                PairEncodeError::BadOutputIndex,
-            ));
+            return Err(TranscodeError::Domain(PairEncodeError::BadOutputIndex));
         }
         if input_index == input.len() {
             return Ok(TranscodeProgress::complete(0, 0));
@@ -182,7 +157,7 @@ impl Transcoder<u32, u16> for FinishEncoder {
         if output_index == output.len() {
             return Ok(TranscodeProgress::need_output(
                 output_index,
-                nz(1),
+                crate::nz(1),
                 0,
                 0,
                 0,
@@ -282,9 +257,7 @@ impl Transcoder<u32, u16> for ZeroWidthFailingFinishEncoder {
             return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
         }
         if output_index > output.len() {
-            return Err(TranscodeError::Domain(
-                PairEncodeError::BadOutputIndex,
-            ));
+            return Err(TranscodeError::Domain(PairEncodeError::BadOutputIndex));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }
@@ -438,7 +411,13 @@ impl Transcoder<u32, u16> for NeedInputEncoder {
         if input_index > input.len() {
             return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_input(input_index, nz(1), 0, 0, 0))
+        Ok(TranscodeProgress::need_input(
+            input_index,
+            crate::nz(1),
+            0,
+            0,
+            0,
+        ))
     }
 
     noop_finish!(u16);
@@ -466,7 +445,13 @@ impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
         if input_index > input.len() {
             return Err(TranscodeError::Domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_output(output_index, nz(1), 0, 1, 0))
+        Ok(TranscodeProgress::need_output(
+            output_index,
+            crate::nz(1),
+            0,
+            1,
+            0,
+        ))
     }
 
     noop_finish!(u16);
@@ -497,7 +482,7 @@ impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::need_output(
             output_index + 1,
-            nz(1),
+            crate::nz(1),
             0,
             1,
             1,
@@ -588,7 +573,7 @@ impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
         }
         Ok(TranscodeProgress::need_output(
             output_index,
-            nz(1),
+            crate::nz(1),
             usize::MAX,
             0,
             0,
@@ -622,7 +607,7 @@ impl Transcoder<u32, u16> for MisindexedNeedOutputEncoder {
         }
         Ok(TranscodeProgress::need_output(
             output_index + 1,
-            nz(1),
+            crate::nz(1),
             0,
             0,
             0,
@@ -678,7 +663,7 @@ fn map_error(error: TranscodeError<PairEncodeError>) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
-unsafe fn encode_with<E>(
+fn encode_with<E>(
     output: &mut TranscodeEncodeOutput<UnitOutput>,
     encoder: &mut E,
     input: &[u32],
@@ -689,10 +674,7 @@ where
     E: Transcoder<u32, u16, Error = PairEncodeError>,
 {
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
-    // SAFETY: The caller upholds the requested input range contract.
-    unsafe {
-        output.transcode_from(encoder, &mut mapper, input, input_index, count)
-    }
+    output.transcode_from(encoder, &mut mapper, input, input_index, count)
 }
 
 fn finish_with<E>(
@@ -725,16 +707,13 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
     let mut output = TranscodeEncodeOutput::new(Cursor::new(Vec::new()));
     output.inner_mut().set_position(0);
 
-    let written = Write::write(&mut output, &[1, 2])
-        .expect("raw unit write should succeed");
+    let written = Write::write(&mut output, &[1, 2]).expect("raw unit write should succeed");
     assert_eq!(2, written);
-    let written = Write::write(&mut output, &[3, 4])
-        .expect("raw unit write should succeed");
+    let written = Write::write(&mut output, &[3, 4]).expect("raw unit write should succeed");
     assert_eq!(2, written);
     assert_eq!(
         1,
-        Write::write(&mut output, &[5])
-            .expect("std::io::Write should delegate to raw unit writes")
+        Write::write(&mut output, &[5]).expect("std::io::Write should delegate to raw unit writes")
     );
     Write::write_all(&mut output, &[6, 7])
         .expect("std::io::Write::write_all should delegate to raw units");
@@ -746,8 +725,7 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
         Seek::seek(&mut output, SeekFrom::Start(1))
             .expect("std::io::Seek should flush then delegate")
     );
-    Write::write_all(&mut output, &[8])
-        .expect("write after seek should update the wrapped cursor");
+    Write::write_all(&mut output, &[8]).expect("write after seek should update the wrapped cursor");
     output.flush().expect("flush should drain after seek");
     assert_eq!(&[1, 8, 3, 4, 5, 6, 7], output.inner().get_ref().as_slice(),);
 }
@@ -757,12 +735,8 @@ fn test_buffered_encode_output_returns_zero_for_zero_count() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The empty input range at index zero is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 0)
-            .expect("zero-count write should be a no-op")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 0)
+        .expect("zero-count write should be a no-op");
 
     assert_eq!(0, written);
     assert!(output.inner().units.is_empty());
@@ -775,10 +749,9 @@ fn test_buffered_encode_output_transcode_from_respects_input_range() {
     let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
 
-    let written = unsafe {
-        output.transcode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1)
-    }
-    .expect("checked encode should accept a valid input range");
+    let written = output
+        .transcode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1)
+        .expect("checked encode should accept a valid input range");
 
     output.flush().expect("flush should drain encoded units");
 
@@ -791,18 +764,8 @@ fn test_buffered_encode_output_encodes_and_flushes_units() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(
-            &mut output,
-            &mut encoder,
-            &[0x0001_0002, 0x0003_0004],
-            0,
-            2,
-        )
-        .expect("encoding should accept both values")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002, 0x0003_0004], 0, 2)
+        .expect("encoding should accept both values");
     assert_eq!(2, written);
 
     output.flush().expect("flush should drain buffered units");
@@ -816,20 +779,12 @@ fn test_buffered_encode_output_flushes_full_buffer_before_next_write() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
-            .expect("first value should fill the unit buffer")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect("first value should fill the unit buffer");
     assert_eq!(1, written);
     assert!(output.inner().units.is_empty());
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
-            .expect("second value should flush the full buffer first")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
+        .expect("second value should flush the full buffer first");
     assert_eq!(1, written);
 
     output.flush().expect("flush should drain buffered units");
@@ -843,17 +798,15 @@ fn test_buffered_encode_output_transcode_from_reports_entry_flush_error() {
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
 
-    let written = unsafe {
-        output.transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
-    }
-    .expect("first value should remain pending in the internal buffer");
+    let written = output
+        .transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
+        .expect("first value should remain pending in the internal buffer");
     assert_eq!(1, written);
     assert_eq!(0, output.spare_capacity());
 
-    let error = unsafe {
-        output.transcode_from(&mut encoder, &mut mapper, &[0x5678], 0, 1)
-    }
-    .expect_err("entry spare-capacity reservation should flush and fail");
+    let error = output
+        .transcode_from(&mut encoder, &mut mapper, &[0x5678], 0, 1)
+        .expect_err("entry spare-capacity reservation should flush and fail");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert!(error.to_string().contains("fixed output capacity exceeded"));
@@ -864,13 +817,8 @@ fn test_buffered_encode_output_reports_no_progress_need_output_capacity() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1) }
-            .expect_err(
-                "insufficient fixed buffer capacity should be reported",
-            );
+    let error = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect_err("insufficient fixed buffer capacity should be reported");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert!(error.to_string().contains("spare capacity"));
@@ -881,12 +829,8 @@ fn test_buffered_encode_output_returns_after_need_output_consumes_input() {
     let output = UnitOutput::default();
     let mut encoder = NeedOutputAfterReadEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-            .expect("need-output after consuming input should return progress")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect("need-output after consuming input should return progress");
 
     assert_eq!(1, written);
 }
@@ -897,9 +841,7 @@ fn test_buffered_encode_output_reports_transcoder_errors_as_io_errors() {
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
     let input = [u32::MAX];
-
-    // SAFETY: The full input range is valid.
-    let error = unsafe { encode_with(&mut output, &mut encoder, &input, 0, 1) }
+    let error = encode_with(&mut output, &mut encoder, &input, 0, 1)
         .expect_err("encoder error should be mapped to I/O error");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -910,11 +852,8 @@ fn test_buffered_encode_output_rejects_need_input_status() {
     let output = UnitOutput::default();
     let mut encoder = NeedInputEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err("encoder NeedInput status should be rejected");
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("encoder NeedInput status should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
@@ -929,11 +868,8 @@ fn test_buffered_encode_output_rejects_overreported_read_progress() {
     let output = UnitOutput::default();
     let mut encoder = OverreadingProgressEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err("overreported input progress should be rejected");
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("overreported input progress should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("consumed beyond input range"));
@@ -944,11 +880,8 @@ fn test_buffered_encode_output_rejects_overreported_write_progress() {
     let output = UnitOutput::default();
     let mut encoder = OverwritingProgressEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err("overreported output progress should be rejected");
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("overreported output progress should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("wrote beyond spare output"));
@@ -959,16 +892,15 @@ fn test_buffered_encode_output_rejects_overflowing_need_output() {
     let output = UnitOutput::default();
     let mut encoder = OverflowingNeedOutputEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err(
-                "overflowing NeedOutput requirement should be rejected",
-            );
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("satisfied NeedOutput requirement should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("output requirement overflowed"));
+    assert!(
+        error
+            .to_string()
+            .contains("satisfied NeedOutput requirement")
+    );
 }
 
 #[test]
@@ -976,11 +908,8 @@ fn test_buffered_encode_output_rejects_misindexed_need_output() {
     let output = UnitOutput::default();
     let mut encoder = MisindexedNeedOutputEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let error =
-        unsafe { encode_with(&mut output, &mut encoder, &[0x1234], 0, 1) }
-            .expect_err("misindexed NeedOutput status should be rejected");
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("misindexed NeedOutput status should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("inconsistent NeedOutput index"));
@@ -991,12 +920,8 @@ fn test_buffered_encode_output_flush_does_not_finish_encoder() {
     let output = UnitOutput::default();
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-            .expect("encoding should accept the value")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect("encoding should accept the value");
     assert_eq!(1, written);
 
     output
@@ -1004,8 +929,7 @@ fn test_buffered_encode_output_flush_does_not_finish_encoder() {
         .expect("flush should only drain buffered units");
     assert_eq!(&[0x1234], output.inner().units.as_slice());
 
-    finish_with(&mut output, &mut encoder)
-        .expect("finish should write encoder trailer");
+    finish_with(&mut output, &mut encoder).expect("finish should write encoder trailer");
     assert_eq!(&[0x1234, 0xeeee], output.inner().units.as_slice());
 }
 
@@ -1015,8 +939,7 @@ fn test_buffered_encode_output_finish_writes_and_flushes() {
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
 
-    finish_with(&mut output, &mut encoder)
-        .expect("finish should write trailer and flush");
+    finish_with(&mut output, &mut encoder).expect("finish should write trailer and flush");
 
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
     assert!(output.inner().flushed);
@@ -1076,31 +999,12 @@ fn test_buffered_encode_output_takes_encoder_per_call() {
     let mut first_encoder = PairEncoder;
     let mut second_encoder = PairEncoder;
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
-
-    // SAFETY: The requested input range is valid.
-    let first = unsafe {
-        output
-            .transcode_from(
-                &mut first_encoder,
-                &mut mapper,
-                &[0x0001_0002],
-                0,
-                1,
-            )
-            .expect("first encoder should write one value")
-    };
-    // SAFETY: The requested input range is valid.
-    let second = unsafe {
-        output
-            .transcode_from(
-                &mut second_encoder,
-                &mut mapper,
-                &[0x0003_0004],
-                0,
-                1,
-            )
-            .expect("second encoder should reuse the same buffer")
-    };
+    let first = output
+        .transcode_from(&mut first_encoder, &mut mapper, &[0x0001_0002], 0, 1)
+        .expect("first encoder should write one value");
+    let second = output
+        .transcode_from(&mut second_encoder, &mut mapper, &[0x0003_0004], 0, 1)
+        .expect("second encoder should reuse the same buffer");
 
     output.flush().expect("flush should drain buffered units");
 
@@ -1137,20 +1041,12 @@ fn test_buffered_encode_output_transcode_from_flushes_when_spare_is_empty() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
-
-    // SAFETY: The full input range is valid.
-    let first = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
-            .expect("first value should fill the spare buffer")
-    };
+    let first = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect("first value should fill the spare buffer");
     assert_eq!(1, first);
     assert_eq!(0, output.spare_capacity());
-
-    // SAFETY: The full input range is valid.
-    let second = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
-            .expect("second value should flush before encoding")
-    };
+    let second = encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
+        .expect("second value should flush before encoding");
     assert_eq!(1, second);
     output.flush().expect("flush should drain buffered units");
     assert_eq!(&[1, 2, 3, 4], output.inner().units.as_slice());
@@ -1161,12 +1057,8 @@ fn test_buffered_encode_output_flushes_after_partial_need_output_progress() {
     let output = UnitOutput::default();
     let mut encoder = NeedOutputAfterWriteEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
-
-    // SAFETY: The full input range is valid.
-    let written = unsafe {
-        encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-            .expect("partial need-output progress should flush buffered units")
-    };
+    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect("partial need-output progress should flush buffered units");
 
     assert_eq!(1, written);
     output.flush().expect("flush should drain buffered units");

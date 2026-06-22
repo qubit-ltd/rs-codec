@@ -8,10 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::{
-    Codec,
-    CodecDecodeFailure,
-};
+use qubit_codec::{Codec, CodecDecodeFailure};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct DomainDecodeError;
@@ -25,20 +22,15 @@ impl Codec for PlainCodec {
     type DecodeError = DomainDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> NonZeroUsize {
-        NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> NonZeroUsize {
-        NonZeroUsize::new(2).expect("literal is non-zero")
-    }
+    const MAX_UNITS_PER_VALUE: NonZeroUsize = qubit_io::nz!(2);
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(Vec<u8>, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(Vec<u8>, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
         if input[index] == 0xff {
             return Err(CodecDecodeFailure::invalid(
                 DomainDecodeError,
@@ -74,7 +66,7 @@ fn test_codec_decode_failure_reports_incomplete_control_flow() {
 
 #[test]
 fn test_codec_decode_failure_reports_invalid_domain_error() {
-    let consumed = NonZeroUsize::new(2).expect("literal is non-zero");
+    let consumed = qubit_io::nz!(2);
     let failure = CodecDecodeFailure::invalid(DomainDecodeError, consumed);
 
     assert_eq!(
@@ -94,8 +86,7 @@ fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let mut codec = PlainCodec;
     let mut output = [0_u8; 1];
 
-    let decoded = unsafe { codec.decode(&[0x41], 0) }
-        .expect("plain codec should decode a value");
+    let decoded = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
     assert_eq!(vec![0x41], decoded.0);
 
     let written = unsafe { codec.encode(&vec![0x42], &mut output, 0) }

@@ -8,11 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::{
-    DecodeAction,
-    DecodeContext,
-    TranscodeDecodeHooks,
-};
+use qubit_codec::{DecodeAction, DecodeContext, TranscodeDecodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -27,22 +23,16 @@ impl qubit_codec::Codec for UnitCodec {
     type DecodeError = UnitDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
+    {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -95,13 +85,8 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeDecodeHooks::<UnitCodec>::finish(
-        &mut hooks,
-        &mut codec,
-        &mut output,
-        0,
-    )
-    .expect("default finish should be a no-op");
+    let written = TranscodeDecodeHooks::<UnitCodec>::finish(&mut hooks, &mut codec, &mut output, 0)
+        .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }

@@ -8,12 +8,7 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
-use crate::{
-    Codec,
-    CodecDecodeError,
-    CodecValueExt,
-    codec::assert_unit_bounds,
-};
+use crate::{Codec, CodecDecodeError, CodecValueExt, codec::assert_unit_bounds};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -26,7 +21,7 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CodecValueDecoder<C> {
     /// Low-level codec used for one-value decoding.
     codec: C,
@@ -49,13 +44,13 @@ where
     /// # Panics
     ///
     /// Panics when the supplied codec violates the
-    /// [`Codec::min_units_per_value`] / [`Codec::max_units_per_value`] ordering
+    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
     /// invariant. Validating once at construction lets the hot decode path
     /// skip the check.
     #[must_use]
     #[inline]
     pub fn new(codec: C) -> Self {
-        assert_unit_bounds::<C>(&codec);
+        assert_unit_bounds::<C>();
         Self { codec }
     }
 }
@@ -81,7 +76,7 @@ where
     /// # Errors
     ///
     /// Returns [`CodecDecodeError::Incomplete`] when fewer than
-    /// [`Codec::min_units_per_value`] units are available. Returns
+    /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. Returns
     /// [`CodecDecodeError::Decode`] when the wrapped codec rejects the input.
     /// Returns [`CodecDecodeError::TrailingInput`] when a value is decoded but
     /// extra input remains.
@@ -90,12 +85,9 @@ where
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when flush output exceeds
-    /// [`Codec::max_decode_flush_values`].
-    fn decode(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<Self::Output, Self::Error> {
-        let flush_cap = self.codec.max_decode_flush_values();
+    /// [`Codec::MAX_DECODE_FLUSH_VALUES`].
+    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+        let flush_cap = C::MAX_DECODE_FLUSH_VALUES;
         let (value, _) = if flush_cap == 0 {
             self.codec
                 .decode_exact_value_with_flush(input, &mut [], 0)?

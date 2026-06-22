@@ -9,14 +9,8 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{
-    decode_action::DecodeAction,
-    decode_context::DecodeContext,
-};
-use crate::{
-    CapacityError,
-    Codec,
-};
+use super::super::{decode_action::DecodeAction, decode_context::DecodeContext};
+use crate::{CapacityError, Codec};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
 ///
@@ -66,13 +60,8 @@ use crate::{
 ///     type DecodeError = MyDecodeError;
 ///     type EncodeError = core::convert::Infallible;
 ///
-///     fn min_units_per_value(&self) -> NonZeroUsize {
-///         NonZeroUsize::MIN
-///     }
-///
-///     fn max_units_per_value(&self) -> NonZeroUsize {
-///         NonZeroUsize::MIN
-///     }
+///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -146,15 +135,11 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound derived from
-    /// [`Codec::min_units_per_value`].
-    #[must_use = "capacity planning can fail on overflow"]
+    /// [`Codec::MIN_UNITS_PER_VALUE`].
     #[inline]
-    fn max_output_len(
-        &self,
-        codec: &C,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        Ok(input_len / codec.min_units_per_value().get())
+    #[must_use = "capacity planning can fail on overflow"]
+    fn max_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len / C::MIN_UNITS_PER_VALUE.get())
     }
 
     /// Returns an upper bound for values emitted by finishing hook-owned state.
@@ -170,8 +155,8 @@ where
     /// # Returns
     ///
     /// Returns the finite final-output upper bound.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
         0
     }
@@ -226,11 +211,7 @@ where
     /// is appropriate only when flush is infallible or unreachable for the
     /// codec and hook pairing.
     #[inline]
-    fn map_decode_flush_error(
-        &mut self,
-        _codec: &mut C,
-        _error: C::DecodeError,
-    ) -> Self::Error {
+    fn map_decode_flush_error(&mut self, _codec: &mut C, _error: C::DecodeError) -> Self::Error {
         panic!(
             "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
         )

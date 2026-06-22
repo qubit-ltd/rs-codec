@@ -8,15 +8,8 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    Codec,
-    CodecDecodeError,
-    CodecDecodeFailure,
-    CodecTranscodeDecoder,
-    TranscodeDecoder,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-    nz,
+    Codec, CodecDecodeError, CodecDecodeFailure, CodecTranscodeDecoder, TranscodeDecoder,
+    TranscodeError, TranscodeStatus, Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -28,22 +21,15 @@ impl Codec for VariableByteCodec {
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::MIN
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        unsafe { core::num::NonZeroUsize::new_unchecked(2) }
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
         debug_assert!(index < input.len());
 
         let first = input[index];
@@ -93,27 +79,20 @@ impl Codec for FixedPairCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    fn min_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
-    }
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
-    fn max_units_per_value(&self) -> core::num::NonZeroUsize {
-        core::num::NonZeroUsize::new(2).expect("literal is non-zero")
-    }
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
         debug_assert!(index + 1 < input.len());
 
         Ok((
             input[index].wrapping_add(input[index + 1]),
-            core::num::NonZeroUsize::new(2).expect("literal is non-zero"),
+            qubit_io::nz!(2),
         ))
     }
 
@@ -146,7 +125,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 2,
-            additional: nz(1),
+            required: crate::nz(1),
             available: 0,
         },
         progress.status(),
@@ -168,7 +147,7 @@ fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
     assert_eq!(
         TranscodeStatus::NeedOutput {
             output_index: 1,
-            additional: nz(1),
+            required: crate::nz(1),
             available: 0,
         },
         progress.status(),
@@ -204,7 +183,7 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: nz(1),
+            required: crate::nz(2),
             available: 1,
         },
         progress.status(),
@@ -231,12 +210,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidOutputIndex {
-                index: 1,
-                len: 0
-            }
-        ),
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -251,12 +225,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .expect_err("out-of-range input index should fail");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidInputIndex {
-                index: 2,
-                len: 1
-            }
-        ),
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
         error
     );
 }
@@ -271,12 +240,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        TranscodeError::Buffer(
-            qubit_codec::BufferContractError::InvalidOutputIndex {
-                index: 1,
-                len: 0
-            }
-        ),
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error
     );
 }
@@ -292,7 +256,7 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
     assert_eq!(
         TranscodeStatus::NeedInput {
             input_index: 0,
-            additional: nz(1),
+            required: crate::nz(2),
             available: 1,
         },
         progress.status(),
