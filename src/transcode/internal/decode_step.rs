@@ -18,7 +18,10 @@ pub(in crate::transcode) enum DecodeStep<Value> {
         value: Value,
         /// Number of consumed source units.
         consumed: NonZeroUsize,
-        /// Source input index used for downstream encode context.
+        /// Source input index used for downstream encode context. Plain
+        /// decode state intentionally ignores this field, while converter
+        /// state stores it with the pending value so encode hooks can report
+        /// errors against the original source position.
         input_index: usize,
     },
     /// Source input was consumed without producing a value.

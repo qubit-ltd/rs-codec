@@ -16,6 +16,7 @@ use qubit_codec::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -288,7 +289,8 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
 
     assert_eq!(Ok(8), encoder.max_output_len(2));
-    assert_eq!(0, encoder.max_finish_output_len());
+    assert_eq!(Ok(0), encoder.max_finish_output_len());
+    assert_eq!(Ok(0), encoder.max_reset_output_len());
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         encoder.max_output_len(usize::MAX),
@@ -302,7 +304,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
         TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     let mut output = [0_u8; 1];
 
-    assert_eq!(1, encoder.max_finish_output_len());
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let error = encoder.finish(&mut [], 0).expect_err(
         "finish should reject insufficient output before calling hooks",
@@ -315,19 +317,58 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
         },
         error,
     );
-    assert_eq!(1, encoder.max_finish_output_len());
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let written = encoder
         .finish(&mut output, 0)
         .expect("hook should write final output");
     assert_eq!(1, written);
     assert_eq!([0xee], output);
-    assert_eq!(0, encoder.max_finish_output_len());
+    assert_eq!(Ok(0), encoder.max_finish_output_len());
 
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     encoder.reset(&mut [], 0).expect("reset");
-    assert_eq!(0, encoder.max_finish_output_len());
+    assert_eq!(Ok(0), encoder.max_finish_output_len());
+}
+
+#[test]
+fn test_buffered_encode_engine_implements_transcoder() {
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let mut output = [0_u8; 2];
+
+    assert_eq!(
+        Ok(8),
+        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
+            u8,
+            u8,
+        >>::max_output_len(&encoder, 2),
+    );
+    assert_eq!(
+        Ok(0),
+        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
+            u8,
+            u8,
+        >>::max_finish_output_len(&encoder),
+    );
+    assert_eq!(
+        Ok(0),
+        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
+            u8,
+            u8,
+        >>::max_reset_output_len(&encoder),
+    );
+    let progress =
+        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
+            u8,
+            u8,
+        >>::transcode(&mut encoder, &[1, 2], 0, &mut output, 0)
+        .expect("engine should transcode through the trait");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!((2, 2), (progress.read(), progress.written()));
+    assert_eq!([11, 12], output);
 }
 
 #[test]

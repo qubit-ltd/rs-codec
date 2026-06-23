@@ -31,7 +31,7 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode values.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct CodecTranscodeEncoder<C> {
     /// Common buffered encoding engine.
     engine: TranscodeEncodeEngine<C, CodecTranscodeEncodeHooks>,
@@ -90,7 +90,7 @@ where
     /// the maximum units emitted when resetting internal state.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_reset_output_len())
+        self.engine.max_reset_output_len()
     }
 
     /// Gets the maximum units emitted by finishing internal state.
@@ -100,7 +100,7 @@ where
     /// the number of units that may be emitted by finishing state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_finish_output_len())
+        self.engine.max_finish_output_len()
     }
 
     /// Runs before-reset cleanup and emits stream-start output.

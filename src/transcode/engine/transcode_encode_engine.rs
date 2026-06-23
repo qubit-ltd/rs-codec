@@ -15,6 +15,7 @@ use crate::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
+    Transcoder,
 };
 
 /// Reusable buffered encoding engine for codec-backed encoders.
@@ -130,7 +131,7 @@ use crate::{
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct TranscodeEncodeEngine<C, H> {
     /// Low-level codec used for one-value encoding.
     pub(super) codec: C,
@@ -193,9 +194,9 @@ where
     ///
     /// the codec's reset-output upper bound.
     #[inline(always)]
-    #[must_use]
-    pub fn max_reset_output_len(&self) -> usize {
-        C::MAX_ENCODE_RESET_UNITS
+    #[must_use = "capacity planning can fail on overflow"]
+    pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(C::MAX_ENCODE_RESET_UNITS)
     }
 
     /// Gets the maximum output units emitted by finishing hook-owned state.
@@ -204,9 +205,9 @@ where
     ///
     /// the hook-provided final output bound.
     #[inline(always)]
-    #[must_use]
-    pub fn max_finish_output_len(&self) -> usize {
-        self.hooks.max_finish_output_len(&self.codec)
+    #[must_use = "capacity planning can fail on overflow"]
+    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(self.hooks.max_finish_output_len(&self.codec))
     }
 
     /// Resets codec encode state, hook-owned state, and stream-start output.
@@ -230,7 +231,9 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self.max_reset_output_len();
+        let required = self
+            .max_reset_output_len()
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -334,7 +337,9 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self.max_finish_output_len();
+        let required = self
+            .max_finish_output_len()
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -365,5 +370,69 @@ where
     #[inline(always)]
     fn default() -> Self {
         Self::new(C::default(), H::default())
+    }
+}
+
+impl<C, H> Transcoder<C::Value, C::Unit> for TranscodeEncodeEngine<C, H>
+where
+    C: Codec,
+    H: TranscodeEncodeHooks<C>,
+{
+    type Error = H::Error;
+
+    /// Returns an upper bound for units produced from `input_len` values.
+    #[inline(always)]
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        TranscodeEncodeEngine::max_output_len(self, input_len)
+    }
+
+    /// Returns the maximum units emitted when resetting stream state.
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        TranscodeEncodeEngine::max_reset_output_len(self)
+    }
+
+    /// Returns the maximum units emitted by finishing internal state.
+    #[inline(always)]
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        TranscodeEncodeEngine::max_finish_output_len(self)
+    }
+
+    /// Resets codec encode state, hook-owned state, and stream-start output.
+    #[inline(always)]
+    fn reset(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        TranscodeEncodeEngine::reset(self, output, output_index)
+    }
+
+    /// Encodes input values into caller-provided output units.
+    #[inline(always)]
+    fn transcode(
+        &mut self,
+        input: &[C::Value],
+        input_index: usize,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+        TranscodeEncodeEngine::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
+    }
+
+    /// Finishes hook-owned encoder state.
+    #[inline(always)]
+    fn finish(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        TranscodeEncodeEngine::finish(self, output, output_index)
     }
 }

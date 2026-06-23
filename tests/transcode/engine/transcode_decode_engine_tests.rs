@@ -1090,7 +1090,7 @@ fn test_transcode_decode_engine_reports_max_reset_output_len() {
         ReplacingHooks,
     );
 
-    assert_eq!(0, decoder.max_reset_output_len());
+    assert_eq!(Ok(0), decoder.max_reset_output_len());
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&decoder));
 }
 

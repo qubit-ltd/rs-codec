@@ -27,6 +27,7 @@ use crate::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
+    Transcoder,
 };
 
 /// Reusable buffered conversion engine.
@@ -50,7 +51,7 @@ use crate::{
 /// - `DH`: Source-side decode hooks.
 /// - `EH`: Target-side encode hooks.
 /// - `H`: Conversion-level error mapper.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct TranscodeConvertEngine<D, E, DH, EH, H>
 where
     D: Codec,
@@ -147,7 +148,7 @@ where
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.encode_engine.max_reset_output_len())
+        self.encode_engine.max_reset_output_len()
     }
 
     /// Returns the maximum target units emitted by finishing retained state.
@@ -158,7 +159,7 @@ where
             self.decode_engine.max_finish_output_len()?;
         let decoder_finish_units =
             self.encode_engine.max_output_len(decoder_finish_values)?;
-        let encoder_finish_units = self.encode_engine.max_finish_output_len();
+        let encoder_finish_units = self.encode_engine.max_finish_output_len()?;
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
@@ -316,7 +317,10 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<usize, ConvertErrorOf<D, E, H>> {
-        let required = self.encode_engine.max_reset_output_len();
+        let required = self
+            .encode_engine
+            .max_reset_output_len()
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -325,6 +329,9 @@ where
 
         self.pending.clear();
         self.hooks.before_reset();
+        // Decoder reset only validates its output cursor and runs decode-side
+        // reset hooks; decoders never emit reset output, so an empty output at
+        // index 0 is the canonical non-writing reset path.
         if self.decode_engine.reset(&mut [], 0).is_err() {
             unreachable!(
                 "decoder reset with empty output at index 0 cannot fail"
@@ -462,5 +469,79 @@ where
             EH::default(),
             H::default(),
         )
+    }
+}
+
+impl<D, E, DH, EH, H> Transcoder<D::Unit, E::Unit>
+    for TranscodeConvertEngine<D, E, DH, EH, H>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    D::Value: Default,
+    DH: TranscodeDecodeHooks<D>,
+    EH: TranscodeEncodeHooks<E>,
+    H: TranscodeConvertHooks<
+            D,
+            E,
+            DecodeError = DH::Error,
+            EncodeError = EH::Error,
+        >,
+{
+    type Error = H::Error;
+
+    /// Returns an upper bound for target units produced from `input_len` units.
+    #[inline(always)]
+    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        TranscodeConvertEngine::max_output_len(self, input_len)
+    }
+
+    /// Returns the maximum target units emitted by finishing retained state.
+    #[inline(always)]
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        TranscodeConvertEngine::max_finish_output_len(self)
+    }
+
+    /// Returns the maximum target units emitted when resetting stream state.
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        TranscodeConvertEngine::max_reset_output_len(self)
+    }
+
+    /// Clears retained conversion state and emits target reset output.
+    #[inline(always)]
+    fn reset(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        TranscodeConvertEngine::reset(self, output, output_index)
+    }
+
+    /// Converts source units into target units.
+    #[inline(always)]
+    fn transcode(
+        &mut self,
+        input: &[D::Unit],
+        input_index: usize,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+        TranscodeConvertEngine::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
+    }
+
+    /// Finishes retained converter output after EOF.
+    #[inline(always)]
+    fn finish(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        TranscodeConvertEngine::finish(self, output, output_index)
     }
 }

@@ -58,31 +58,6 @@ where
     >,
 }
 
-impl<D, E> Clone for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: Clone,
-{
-    /// Clones the wrapped converter engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns a cloned converter adapter sharing the same inner engine state.
-    #[inline(always)]
-    fn clone(&self) -> Self {
-        Self {
-            engine: self.engine.clone(),
-        }
-    }
-}
-
 impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
@@ -397,46 +372,5 @@ where
         Self {
             engine: TranscodeConvertEngine::default(),
         }
-    }
-}
-
-impl<D, E> Eq for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: Eq,
-{
-}
-
-impl<D, E> PartialEq for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: PartialEq,
-{
-    /// Compares the wrapped converter engine.
-    ///
-    /// # Parameters
-    ///
-    /// - `other`: Another converter to compare with.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when the wrapped engines are equal.
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.engine == other.engine
     }
 }

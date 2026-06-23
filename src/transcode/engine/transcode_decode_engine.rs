@@ -154,7 +154,7 @@ use crate::{
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct TranscodeDecodeEngine<C, H> {
     /// Low-level codec used for one-value decoding.
     pub(super) codec: C,
@@ -233,9 +233,9 @@ where
     ///
     /// Decoders do not emit reset output; this bound is always `0`.
     #[inline(always)]
-    #[must_use]
-    pub fn max_reset_output_len(&self) -> usize {
-        0
+    #[must_use = "capacity planning can fail on overflow"]
+    pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
     }
 
     /// Runs hook-owned cleanup before a logical decoder reset.
@@ -487,7 +487,7 @@ where
     /// Returns an upper bound for values emitted when resetting stream state.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(TranscodeDecodeEngine::max_reset_output_len(self))
+        TranscodeDecodeEngine::max_reset_output_len(self)
     }
 
     /// Runs hook-owned cleanup before a logical decoder reset.

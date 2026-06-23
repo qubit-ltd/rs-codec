@@ -25,6 +25,7 @@ use qubit_codec::{
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -1258,6 +1259,42 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
 
     engine.reset(&mut [], 0).expect("reset");
     assert_eq!(Ok(0), engine.max_finish_output_len());
+}
+
+#[test]
+fn test_buffered_convert_engine_implements_transcoder() {
+    let mut engine = new_copy_engine();
+    let mut output = [0_u8; 2];
+
+    assert_eq!(
+        Ok(2),
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_output_len(&engine, 2),
+    );
+    assert_eq!(
+        Ok(0),
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_finish_output_len(
+            &engine,
+        ),
+    );
+    assert_eq!(
+        Ok(0),
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_reset_output_len(
+            &engine,
+        ),
+    );
+    let progress =
+        <CopyConvertEngine as Transcoder<u8, u8>>::transcode(
+            &mut engine,
+            &[3, 4],
+            0,
+            &mut output,
+            0,
+        )
+        .expect("engine should convert through the trait");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!((2, 2), (progress.read(), progress.written()));
+    assert_eq!([4, 5], output);
 }
 
 #[test]

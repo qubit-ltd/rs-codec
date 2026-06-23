@@ -310,15 +310,13 @@ impl Codec for NonDefaultEncoder {
 }
 
 #[test]
-fn test_codec_transcode_converter_supports_standard_traits() {
+fn test_codec_transcode_converter_supports_debug_and_default() {
     let converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
     >::default();
-    let cloned = converter.clone();
 
-    assert_eq!(converter, cloned);
-    assert_eq!(format!("{converter:?}"), format!("{cloned:?}"));
+    assert!(format!("{converter:?}").contains("CodecTranscodeConverter"));
 }
 
 #[test]

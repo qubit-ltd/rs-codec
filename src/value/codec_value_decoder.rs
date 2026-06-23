@@ -26,7 +26,7 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct CodecValueDecoder<C> {
     /// Low-level codec used for one-value decoding.
     codec: C,

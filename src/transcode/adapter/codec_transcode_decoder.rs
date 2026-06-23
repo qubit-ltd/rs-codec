@@ -30,7 +30,7 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode values.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default)]
 pub struct CodecTranscodeDecoder<C> {
     /// Common buffered decoding engine.
     engine: TranscodeDecodeEngine<C, CodecTranscodeDecodeHooks>,
@@ -96,7 +96,7 @@ where
     /// Returns the maximum values emitted when resetting internal state.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.engine.max_reset_output_len())
+        self.engine.max_reset_output_len()
     }
 
     /// Runs before-reset cleanup for decoder state.
