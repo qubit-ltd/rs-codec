@@ -60,7 +60,11 @@ impl<Value> DecodeInvalidAction<Value> {
     /// Panics when a consuming action exceeds `available`.
     #[inline]
     #[must_use]
-    pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
+    pub(super) fn into_step(
+        self,
+        input_index: usize,
+        available: usize,
+    ) -> DecodeStep<Value> {
         match self {
             Self::Skip { consumed } => {
                 DecodeStep::skipped(Self::bound_consumed(consumed, available))
@@ -90,7 +94,10 @@ impl<Value> DecodeInvalidAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[inline(always)]
     #[must_use]
-    fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
+    fn bound_consumed(
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> NonZeroUsize {
         assert!(
             available > 0,
             "DecodeInvalidAction cannot consume empty input",

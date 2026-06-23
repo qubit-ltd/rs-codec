@@ -42,7 +42,9 @@ pub enum CodecDecodeError<E> {
     },
 
     /// A whole-value decode succeeded but left trailing input units.
-    #[error("trailing input after decoded value: consumed {consumed} units, remaining {remaining}")]
+    #[error(
+        "trailing input after decoded value: consumed {consumed} units, remaining {remaining}"
+    )]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -115,7 +117,11 @@ impl<E> CodecDecodeError<E> {
     /// Returns an incomplete-input error.
     #[inline(always)]
     #[must_use]
-    pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
+    pub const fn incomplete(
+        input_index: usize,
+        required_total: usize,
+        available: usize,
+    ) -> Self {
         Self::Incomplete {
             input_index,
             required_total,
@@ -244,7 +250,10 @@ impl<E> CodecDecodeError<E> {
     /// Returns an invalid-input-index error when `input_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+    pub fn ensure_input_index(
+        input_len: usize,
+        input_index: usize,
+    ) -> Result<(), Self> {
         if input_index > input_len {
             return Err(Self::invalid_input_index(input_index, input_len));
         }
@@ -267,7 +276,10 @@ impl<E> CodecDecodeError<E> {
     /// Returns an invalid-output-index error when `output_index` is beyond the
     /// slice.
     #[inline]
-    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+    pub fn ensure_output_index(
+        output_len: usize,
+        output_index: usize,
+    ) -> Result<(), Self> {
         if output_index > output_len {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
@@ -300,7 +312,11 @@ impl<E> CodecDecodeError<E> {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(output_index, required, available));
+            return Err(Self::insufficient_output(
+                output_index,
+                required,
+                available,
+            ));
         }
         Ok(())
     }
@@ -350,7 +366,10 @@ impl<E> CodecDecodeError<E> {
     /// Returns a trailing-input error when extra units remain after the
     /// decoded value.
     #[inline]
-    pub fn ensure_no_trailing_input(consumed: usize, total: usize) -> Result<(), Self> {
+    pub fn ensure_no_trailing_input(
+        consumed: usize,
+        total: usize,
+    ) -> Result<(), Self> {
         let remaining = total.saturating_sub(consumed);
         if remaining != 0 {
             return Err(Self::trailing_input(consumed, remaining));

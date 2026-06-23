@@ -8,11 +8,28 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{Buffer, BufferedInput, Input, Seekable};
+use qubit_io::{
+    Buffer,
+    BufferedInput,
+    Input,
+    Seekable,
+    UncheckedSlice,
+};
 
-use crate::{TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -188,15 +205,21 @@ where
         // requirements for the unread copy.
         let unread = self.input.unread();
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(unread.len(), 0, count),
+            UncheckedSlice::range_fits(unread.len(), 0, count),
             "unchecked unread copy range exceeds unread source",
         );
         debug_assert!(
-            qubit_io::UncheckedSlice::range_fits(output.len(), output_index, count),
+            UncheckedSlice::range_fits(output.len(), output_index, count),
             "unchecked copy destination range exceeds output buffer",
         );
         unsafe {
-            qubit_io::UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
+            UncheckedSlice::copy_nonoverlapping(
+                unread,
+                0,
+                output,
+                output_index,
+                count,
+            );
         }
     }
 
@@ -277,7 +300,7 @@ where
         D: Transcoder<I::Item, Value>,
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
-        let output_end = checked_range_end(
+        let output_end = UncheckedSlice::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -394,7 +417,7 @@ where
         D: Transcoder<I::Item, Value>,
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
-        let output_end = checked_range_end(
+        let output_end = UncheckedSlice::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -486,22 +509,8 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
 }
 
 /// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(error: TranscodeError<core::convert::Infallible>) -> Error {
+fn transcode_contract_to_io_error(
+    error: TranscodeError<core::convert::Infallible>,
+) -> Error {
     Error::new(ErrorKind::InvalidData, error)
-}
-
-/// Checks an indexed slice range and returns its exclusive end index.
-fn checked_range_end(
-    len: usize,
-    index: usize,
-    count: usize,
-    message: &'static str,
-) -> Result<usize> {
-    let end = index
-        .checked_add(count)
-        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, message))?;
-    if end > len {
-        return Err(Error::new(ErrorKind::InvalidInput, message));
-    }
-    Ok(end)
 }

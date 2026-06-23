@@ -9,10 +9,20 @@
 
 use core::fmt;
 
-use super::{CodecTranscodeConvertHooks, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks};
+use super::{
+    CodecTranscodeConvertHooks,
+    CodecTranscodeDecodeHooks,
+    CodecTranscodeEncodeHooks,
+};
 use crate::{
-    CapacityError, Codec, CodecConvertError, TranscodeConvertEngine, TranscodeConverter,
-    TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    CodecConvertError,
+    TranscodeConvertEngine,
+    TranscodeConverter,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Strict codec-backed converter error type.
@@ -144,7 +154,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_output_len(input_len)
     }
 
@@ -205,7 +218,10 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<CodecTranscodeConvertError<D, E>>> {
+    ) -> Result<
+        TranscodeProgress,
+        TranscodeError<CodecTranscodeConvertError<D, E>>,
+    > {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
@@ -316,7 +332,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
-        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -343,7 +365,8 @@ where
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter<D::Unit, E::Unit>
+    for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,

@@ -70,27 +70,23 @@ impl<E> TranscodeError<E> {
     /// # Returns
     ///
     /// Returns a transcode error wrapping `error`.
-    #[inline(always)]
     pub const fn domain(error: E) -> Self {
         Self::Domain(error)
     }
 
     /// Creates an invalid-input-index error.
-    #[inline(always)]
     #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
 
     /// Creates an invalid-output-index error.
-    #[inline(always)]
     #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
         Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
-    #[inline(always)]
     #[must_use]
     pub const fn insufficient_output(
         output_index: usize,
@@ -105,7 +101,6 @@ impl<E> TranscodeError<E> {
     }
 
     /// Creates an output-length-overflow error.
-    #[inline(always)]
     #[must_use]
     pub const fn output_length_overflow() -> Self {
         Self::OutputLengthOverflow
@@ -116,7 +111,6 @@ impl<E> TranscodeError<E> {
     /// # Returns
     ///
     /// Returns `true` for [`TranscodeError::Domain`].
-    #[inline(always)]
     #[must_use]
     pub const fn is_domain(&self) -> bool {
         matches!(self, Self::Domain(_))
@@ -128,7 +122,6 @@ impl<E> TranscodeError<E> {
     ///
     /// Returns `Some(error)` for [`TranscodeError::Domain`] and `None` for
     /// buffer contract errors.
-    #[inline(always)]
     #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
@@ -182,7 +175,10 @@ impl<E> TranscodeError<E> {
 
     /// Validates that `input_index` is within an input slice.
     #[inline]
-    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+    pub fn ensure_input_index(
+        input_len: usize,
+        input_index: usize,
+    ) -> Result<(), Self> {
         if input_index > input_len {
             return Err(Self::invalid_input_index(input_index, input_len));
         }
@@ -191,7 +187,10 @@ impl<E> TranscodeError<E> {
 
     /// Validates that `output_index` is within an output slice.
     #[inline]
-    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+    pub fn ensure_output_index(
+        output_len: usize,
+        output_index: usize,
+    ) -> Result<(), Self> {
         if output_index > output_len {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
@@ -220,7 +219,11 @@ impl<E> TranscodeError<E> {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if available < required {
-            return Err(Self::insufficient_output(output_index, required, available));
+            return Err(Self::insufficient_output(
+                output_index,
+                required,
+                available,
+            ));
         }
         Ok(())
     }
@@ -234,11 +237,19 @@ impl<E> TranscodeError<E> {
         required: usize,
     ) -> Result<(), Self> {
         Self::ensure_output_index(output_len, output_index)?;
-        if !qubit_io::UncheckedSlice::range_fits(output_len, output_index, range_len) {
+        if !qubit_io::UncheckedSlice::range_fits(
+            output_len,
+            output_index,
+            range_len,
+        ) {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
         if range_len < required {
-            return Err(Self::insufficient_output(output_index, required, range_len));
+            return Err(Self::insufficient_output(
+                output_index,
+                required,
+                range_len,
+            ));
         }
         Ok(())
     }

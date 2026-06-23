@@ -8,10 +8,16 @@
 //! Policy hooks used by the default codec-backed buffered decoder.
 
 use super::super::engine::TranscodeDecodeHooks;
-use super::super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
+use super::super::{
+    decode_context::DecodeContext,
+    decode_invalid_action::DecodeInvalidAction,
+};
 use core::num::NonZeroUsize;
 
-use crate::{Codec, CodecDecodeError};
+use crate::{
+    Codec,
+    CodecDecodeError,
+};
 
 /// Policy hooks for [`crate::CodecTranscodeDecoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

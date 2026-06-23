@@ -7,7 +7,13 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered converter.
 
-use crate::{Codec, CodecConvertError, CodecDecodeError, CodecEncodeError, TranscodeConvertHooks};
+use crate::{
+    Codec,
+    CodecConvertError,
+    CodecDecodeError,
+    CodecEncodeError,
+    TranscodeConvertHooks,
+};
 
 /// Policy hooks for [`crate::CodecTranscodeConverter`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]

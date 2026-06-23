@@ -10,11 +10,15 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    decode_context::DecodeContext, encode_outcome::EncodeOutcome,
+    decode_context::DecodeContext,
+    encode_outcome::EncodeOutcome,
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
-use super::{decode_step::DecodeStep, pending_value::PendingValue};
+use super::{
+    decode_step::DecodeStep,
+    pending_value::PendingValue,
+};
 
 /// Mutable state for one buffered conversion call.
 ///
@@ -49,7 +53,12 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 

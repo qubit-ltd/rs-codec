@@ -8,7 +8,11 @@
 //! Policy hooks used by buffered encoder engines.
 
 use super::super::encode_context::EncodeContext;
-use crate::{CapacityError, Codec, EncodeOutcome};
+use crate::{
+    CapacityError,
+    Codec,
+    EncodeOutcome,
+};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -133,7 +137,11 @@ where
     /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(C::MAX_UNITS_PER_VALUE.get())
             .ok_or(CapacityError::OutputLengthOverflow)

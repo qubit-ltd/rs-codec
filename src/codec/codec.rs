@@ -269,7 +269,10 @@ pub trait Codec {
         &mut self,
         input: &[Self::Unit],
         index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>>;
+    ) -> Result<
+        (Self::Value, NonZeroUsize),
+        CodecDecodeFailure<Self::DecodeError>,
+    >;
 
     /// Flushes decode-side EOF state into `output`.
     ///

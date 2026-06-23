@@ -8,7 +8,12 @@
 //! Slot that owns the converter's retained decoded value.
 
 use super::pending_value::PendingValue;
-use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks};
+use crate::{
+    CapacityError,
+    Codec,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
+};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

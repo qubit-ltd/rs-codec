@@ -86,7 +86,10 @@ impl<Value> DecodeStep<Value> {
     ///
     /// Returns a need-input step.
     #[inline(always)]
-    pub(in crate::transcode) const fn need_input(required: NonZeroUsize, available: usize) -> Self {
+    pub(in crate::transcode) const fn need_input(
+        required: NonZeroUsize,
+        available: usize,
+    ) -> Self {
         Self::NeedInput {
             required,
             available,

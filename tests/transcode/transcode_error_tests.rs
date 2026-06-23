@@ -23,6 +23,20 @@ fn test_transcode_error_domain_helpers() {
     let framework = TranscodeError::<&'static str>::invalid_input_index(1, 0);
     assert!(!framework.is_domain());
     assert_eq!(None, framework.domain_ref());
+
+    assert_eq!(
+        None,
+        TranscodeError::<&'static str>::invalid_output_index(1, 0).domain_ref(),
+    );
+    assert_eq!(
+        None,
+        TranscodeError::<&'static str>::insufficient_output(0, 1, 0)
+            .domain_ref(),
+    );
+    assert_eq!(
+        None,
+        TranscodeError::<&'static str>::output_length_overflow().domain_ref(),
+    );
 }
 
 #[test]
@@ -98,46 +112,52 @@ fn test_transcode_error_source_returns_domain_error() {
 
 #[test]
 fn test_transcode_error_ensure_input_index_accepts_valid_index() {
-    TranscodeError::<&'static str>::ensure_input_index(4, 2).expect("valid index");
+    TranscodeError::<&'static str>::ensure_input_index(4, 2)
+        .expect("valid index");
 }
 
 #[test]
 fn test_transcode_error_ensure_input_index_rejects_out_of_range() {
-    let error =
-        TranscodeError::<&'static str>::ensure_input_index(2, 5).expect_err("out-of-range index");
+    let error = TranscodeError::<&'static str>::ensure_input_index(2, 5)
+        .expect_err("out-of-range index");
 
     assert_eq!(TranscodeError::invalid_input_index(5, 2), error,);
 }
 
 #[test]
 fn test_transcode_error_ensure_output_index_accepts_valid_index() {
-    TranscodeError::<&'static str>::ensure_output_index(4, 4).expect("valid index");
+    TranscodeError::<&'static str>::ensure_output_index(4, 4)
+        .expect("valid index");
 }
 
 #[test]
 fn test_transcode_error_ensure_output_index_rejects_out_of_range() {
-    let error =
-        TranscodeError::<&'static str>::ensure_output_index(1, 2).expect_err("out-of-range index");
+    let error = TranscodeError::<&'static str>::ensure_output_index(1, 2)
+        .expect_err("out-of-range index");
 
     assert_eq!(TranscodeError::invalid_output_index(2, 1), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_transcode_indices_accepts_valid_indices() {
-    TranscodeError::<&'static str>::ensure_transcode_indices(3, 1, 5, 2).expect("valid indices");
+    TranscodeError::<&'static str>::ensure_transcode_indices(3, 1, 5, 2)
+        .expect("valid indices");
 }
 
 #[test]
-fn test_transcode_error_ensure_transcode_indices_rejects_invalid_output_index() {
-    let error = TranscodeError::<&'static str>::ensure_transcode_indices(3, 0, 1, 2)
-        .expect_err("invalid output index");
+fn test_transcode_error_ensure_transcode_indices_rejects_invalid_output_index()
+{
+    let error =
+        TranscodeError::<&'static str>::ensure_transcode_indices(3, 0, 1, 2)
+            .expect_err("invalid output index");
 
     assert_eq!(TranscodeError::invalid_output_index(2, 1), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_output_capacity_accepts_sufficient_capacity() {
-    TranscodeError::<&'static str>::ensure_output_capacity(4, 1, 2).expect("sufficient capacity");
+    TranscodeError::<&'static str>::ensure_output_capacity(4, 1, 2)
+        .expect("sufficient capacity");
 }
 
 #[test]
@@ -158,7 +178,8 @@ fn test_transcode_error_ensure_output_capacity_rejects_insufficient_capacity() {
 
 #[test]
 fn test_transcode_error_ensure_output_range_accepts_valid_range() {
-    TranscodeError::<&'static str>::ensure_output_range(4, 1, 2, 2).expect("valid range");
+    TranscodeError::<&'static str>::ensure_output_range(4, 1, 2, 2)
+        .expect("valid range");
 }
 
 #[test]
@@ -187,8 +208,13 @@ fn test_transcode_error_ensure_output_range_rejects_invalid_output_index() {
 
 #[test]
 fn test_transcode_error_ensure_output_range_rejects_range_length_overflow() {
-    let error = TranscodeError::<&'static str>::ensure_output_range(usize::MAX, usize::MAX, 1, 0)
-        .expect_err("range length overflow");
+    let error = TranscodeError::<&'static str>::ensure_output_range(
+        usize::MAX,
+        usize::MAX,
+        1,
+        0,
+    )
+    .expect_err("range length overflow");
 
     assert_eq!(
         TranscodeError::invalid_output_index(usize::MAX, usize::MAX),

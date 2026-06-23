@@ -7,7 +7,13 @@
 // =============================================================================
 //! Tests for the value-level codec extension trait.
 
-use qubit_codec::{CapacityError, Codec, CodecDecodeError, CodecEncodeError, CodecValueExt};
+use qubit_codec::{
+    CapacityError,
+    Codec,
+    CodecDecodeError,
+    CodecEncodeError,
+    CodecValueExt,
+};
 
 #[derive(Default)]
 struct ResetByteCodec;
@@ -18,9 +24,11 @@ impl Codec for ResetByteCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -28,8 +36,10 @@ impl Codec for ResetByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -65,9 +75,11 @@ impl Codec for StatefulLifecycleCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -77,8 +89,10 @@ impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         let decoded = input[index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
         Ok((decoded, core::num::NonZeroUsize::MIN))
@@ -125,7 +139,8 @@ impl Codec for VariableWidthResetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -143,8 +158,10 @@ impl Codec for VariableWidthResetCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -190,9 +207,11 @@ impl Codec for OverflowEncodeBoundCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_ENCODE_RESET_UNITS: usize = usize::MAX;
 
@@ -200,8 +219,10 @@ impl Codec for OverflowEncodeBoundCodec {
         &mut self,
         _input: &[u8],
         _index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
 
@@ -224,9 +245,11 @@ impl Codec for RejectingCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     fn can_encode_value(&self, _value: &u8) -> bool {
         false
@@ -236,8 +259,10 @@ impl Codec for RejectingCodec {
         &mut self,
         _input: &[u8],
         _index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
 
@@ -260,9 +285,11 @@ impl Codec for FallibleCodec {
     type DecodeError = &'static str;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_DECODE_FLUSH_VALUES: usize = 1;
 
@@ -270,8 +297,10 @@ impl Codec for FallibleCodec {
         &mut self,
         _input: &[u8],
         _index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Err(qubit_codec::CodecDecodeFailure::invalid_without_consumed(
             "decode failure",
         ))
@@ -406,7 +435,8 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_unencodable_value() {
 }
 
 #[test]
-fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow() {
+fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow()
+{
     let mut codec = OverflowEncodeBoundCodec;
     let mut output = [0_u8; 1];
 
@@ -436,7 +466,8 @@ fn test_codec_value_ext_encode_value_with_reset_wraps_encode_error() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_value_with_flush_returns_value_consumed_and_flushed() {
+fn test_codec_value_ext_decode_value_with_flush_returns_value_consumed_and_flushed()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -457,7 +488,9 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_incomplete_input() {
 
     let error = codec
         .decode_value_with_flush(&[], 0, &mut flushed, 0)
-        .expect_err("closed input shorter than the codec minimum is incomplete");
+        .expect_err(
+            "closed input shorter than the codec minimum is incomplete",
+        );
 
     assert_eq!(
         CodecDecodeError::Incomplete {
@@ -497,7 +530,8 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
         type DecodeError = &'static str;
         type EncodeError = core::convert::Infallible;
 
-        const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+        const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+            core::num::NonZeroUsize::MIN;
 
         const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -505,8 +539,10 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
             &mut self,
             _input: &[u8],
             _index: usize,
-        ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-        {
+        ) -> Result<
+            (u8, core::num::NonZeroUsize),
+            qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        > {
             Err(qubit_codec::CodecDecodeFailure::incomplete(2))
         }
 
@@ -546,9 +582,11 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
         type DecodeError = &'static str;
         type EncodeError = core::convert::Infallible;
 
-        const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+        const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+            core::num::NonZeroUsize::MIN;
 
-        const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+        const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+            core::num::NonZeroUsize::MIN;
 
         const MAX_DECODE_FLUSH_VALUES: usize = 1;
 
@@ -556,8 +594,10 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
             &mut self,
             input: &[u8],
             index: usize,
-        ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-        {
+        ) -> Result<
+            (u8, core::num::NonZeroUsize),
+            qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        > {
             Ok((input[index], core::num::NonZeroUsize::MIN))
         }
 
@@ -596,7 +636,8 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed() {
+fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -610,7 +651,8 @@ fn test_codec_value_ext_decode_exact_value_with_flush_returns_value_and_flushed(
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush_output() {
+fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush_output()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [];
 
@@ -629,7 +671,8 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush
 }
 
 #[test]
-fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_flush() {
+fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_flush()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [0_u8; 1];
 
@@ -664,7 +707,8 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_invalid_input_index() {
 }
 
 #[test]
-fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_output() {
+fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_output()
+ {
     let mut codec = StatefulLifecycleCodec::default();
     let mut flushed = [];
 

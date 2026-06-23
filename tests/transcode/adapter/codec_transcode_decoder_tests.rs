@@ -8,8 +8,14 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    Codec, CodecDecodeError, CodecDecodeFailure, CodecTranscodeDecoder, TranscodeDecoder,
-    TranscodeError, TranscodeStatus, Transcoder,
+    Codec,
+    CodecDecodeError,
+    CodecDecodeFailure,
+    CodecTranscodeDecoder,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -21,7 +27,8 @@ impl Codec for VariableByteCodec {
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -29,7 +36,10 @@ impl Codec for VariableByteCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index < input.len());
 
         let first = input[index];
@@ -87,7 +97,10 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        CodecDecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(index + 1 < input.len());
 
         Ok((

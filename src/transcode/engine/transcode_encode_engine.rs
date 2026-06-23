@@ -9,7 +9,13 @@
 
 use super::super::internal::encode_state::EncodeState;
 use crate::codec::assert_unit_bounds;
-use crate::{CapacityError, Codec, TranscodeEncodeHooks, TranscodeError, TranscodeProgress};
+use crate::{
+    CapacityError,
+    Codec,
+    TranscodeEncodeHooks,
+    TranscodeError,
+    TranscodeProgress,
+};
 
 /// Reusable buffered encoding engine for codec-backed encoders.
 ///
@@ -173,7 +179,10 @@ where
     /// arithmetic overflow.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.hooks.max_output_len(&self.codec, input_len)
     }
 
@@ -221,7 +230,11 @@ where
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
         let required = self.max_reset_output_len();
-        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         self.hooks.before_reset(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -271,7 +284,8 @@ where
             output.len(),
             output_index,
         )?;
-        let mut state = EncodeState::new(input, input_index, output, output_index);
+        let mut state =
+            EncodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
@@ -320,7 +334,11 @@ where
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
         let required = self.max_finish_output_len();
-        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         let written = self
             .hooks
             .finish(&mut self.codec, output, output_index)

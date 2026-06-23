@@ -8,7 +8,12 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use super::ValueDecoder;
-use crate::{Codec, CodecDecodeError, CodecValueExt, codec::assert_unit_bounds};
+use crate::{
+    Codec,
+    CodecDecodeError,
+    CodecValueExt,
+    codec::assert_unit_bounds,
+};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -86,7 +91,10 @@ where
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when flush output exceeds
     /// [`Codec::MAX_DECODE_FLUSH_VALUES`].
-    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
         let flush_cap = C::MAX_DECODE_FLUSH_VALUES;
         let (value, _) = if flush_cap == 0 {
             self.codec

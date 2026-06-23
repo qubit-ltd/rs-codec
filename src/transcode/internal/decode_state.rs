@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    decode_context::DecodeContext,
+    transcode_progress::TranscodeProgress,
+};
 use super::decode_step::DecodeStep;
 use super::transcode_state::TranscodeState;
 
@@ -41,7 +44,12 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -127,7 +135,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns unit `()`.
     #[inline(always)]
-    pub(in crate::transcode) fn emit(&mut self, value: Value, consumed: NonZeroUsize) {
+    pub(in crate::transcode) fn emit(
+        &mut self,
+        value: Value,
+        consumed: NonZeroUsize,
+    ) {
         let consumed = consumed.get();
         assert!(
             consumed <= self.available(),
@@ -141,7 +153,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         // at a writable slot.
         let output_cursor = self.state.output_cursor();
         unsafe {
-            *qubit_io::UncheckedSlice::get_mut(self.state.output_mut(), output_cursor) = value;
+            *qubit_io::UncheckedSlice::get_mut(
+                self.state.output_mut(),
+                output_cursor,
+            ) = value;
         }
         self.state.advance(consumed, 1);
     }
@@ -162,7 +177,9 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
-    pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(
+        &self,
+    ) -> TranscodeProgress {
         self.state.need_output_progress(NonZeroUsize::MIN, 0)
     }
 
@@ -206,9 +223,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             DecodeStep::Decoded {
                 value, consumed, ..
             } => {
-                if self.needs_output() {
-                    return Some(self.need_output_progress());
-                }
                 self.emit(value, consumed);
                 None
             }

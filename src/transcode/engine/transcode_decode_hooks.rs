@@ -9,8 +9,14 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
-use crate::{CapacityError, Codec};
+use super::super::{
+    decode_context::DecodeContext,
+    decode_invalid_action::DecodeInvalidAction,
+};
+use crate::{
+    CapacityError,
+    Codec,
+};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
 ///
@@ -142,7 +148,11 @@ where
     /// [`Codec::MIN_UNITS_PER_VALUE`].
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _codec: &C,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / C::MIN_UNITS_PER_VALUE.get())
     }
 

@@ -7,10 +7,21 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::io::{Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{
+    Cursor,
+    Error,
+    ErrorKind,
+    Read,
+    Seek,
+    SeekFrom,
+};
 
 use qubit_codec::{
-    CapacityError, TranscodeDecodeInput, TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    TranscodeDecodeInput,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 use qubit_io::Input;
 
@@ -41,7 +52,10 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::Error>> {
-            TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+            TranscodeError::<Self::Error>::ensure_output_index(
+                output.len(),
+                output_index,
+            )?;
             Ok(0)
         }
     };
@@ -54,7 +68,10 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::Error>> {
-            TranscodeError::<Self::Error>::ensure_output_index(output.len(), output_index)?;
+            TranscodeError::<Self::Error>::ensure_output_index(
+                output.len(),
+                output_index,
+            )?;
             Ok(0)
         }
     };
@@ -65,8 +82,10 @@ struct PairDecoder;
 
 #[test]
 fn test_transcode_decode_input_exposes_unread_window() {
-    let mut input =
-        TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1_u16, 2, 3]]), 3);
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![1_u16, 2, 3]]),
+        3,
+    );
 
     assert!(input.fill_until(2).expect("fill should succeed"));
     assert_eq!(&[1, 2, 3], input.unread());
@@ -95,7 +114,9 @@ impl Transcoder<u16, u32> for PairDecoder {
             return Err(TranscodeError::Domain(PairDecodeError::BadInputIndex));
         }
         if output_index > output.len() {
-            return Err(TranscodeError::Domain(PairDecodeError::BadOutputIndex));
+            return Err(TranscodeError::Domain(
+                PairDecodeError::BadOutputIndex,
+            ));
         }
         let mut read = 0;
         let mut written = 0;
@@ -146,7 +167,10 @@ struct FinishDecoder {
 impl Transcoder<u16, u32> for FinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -167,7 +191,9 @@ impl Transcoder<u16, u32> for FinishDecoder {
             return Err(TranscodeError::Domain(PairDecodeError::BadInputIndex));
         }
         if output_index > 0 {
-            return Err(TranscodeError::Domain(PairDecodeError::BadOutputIndex));
+            return Err(TranscodeError::Domain(
+                PairDecodeError::BadOutputIndex,
+            ));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }
@@ -201,7 +227,10 @@ struct ZeroWidthFailingFinishDecoder;
 impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -222,7 +251,9 @@ impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
             return Err(TranscodeError::Domain(PairDecodeError::BadInputIndex));
         }
         if output_index > 0 {
-            return Err(TranscodeError::Domain(PairDecodeError::BadOutputIndex));
+            return Err(TranscodeError::Domain(
+                PairDecodeError::BadOutputIndex,
+            ));
         }
         Ok(TranscodeProgress::complete(0, 0))
     }
@@ -276,7 +307,10 @@ struct TwoUnitFinishDecoder;
 impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -304,7 +338,11 @@ impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
         output: &mut [u32],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_capacity(output.len(), output_index, 2)?;
+        TranscodeError::<Self::Error>::ensure_output_capacity(
+            output.len(),
+            output_index,
+            2,
+        )?;
         output[output_index] = 0xaaaa;
         output[output_index + 1] = 0xbbbb;
         Ok(2)
@@ -317,7 +355,10 @@ struct CapacityBoundDecoder;
 impl Transcoder<u16, u32> for CapacityBoundDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -349,7 +390,10 @@ struct FailingTranscodeDecoder;
 impl Transcoder<u16, u32> for FailingTranscodeDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -377,7 +421,10 @@ struct OverreadingProgressDecoder;
 impl Transcoder<u16, u32> for OverreadingProgressDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -405,7 +452,10 @@ struct OverwritingProgressDecoder;
 impl Transcoder<u16, u32> for OverwritingProgressDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(2)
     }
 
@@ -433,7 +483,10 @@ struct OverflowingNeedInputDecoder;
 impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -467,7 +520,10 @@ struct MisindexedNeedInputDecoder;
 impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -501,7 +557,10 @@ struct MisindexedNeedOutputDecoder;
 impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -543,7 +602,10 @@ struct FailingFinishDecoder {
 impl Transcoder<u16, u32> for FailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -659,7 +721,13 @@ where
     D: Transcoder<u16, u32, Error = PairDecodeError>,
 {
     let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
-    input.finish_transcode_into(decoder, &mut mapper, output, output_index, count)
+    input.finish_transcode_into(
+        decoder,
+        &mut mapper,
+        output,
+        output_index,
+        count,
+    )
 }
 
 #[test]
@@ -682,19 +750,22 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
     input.inner_mut().set_position(0);
 
     let mut first = [0_u8; 1];
-    let read = Read::read(&mut input, &mut first).expect("raw unit read should succeed");
+    let read = Read::read(&mut input, &mut first)
+        .expect("raw unit read should succeed");
     assert_eq!(1, read);
     assert_eq!([1], first);
 
     let mut middle = [0_u8; 4];
-    let read = Read::read(&mut input, &mut middle[1..3]).expect("raw unit read should succeed");
+    let read = Read::read(&mut input, &mut middle[1..3])
+        .expect("raw unit read should succeed");
     assert_eq!(2, read);
     assert_eq!([0, 2, 3, 0], middle);
 
     let mut next = [0_u8; 1];
     assert_eq!(
         1,
-        Read::read(&mut input, &mut next).expect("std::io::Read should delegate to raw unit reads")
+        Read::read(&mut input, &mut next)
+            .expect("std::io::Read should delegate to raw unit reads")
     );
     assert_eq!([4], next);
 
@@ -704,7 +775,8 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
             .expect("std::io::Seek should delegate to the buffered input")
     );
     let mut after_seek = [0_u8; 1];
-    let read = Read::read(&mut input, &mut after_seek).expect("seek should discard buffered bytes");
+    let read = Read::read(&mut input, &mut after_seek)
+        .expect("seek should discard buffered bytes");
     assert_eq!(1, read);
     assert_eq!([1], after_seek);
 }
@@ -739,8 +811,28 @@ fn test_buffered_decode_input_transcode_into_respects_output_range() {
 }
 
 #[test]
+fn test_buffered_decode_input_transcode_into_rejects_invalid_output_range() {
+    let input = ChunkedInput::new(Vec::new());
+    let mut decoder = PairDecoder;
+    let mut input = TranscodeDecodeInput::with_capacity(input, 3);
+    let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
+    let mut output = [0_u32; 1];
+
+    let error = input
+        .transcode_into(&mut decoder, &mut mapper, &mut output, 1, 1)
+        .expect_err("invalid output range should be rejected before decoding");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(
+        "decoded output range exceeds destination buffer",
+        error.to_string(),
+    );
+}
+
+#[test]
 fn test_buffered_decode_input_decodes_across_refills() {
-    let input = ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
+    let input =
+        ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
     let mut decoder = PairDecoder;
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
@@ -956,6 +1048,25 @@ fn test_buffered_decode_input_reports_insufficient_finish_output() {
 }
 
 #[test]
+fn test_buffered_decode_input_finish_rejects_invalid_output_range() {
+    let input = ChunkedInput::new(Vec::new());
+    let mut decoder = FinishDecoder::default();
+    let mut input = TranscodeDecodeInput::with_capacity(input, 3);
+    let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
+    let mut output = [0_u32; 1];
+
+    let error = input
+        .finish_transcode_into(&mut decoder, &mut mapper, &mut output, 1, 1)
+        .expect_err("invalid finish output range should be rejected");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(
+        "finish output range exceeds destination buffer",
+        error.to_string(),
+    );
+}
+
+#[test]
 fn test_buffered_decode_input_maps_finish_capacity_bound_error() {
     let input = ChunkedInput::new(Vec::new());
     let mut decoder = CapacityBoundDecoder;
@@ -1067,8 +1178,8 @@ fn test_buffered_decode_input_copy_unread_and_read_unchecked() {
 
     let mut read = [0_u16; 2];
     // SAFETY: The destination range is valid.
-    let read_count =
-        unsafe { input.read_unchecked(&mut read, 0, 2) }.expect("read should copy unread units");
+    let read_count = unsafe { input.read_unchecked(&mut read, 0, 2) }
+        .expect("read should copy unread units");
     assert_eq!(2, read_count);
     assert_eq!([0x0001, 0x0002], read);
     assert_eq!(1, input.available());

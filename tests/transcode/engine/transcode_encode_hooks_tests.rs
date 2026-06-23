@@ -6,7 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodeOutcome, TranscodeEncodeHooks};
+use qubit_codec::{
+    EncodeContext,
+    EncodeOutcome,
+    TranscodeEncodeHooks,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -21,9 +25,11 @@ impl qubit_codec::Codec for UnitCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = UnitEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -31,8 +37,10 @@ impl qubit_codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[index], core::num::NonZeroUsize::MIN))
     }
 
@@ -82,8 +90,13 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeEncodeHooks::<UnitCodec>::finish(&mut hooks, &mut codec, &mut output, 0)
-        .expect("default finish should be a no-op");
+    let written = TranscodeEncodeHooks::<UnitCodec>::finish(
+        &mut hooks,
+        &mut codec,
+        &mut output,
+        0,
+    )
+    .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }

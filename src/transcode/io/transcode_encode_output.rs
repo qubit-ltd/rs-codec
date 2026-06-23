@@ -8,11 +8,28 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+    Seek,
+    SeekFrom,
+    Write,
+};
 
-use qubit_io::{Buffer, BufferedOutput, Output, Seekable};
+use qubit_io::{
+    Buffer,
+    BufferedOutput,
+    Output,
+    Seekable,
+    UncheckedSlice,
+};
 
-use crate::{TranscodeError, TranscodeStatus, Transcoder};
+use crate::{
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -198,7 +215,7 @@ where
         E: Transcoder<Value, O::Item>,
         M: FnMut(TranscodeError<E::Error>) -> Error,
     {
-        let input_end = checked_range_end(
+        let input_end = UncheckedSlice::checked_range_end(
             input.len(),
             input_index,
             count,
@@ -215,7 +232,8 @@ where
             // `transcode` cannot make progress. Reserving one spare slot drains
             // pending units to the wrapped output only when needed.
             self.output.ensure_spare_capacity(1)?;
-            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
+            let (units, output_index, available_output) =
+                self.output.spare_raw_parts_mut();
             let remaining_input = count - read_total;
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
@@ -284,7 +302,11 @@ where
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
     #[inline]
-    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
+    pub fn finish<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
         M: FnMut(TranscodeError<E::Error>) -> Error,
@@ -293,7 +315,8 @@ where
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",
@@ -381,20 +404,4 @@ where
             .field("output", &self.output)
             .finish()
     }
-}
-
-/// Checks an indexed slice range and returns its exclusive end index.
-fn checked_range_end(
-    len: usize,
-    index: usize,
-    count: usize,
-    message: &'static str,
-) -> Result<usize> {
-    let end = index
-        .checked_add(count)
-        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, message))?;
-    if end > len {
-        return Err(Error::new(ErrorKind::InvalidInput, message));
-    }
-    Ok(end)
 }
