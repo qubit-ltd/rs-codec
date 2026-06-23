@@ -441,9 +441,8 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
         .expect_err("encode reset failure should propagate");
 
     assert_eq!(
-        CodecEncodeError::Encode {
+        CodecEncodeError::EncodeReset {
             source: ResetFailError,
-            input_index: 0,
         },
         error,
     );

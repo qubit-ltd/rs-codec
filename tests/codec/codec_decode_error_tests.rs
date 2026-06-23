@@ -6,11 +6,27 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::CodecDecodeError;
+use qubit_codec::{
+    CodecDecodeError,
+    CodecDecodeFlushError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
     Invalid { consumed: usize },
+}
+
+impl core::fmt::Display for TestDecodeError {
+    fn fmt(
+        &self,
+        formatter: &mut core::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        match self {
+            Self::Invalid { consumed } => {
+                write!(formatter, "invalid decode consumed {consumed}")
+            }
+        }
+    }
 }
 
 #[test]
@@ -24,6 +40,33 @@ fn test_codec_decode_error_wraps_codec_error() {
             input_index: 7,
         },
         error,
+    );
+}
+
+#[test]
+fn test_codec_decode_error_wraps_decode_flush_error() {
+    let lifecycle =
+        CodecDecodeFlushError::new(TestDecodeError::Invalid { consumed: 1 });
+    assert_eq!(
+        TestDecodeError::Invalid { consumed: 1 },
+        *lifecycle.source(),
+    );
+
+    let error: CodecDecodeError<TestDecodeError> = lifecycle.into();
+
+    assert_eq!(
+        CodecDecodeError::DecodeFlush {
+            source: TestDecodeError::Invalid { consumed: 1 },
+        },
+        error,
+    );
+    assert!(error.to_string().contains("codec decode flush error"));
+
+    let lifecycle: CodecDecodeFlushError<TestDecodeError> =
+        TestDecodeError::Invalid { consumed: 3 }.into();
+    assert_eq!(
+        TestDecodeError::Invalid { consumed: 3 },
+        lifecycle.into_source(),
     );
 }
 

@@ -9,6 +9,8 @@
 
 use thiserror::Error;
 
+use crate::transcode::CapacityError;
+
 /// Error reported by codec-backed buffered encoder adapters.
 ///
 /// The wrapped codec remains responsible for domain-specific encode failures.
@@ -25,6 +27,14 @@ pub enum CodecEncodeError<E> {
         source: E,
         /// Absolute input index of the value being encoded.
         input_index: usize,
+    },
+
+    /// The wrapped codec reported an error while resetting encode state.
+    #[error("codec encode reset error: {source}")]
+    EncodeReset {
+        /// Error returned by [`crate::Codec::encode_reset`].
+        #[source]
+        source: E,
     },
 
     /// The wrapped codec cannot represent the input value.
@@ -88,6 +98,21 @@ impl<E> CodecEncodeError<E> {
             source,
             input_index,
         }
+    }
+
+    /// Creates an error wrapping a codec-specific encode-reset error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Error returned by [`crate::Codec::encode_reset`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec encode-reset error wrapper.
+    #[inline(always)]
+    #[must_use]
+    pub const fn encode_reset(source: E) -> Self {
+        Self::EncodeReset { source }
     }
 
     /// Creates an unencodable-value error.
@@ -261,14 +286,12 @@ impl<E> CodecEncodeError<E> {
     }
 }
 
-impl<E> From<E> for CodecEncodeError<E> {
-    /// Wraps a codec encode error without a current input value.
-    ///
-    /// Lifecycle calls such as encode reset do not correspond to a caller
-    /// input value. The adapter uses input index `0` for that synthetic
-    /// position.
+impl<E> From<CapacityError> for CodecEncodeError<E> {
+    /// Converts capacity-planning failures into codec encode adapter errors.
     #[inline(always)]
-    fn from(source: E) -> Self {
-        Self::encode(source, 0)
+    fn from(error: CapacityError) -> Self {
+        match error {
+            CapacityError::OutputLengthOverflow => Self::OutputLengthOverflow,
+        }
     }
 }

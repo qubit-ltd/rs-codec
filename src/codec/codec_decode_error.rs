@@ -28,6 +28,14 @@ pub enum CodecDecodeError<E> {
         input_index: usize,
     },
 
+    /// The wrapped codec reported an error while flushing decode state.
+    #[error("codec decode flush error: {source}")]
+    DecodeFlush {
+        /// Error returned by [`crate::Codec::decode_flush`].
+        #[source]
+        source: E,
+    },
+
     /// The adapter could not safely call the wrapped codec because input ended.
     #[error(
         "incomplete input at index {input_index}: required {required_total} units, available {available}"
@@ -102,6 +110,21 @@ impl<E> CodecDecodeError<E> {
             source,
             input_index,
         }
+    }
+
+    /// Creates an error wrapping a codec-specific decode-flush error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Error returned by [`crate::Codec::decode_flush`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec decode-flush error wrapper.
+    #[inline(always)]
+    #[must_use]
+    pub const fn decode_flush(source: E) -> Self {
+        Self::DecodeFlush { source }
     }
 
     /// Creates an adapter-level incomplete-input error.
@@ -375,17 +398,5 @@ impl<E> CodecDecodeError<E> {
             return Err(Self::trailing_input(consumed, remaining));
         }
         Ok(())
-    }
-}
-
-impl<E> From<E> for CodecDecodeError<E> {
-    /// Wraps a codec decode error without a current source unit position.
-    ///
-    /// Lifecycle calls such as decode flush do not correspond to a caller
-    /// input unit. The adapter uses input index `0` for that synthetic
-    /// position.
-    #[inline(always)]
-    fn from(source: E) -> Self {
-        Self::decode(source, 0)
     }
 }

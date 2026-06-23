@@ -49,7 +49,9 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - index;
                 if available < 2 {
-                    Err(qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)))
+                    Err(qubit_codec::CodecDecodeFailure::incomplete(
+                        qubit_io::nz!(2),
+                    ))
                 } else {
                     Ok((input[index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)

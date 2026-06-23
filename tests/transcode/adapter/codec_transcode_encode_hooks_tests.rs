@@ -138,9 +138,8 @@ fn test_codec_transcode_encode_hooks_wraps_encode_reset_errors() {
         .expect_err("reset errors should be wrapped");
 
     assert_eq!(
-        TranscodeError::Domain(CodecEncodeError::Encode {
+        TranscodeError::Domain(CodecEncodeError::EncodeReset {
             source: ResetFailError,
-            input_index: 0,
         }),
         error,
     );

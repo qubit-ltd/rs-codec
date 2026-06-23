@@ -7,6 +7,8 @@
 // =============================================================================
 //! Value decoder adapter backed by a low-level codec.
 
+use core::fmt;
+
 use super::ValueDecoder;
 use crate::{
     Codec,
@@ -26,10 +28,40 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
-#[derive(Debug, Default)]
-pub struct CodecValueDecoder<C> {
+pub struct CodecValueDecoder<C>
+where
+    C: Codec,
+{
     /// Low-level codec used for one-value decoding.
     codec: C,
+    /// Reusable storage for values emitted by `Codec::decode_flush`.
+    flush_scratch: Vec<C::Value>,
+}
+
+impl<C> fmt::Debug for CodecValueDecoder<C>
+where
+    C: Codec + fmt::Debug,
+{
+    /// Formats the decoder without requiring flushed values to be printable.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CodecValueDecoder")
+            .field("codec", &self.codec)
+            .field("flush_scratch_len", &self.flush_scratch.len())
+            .field("flush_scratch_capacity", &self.flush_scratch.capacity())
+            .finish()
+    }
+}
+
+impl<C> Default for CodecValueDecoder<C>
+where
+    C: Codec + Default,
+{
+    /// Creates a decoder from the default codec.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(C::default())
+    }
 }
 
 impl<C> CodecValueDecoder<C>
@@ -56,7 +88,10 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         assert_unit_bounds::<C>();
-        Self { codec }
+        Self {
+            codec,
+            flush_scratch: Vec::new(),
+        }
     }
 }
 
@@ -100,10 +135,14 @@ where
             self.codec
                 .decode_exact_value_with_flush(input, &mut [], 0)?
         } else {
-            let mut scratch = Vec::with_capacity(flush_cap);
-            scratch.resize_with(flush_cap, C::Value::default);
-            self.codec
-                .decode_exact_value_with_flush(input, &mut scratch, 0)?
+            if self.flush_scratch.len() < flush_cap {
+                self.flush_scratch.resize_with(flush_cap, C::Value::default);
+            }
+            self.codec.decode_exact_value_with_flush(
+                input,
+                &mut self.flush_scratch,
+                0,
+            )?
         };
 
         Ok(value)

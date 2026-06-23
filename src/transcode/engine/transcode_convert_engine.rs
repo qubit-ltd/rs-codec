@@ -21,6 +21,8 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecDecodeFlushError,
+    CodecEncodeResetError,
     EncodeContext,
     TranscodeConvertHooks,
     TranscodeDecodeHooks,
@@ -159,7 +161,8 @@ where
             self.decode_engine.max_finish_output_len()?;
         let decoder_finish_units =
             self.encode_engine.max_output_len(decoder_finish_values)?;
-        let encoder_finish_units = self.encode_engine.max_finish_output_len()?;
+        let encoder_finish_units =
+            self.encode_engine.max_finish_output_len()?;
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
@@ -261,10 +264,9 @@ where
     ) -> Result<usize, ConvertErrorOf<D, E, H>>
     where
         D::Value: Default,
+        DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     {
-        let required = self
-            .max_finish_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+        let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -316,11 +318,11 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E, H>> {
-        let required = self
-            .encode_engine
-            .max_reset_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+    ) -> Result<usize, ConvertErrorOf<D, E, H>>
+    where
+        EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
+    {
+        let required = self.encode_engine.max_reset_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -332,11 +334,12 @@ where
         // Decoder reset only validates its output cursor and runs decode-side
         // reset hooks; decoders never emit reset output, so an empty output at
         // index 0 is the canonical non-writing reset path.
-        if self.decode_engine.reset(&mut [], 0).is_err() {
-            unreachable!(
-                "decoder reset with empty output at index 0 cannot fail"
-            );
-        }
+        let decoder_reset = self.decode_engine.reset(&mut [], 0);
+        debug_assert!(
+            decoder_reset.is_ok(),
+            "decoder reset with empty output at index 0 cannot fail",
+        );
+        drop(decoder_reset);
         self.encode_engine
             .reset(output, output_index)
             .map_err(|error| {
@@ -387,11 +390,9 @@ where
     ) -> Result<(), ConvertErrorOf<D, E, H>>
     where
         D::Value: Default,
+        DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     {
-        let value_count = self
-            .decode_engine
-            .max_finish_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+        let value_count = self.decode_engine.max_finish_output_len()?;
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written =
@@ -480,6 +481,8 @@ where
     D::Value: Default,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
+    DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
+    EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
     H: TranscodeConvertHooks<
             D,
             E,

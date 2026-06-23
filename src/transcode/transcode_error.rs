@@ -9,6 +9,8 @@
 
 use thiserror::Error;
 
+use super::capacity_error::CapacityError;
+
 /// Error reported by a transcode operation.
 ///
 /// Buffer contract failures are framework errors owned by the transcode layer
@@ -252,5 +254,15 @@ impl<E> TranscodeError<E> {
             ));
         }
         Ok(())
+    }
+}
+
+impl<E> From<CapacityError> for TranscodeError<E> {
+    /// Converts capacity planning errors into transcode framework errors.
+    #[inline(always)]
+    fn from(error: CapacityError) -> Self {
+        match error {
+            CapacityError::OutputLengthOverflow => Self::OutputLengthOverflow,
+        }
     }
 }

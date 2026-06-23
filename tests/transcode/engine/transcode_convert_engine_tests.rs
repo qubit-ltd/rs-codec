@@ -15,6 +15,8 @@ use core::{
 use qubit_codec::{
     CapacityError,
     Codec,
+    CodecDecodeFlushError,
+    CodecEncodeResetError,
     DecodeContext,
     DecodeInvalidAction,
     EncodeContext,
@@ -24,6 +26,7 @@ use qubit_codec::{
     TranscodeDecodeHooks,
     TranscodeEncodeHooks,
     TranscodeError,
+    TranscodeProgress,
     TranscodeStatus,
     Transcoder,
 };
@@ -55,6 +58,32 @@ enum EngineError {
 impl From<core::convert::Infallible> for EngineError {
     fn from(error: core::convert::Infallible) -> Self {
         match error {}
+    }
+}
+
+impl From<CodecDecodeFlushError<core::convert::Infallible>> for EngineError {
+    #[allow(unreachable_code)]
+    fn from(error: CodecDecodeFlushError<core::convert::Infallible>) -> Self {
+        match error.into_source() {}
+    }
+}
+
+impl From<CodecEncodeResetError<core::convert::Infallible>> for EngineError {
+    #[allow(unreachable_code)]
+    fn from(error: CodecEncodeResetError<core::convert::Infallible>) -> Self {
+        match error.into_source() {}
+    }
+}
+
+impl From<CodecDecodeFlushError<EngineError>> for EngineError {
+    fn from(error: CodecDecodeFlushError<EngineError>) -> Self {
+        error.into_source()
+    }
+}
+
+impl From<CodecEncodeResetError<EngineError>> for EngineError {
+    fn from(error: CodecEncodeResetError<EngineError>) -> Self {
+        error.into_source()
     }
 }
 
@@ -195,6 +224,14 @@ struct ResetFailTargetCodec;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("target reset failed")]
 struct TargetResetFailError;
+
+impl From<CodecEncodeResetError<TargetResetFailError>>
+    for TargetResetFailError
+{
+    fn from(error: CodecEncodeResetError<TargetResetFailError>) -> Self {
+        error.into_source()
+    }
+}
 
 impl Codec for ResetFailTargetCodec {
     type Value = u8;
@@ -1263,38 +1300,62 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
 
 #[test]
 fn test_buffered_convert_engine_implements_transcoder() {
+    type EngineResult<T> =
+        Result<T, TranscodeError<ConvertEngineError<EngineError>>>;
+    type TranscodeFn = fn(
+        &mut CopyConvertEngine,
+        &[u8],
+        usize,
+        &mut [u8],
+        usize,
+    ) -> EngineResult<TranscodeProgress>;
+    type OutputFn =
+        fn(&mut CopyConvertEngine, &mut [u8], usize) -> EngineResult<usize>;
+
     let mut engine = new_copy_engine();
     let mut output = [0_u8; 2];
+    let max_output_len: fn(
+        &CopyConvertEngine,
+        usize,
+    ) -> Result<usize, CapacityError> = std::hint::black_box(
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_output_len,
+    );
+    let max_finish_output_len: fn(
+        &CopyConvertEngine,
+    ) -> Result<usize, CapacityError> = std::hint::black_box(
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_finish_output_len,
+    );
+    let max_reset_output_len: fn(
+        &CopyConvertEngine,
+    ) -> Result<usize, CapacityError> = std::hint::black_box(
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_reset_output_len,
+    );
+    let transcode: TranscodeFn = std::hint::black_box(
+        <CopyConvertEngine as Transcoder<u8, u8>>::transcode,
+    );
+    let reset: OutputFn =
+        std::hint::black_box(<CopyConvertEngine as Transcoder<u8, u8>>::reset);
+    let finish: OutputFn =
+        std::hint::black_box(<CopyConvertEngine as Transcoder<u8, u8>>::finish);
 
-    assert_eq!(
-        Ok(2),
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_output_len(&engine, 2),
-    );
-    assert_eq!(
-        Ok(0),
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_finish_output_len(
-            &engine,
-        ),
-    );
-    assert_eq!(
-        Ok(0),
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_reset_output_len(
-            &engine,
-        ),
-    );
-    let progress =
-        <CopyConvertEngine as Transcoder<u8, u8>>::transcode(
-            &mut engine,
-            &[3, 4],
-            0,
-            &mut output,
-            0,
-        )
+    assert_eq!(Ok(2), max_output_len(&engine, 2));
+    assert_eq!(Ok(0), max_finish_output_len(&engine));
+    assert_eq!(Ok(0), max_reset_output_len(&engine));
+    let progress = transcode(&mut engine, &[3, 4], 0, &mut output, 0)
         .expect("engine should convert through the trait");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((2, 2), (progress.read(), progress.written()));
     assert_eq!([4, 5], output);
+
+    let mut empty_output = [0_u8; 0];
+    let reset = reset(&mut engine, &mut empty_output, 0)
+        .expect("engine should reset through the trait");
+    let finished = finish(&mut engine, &mut empty_output, 0)
+        .expect("engine should finish through the trait");
+
+    assert_eq!(0, reset);
+    assert_eq!(0, finished);
 }
 
 #[test]

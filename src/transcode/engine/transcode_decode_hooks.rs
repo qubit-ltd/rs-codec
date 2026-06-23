@@ -129,10 +129,10 @@ where
 {
     /// Domain error type returned by the buffered decoder policy.
     ///
-    /// The error type must also accept codec decode errors so the engine can
-    /// report lifecycle failures such as [`Codec::decode_flush`] without a
-    /// hook-specific mapping method.
-    type Error: From<C::DecodeError>;
+    /// Engine methods that call decode lifecycle hooks, such as
+    /// [`crate::TranscodeDecodeEngine::finish`], require this type to accept
+    /// [`crate::CodecDecodeFlushError`] through [`From`].
+    type Error;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.

@@ -58,12 +58,10 @@ impl Codec for PlainCodec {
 #[test]
 fn test_codec_decode_failure_reports_incomplete_control_flow() {
     let required_total = qubit_io::nz!(3);
-    let failure = CodecDecodeFailure::<DomainDecodeError>::incomplete(required_total);
+    let failure =
+        CodecDecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
-    assert_eq!(
-        CodecDecodeFailure::Incomplete { required_total },
-        failure
-    );
+    assert_eq!(CodecDecodeFailure::Incomplete { required_total }, failure);
     assert_eq!(Some(required_total), failure.required_total());
     assert_eq!(None, failure.invalid_source());
     assert_eq!(None, failure.consumed_units());

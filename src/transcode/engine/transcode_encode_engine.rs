@@ -12,6 +12,7 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecEncodeResetError,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
@@ -230,10 +231,11 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self
-            .max_reset_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+    ) -> Result<usize, TranscodeError<H::Error>>
+    where
+        H::Error: From<CodecEncodeResetError<C::EncodeError>>,
+    {
+        let required = self.max_reset_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -245,7 +247,11 @@ where
             // reset-output bound at `output_index`.
             self.codec.encode_reset(output, output_index)
         }
-        .map_err(|error| TranscodeError::domain(H::Error::from(error)))?;
+        .map_err(|error| {
+            TranscodeError::domain(H::Error::from(CodecEncodeResetError::new(
+                error,
+            )))
+        })?;
         assert!(
             written <= required,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -337,9 +343,7 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self
-            .max_finish_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+        let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -377,6 +381,7 @@ impl<C, H> Transcoder<C::Value, C::Unit> for TranscodeEncodeEngine<C, H>
 where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
+    H::Error: From<CodecEncodeResetError<C::EncodeError>>,
 {
     type Error = H::Error;
 

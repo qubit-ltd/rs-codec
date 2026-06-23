@@ -18,6 +18,7 @@ use crate::{
     CapacityError,
     Codec,
     CodecDecodeFailure,
+    CodecDecodeFlushError,
     DecodeContext,
     TranscodeDecodeHooks,
     TranscodeError,
@@ -349,17 +350,22 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>> {
-        let required = self
-            .max_finish_output_len()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+    ) -> Result<usize, TranscodeError<H::Error>>
+    where
+        H::Error: From<CodecDecodeFlushError<C::DecodeError>>,
+    {
+        let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
         let flushed = unsafe { self.codec.decode_flush(output, output_index) }
-            .map_err(|error| TranscodeError::domain(H::Error::from(error)))?;
+            .map_err(|error| {
+                TranscodeError::domain(H::Error::from(
+                    CodecDecodeFlushError::new(error),
+                ))
+            })?;
         assert!(
             flushed <= C::MAX_DECODE_FLUSH_VALUES,
             "Codec::decode_flush wrote beyond its flush bound",
@@ -467,6 +473,7 @@ impl<C, H> Transcoder<C::Unit, C::Value> for TranscodeDecodeEngine<C, H>
 where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
+    H::Error: From<CodecDecodeFlushError<C::DecodeError>>,
 {
     type Error = H::Error;
 

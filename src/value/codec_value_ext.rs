@@ -14,7 +14,9 @@ use crate::{
     Codec,
     CodecDecodeError,
     CodecDecodeFailure,
+    CodecDecodeFlushError,
     CodecEncodeError,
+    CodecEncodeResetError,
 };
 
 /// Extension trait for checked one-value codec operations.
@@ -74,8 +76,8 @@ pub trait CodecValueExt: Codec {
     /// [`CodecEncodeError::InsufficientOutput`] when the writable
     /// suffix cannot hold the reset output plus exact encoded value width,
     /// [`CodecEncodeError::OutputLengthOverflow`] when the bound
-    /// overflows, or [`CodecEncodeError::Encode`] when reset or value encoding
-    /// fails.
+    /// overflows, [`CodecEncodeError::EncodeReset`] when reset fails, or
+    /// [`CodecEncodeError::Encode`] when value encoding fails.
     ///
     /// # Panics
     ///
@@ -106,7 +108,9 @@ pub trait CodecValueExt: Codec {
             // reset-plus-value output bound at `output_index`.
             self.encode_reset(output, output_index)
         }
-        .map_err(|error| CodecEncodeError::encode(error, 0))?;
+        .map_err(|error| {
+            CodecEncodeError::from(CodecEncodeResetError::new(error))
+        })?;
         assert!(
             reset_written <= reset_units,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -152,7 +156,8 @@ pub trait CodecValueExt: Codec {
     /// [`CodecDecodeError::InvalidOutputIndex`] or
     /// [`CodecDecodeError::InsufficientOutput`] when flush output
     /// cannot hold [`Codec::MAX_DECODE_FLUSH_VALUES`], or
-    /// [`CodecDecodeError::Decode`] when decoding or flushing fails.
+    /// [`CodecDecodeError::Decode`] when decoding fails, or
+    /// [`CodecDecodeError::DecodeFlush`] when flushing fails.
     ///
     /// # Panics
     ///
@@ -203,7 +208,7 @@ pub trait CodecValueExt: Codec {
             self.decode_flush(flush_output, flush_output_index)
         }
         .map_err(|error| {
-            CodecDecodeError::decode(error, input_index + consumed.get())
+            CodecDecodeError::from(CodecDecodeFlushError::new(error))
         })?;
         assert!(
             flushed <= flush_cap,
@@ -236,7 +241,8 @@ pub trait CodecValueExt: Codec {
     /// [`Codec::MIN_UNITS_PER_VALUE`] units are available,
     /// [`CodecDecodeError::TrailingInput`] when decode succeeds but leaves
     /// extra units, output-capacity errors for invalid flush storage, or
-    /// [`CodecDecodeError::Decode`] when decoding or flushing fails.
+    /// [`CodecDecodeError::Decode`] when decoding fails, or
+    /// [`CodecDecodeError::DecodeFlush`] when flushing fails.
     ///
     /// # Panics
     ///
@@ -278,7 +284,9 @@ pub trait CodecValueExt: Codec {
             // output bound at `flush_output_index`.
             self.decode_flush(flush_output, flush_output_index)
         }
-        .map_err(|error| CodecDecodeError::decode(error, consumed.get()))?;
+        .map_err(|error| {
+            CodecDecodeError::from(CodecDecodeFlushError::new(error))
+        })?;
         assert!(
             flushed <= flush_cap,
             "Codec::decode_flush wrote beyond its flush bound",
@@ -297,7 +305,11 @@ fn map_decode_failure<E>(
 ) -> CodecDecodeError<E> {
     match failure {
         CodecDecodeFailure::Incomplete { required_total } => {
-            CodecDecodeError::incomplete(input_index, required_total.get(), available)
+            CodecDecodeError::incomplete(
+                input_index,
+                required_total.get(),
+                available,
+            )
         }
         CodecDecodeFailure::Invalid { source, .. } => {
             CodecDecodeError::decode(source, input_index)

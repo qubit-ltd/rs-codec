@@ -119,10 +119,10 @@ where
 {
     /// Domain error type returned by the buffered encoder policy.
     ///
-    /// The error type must also accept codec encode errors so the engine can
-    /// report lifecycle failures such as [`Codec::encode_reset`] without a
-    /// hook-specific mapping method.
-    type Error: From<C::EncodeError>;
+    /// Engine methods that call encode lifecycle hooks, such as
+    /// [`crate::TranscodeEncodeEngine::reset`], require this type to accept
+    /// [`crate::CodecEncodeResetError`] through [`From`].
+    type Error;
 
     /// Returns the maximum output units needed for `input_len` values.
     ///

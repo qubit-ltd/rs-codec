@@ -14,6 +14,7 @@ use core::{
 
 use qubit_codec::{
     Codec,
+    CodecDecodeFlushError,
     DecodeContext,
     DecodeInvalidAction,
     TranscodeDecodeEngine,
@@ -60,9 +61,9 @@ impl Codec for PrefixCodec {
         // SAFETY: The caller guarantees that `index` is readable.
         let first = unsafe { *input.as_ptr().add(index) };
         match first {
-            0xfe if input.len() - index < 2 => {
-                Err(qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)))
-            }
+            0xfe if input.len() - index < 2 => Err(
+                qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)),
+            ),
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(index + 1) };
@@ -202,9 +203,34 @@ impl From<PrefixDecodeError> for EngineError {
     }
 }
 
+impl From<CodecDecodeFlushError<PrefixDecodeError>> for EngineError {
+    fn from(error: CodecDecodeFlushError<PrefixDecodeError>) -> Self {
+        Self::from(error.into_source())
+    }
+}
+
 impl From<HintOnlyDecodeError> for EngineError {
     fn from(_error: HintOnlyDecodeError) -> Self {
         Self::Decode
+    }
+}
+
+impl From<CodecDecodeFlushError<HintOnlyDecodeError>> for EngineError {
+    fn from(error: CodecDecodeFlushError<HintOnlyDecodeError>) -> Self {
+        Self::from(error.into_source())
+    }
+}
+
+impl From<CodecDecodeFlushError<core::convert::Infallible>> for EngineError {
+    #[allow(unreachable_code)]
+    fn from(error: CodecDecodeFlushError<core::convert::Infallible>) -> Self {
+        match error.into_source() {}
+    }
+}
+
+impl From<CodecDecodeFlushError<PrefixDecodeError>> for PrefixDecodeError {
+    fn from(error: CodecDecodeFlushError<PrefixDecodeError>) -> Self {
+        error.into_source()
     }
 }
 
@@ -1135,9 +1161,8 @@ fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
     );
 
     assert_eq!(
-        TranscodeError::Domain(qubit_codec::CodecDecodeError::Decode {
+        TranscodeError::Domain(qubit_codec::CodecDecodeError::DecodeFlush {
             source: FlushFailError,
-            input_index: 0,
         }),
         error,
     );

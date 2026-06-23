@@ -8,7 +8,10 @@
 
 use core::error::Error;
 
-use qubit_codec::TranscodeError;
+use qubit_codec::{
+    CapacityError,
+    TranscodeError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain failure")]
@@ -37,6 +40,14 @@ fn test_transcode_error_domain_helpers() {
         None,
         TranscodeError::<&'static str>::output_length_overflow().domain_ref(),
     );
+}
+
+#[test]
+fn test_transcode_error_converts_capacity_error() {
+    let error: TranscodeError<DomainError> =
+        CapacityError::OutputLengthOverflow.into();
+
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
 }
 
 #[test]

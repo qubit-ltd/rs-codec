@@ -6,10 +6,23 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::CodecEncodeError;
+use qubit_codec::{
+    CapacityError,
+    CodecEncodeError,
+    CodecEncodeResetError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TestEncodeError;
+
+impl core::fmt::Display for TestEncodeError {
+    fn fmt(
+        &self,
+        formatter: &mut core::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        formatter.write_str("test encode error")
+    }
+}
 
 #[test]
 fn test_codec_encode_error_wraps_codec_error() {
@@ -22,6 +35,26 @@ fn test_codec_encode_error_wraps_codec_error() {
         },
         error,
     );
+}
+
+#[test]
+fn test_codec_encode_error_wraps_encode_reset_error() {
+    let lifecycle = CodecEncodeResetError::new(TestEncodeError);
+    assert_eq!(TestEncodeError, *lifecycle.source());
+
+    let error: CodecEncodeError<TestEncodeError> = lifecycle.into();
+
+    assert_eq!(
+        CodecEncodeError::EncodeReset {
+            source: TestEncodeError,
+        },
+        error,
+    );
+    assert!(error.to_string().contains("codec encode reset error"));
+
+    let lifecycle: CodecEncodeResetError<TestEncodeError> =
+        TestEncodeError.into();
+    assert_eq!(TestEncodeError, lifecycle.into_source());
 }
 
 #[test]
@@ -86,6 +119,14 @@ fn test_codec_encode_error_reports_output_length_overflow() {
             .to_string()
             .contains("output length arithmetic overflow")
     );
+}
+
+#[test]
+fn test_codec_encode_error_converts_capacity_error() {
+    let error: CodecEncodeError<TestEncodeError> =
+        CapacityError::OutputLengthOverflow.into();
+
+    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
 }
 
 #[test]

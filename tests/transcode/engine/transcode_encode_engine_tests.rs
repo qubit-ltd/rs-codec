@@ -10,11 +10,13 @@
 use qubit_codec::{
     CapacityError,
     Codec,
+    CodecEncodeResetError,
     EncodeContext,
     EncodeOutcome,
     TranscodeEncodeEngine,
     TranscodeEncodeHooks,
     TranscodeError,
+    TranscodeProgress,
     TranscodeStatus,
     Transcoder,
 };
@@ -73,6 +75,13 @@ enum EngineError {
 impl From<core::convert::Infallible> for EngineError {
     fn from(error: core::convert::Infallible) -> Self {
         match error {}
+    }
+}
+
+impl From<CodecEncodeResetError<core::convert::Infallible>> for EngineError {
+    #[allow(unreachable_code)]
+    fn from(error: CodecEncodeResetError<core::convert::Infallible>) -> Self {
+        match error.into_source() {}
     }
 }
 
@@ -135,6 +144,40 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
     ) -> Result<EncodeOutcome, Self::Error> {
         Err(EngineError::Rejected {
             input_index: context.input_index,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FailingFinishHooks;
+
+impl TranscodeEncodeHooks<WideCodec> for FailingFinishHooks {
+    type Error = EngineError;
+
+    fn encode_value(
+        &mut self,
+        _codec: &mut WideCodec,
+        context: EncodeContext<'_, u8, u8>,
+    ) -> Result<EncodeOutcome, Self::Error> {
+        if context.available_output() < 1 {
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
+        }
+        context.output[context.output_index] = *context.input_value;
+        Ok(EncodeOutcome::consumed(1))
+    }
+
+    fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
+        1
+    }
+
+    fn finish(
+        &mut self,
+        _codec: &mut WideCodec,
+        _output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Err(EngineError::Rejected {
+            input_index: output_index,
         })
     }
 }
@@ -334,41 +377,71 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
 
 #[test]
 fn test_buffered_encode_engine_implements_transcoder() {
+    type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
+    type EngineResult<T> = Result<T, TranscodeError<EngineError>>;
+    type TranscodeFn = fn(
+        &mut Engine,
+        &[u8],
+        usize,
+        &mut [u8],
+        usize,
+    ) -> EngineResult<TranscodeProgress>;
+    type OutputFn = fn(&mut Engine, &mut [u8], usize) -> EngineResult<usize>;
+
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
     let mut output = [0_u8; 2];
+    let max_output_len: fn(&Engine, usize) -> Result<usize, CapacityError> =
+        std::hint::black_box(<Engine as Transcoder<u8, u8>>::max_output_len);
+    let max_finish_output_len: fn(&Engine) -> Result<usize, CapacityError> =
+        std::hint::black_box(
+            <Engine as Transcoder<u8, u8>>::max_finish_output_len,
+        );
+    let max_reset_output_len: fn(&Engine) -> Result<usize, CapacityError> =
+        std::hint::black_box(
+            <Engine as Transcoder<u8, u8>>::max_reset_output_len,
+        );
+    let transcode: TranscodeFn =
+        std::hint::black_box(<Engine as Transcoder<u8, u8>>::transcode);
+    let reset: OutputFn =
+        std::hint::black_box(<Engine as Transcoder<u8, u8>>::reset);
+    let finish: OutputFn =
+        std::hint::black_box(<Engine as Transcoder<u8, u8>>::finish);
 
-    assert_eq!(
-        Ok(8),
-        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
-            u8,
-            u8,
-        >>::max_output_len(&encoder, 2),
-    );
-    assert_eq!(
-        Ok(0),
-        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
-            u8,
-            u8,
-        >>::max_finish_output_len(&encoder),
-    );
-    assert_eq!(
-        Ok(0),
-        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
-            u8,
-            u8,
-        >>::max_reset_output_len(&encoder),
-    );
-    let progress =
-        <TranscodeEncodeEngine<WideCodec, ExactWidthHooks> as Transcoder<
-            u8,
-            u8,
-        >>::transcode(&mut encoder, &[1, 2], 0, &mut output, 0)
+    assert_eq!(Ok(8), max_output_len(&encoder, 2));
+    assert_eq!(Ok(0), max_finish_output_len(&encoder));
+    assert_eq!(Ok(0), max_reset_output_len(&encoder));
+    let progress = transcode(&mut encoder, &[1, 2], 0, &mut output, 0)
         .expect("engine should transcode through the trait");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((2, 2), (progress.read(), progress.written()));
     assert_eq!([11, 12], output);
+
+    let mut empty_output = [0_u8; 0];
+    let reset = reset(&mut encoder, &mut empty_output, 0)
+        .expect("engine should reset through the trait");
+    let finished = finish(&mut encoder, &mut empty_output, 0)
+        .expect("engine should finish through the trait");
+
+    assert_eq!(0, reset);
+    assert_eq!(0, finished);
+}
+
+#[test]
+fn test_buffered_encode_engine_finish_maps_hook_errors() {
+    let mut encoder =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, FailingFinishHooks);
+    let mut output = [0_u8; 1];
+
+    let error = encoder
+        .finish(&mut output, 0)
+        .expect_err("finish hook error should be propagated");
+
+    assert_eq!(
+        TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
+        error,
+    );
 }
 
 #[test]
@@ -598,6 +671,12 @@ struct ResetFailCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
+impl From<CodecEncodeResetError<ResetFailError>> for ResetFailError {
+    fn from(error: CodecEncodeResetError<ResetFailError>) -> Self {
+        error.into_source()
+    }
+}
+
 impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
@@ -680,7 +759,7 @@ fn test_buffered_encode_engine_default_builds_engine() {
 struct ResetPassthroughHooks;
 
 impl TranscodeEncodeHooks<ResetEmittingCodec> for ResetPassthroughHooks {
-    type Error = core::convert::Infallible;
+    type Error = EngineError;
 
     fn encode_value(
         &mut self,

@@ -13,6 +13,10 @@ use qubit_codec::{
     CodecValueDecoder,
     ValueDecoder,
 };
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
@@ -301,6 +305,69 @@ impl Codec for StatefulLifecycleCodec {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct CountingFlushValue(u8);
+
+static COUNTING_FLUSH_DEFAULTS: AtomicUsize = AtomicUsize::new(0);
+
+impl Default for CountingFlushValue {
+    fn default() -> Self {
+        COUNTING_FLUSH_DEFAULTS.fetch_add(1, Ordering::SeqCst);
+        Self(0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CountingFlushCodec;
+
+impl Codec for CountingFlushCodec {
+    type Value = CountingFlushValue;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_DECODE_FLUSH_VALUES: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<
+        (CountingFlushValue, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
+        Ok((
+            CountingFlushValue(input[index]),
+            core::num::NonZeroUsize::MIN,
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &CountingFlushValue,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[index] = value.0;
+        Ok(qubit_io::nz!(1))
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        output: &mut [CountingFlushValue],
+        index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        output[index] = CountingFlushValue(0);
+        Ok(1)
+    }
+}
+
 #[test]
 fn test_codec_value_decoder_flushes_decode_state_after_success() {
     let mut decoder = CodecValueDecoder::<StatefulLifecycleCodec>::new(
@@ -317,6 +384,22 @@ fn test_codec_value_decoder_flushes_decode_state_after_success() {
 }
 
 #[test]
+fn test_codec_value_decoder_reuses_flush_scratch() {
+    COUNTING_FLUSH_DEFAULTS.store(0, Ordering::SeqCst);
+    let mut decoder =
+        CodecValueDecoder::<CountingFlushCodec>::new(CountingFlushCodec);
+
+    let first = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect("first decode should succeed");
+    let second = ValueDecoder::<[u8]>::decode(&mut decoder, &[8])
+        .expect("second decode should succeed");
+
+    assert_eq!(CountingFlushValue(7), first);
+    assert_eq!(CountingFlushValue(8), second);
+    assert_eq!(1, COUNTING_FLUSH_DEFAULTS.load(Ordering::SeqCst));
+}
+
+#[test]
 fn test_codec_value_decoder_decodes_exactly_one_value() {
     let mut decoder =
         CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
@@ -325,6 +408,19 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
         .expect("single byte should decode");
 
     assert_eq!(7, output);
+}
+
+#[test]
+fn test_codec_value_decoder_default_and_debug_do_not_require_value_debug() {
+    let mut decoder = CodecValueDecoder::<SingleByteCodec>::default();
+
+    let output = ValueDecoder::<[u8]>::decode(&mut decoder, &[9])
+        .expect("default decoder should decode");
+    let debug = format!("{decoder:?}");
+
+    assert_eq!(9, output);
+    assert!(debug.contains("CodecValueDecoder"));
+    assert!(debug.contains("flush_scratch_len"));
 }
 
 #[test]
@@ -397,9 +493,8 @@ fn test_codec_value_decoder_wraps_stateless_decode_flush_error() {
         .expect_err("stateless flush failure should be wrapped");
 
     assert_eq!(
-        CodecDecodeError::Decode {
+        CodecDecodeError::DecodeFlush {
             source: TestDecodeError::FlushFailed,
-            input_index: 1,
         },
         error,
     );
@@ -415,9 +510,8 @@ fn test_codec_value_decoder_wraps_stateful_decode_flush_error() {
         .expect_err("stateful flush failure should be wrapped");
 
     assert_eq!(
-        CodecDecodeError::Decode {
+        CodecDecodeError::DecodeFlush {
             source: TestDecodeError::FlushFailed,
-            input_index: 1,
         },
         error,
     );

@@ -141,9 +141,8 @@ fn test_codec_transcode_decode_hooks_wraps_decode_flush_errors() {
         .expect_err("flush errors should be wrapped");
 
     assert_eq!(
-        TranscodeError::Domain(CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecDecodeError::DecodeFlush {
             source: FlushFailError,
-            input_index: 0,
         }),
         error,
     );

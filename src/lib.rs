@@ -35,7 +35,9 @@ pub use codec::{
     CodecConvertError,
     CodecDecodeError,
     CodecDecodeFailure,
+    CodecDecodeFlushError,
     CodecEncodeError,
+    CodecEncodeResetError,
 };
 pub use transcode::{
     CapacityError,
