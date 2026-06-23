@@ -8,7 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::{DecodeAction, DecodeContext, TranscodeDecodeHooks};
+use qubit_codec::{DecodeContext, DecodeInvalidAction, TranscodeDecodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -53,13 +53,13 @@ struct DefaultOnlyHooks;
 impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
     type Error = UnitDecodeError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut UnitCodec,
         error: UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         Err(error)
     }
 }

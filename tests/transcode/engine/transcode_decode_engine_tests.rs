@@ -10,7 +10,7 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::{
-    Codec, DecodeAction, DecodeContext, TranscodeDecodeEngine, TranscodeDecodeHooks,
+    Codec, DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks,
     TranscodeError, TranscodeStatus, Transcoder,
 };
 
@@ -171,15 +171,15 @@ struct ReplacingHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
     type Error = EngineError;
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
             }),
@@ -193,13 +193,13 @@ struct OverconsumingHooks;
 impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverconsumingCodec,
         error: core::convert::Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {}
     }
 }
@@ -210,15 +210,15 @@ struct SkippingHooks;
 impl TranscodeDecodeHooks<PrefixCodec> for SkippingHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
         }
@@ -231,15 +231,15 @@ struct HintOnlySkippingHooks;
 impl TranscodeDecodeHooks<HintOnlyCodec> for HintOnlySkippingHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut HintOnlyCodec,
         error: HintOnlyDecodeError,
         consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            HintOnlyDecodeError::Invalid => Ok(DecodeAction::Skip {
+            HintOnlyDecodeError::Invalid => Ok(DecodeInvalidAction::Skip {
                 consumed: consumed.expect("codec should report invalid width"),
             }),
         }
@@ -262,15 +262,15 @@ impl Default for FinishHooks {
 impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
         }
@@ -297,35 +297,31 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum InvalidDecodeActionKind {
-    NeedInput,
+enum InvalidDecodeInvalidActionKind {
     Skip,
     Emit,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct InvalidDecodeActionHooks {
-    kind: InvalidDecodeActionKind,
+struct InvalidDecodeInvalidActionHooks {
+    kind: InvalidDecodeInvalidActionKind,
 }
 
-impl TranscodeDecodeHooks<PrefixCodec> for InvalidDecodeActionHooks {
+impl TranscodeDecodeHooks<PrefixCodec> for InvalidDecodeInvalidActionHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         _error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match self.kind {
-            InvalidDecodeActionKind::NeedInput => Ok(DecodeAction::NeedInput {
-                required_total: context.available(),
-            }),
-            InvalidDecodeActionKind::Skip => Ok(DecodeAction::Skip {
+            InvalidDecodeInvalidActionKind::Skip => Ok(DecodeInvalidAction::Skip {
                 consumed: non_zero_consumed(context.available() + 1),
             }),
-            InvalidDecodeActionKind::Emit => Ok(DecodeAction::Emit {
+            InvalidDecodeInvalidActionKind::Emit => Ok(DecodeInvalidAction::Emit {
                 value: 77,
                 consumed: non_zero_consumed(context.available() + 1),
             }),
@@ -339,15 +335,15 @@ struct OverwritingFinishHooks;
 impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
         }
@@ -375,15 +371,15 @@ struct OverreportingFinishHooks;
 impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Skip {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Skip {
                 consumed: non_zero_consumed(consumed),
             }),
         }
@@ -488,13 +484,13 @@ impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
         1
     }
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverflowFlushCodec,
         error: core::convert::Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {}
     }
 }
@@ -502,15 +498,15 @@ impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
 impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
     type Error = EngineError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut MinTwoCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         match error {
-            PrefixDecodeError::Invalid { consumed } => Ok(DecodeAction::Emit {
+            PrefixDecodeError::Invalid { consumed } => Ok(DecodeInvalidAction::Emit {
                 value: 99,
                 consumed: non_zero_consumed(consumed),
             }),
@@ -780,26 +776,12 @@ fn test_transcode_decode_engine_passes_invalid_consumed_hint_to_hooks() {
 }
 
 #[test]
-#[should_panic(expected = "DecodeAction::NeedInput required_total must exceed available input")]
-fn test_transcode_decode_engine_panics_on_invalid_need_input_action() {
-    let mut decoder = TranscodeDecodeEngine::new(
-        PrefixCodec,
-        InvalidDecodeActionHooks {
-            kind: InvalidDecodeActionKind::NeedInput,
-        },
-    );
-    let mut output = [0_u8; 1];
-
-    let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
-}
-
-#[test]
-#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
+#[should_panic(expected = "DecodeInvalidAction consumed units must not exceed available input")]
 fn test_transcode_decode_engine_panics_on_invalid_skip_action() {
     let mut decoder = TranscodeDecodeEngine::new(
         PrefixCodec,
-        InvalidDecodeActionHooks {
-            kind: InvalidDecodeActionKind::Skip,
+        InvalidDecodeInvalidActionHooks {
+            kind: InvalidDecodeInvalidActionKind::Skip,
         },
     );
     let mut output = [0_u8; 1];
@@ -808,12 +790,12 @@ fn test_transcode_decode_engine_panics_on_invalid_skip_action() {
 }
 
 #[test]
-#[should_panic(expected = "DecodeAction consumed units must not exceed available input")]
+#[should_panic(expected = "DecodeInvalidAction consumed units must not exceed available input")]
 fn test_transcode_decode_engine_panics_on_invalid_emit_action() {
     let mut decoder = TranscodeDecodeEngine::new(
         PrefixCodec,
-        InvalidDecodeActionHooks {
-            kind: InvalidDecodeActionKind::Emit,
+        InvalidDecodeInvalidActionHooks {
+            kind: InvalidDecodeInvalidActionKind::Emit,
         },
     );
     let mut output = [0_u8; 1];
@@ -967,13 +949,13 @@ struct FlushMappingHooks;
 impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
     type Error = qubit_codec::CodecDecodeError<FlushFailError>;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut FlushFailCodec,
         error: FlushFailError,
         _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         Err(qubit_codec::CodecDecodeError::decode(
             error,
             context.input_index(),
@@ -995,13 +977,13 @@ struct ResetFailHooks;
 impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
     type Error = PrefixDecodeError;
 
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut PrefixCodec,
         error: PrefixDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeAction<u8>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
         Err(error)
     }
 

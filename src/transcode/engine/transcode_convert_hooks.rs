@@ -7,18 +7,14 @@
 // =============================================================================
 //! Policy hooks used by buffered convert engines.
 
-use super::{
-    transcode_decode_hooks::TranscodeDecodeHooks, transcode_encode_hooks::TranscodeEncodeHooks,
-};
 use crate::Codec;
 
-/// Policy hooks for [`crate::TranscodeConvertEngine`].
+/// Error mapping hooks for [`crate::TranscodeConvertEngine`].
 ///
-/// Convert hooks no longer own decoded pending values or the conversion loop.
-/// The engine owns source/target cursor state, retained decoded values, output
-/// capacity checks, and final progress reporting. Hooks only select the
-/// decode/encode policies used by the internal buffered engines and map their
-/// errors into one converter-level error type.
+/// Convert hooks no longer create decode or encode policy hooks. The converter
+/// engine owns those components directly. This trait only maps decode-side and
+/// encode-side errors into one converter-level error type, plus optional
+/// conversion-level reset state.
 ///
 /// # Type Parameters
 ///
@@ -37,36 +33,6 @@ where
 
     /// Error type returned by the selected encode hooks.
     type EncodeError;
-
-    /// Decode policy hooks used by the internal buffered decoder.
-    type DecodeHooks: TranscodeDecodeHooks<D, Error = Self::DecodeError>;
-
-    /// Encode policy hooks used by the internal buffered encoder.
-    type EncodeHooks: TranscodeEncodeHooks<E, Error = Self::EncodeError>;
-
-    /// Creates decode policy hooks for the internal buffered decoder.
-    ///
-    /// # Parameters
-    ///
-    /// - `decode_codec`: Source codec owned by the converter engine.
-    /// - `encode_codec`: Target codec owned by the converter engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns the decode hooks used by the internal buffered decoder.
-    fn create_decode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::DecodeHooks;
-
-    /// Creates encode policy hooks for the internal buffered encoder.
-    ///
-    /// # Parameters
-    ///
-    /// - `decode_codec`: Source codec owned by the converter engine.
-    /// - `encode_codec`: Target codec owned by the converter engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns the encode hooks used by the internal buffered encoder.
-    fn create_encode_hooks(&self, decode_codec: &D, encode_codec: &E) -> Self::EncodeHooks;
 
     /// Maps a decode-engine error into the converter error type.
     ///

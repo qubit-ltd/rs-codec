@@ -9,6 +9,8 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_io::UncheckedSlice;
+
 use super::super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
 use super::cursor_state::CursorState;
 use super::encode_step::EncodeStep;
@@ -77,7 +79,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
         let value =
-            unsafe { qubit_io::UncheckedSlice::get(self.input, self.cursor.input_cursor()) };
+            unsafe { UncheckedSlice::get(self.input, self.cursor.input_cursor()) };
         EncodeContext {
             input_value: value,
             input_index: self.cursor.input_cursor(),

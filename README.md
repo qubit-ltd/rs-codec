@@ -22,10 +22,10 @@ This crate provides:
   `CodecTranscodeEncoder`,
   `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodePlan`, and
+- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodeValueResult`, and
   `EncodeContext` for reusing the common buffered encoding loop in policy-aware
   downstream encoders.
-- `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeAction`, and
+- `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
@@ -89,21 +89,20 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`TranscodeEncodeHooks<C>`**: policy hook trait used by
   codec-backed encoders that need custom transcode/finalization behavior while
   sharing the common loop.
-- **`EncodePlan<P>`**: per-value write plan carrying the output capacity bound
-  required before a hook writes one value.
-- **`EncodeContext<'a, Value, Unit>`**: prepared input value, input index,
-  output slice, and cursor passed to encode hooks after the engine has verified
-  output capacity.
+- **`EncodeValueResult`**: result returned by encode hooks for one value:
+  consumed with a written count, or not consumed because more output is needed.
+- **`EncodeContext<'a, Value, Unit>`**: input value, input index, output slice,
+  and cursor passed to encode hooks.
 - **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a
   strict `TranscodeDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
 - **`TranscodeDecodeEngine<C, H>`**: reusable engine that owns a
   codec, policy hooks, and the common decode loop.
 - **`TranscodeDecodeHooks<C>`**: policy hook trait used by
-  codec-backed decoders that need custom malformed/incomplete behavior while
+  codec-backed decoders that need custom invalid-input behavior while
   sharing the common decode loop.
-- **`DecodeAction<Value>`**: hook return value used by decoder engines for
-  transcode-stage policy decisions.
+- **`DecodeInvalidAction<Value>`**: hook return value used by decoder engines
+  for invalid-input policy decisions.
 - **`CodecTranscodeConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
 - **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
@@ -209,18 +208,18 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeEncodeHooks<C>` | Hook contract for planning, writing, resetting, and finalizing encoded output |
-| `EncodePlan<P>` | Prepared per-value capacity bound plus implementation-specific write action |
-| `EncodeContext<'a, Value, Unit>` | Prepared input value, input index, output slice, and cursor passed to encode hooks |
+| `TranscodeEncodeHooks<C>` | Hook contract for encoding one value, resetting, and finalizing encoded output |
+| `EncodeValueResult` | Per-value hook result: consumed with written output, or needs more output without consuming |
+| `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor passed to encode hooks |
 
 ### Decoder Hooks And Engines
 
 | Type | Purpose |
 |------|---------|
 | `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeDecodeHooks<C>` | Hook contract for malformed/incomplete decode policy |
+| `TranscodeDecodeHooks<C>` | Hook contract for invalid-input decode policy |
 | `DecodeContext` | Context passed to decode policy hooks |
-| `DecodeAction<Value>` | Transcode-stage policy action: need input, skip input, or emit a value |
+| `DecodeInvalidAction<Value>` | Invalid-input policy action: skip input or emit a replacement value |
 
 ### `Transcoder` Operations
 

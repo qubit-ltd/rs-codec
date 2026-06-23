@@ -5,44 +5,36 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Decode actions returned by buffered decoder policy hooks.
+//! Invalid-decode actions returned by buffered decoder policy hooks.
 
 use core::num::NonZeroUsize;
 
 use super::internal::decode_step::DecodeStep;
 
-/// Action selected after a codec decode attempt fails during `transcode`.
+/// Action selected after a codec reports invalid encoded input.
+///
+/// Incomplete input is not a policy action. Codecs report it with
+/// [`crate::CodecDecodeFailure::Incomplete`], and the decode engine converts it
+/// directly into [`crate::TranscodeStatus::NeedInput`].
 ///
 /// # Type Parameters
 ///
 /// - `Value`: Decoded output value type.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum DecodeAction<Value> {
-    /// More source units are needed before a value can be produced.
-    ///
-    /// When returned by a decode hook, `required_total` must be greater than
-    /// the hook context's available input count. Returning a value that is
-    /// already satisfied is a hook contract violation and panics in the engine.
-    NeedInput {
-        /// Total units required from the current value start.
-        required_total: usize,
-    },
-
+pub enum DecodeInvalidAction<Value> {
     /// Consume invalid input without producing output.
     ///
-    /// When returned by a decode hook, `consumed` must not exceed the hook
-    /// context's available input count. Over-consuming is a hook contract
-    /// violation and panics in the engine.
+    /// `consumed` must not exceed the hook context's available input count.
+    /// Over-consuming is a hook contract violation and panics in the engine.
     Skip {
         /// Source units to consume.
         consumed: NonZeroUsize,
     },
 
-    /// Produce one value and consume source units.
+    /// Produce one replacement value and consume source units.
     ///
-    /// When returned by a decode hook, `consumed` must not exceed the hook
-    /// context's available input count. Over-consuming is a hook contract
-    /// violation and panics in the engine.
+    /// `consumed` must not exceed the hook context's available input count.
+    /// Over-consuming is a hook contract violation and panics in the engine.
     Emit {
         /// Value to write to the output buffer.
         value: Value,
@@ -51,7 +43,7 @@ pub enum DecodeAction<Value> {
     },
 }
 
-impl<Value> DecodeAction<Value> {
+impl<Value> DecodeInvalidAction<Value> {
     /// Converts this policy action into the normalized internal decode attempt.
     ///
     /// # Parameters
@@ -65,17 +57,11 @@ impl<Value> DecodeAction<Value> {
     ///
     /// # Panics
     ///
-    /// Panics when a hook returns `NeedInput` with `required_total <=
-    /// available` or a consuming action whose consumed count exceeds
-    /// `available`.
+    /// Panics when a consuming action exceeds `available`.
     #[must_use]
     #[inline]
     pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
         match self {
-            Self::NeedInput { required_total } => DecodeStep::need_input(
-                Self::bound_required_total(required_total, available),
-                available,
-            ),
             Self::Skip { consumed } => {
                 DecodeStep::skipped(Self::bound_consumed(consumed, available))
             }
@@ -85,32 +71,6 @@ impl<Value> DecodeAction<Value> {
                 input_index,
             ),
         }
-    }
-
-    /// Validates and returns the total source units required by a need-input
-    /// action.
-    ///
-    /// # Parameters
-    ///
-    /// - `required_total`: Total source units required from the current value
-    ///   start.
-    /// - `available`: Source units already visible at the current value start.
-    ///
-    /// # Returns
-    ///
-    /// Returns a non-zero total source-unit count.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `required_total <= available`.
-    #[must_use]
-    #[inline(always)]
-    fn bound_required_total(required_total: usize, available: usize) -> NonZeroUsize {
-        assert!(
-            required_total > available,
-            "DecodeAction::NeedInput required_total must exceed available input",
-        );
-        qubit_io::nz(required_total)
     }
 
     /// Validates a policy-reported consumed source-unit count against available
@@ -131,10 +91,13 @@ impl<Value> DecodeAction<Value> {
     #[must_use]
     #[inline(always)]
     fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
-        assert!(available > 0, "DecodeAction cannot consume empty input");
+        assert!(
+            available > 0,
+            "DecodeInvalidAction cannot consume empty input",
+        );
         assert!(
             consumed.get() <= available,
-            "DecodeAction consumed units must not exceed available input",
+            "DecodeInvalidAction consumed units must not exceed available input",
         );
         consumed
     }

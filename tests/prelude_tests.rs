@@ -9,7 +9,7 @@
 use qubit_codec::{
     BigEndian, ByteOrder, ByteOrderSpec, Codec, CodecConvertError, CodecDecodeError,
     CodecEncodeError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
-    CodecValueDecoder, CodecValueEncoder, CodecValueExt, EncodeContext, EncodePlan,
+    CodecValueDecoder, CodecValueEncoder, CodecValueExt, EncodeContext, EncodeValueResult,
     TranscodeConvertHooks, TranscodeConverter, TranscodeDecoder, TranscodeEncoder,
     TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder,
 };
@@ -160,9 +160,16 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(0, context.input_index);
     assert_eq!(1, context.available_output());
 
-    let encode_plan = EncodePlan::new(3, "action");
-    assert_eq!(3, encode_plan.max_output_units);
-    assert_eq!("action", encode_plan.action);
+    assert_eq!(
+        EncodeValueResult::consumed(3),
+        EncodeValueResult::Consumed { written: 3 }
+    );
+    assert_eq!(
+        EncodeValueResult::need_output(qubit_io::nz!(4)),
+        EncodeValueResult::NeedOutput {
+            required: qubit_io::nz!(4),
+        },
+    );
 
     let (decoded, consumed) =
         unsafe { Codec::decode(&mut codec, &[1], 0) }.expect("decode should be infallible");

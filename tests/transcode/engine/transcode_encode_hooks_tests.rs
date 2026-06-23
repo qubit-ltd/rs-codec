@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodePlan, TranscodeEncodeHooks};
+use qubit_codec::{EncodeContext, EncodeValueResult, TranscodeEncodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -63,40 +63,24 @@ struct DefaultResetHooks;
 
 impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
     type Error = UnitEncodeError;
-    type PlanAction = ();
 
-    fn prepare_encode(
-        &mut self,
-        _codec: &mut UnitCodec,
-        _input_value: &u8,
-        _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
-        Ok(EncodePlan::new(1, ()))
-    }
-
-    unsafe fn write_encode(
+    fn encode_value(
         &mut self,
         _codec: &mut UnitCodec,
         context: EncodeContext<'_, u8, u8>,
-        _plan: EncodePlan<Self::PlanAction>,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<EncodeValueResult, Self::Error> {
+        if context.available_output() < 1 {
+            return Ok(EncodeValueResult::NeedOutput {
+                required: core::num::NonZeroUsize::MIN,
+            });
+        }
         context.output[context.output_index] = *context.input_value;
-        Ok(1)
+        Ok(EncodeValueResult::Consumed { written: 1 })
     }
 }
 
 impl TranscodeEncodeHooks<UnitCodec> for DefaultResetHooks {
     type Error = UnitEncodeError;
-    type PlanAction = ();
-
-    fn prepare_encode(
-        &mut self,
-        _codec: &mut UnitCodec,
-        _input_value: &u8,
-        _input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
-        Ok(EncodePlan::new(1, ()))
-    }
 
     fn map_encode_reset_error(
         &mut self,
@@ -106,14 +90,18 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultResetHooks {
         error
     }
 
-    unsafe fn write_encode(
+    fn encode_value(
         &mut self,
         _codec: &mut UnitCodec,
         context: EncodeContext<'_, u8, u8>,
-        _plan: EncodePlan<Self::PlanAction>,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<EncodeValueResult, Self::Error> {
+        if context.available_output() < 1 {
+            return Ok(EncodeValueResult::NeedOutput {
+                required: core::num::NonZeroUsize::MIN,
+            });
+        }
         context.output[context.output_index] = *context.input_value;
-        Ok(1)
+        Ok(EncodeValueResult::Consumed { written: 1 })
     }
 }
 

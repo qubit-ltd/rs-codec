@@ -9,13 +9,11 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_io::nz;
-
 use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError, Codec, CodecDecodeFailure, DecodeAction, DecodeContext, TranscodeDecodeHooks,
-    TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError, Codec, CodecDecodeFailure, DecodeContext, DecodeInvalidAction,
+    TranscodeDecodeHooks, TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Reusable buffered decoding engine for codec-backed decoders.
@@ -30,14 +28,14 @@ use crate::{
 /// engine decodes into a caller-provided output slice and returns
 /// [`TranscodeProgress`] instead of allocating. On success it writes decoded
 /// values directly to output. On codec errors it delegates to
-/// [`crate::TranscodeDecodeHooks`], allowing a policy to request more input,
-/// skip invalid units, emit a replacement value, or fail.
+/// [`crate::TranscodeDecodeHooks`], allowing a policy to skip invalid units,
+/// emit a replacement value, or fail.
 ///
 /// The engine stops before reading an incomplete value when fewer than
 /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. For variable-width
 /// codecs, the codec may still return an incomplete decode error after that
-/// minimum is satisfied; hooks should convert that error into
-/// [`crate::DecodeAction::NeedInput`] when the stream may continue.
+/// minimum is satisfied; the engine converts that failure directly into
+/// [`crate::TranscodeStatus::NeedInput`].
 ///
 /// For strict decoding that wraps codec errors, use
 /// [`crate::CodecTranscodeDecoder`]. Use `TranscodeDecodeEngine` directly when
@@ -52,7 +50,7 @@ use crate::{
 ///     Codec,
 ///     CodecDecodeFailure,
 ///     CodecDecodeError,
-///     DecodeAction,
+///     DecodeInvalidAction,
 ///     DecodeContext,
 ///     TranscodeStatus,
 ///     TranscodeDecodeEngine,
@@ -108,16 +106,16 @@ use crate::{
 /// impl TranscodeDecodeHooks<ByteCodec> for ReplacementHooks {
 ///     type Error = CodecDecodeError<ByteDecodeError>;
 ///
-///     fn handle_decode_error(
+///     fn handle_invalid_decode(
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
 ///         error: ByteDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeAction<u8>, Self::Error> {
+///     ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
 ///         match error {
 ///             ByteDecodeError::Malformed { .. } => {
-///                 Ok(DecodeAction::Emit {
+///                 Ok(DecodeInvalidAction::Emit {
 ///                     value: b'?',
 ///                     consumed: consumed.expect("codec reported malformed width"),
 ///                 })
@@ -286,14 +284,13 @@ where
             output_index,
         )?;
 
-        let min_units = C::MIN_UNITS_PER_VALUE.get();
+        let min_units = C::MIN_UNITS_PER_VALUE;
         let mut state = DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
             let available = context.available();
-            if available < min_units {
-                let required = nz!(min_units);
-                return Ok(state.need_input_progress_with(required, available));
+            if available < min_units.get() {
+                return Ok(state.need_input_progress_with(min_units, available));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -364,31 +361,6 @@ where
         Ok(flushed + written)
     }
 
-    /// Lets the configured decode hooks classify a low-level decode error.
-    ///
-    /// # Parameters
-    ///
-    /// - `error`: Decode error returned by [`Codec::decode`].
-    /// - `context`: Decode context used by policy hooks.
-    ///
-    /// # Returns
-    ///
-    /// Returns the decoded action chosen by policy hooks.
-    ///
-    /// # Errors
-    ///
-    /// Returns a hook-level error when the decode policy rejects the value.
-    #[inline(always)]
-    pub(crate) fn handle_decode_error(
-        &mut self,
-        error: C::DecodeError,
-        consumed: Option<NonZeroUsize>,
-        context: DecodeContext,
-    ) -> Result<DecodeAction<C::Value>, H::Error> {
-        self.hooks
-            .handle_decode_error(&mut self.codec, error, consumed, context)
-    }
-
     /// Decodes one source value attempt into a normalized decode step.
     ///
     /// # Parameters
@@ -411,11 +383,10 @@ where
         input: &[C::Unit],
         context: DecodeContext,
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
-        let min_units = C::MIN_UNITS_PER_VALUE.get();
+        let min_units = C::MIN_UNITS_PER_VALUE;
         let available = context.available();
-        if available < min_units {
-            let required = nz!(min_units);
-            return Ok(DecodeStep::need_input(required, available));
+        if available < min_units.get() {
+            return Ok(DecodeStep::need_input(min_units, available));
         }
 
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
@@ -455,16 +426,46 @@ where
                 Ok(DecodeStep::decoded(value, consumed, context.input_index()))
             }
             Err(CodecDecodeFailure::Incomplete { required_total }) => {
-                let action = DecodeAction::NeedInput { required_total };
-                Ok(action.into_step(context.input_index(), context.available()))
+                assert!(
+                    required_total > context.available(),
+                    "Codec::decode incomplete required_total must exceed available input",
+                );
+                let required = NonZeroUsize::new(required_total)
+                    .expect("codec incomplete required_total must be non-zero");
+                Ok(DecodeStep::need_input(required, context.available()))
             }
             Err(CodecDecodeFailure::Invalid { source, consumed }) => {
                 let action = self
-                    .handle_decode_error(source, consumed, context)
+                    .handle_invalid_decode(source, consumed, context)
                     .map_err(TranscodeError::domain)?;
                 Ok(action.into_step(context.input_index(), context.available()))
             }
         }
+    }
+
+    /// Lets the configured decode hooks classify a low-level decode error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Decode error returned by [`Codec::decode`].
+    /// - `context`: Decode context used by policy hooks.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded action chosen by policy hooks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a hook-level error when the decode policy rejects the value.
+    #[inline(always)]
+    pub(crate) fn handle_invalid_decode(
+        &mut self,
+        error: C::DecodeError,
+        consumed: Option<NonZeroUsize>,
+        context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<C::Value>, H::Error> {
+        self.hooks
+            .handle_invalid_decode(&mut self.codec, error, consumed, context)
     }
 }
 

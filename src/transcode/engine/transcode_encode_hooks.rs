@@ -7,8 +7,8 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
-use crate::{CapacityError, Codec};
+use super::super::encode_context::EncodeContext;
+use crate::{CapacityError, Codec, EncodeValueResult};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -22,18 +22,16 @@ use crate::{CapacityError, Codec};
 /// without writing output, writing replacement units, or emitting final state
 /// in [`finish`](Self::finish).
 ///
-/// The engine calls [`prepare_encode`](Self::prepare_encode) before each value
-/// is consumed. The returned [`EncodePlan`] states the required output capacity
-/// and may carry an action computed by the hook. Only after that capacity is
-/// available does the engine call [`write_encode`](Self::write_encode) with the
-/// same cursor context and the prepared plan. This split lets the engine stop
-/// with [`crate::TranscodeStatus::NeedOutput`]
-/// without consuming the next input value.
+/// The engine calls [`encode_value`](Self::encode_value) for the current input
+/// value. The hook either consumes that value and reports written output units,
+/// or returns [`EncodeValueResult::NeedOutput`] without consuming it. This lets
+/// the engine stop with [`crate::TranscodeStatus::NeedOutput`] and resume later
+/// at the same input value.
 ///
 /// # Example
 ///
-/// This hook writes each value with the wrapped codec and uses the codec's
-/// maximum width as the capacity plan.
+/// This hook writes each value with the wrapped codec and reports
+/// `NeedOutput` when the current output slice cannot fit the value.
 ///
 /// ```rust
 /// use core::{
@@ -46,7 +44,7 @@ use crate::{CapacityError, Codec};
 ///     CodecDecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
-///     EncodePlan,
+///     EncodeValueResult,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -87,28 +85,22 @@ use crate::{CapacityError, Codec};
 ///     C: Codec,
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
-///     type PlanAction = ();
 ///
-///     fn prepare_encode(
-///         &mut self,
-///         codec: &mut C,
-///         _value: &C::Value,
-///         _input_index: usize,
-///     ) -> Result<EncodePlan<()>, Self::Error> {
-///         Ok(EncodePlan::new(C::MAX_UNITS_PER_VALUE.get(), ()))
-///     }
-///
-///     unsafe fn write_encode(
+///     fn encode_value(
 ///         &mut self,
 ///         codec: &mut C,
 ///         context: EncodeContext<'_, C::Value, C::Unit>,
-///         _plan: EncodePlan<()>,
-///     ) -> Result<usize, Self::Error> {
-///         unsafe {
+///     ) -> Result<EncodeValueResult, Self::Error> {
+///         let required = C::MAX_UNITS_PER_VALUE;
+///         if context.available_output() < required.get() {
+///             return Ok(EncodeValueResult::need_output(required));
+///         }
+///         let written = unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map(NonZeroUsize::get)
-///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
+///         Ok(EncodeValueResult::consumed(written))
 ///     }
 /// }
 /// ```
@@ -122,9 +114,6 @@ where
 {
     /// Domain error type returned by the buffered encoder policy.
     type Error;
-
-    /// Concrete action stored in [`EncodePlan::action`].
-    type PlanAction;
 
     /// Returns the maximum output units needed for `input_len` values.
     ///
@@ -164,72 +153,6 @@ where
         0
     }
 
-    /// Prepares an encoding plan for one input value.
-    ///
-    /// This method must not write output. It decides the output capacity bound
-    /// needed before [`write_encode`](Self::write_encode) may be called and
-    /// returns an implementation-specific plan action.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `input_value`: Input value being encoded.
-    /// - `input_index`: Absolute input index of `value`.
-    ///
-    /// # Returns
-    ///
-    /// Returns the write plan for `value`.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::Error` when this value cannot be encoded under the hook
-    /// policy.
-    fn prepare_encode(
-        &mut self,
-        codec: &mut C,
-        input_value: &C::Value,
-        input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error>;
-
-    /// Writes one input value according to a previously prepared plan.
-    ///
-    /// This method is called only after the engine has verified that
-    /// [`EncodePlan::max_output_units`] units from `plan` are writable from
-    /// [`EncodeContext::output_index`]. Implementations may rely on that
-    /// capacity guarantee and do not need to report output starvation here. If
-    /// a value needs more output than the plan declared, fix
-    /// [`prepare_encode`](Self::prepare_encode) to return a larger bound.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `context`: Encode-write context containing the input value, input
-    ///   index, output slice, and output cursor.
-    /// - `plan`: Prepared plan returned by
-    ///   [`prepare_encode`](Self::prepare_encode).
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of output units written.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::Error` when writing fails under the hook policy. Output
-    /// capacity exhaustion is handled before this method is called and should
-    /// not be reported as a write error.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that at least the corresponding
-    /// [`EncodePlan::max_output_units`] units are writable from
-    /// [`EncodeContext::output_index`] in [`EncodeContext::output`].
-    unsafe fn write_encode(
-        &mut self,
-        codec: &mut C,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-        plan: EncodePlan<Self::PlanAction>,
-    ) -> Result<usize, Self::Error>;
-
     /// Maps a codec-level reset error into this hook's public error type.
     ///
     /// # Parameters
@@ -253,6 +176,29 @@ where
             "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
         )
     }
+
+    /// Processes one input value at the current output cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `context`: Encode context containing the input value, input index,
+    ///   output slice, and output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns whether the current input value was consumed or needs more
+    /// output capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::Error` when the policy rejects the value or the wrapped
+    /// codec fails while writing it.
+    fn encode_value(
+        &mut self,
+        codec: &mut C,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeValueResult, Self::Error>;
 
     /// Writes encoder reset output through the wrapped codec.
     ///

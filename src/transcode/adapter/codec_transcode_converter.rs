@@ -9,7 +9,7 @@
 
 use core::fmt;
 
-use super::CodecTranscodeConvertHooks;
+use super::{CodecTranscodeConvertHooks, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks};
 use crate::{
     CapacityError, Codec, CodecConvertError, TranscodeConvertEngine, TranscodeConverter,
     TranscodeError, TranscodeProgress, Transcoder,
@@ -39,14 +39,26 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>,
+    engine: TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >,
 }
 
 impl<D, E> Clone for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>: Clone,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: Clone,
 {
     /// Clones the wrapped converter engine.
     ///
@@ -65,7 +77,13 @@ impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>: fmt::Debug,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///
@@ -87,7 +105,13 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>: Default,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///
@@ -106,7 +130,13 @@ impl<D, E> Eq for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>: Eq,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: Eq,
 {
 }
 
@@ -114,7 +144,13 @@ impl<D, E> PartialEq for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeConvertHooks>: PartialEq,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: PartialEq,
 {
     /// Compares the wrapped converter engine.
     ///
@@ -153,6 +189,8 @@ where
             engine: TranscodeConvertEngine::new(
                 decoder,
                 encoder,
+                CodecTranscodeDecodeHooks,
+                CodecTranscodeEncodeHooks,
                 CodecTranscodeConvertHooks::new(),
             ),
         }

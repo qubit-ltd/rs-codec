@@ -22,10 +22,10 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `CodecTranscodeEncoder`、`CodecTranscodeDecoder` 和
   `CodecTranscodeConverter` adapter。
 - 用于下游带策略 encoder 复用公共 buffered encode 循环的
-  `TranscodeEncodeEngine`、`TranscodeEncodeHooks`、`EncodePlan` 和
+  `TranscodeEncodeEngine`、`TranscodeEncodeHooks`、`EncodeValueResult` 和
   `EncodeContext`。
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
-  `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeAction` 和
+  `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeInvalidAction` 和
   `DecodeContext`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress`
@@ -78,9 +78,10 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   buffered encode 循环的可复用 engine。
 - **`TranscodeEncodeHooks<C>`**：供带策略 codec-backed encoder
   共享公共循环时实现的 transcode/finalization 策略 hook trait。
-- **`EncodePlan<P>`**：单值写入计划，携带写入前必须保证的输出容量上界。
-- **`EncodeContext<'a, Value, Unit>`**：engine 确认输出容量后传给
-  encode hook 的输入值、输入索引、输出切片和游标上下文。
+- **`EncodeValueResult`**：encode hook 处理单个 value 后返回的结果：
+  已消费并写出若干 unit，或因输出空间不足而未消费。
+- **`EncodeContext<'a, Value, Unit>`**：传给 encode hook 的输入值、输入索引、
+  输出切片和游标上下文。
 - **`CodecTranscodeDecoder<C>`**：把 `Codec` 包装为无策略的
   严格 `TranscodeDecoder<C::Unit, C::Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
   codec 返回的 decode error 会被直接包装返回。
@@ -88,7 +89,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   decode 循环的可复用 engine。
 - **`TranscodeDecodeHooks<C>`**：供带策略 codec-backed decoder
   共享公共 decode 循环时实现的策略 hook trait。
-- **`DecodeAction<Value>`**：decoder engine hook 在 transcode 阶段返回的策略动作。
+- **`DecodeInvalidAction<Value>`**：decoder engine hook 针对非法输入返回的策略动作。
 - **`CodecTranscodeConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
 - **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
@@ -191,8 +192,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
-| `TranscodeEncodeHooks<C>` | 准备、写入、重置并完成 encoded output 收尾的 hook 契约 |
-| `EncodePlan<P>` | 已准备好的单值容量上界和实现自定义写入 action |
+| `TranscodeEncodeHooks<C>` | 编码单个 value、重置并完成 encoded output 收尾的 hook 契约 |
+| `EncodeValueResult` | 单值 hook 结果：已消费并写出 output，或需要更多 output 且不消费 |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
 ### Decoder Hooks 和 Engine
@@ -200,9 +201,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
-| `TranscodeDecodeHooks<C>` | malformed/incomplete decode 策略 hook 契约 |
+| `TranscodeDecodeHooks<C>` | invalid-input decode 策略 hook 契约 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
-| `DecodeAction<Value>` | transcode 阶段的策略动作：需要输入、跳过输入或输出一个值 |
+| `DecodeInvalidAction<Value>` | 非法输入策略动作：跳过输入或输出替换值 |
 
 ### `Transcoder` 操作
 

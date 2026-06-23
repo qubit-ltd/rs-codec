@@ -17,14 +17,17 @@ use super::{
     transcode_decode_engine::TranscodeDecodeEngine, transcode_encode_engine::TranscodeEncodeEngine,
 };
 use crate::codec::assert_unit_bounds;
-use crate::{CapacityError, Codec, EncodeContext, TranscodeConvertHooks, TranscodeError};
+use crate::{
+    CapacityError, Codec, EncodeContext, TranscodeConvertHooks, TranscodeDecodeHooks,
+    TranscodeEncodeHooks, TranscodeError,
+};
 
 /// Reusable buffered conversion engine.
 ///
 /// The engine owns reusable buffered decode and encode engines plus a small
-/// conversion-level hook object. It keeps common converter control flow
+/// conversion-level error mapper. It keeps common converter control flow
 /// private: index validation, pending-value retention, pending flush,
-/// decode-error policy dispatch, encode planning, output-capacity checks, and
+/// decode-error policy dispatch, encode attempts, output-capacity checks, and
 /// progress reporting.
 ///
 /// `TranscodeConvertEngine` is intentionally batch-oriented. Its public
@@ -37,42 +40,48 @@ use crate::{CapacityError, Codec, EncodeContext, TranscodeConvertHooks, Transcod
 ///
 /// - `D`: Source-side decoder codec.
 /// - `E`: Target-side encoder codec.
-/// - `H`: Conversion-level policy hooks.
+/// - `DH`: Source-side decode hooks.
+/// - `EH`: Target-side encode hooks.
+/// - `H`: Conversion-level error mapper.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TranscodeConvertEngine<D, E, H>
+pub struct TranscodeConvertEngine<D, E, DH, EH, H>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    H: TranscodeConvertHooks<D, E>,
+    DH: TranscodeDecodeHooks<D>,
+    EH: TranscodeEncodeHooks<E>,
+    H: TranscodeConvertHooks<D, E, DecodeError = DH::Error, EncodeError = EH::Error>,
 {
     /// Source-side buffered decoder engine.
-    decode_engine: TranscodeDecodeEngine<D, H::DecodeHooks>,
+    decode_engine: TranscodeDecodeEngine<D, DH>,
     /// Target-side buffered encoder engine.
-    encode_engine: TranscodeEncodeEngine<E, H::EncodeHooks>,
-    /// Conversion-level policy hooks.
+    encode_engine: TranscodeEncodeEngine<E, EH>,
+    /// Conversion-level error mapper.
     hooks: H,
     /// Decoded value waiting for target output capacity.
     pending: PendingValueSlot<D::Value>,
 }
 
-impl<D, E, H> TranscodeConvertEngine<D, E, H>
+impl<D, E, DH, EH, H> TranscodeConvertEngine<D, E, DH, EH, H>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    H: TranscodeConvertHooks<D, E>,
+    DH: TranscodeDecodeHooks<D>,
+    EH: TranscodeEncodeHooks<E>,
+    H: TranscodeConvertHooks<D, E, DecodeError = DH::Error, EncodeError = EH::Error>,
 {
     /// Creates a buffered converter engine.
     ///
-    /// The supplied conversion hooks create the internal decode and encode hook
-    /// instances. This keeps codec-specific hook initialization with the
-    /// conversion policy instead of requiring those hook types to implement
-    /// [`Default`].
+    /// The caller supplies decode hooks, encode hooks, and the converter-level
+    /// error mapper directly.
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Low-level codec used for source decoding.
+    /// - `decoder`: Low-level codec used for source decoding.-
     /// - `encoder`: Low-level codec used for target encoding.
-    /// - `hooks`: Conversion-level policy hooks.
+    /// - `decode_hooks`: Decode-side policy hooks.
+    /// - `encode_hooks`: Encode-side policy hooks.
+    /// - `hooks`: Conversion-level error mapper.
     ///
     /// # Returns
     ///
@@ -84,53 +93,9 @@ where
     /// invariant.
     #[inline]
     #[must_use]
-    pub fn new(decoder: D, encoder: E, hooks: H) -> Self {
+    pub fn new(decoder: D, encoder: E, decode_hooks: DH, encode_hooks: EH, hooks: H) -> Self {
         assert_unit_bounds::<D>();
         assert_unit_bounds::<E>();
-        let decode_hooks = hooks.create_decode_hooks(&decoder, &encoder);
-        let encode_hooks = hooks.create_encode_hooks(&decoder, &encoder);
-        Self::from_parts(decoder, encoder, hooks, decode_hooks, encode_hooks)
-    }
-
-    /// Builds the engine from already-created component hooks.
-    ///
-    /// Callers that use [`new`](Self::new) do not need to call this directly;
-    /// this method is provided for advanced cases where decode and encode
-    /// hooks are constructed externally. It constructs the component decode and
-    /// encode engines through their public constructors, so both codecs are
-    /// still validated against the [`Codec`] unit-bound invariant.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `D`: Source-side decoder codec.
-    /// - `E`: Target-side encoder codec.
-    /// - `H`: Conversion-level policy hooks.
-    ///
-    /// # Parameters
-    ///
-    /// - `decoder`: Low-level decode codec.
-    /// - `encoder`: Low-level encode codec.
-    /// - `hooks`: Conversion-level hook aggregator.
-    /// - `decode_hooks`: Decode hooks instance created from `hooks`.
-    /// - `encode_hooks`: Encode hooks instance created from `hooks`.
-    ///
-    /// # Returns
-    ///
-    /// Returns an engine assembled from the provided codecs and hooks.
-    ///
-    /// # Panics
-    ///
-    /// Panics when either codec violates the
-    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant.
-    #[inline]
-    pub fn from_parts(
-        decoder: D,
-        encoder: E,
-        hooks: H,
-        decode_hooks: H::DecodeHooks,
-        encode_hooks: H::EncodeHooks,
-    ) -> Self {
         Self {
             decode_engine: TranscodeDecodeEngine::new(decoder, decode_hooks),
             encode_engine: TranscodeEncodeEngine::new(encoder, encode_hooks),
@@ -403,11 +368,13 @@ where
     }
 }
 
-impl<D, E, H> Default for TranscodeConvertEngine<D, E, H>
+impl<D, E, DH, EH, H> Default for TranscodeConvertEngine<D, E, DH, EH, H>
 where
     D: Codec + Default,
     E: Codec<Value = D::Value> + Default,
-    H: TranscodeConvertHooks<D, E> + Default,
+    DH: TranscodeDecodeHooks<D> + Default,
+    EH: TranscodeEncodeHooks<E> + Default,
+    H: TranscodeConvertHooks<D, E, DecodeError = DH::Error, EncodeError = EH::Error> + Default,
 {
     /// Creates a default buffered converter engine.
     ///
@@ -416,6 +383,12 @@ where
     /// Returns a converter engine constructed from default codecs and hooks.
     #[inline(always)]
     fn default() -> Self {
-        Self::new(D::default(), E::default(), H::default())
+        Self::new(
+            D::default(),
+            E::default(),
+            DH::default(),
+            EH::default(),
+            H::default(),
+        )
     }
 }

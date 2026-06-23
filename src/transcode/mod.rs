@@ -9,10 +9,10 @@
 
 mod adapter;
 mod capacity_error;
-mod decode_action;
 mod decode_context;
+mod decode_invalid_action;
 mod encode_context;
-mod encode_plan;
+mod encode_value_result;
 mod engine;
 mod internal;
 mod io;
@@ -26,10 +26,10 @@ mod transcoder;
 
 pub use adapter::{CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder};
 pub use capacity_error::CapacityError;
-pub use decode_action::DecodeAction;
 pub use decode_context::DecodeContext;
+pub use decode_invalid_action::DecodeInvalidAction;
 pub use encode_context::EncodeContext;
-pub use encode_plan::EncodePlan;
+pub use encode_value_result::EncodeValueResult;
 pub use engine::{
     TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeEngine, TranscodeDecodeHooks,
     TranscodeEncodeEngine, TranscodeEncodeHooks,

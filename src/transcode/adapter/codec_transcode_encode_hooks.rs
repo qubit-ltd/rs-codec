@@ -9,9 +9,9 @@
 
 use core::num::NonZeroUsize;
 
+use super::super::encode_context::EncodeContext;
 use super::super::engine::TranscodeEncodeHooks;
-use super::super::{encode_context::EncodeContext, encode_plan::EncodePlan};
-use crate::{Codec, CodecEncodeError};
+use crate::{Codec, CodecEncodeError, EncodeValueResult};
 
 /// Policy hooks for [`crate::CodecTranscodeEncoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -22,57 +22,34 @@ where
     C: Codec,
 {
     type Error = CodecEncodeError<C::EncodeError>;
-    type PlanAction = ();
 
-    /// Prepares an exact one-value encoding plan.
+    /// Encodes one value through the wrapped codec.
     ///
     /// # Parameters
     ///
-    /// - `codec`: Low-level codec for width calculation.
-    /// - `input_value`: Input value to be encoded.
-    /// - `_input_index`: Absolute index of the input value.
+    /// - `codec`: Low-level codec for width calculation and writing.
+    /// - `context`: Input value and output cursor.
     ///
     /// # Returns
     ///
-    /// Returns an [`EncodePlan`] whose action is defaulted to unit.
+    /// Returns whether the value was consumed or needs more output capacity.
     #[inline(always)]
-    fn prepare_encode(
-        &mut self,
-        codec: &mut C,
-        input_value: &C::Value,
-        input_index: usize,
-    ) -> Result<EncodePlan<Self::PlanAction>, Self::Error> {
-        if !codec.can_encode_value(input_value) {
-            return Err(CodecEncodeError::unencodable_value(input_index));
-        }
-        Ok(EncodePlan::new(codec.encode_len(input_value).get(), ()))
-    }
-
-    /// Writes one value by delegating to the wrapped codec.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec used for actual writing.
-    /// - `context`: Encode context with prepared action and output cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of units written.
-    ///
-    /// # Errors
-    ///
-    /// Returns a codec encode error when the codec fails.
-    #[inline(always)]
-    unsafe fn write_encode(
+    fn encode_value(
         &mut self,
         codec: &mut C,
         context: EncodeContext<'_, C::Value, C::Unit>,
-        _plan: EncodePlan<Self::PlanAction>,
-    ) -> Result<usize, Self::Error> {
-        // SAFETY: The engine checked that the prepared exact-value capacity is
-        // available before calling this method.
+    ) -> Result<EncodeValueResult, Self::Error> {
+        if !codec.can_encode_value(context.input_value) {
+            return Err(CodecEncodeError::unencodable_value(context.input_index));
+        }
+        let required = codec.encode_len(context.input_value);
+        if context.available_output() < required.get() {
+            return Ok(EncodeValueResult::need_output(required));
+        }
+        // SAFETY: The capacity check above reserves the exact value width.
         unsafe { codec.encode(context.input_value, context.output, context.output_index) }
             .map(NonZeroUsize::get)
+            .map(EncodeValueResult::consumed)
             .map_err(|error| CodecEncodeError::encode(error, context.input_index))
     }
 

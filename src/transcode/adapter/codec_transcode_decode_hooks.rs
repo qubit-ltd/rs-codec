@@ -8,7 +8,7 @@
 //! Policy hooks used by the default codec-backed buffered decoder.
 
 use super::super::engine::TranscodeDecodeHooks;
-use super::super::{decode_action::DecodeAction, decode_context::DecodeContext};
+use super::super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
 use core::num::NonZeroUsize;
 
 use crate::{Codec, CodecDecodeError};
@@ -36,13 +36,13 @@ where
     ///
     /// Returns a convert status action wrapped as `CodecDecodeError`.
     #[inline(always)]
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         _codec: &mut C,
         error: C::DecodeError,
         _consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeAction<C::Value>, Self::Error> {
+    ) -> Result<DecodeInvalidAction<C::Value>, Self::Error> {
         Err(CodecDecodeError::decode(error, context.input_index()))
     }
 

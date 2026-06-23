@@ -9,7 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{decode_action::DecodeAction, decode_context::DecodeContext};
+use super::super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
 use crate::{CapacityError, Codec};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
@@ -21,8 +21,8 @@ use crate::{CapacityError, Codec};
 /// Implement this trait when a buffered decoder needs policy decisions after
 /// the low-level codec reports an error. The engine handles input/output cursor
 /// bookkeeping, output-capacity checks, and successful one-value decodes; hooks
-/// decide whether a decode error means "need more input", "skip these units",
-/// "emit a replacement value", or "return an error".
+/// decide whether invalid input should be skipped, replaced, or returned as an
+/// error.
 ///
 /// The hook receives a [`DecodeContext`] with absolute input/output cursors, so
 /// errors can include useful positions without duplicating engine arithmetic.
@@ -42,7 +42,7 @@ use crate::{CapacityError, Codec};
 ///     Codec,
 ///     CodecDecodeFailure,
 ///     CodecDecodeError,
-///     DecodeAction,
+///     DecodeInvalidAction,
 ///     DecodeContext,
 /// };
 ///
@@ -95,16 +95,16 @@ use crate::{CapacityError, Codec};
 /// impl TranscodeDecodeHooks<MyCodec> for ReplacementHooks {
 ///     type Error = CodecDecodeError<MyDecodeError>;
 ///
-///     fn handle_decode_error(
+///     fn handle_invalid_decode(
 ///         &mut self,
 ///         _codec: &mut MyCodec,
 ///         error: MyDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeAction<u8>, Self::Error> {
+///     ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
 ///         match error {
 ///             MyDecodeError::Malformed { .. } => {
-///                 Ok(DecodeAction::Emit {
+///                 Ok(DecodeInvalidAction::Emit {
 ///                     value: b'?',
 ///                     consumed: consumed.expect("codec reported malformed width"),
 ///                 })
@@ -175,23 +175,21 @@ where
     ///
     /// Returns the action selected by this hook policy.
     ///
-    /// Returned actions must be consistent with `context.available()`:
-    /// - `NeedInput.required_total` must be greater than `context.available()`;
-    /// - `Skip.consumed` and `Emit.consumed` must not exceed
-    ///   `context.available()`.
+    /// Returned consuming actions must not consume more than
+    /// `context.available()` input units.
     ///
     /// The engine treats violations as hook bugs and panics.
     ///
     /// # Errors
     ///
     /// Returns `Self::Error` when the policy rejects the input.
-    fn handle_decode_error(
+    fn handle_invalid_decode(
         &mut self,
         codec: &mut C,
         error: C::DecodeError,
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeAction<C::Value>, Self::Error>;
+    ) -> Result<DecodeInvalidAction<C::Value>, Self::Error>;
 
     /// Maps a codec-level flush error into this hook's public error type.
     ///
@@ -215,6 +213,20 @@ where
         panic!(
             "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
         )
+    }
+
+    /// Resets hook-owned policy state.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::Error` when hook-owned state cannot be reset.
+    #[inline]
+    fn reset(&mut self, _codec: &mut C) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     /// Finishes hook-owned state and writes any retained output.
@@ -248,19 +260,5 @@ where
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
         Ok(0)
-    }
-
-    /// Resets hook-owned policy state.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::Error` when hook-owned state cannot be reset.
-    #[inline]
-    fn reset(&mut self, _codec: &mut C) -> Result<(), Self::Error> {
-        Ok(())
     }
 }

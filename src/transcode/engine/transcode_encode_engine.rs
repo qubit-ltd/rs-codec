@@ -10,7 +10,8 @@
 use super::super::internal::{encode_state::EncodeState, encode_step::EncodeStep};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError, Codec, EncodeContext, TranscodeEncodeHooks, TranscodeError, TranscodeProgress,
+    CapacityError, Codec, EncodeContext, EncodeValueResult, TranscodeEncodeHooks, TranscodeError,
+    TranscodeProgress,
 };
 
 /// Reusable buffered encoding engine for codec-backed encoders.
@@ -21,12 +22,11 @@ use crate::{
 /// reporting.
 ///
 /// Use this type to build a streaming encoder over a one-value [`Codec`]. The
-/// engine does not allocate output. It repeatedly asks hooks to plan one input
-/// value, verifies that the caller-provided output slice can hold that plan,
-/// and then lets the hooks write the value. If the next value would not fit,
-/// the engine returns [`crate::TranscodeStatus::NeedOutput`] without consuming
-/// that value; the caller can provide a larger or fresh output buffer and
-/// resume with the returned input index.
+/// engine does not allocate output. It repeatedly asks hooks to process one
+/// input value at the current output cursor. If the hook reports insufficient
+/// output, the engine returns [`crate::TranscodeStatus::NeedOutput`] without
+/// consuming that value; the caller can provide a larger or fresh output buffer
+/// and resume with the returned input index.
 ///
 /// For the common strict policy that simply wraps codec errors, use
 /// [`crate::CodecTranscodeEncoder`]. Use `TranscodeEncodeEngine` directly when
@@ -47,7 +47,7 @@ use crate::{
 ///     CodecDecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
-///     EncodePlan,
+///     EncodeValueResult,
 ///     TranscodeStatus,
 /// };
 ///
@@ -86,28 +86,22 @@ use crate::{
 ///
 /// impl TranscodeEncodeHooks<ByteCodec> for StrictHooks {
 ///     type Error = CodecEncodeError<Infallible>;
-///     type PlanAction = ();
 ///
-///     fn prepare_encode(
-///         &mut self,
-///         codec: &mut ByteCodec,
-///         _value: &u8,
-///         _input_index: usize,
-///     ) -> Result<EncodePlan<()>, Self::Error> {
-///         Ok(EncodePlan::new(ByteCodec::MAX_UNITS_PER_VALUE.get(), ()))
-///     }
-///
-///     unsafe fn write_encode(
+///     fn encode_value(
 ///         &mut self,
 ///         codec: &mut ByteCodec,
 ///         context: EncodeContext<'_, u8, u8>,
-///         _plan: EncodePlan<()>,
-///     ) -> Result<usize, Self::Error> {
-///         unsafe {
+///     ) -> Result<EncodeValueResult, Self::Error> {
+///         let required = ByteCodec::MAX_UNITS_PER_VALUE;
+///         if context.available_output() < required.get() {
+///             return Ok(EncodeValueResult::need_output(required));
+///         }
+///         let written = unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map(NonZeroUsize::get)
-///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))
+///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
+///         Ok(EncodeValueResult::consumed(written))
 ///     }
 /// }
 ///
@@ -162,8 +156,8 @@ where
     /// Panics when the supplied codec violates the
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
     /// invariant.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
         assert_unit_bounds::<C>();
         Self { codec, hooks }
@@ -180,8 +174,8 @@ where
     ///
     /// a conservative upper bound for output units, or a capacity error on
     /// arithmetic overflow.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
+    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_output_len(&self.codec, input_len)
     }
@@ -191,8 +185,8 @@ where
     /// # Returns
     ///
     /// the codec's reset-output upper bound.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn max_reset_output_len(&self) -> usize {
         C::MAX_ENCODE_RESET_UNITS
     }
@@ -202,8 +196,8 @@ where
     /// # Returns
     ///
     /// the hook-provided final output bound.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn max_finish_output_len(&self) -> usize {
         self.hooks.max_finish_output_len(&self.codec)
     }
@@ -352,32 +346,32 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when planning or writing rejects the value.
+    /// Returns hook errors when the policy rejects the value.
     pub(super) fn encode_step(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeStep, TranscodeError<H::Error>> {
-        let plan = self
-            .hooks
-            .prepare_encode(&mut self.codec, context.input_value, context.input_index)
-            .map_err(TranscodeError::domain)?;
-        let max_output_units = plan.max_output_units;
         let available = context.available_output();
-        if available < max_output_units {
-            return Ok(EncodeStep::need_output(max_output_units, available));
+        match self
+            .hooks
+            .encode_value(&mut self.codec, context)
+            .map_err(TranscodeError::domain)?
+        {
+            EncodeValueResult::Consumed { written } => {
+                assert!(
+                    written <= available,
+                    "TranscodeEncodeEngine hook wrote beyond available output",
+                );
+                Ok(EncodeStep::written(written))
+            }
+            EncodeValueResult::NeedOutput { required } => {
+                assert!(
+                    required.get() > available,
+                    "EncodeValueResult::NeedOutput required capacity must exceed available output",
+                );
+                Ok(EncodeStep::need_output(required, available))
+            }
         }
-
-        // SAFETY: The capacity check above guarantees the bound requested by
-        // the prepared plan.
-        let written = match unsafe { self.hooks.write_encode(&mut self.codec, context, plan) } {
-            Ok(written) => written,
-            Err(error) => return Err(TranscodeError::domain(error)),
-        };
-        assert!(
-            written <= max_output_units,
-            "TranscodeEncodeEngine hook wrote beyond its prepared capacity bound",
-        );
-        Ok(EncodeStep::written(written))
     }
 }
 
