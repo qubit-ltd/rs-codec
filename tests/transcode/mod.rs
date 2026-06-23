@@ -11,7 +11,7 @@ mod capacity_error_tests;
 mod decode_context_tests;
 mod decode_invalid_action_tests;
 mod encode_context_tests;
-mod encode_value_result_tests;
+mod encode_outcome_tests;
 mod engine;
 mod internal;
 mod io;

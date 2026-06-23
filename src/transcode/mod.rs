@@ -12,7 +12,7 @@ mod capacity_error;
 mod decode_context;
 mod decode_invalid_action;
 mod encode_context;
-mod encode_value_result;
+mod encode_outcome;
 mod engine;
 mod internal;
 mod io;
@@ -29,7 +29,7 @@ pub use capacity_error::CapacityError;
 pub use decode_context::DecodeContext;
 pub use decode_invalid_action::DecodeInvalidAction;
 pub use encode_context::EncodeContext;
-pub use encode_value_result::EncodeValueResult;
+pub use encode_outcome::EncodeOutcome;
 pub use engine::{
     TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeEngine, TranscodeDecodeHooks,
     TranscodeEncodeEngine, TranscodeEncodeHooks,

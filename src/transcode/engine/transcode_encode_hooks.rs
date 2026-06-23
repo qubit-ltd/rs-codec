@@ -8,7 +8,7 @@
 //! Policy hooks used by buffered encoder engines.
 
 use super::super::encode_context::EncodeContext;
-use crate::{CapacityError, Codec, EncodeValueResult};
+use crate::{CapacityError, Codec, EncodeOutcome};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -19,12 +19,13 @@ use crate::{CapacityError, Codec, EncodeValueResult};
 /// Implement this trait when a buffered encoder needs policy decisions around
 /// individual values while reusing the common engine loop. Examples include
 /// rejecting unsupported values with adapter-level context, consuming values
-/// without writing output, writing replacement units, or emitting final state
-/// in [`finish`](Self::finish).
+/// without writing output, writing replacement units, resetting hook-owned
+/// state in [`before_reset`](Self::before_reset), or emitting final state in
+/// [`finish`](Self::finish).
 ///
 /// The engine calls [`encode_value`](Self::encode_value) for the current input
 /// value. The hook either consumes that value and reports written output units,
-/// or returns [`EncodeValueResult::NeedOutput`] without consuming it. This lets
+/// or returns [`EncodeOutcome::NeedOutput`] without consuming it. This lets
 /// the engine stop with [`crate::TranscodeStatus::NeedOutput`] and resume later
 /// at the same input value.
 ///
@@ -44,7 +45,7 @@ use crate::{CapacityError, Codec, EncodeValueResult};
 ///     CodecDecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
-///     EncodeValueResult,
+///     EncodeOutcome,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -90,17 +91,17 @@ use crate::{CapacityError, Codec, EncodeValueResult};
 ///         &mut self,
 ///         codec: &mut C,
 ///         context: EncodeContext<'_, C::Value, C::Unit>,
-///     ) -> Result<EncodeValueResult, Self::Error> {
+///     ) -> Result<EncodeOutcome, Self::Error> {
 ///         let required = C::MAX_UNITS_PER_VALUE;
 ///         if context.available_output() < required.get() {
-///             return Ok(EncodeValueResult::need_output(required));
+///             return Ok(EncodeOutcome::need_output(required));
 ///         }
 ///         let written = unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map(NonZeroUsize::get)
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
-///         Ok(EncodeValueResult::consumed(written))
+///         Ok(EncodeOutcome::consumed(written))
 ///     }
 /// }
 /// ```
@@ -113,7 +114,11 @@ where
     C: Codec,
 {
     /// Domain error type returned by the buffered encoder policy.
-    type Error;
+    ///
+    /// The error type must also accept codec encode errors so the engine can
+    /// report lifecycle failures such as [`Codec::encode_reset`] without a
+    /// hook-specific mapping method.
+    type Error: From<C::EncodeError>;
 
     /// Returns the maximum output units needed for `input_len` values.
     ///
@@ -153,30 +158,6 @@ where
         0
     }
 
-    /// Maps a codec-level reset error into this hook's public error type.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    /// - `error`: Error returned by [`Codec::encode_reset`].
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific error.
-    ///
-    /// # Required Overrides
-    ///
-    /// The default implementation panics. Override this method whenever
-    /// [`Codec::encode_reset`] can return an error for `C`. Leaving the default
-    /// is appropriate only when reset is infallible or unreachable for the
-    /// codec and hook pairing.
-    #[inline]
-    fn map_encode_reset_error(&mut self, _codec: &mut C, _error: C::EncodeError) -> Self::Error {
-        panic!(
-            "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
-        )
-    }
-
     /// Processes one input value at the current output cursor.
     ///
     /// # Parameters
@@ -198,44 +179,15 @@ where
         &mut self,
         codec: &mut C,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeValueResult, Self::Error>;
+    ) -> Result<EncodeOutcome, Self::Error>;
 
-    /// Writes encoder reset output through the wrapped codec.
-    ///
-    /// The default implementation delegates to [`Codec::encode_reset`] and
-    /// maps errors through
-    /// [`map_encode_reset_error`](Self::map_encode_reset_error).
+    /// Runs hook-owned cleanup before stream reset.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `output`: Destination unit buffer.
-    /// - `output_index`: Absolute output index where reset output starts.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of reset units written.
-    ///
-    /// # Errors
-    ///
-    /// Returns hook-specific reset errors.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that at least
-    /// [`Codec::MAX_ENCODE_RESET_UNITS`] units are writable from
-    /// `output_index`.
-    #[inline]
-    unsafe fn write_encode_reset(
-        &mut self,
-        codec: &mut C,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        // SAFETY: Forwarded from this method's safety contract.
-        unsafe { codec.encode_reset(output, output_index) }
-            .map_err(|error| self.map_encode_reset_error(codec, error))
-    }
+    #[inline(always)]
+    fn before_reset(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output units.
     ///
@@ -260,7 +212,7 @@ where
     /// # Errors
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
-    #[inline]
+    #[inline(always)]
     fn finish(
         &mut self,
         _codec: &mut C,
@@ -269,12 +221,4 @@ where
     ) -> Result<usize, Self::Error> {
         Ok(0)
     }
-
-    /// Resets hook-owned policy state.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    #[inline(always)]
-    fn reset(&mut self, _codec: &mut C) {}
 }

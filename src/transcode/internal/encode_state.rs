@@ -11,9 +11,11 @@ use core::num::NonZeroUsize;
 
 use qubit_io::UncheckedSlice;
 
-use super::super::{encode_context::EncodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    encode_context::EncodeContext, encode_outcome::EncodeOutcome,
+    transcode_progress::TranscodeProgress,
+};
 use super::cursor_state::CursorState;
-use super::encode_step::EncodeStep;
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
@@ -78,8 +80,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         &mut self,
     ) -> EncodeContext<'_, Value, Unit> {
         // SAFETY: Guaranteed by the caller.
-        let value =
-            unsafe { UncheckedSlice::get(self.input, self.cursor.input_cursor()) };
+        let value = unsafe { UncheckedSlice::get(self.input, self.cursor.input_cursor()) };
         EncodeContext {
             input_value: value,
             input_index: self.cursor.input_cursor(),
@@ -113,7 +114,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
         assert!(
             written <= self.available_output(),
-            "encode step wrote beyond available output",
+            "EncodeOutcome::Consumed wrote beyond available output",
         );
         self.cursor.advance(1, written);
     }
@@ -156,29 +157,33 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         )
     }
 
-    /// Applies one normalized encode step to this encode state.
+    /// Applies one encode outcome to this encode state.
     ///
     /// # Parameters
     ///
-    /// - `step`: Encode step produced by the encode engine.
+    /// - `outcome`: Encode outcome produced by the encode hooks.
     ///
     /// # Returns
     ///
     /// Returns stop progress when output is insufficient, otherwise `None`.
     #[inline]
-    pub(in crate::transcode) fn apply_step(
+    pub(in crate::transcode) fn apply_encode_outcome(
         &mut self,
-        step: EncodeStep,
+        outcome: EncodeOutcome,
     ) -> Option<TranscodeProgress> {
-        match step {
-            EncodeStep::Written { written } => {
+        match outcome {
+            EncodeOutcome::Consumed { written } => {
                 self.accept_written_value(written);
                 None
             }
-            EncodeStep::NeedOutput {
-                required,
-                available,
-            } => Some(self.need_output_progress_with(required, available)),
+            EncodeOutcome::NeedOutput { required } => {
+                let available = self.available_output();
+                assert!(
+                    required.get() > available,
+                    "EncodeOutcome::NeedOutput required capacity must exceed available output",
+                );
+                Some(self.need_output_progress_with(required, available))
+            }
         }
     }
 }

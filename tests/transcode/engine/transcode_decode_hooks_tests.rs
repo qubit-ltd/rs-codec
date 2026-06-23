@@ -65,21 +65,6 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
 }
 
 #[test]
-#[should_panic(
-    expected = "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
-)]
-fn test_transcode_decode_hooks_default_map_decode_flush_error_panics() {
-    let mut hooks = DefaultOnlyHooks;
-    let mut codec = UnitCodec;
-
-    let _ = TranscodeDecodeHooks::<UnitCodec>::map_decode_flush_error(
-        &mut hooks,
-        &mut codec,
-        UnitDecodeError,
-    );
-}
-
-#[test]
 fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut hooks = DefaultOnlyHooks;
     let mut codec = UnitCodec;
@@ -92,10 +77,9 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
 }
 
 #[test]
-fn test_transcode_decode_hooks_default_reset_succeeds() {
+fn test_transcode_decode_hooks_default_before_reset_is_noop() {
     let mut hooks = DefaultOnlyHooks;
     let mut codec = UnitCodec;
 
-    TranscodeDecodeHooks::<UnitCodec>::reset(&mut hooks, &mut codec)
-        .expect("default reset should succeed");
+    TranscodeDecodeHooks::<UnitCodec>::before_reset(&mut hooks, &mut codec);
 }

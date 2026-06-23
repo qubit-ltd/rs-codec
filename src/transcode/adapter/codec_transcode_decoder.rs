@@ -90,7 +90,7 @@ where
         Ok(self.engine.max_reset_output_len())
     }
 
-    /// Resets codec decode state and hook-owned state.
+    /// Runs before-reset cleanup for decoder state.
     #[inline(always)]
     fn reset(
         &mut self,

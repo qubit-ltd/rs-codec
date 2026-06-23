@@ -358,3 +358,15 @@ impl<E> CodecDecodeError<E> {
         Ok(())
     }
 }
+
+impl<E> From<E> for CodecDecodeError<E> {
+    /// Wraps a codec decode error without a current source unit position.
+    ///
+    /// Lifecycle calls such as decode flush do not correspond to a caller
+    /// input unit. The adapter uses input index `0` for that synthetic
+    /// position.
+    #[inline(always)]
+    fn from(source: E) -> Self {
+        Self::decode(source, 0)
+    }
+}

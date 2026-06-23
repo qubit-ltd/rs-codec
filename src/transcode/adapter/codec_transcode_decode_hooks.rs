@@ -45,10 +45,4 @@ where
     ) -> Result<DecodeInvalidAction<C::Value>, Self::Error> {
         Err(CodecDecodeError::decode(error, context.input_index()))
     }
-
-    /// Maps flush errors into generic codec decode errors.
-    #[inline(always)]
-    fn map_decode_flush_error(&mut self, _codec: &mut C, error: C::DecodeError) -> Self::Error {
-        CodecDecodeError::decode(error, 0)
-    }
 }

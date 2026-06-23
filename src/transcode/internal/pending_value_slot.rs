@@ -7,11 +7,8 @@
 // =============================================================================
 //! Slot that owns the converter's retained decoded value.
 
-use super::{
-    convert_state::ConvertState, pending_encode_step::PendingEncodeStep,
-    pending_value::PendingValue,
-};
-use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks, TranscodeProgress};
+use super::pending_value::PendingValue;
+use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -79,44 +76,13 @@ impl<Value> PendingValueSlot<Value> {
         self.value.take()
     }
 
-    /// Applies a pending-value encode step to this slot and the current
-    /// conversion state.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `Input`: Converter input-unit type carried by conversion state.
-    /// - `Output`: Converter output-unit type carried by conversion state.
+    /// Stores a decoded value that could not be encoded yet.
     ///
     /// # Parameters
     ///
-    /// - `step`: Pending encode step produced by encoding attempts.
-    /// - `state`: Shared conversion state updated by the step result.
-    ///
-    /// # Returns
-    ///
-    /// Returns:
-    /// - `None` when output has been produced immediately.
-    /// - `Some(progress)` when output progress should stop for missing
-    ///   capacity.
-    #[inline]
-    pub(in crate::transcode) fn apply_pending_encode_step<Input, Output>(
-        &mut self,
-        step: PendingEncodeStep<Value>,
-        state: &mut ConvertState<'_, Input, Output>,
-    ) -> Option<TranscodeProgress> {
-        match step {
-            PendingEncodeStep::Written { written } => {
-                state.advance_output(written);
-                None
-            }
-            PendingEncodeStep::NeedOutput {
-                pending,
-                required,
-                available,
-            } => {
-                self.value = Some(pending);
-                Some(state.need_output_progress(required, available))
-            }
-        }
+    /// - `pending`: Decoded value and its source input position.
+    #[inline(always)]
+    pub(in crate::transcode) fn put(&mut self, pending: PendingValue<Value>) {
+        self.value = Some(pending);
     }
 }

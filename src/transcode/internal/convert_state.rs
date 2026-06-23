@@ -9,7 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
+use super::super::{
+    decode_context::DecodeContext, encode_outcome::EncodeOutcome,
+    transcode_progress::TranscodeProgress,
+};
 use super::cursor_state::CursorState;
 use super::{decode_step::DecodeStep, pending_value::PendingValue};
 
@@ -310,6 +313,39 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
                 required,
                 available,
             } => Ok(Some(self.need_input_progress(required, available))),
+        }
+    }
+
+    /// Applies one normalized encode outcome to this conversion state.
+    ///
+    /// # Parameters
+    ///
+    /// - `outcome`: Encode outcome produced by the target encoder hooks.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(progress)` when target output is insufficient and
+    /// conversion must stop, otherwise returns `None` after advancing the
+    /// output cursor.
+    #[must_use]
+    #[inline]
+    pub(crate) fn apply_encode_outcome(
+        &mut self,
+        outcome: EncodeOutcome,
+    ) -> Option<TranscodeProgress> {
+        match outcome {
+            EncodeOutcome::Consumed { written } => {
+                self.advance_output(written);
+                None
+            }
+            EncodeOutcome::NeedOutput { required } => {
+                let available = self.available_output();
+                assert!(
+                    required.get() > available,
+                    "EncodeOutcome::NeedOutput required capacity must exceed available output",
+                );
+                Some(self.need_output_progress(required, available))
+            }
         }
     }
 }

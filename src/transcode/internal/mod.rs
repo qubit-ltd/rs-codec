@@ -15,7 +15,5 @@ pub(in crate::transcode) mod cursor_state;
 pub(in crate::transcode) mod decode_state;
 pub(in crate::transcode) mod decode_step;
 pub(in crate::transcode) mod encode_state;
-pub(in crate::transcode) mod encode_step;
-pub(in crate::transcode) mod pending_encode_step;
 pub(in crate::transcode) mod pending_value;
 pub(in crate::transcode) mod pending_value_slot;

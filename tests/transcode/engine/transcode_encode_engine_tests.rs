@@ -8,7 +8,7 @@
 //! Tests for the reusable buffered encoder engine.
 
 use qubit_codec::{
-    CapacityError, Codec, EncodeContext, EncodeValueResult, TranscodeEncodeEngine,
+    CapacityError, Codec, EncodeContext, EncodeOutcome, TranscodeEncodeEngine,
     TranscodeEncodeHooks, TranscodeError, TranscodeStatus,
 };
 
@@ -60,6 +60,12 @@ enum EngineError {
     Rejected { input_index: usize },
 }
 
+impl From<core::convert::Infallible> for EngineError {
+    fn from(error: core::convert::Infallible) -> Self {
+        match error {}
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ExactWidthHooks;
 
@@ -70,9 +76,9 @@ impl TranscodeEncodeHooks<WideCodec> for ExactWidthHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         let EncodeContext {
             input_value,
@@ -86,7 +92,7 @@ impl TranscodeEncodeHooks<WideCodec> for ExactWidthHooks {
         unsafe {
             *output.as_mut_ptr().add(output_index) = input_value.wrapping_add(10);
         }
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 }
 
@@ -100,8 +106,8 @@ impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
         &mut self,
         _codec: &mut WideCodec,
         _context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
-        Ok(EncodeValueResult::consumed(0))
+    ) -> Result<EncodeOutcome, Self::Error> {
+        Ok(EncodeOutcome::consumed(0))
     }
 }
 
@@ -115,7 +121,7 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         Err(EngineError::Rejected {
             input_index: context.input_index,
         })
@@ -132,12 +138,12 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingWriteHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::consumed(2))
+        Ok(EncodeOutcome::consumed(2))
     }
 }
 
@@ -161,9 +167,9 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         let EncodeContext {
             input_value,
@@ -172,7 +178,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
             ..
         } = context;
         output[output_index] = *input_value;
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -194,7 +200,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         Ok(1)
     }
 
-    fn reset(&mut self, _codec: &mut WideCodec) {
+    fn before_reset(&mut self, _codec: &mut WideCodec) {
         self.pending_suffix = false;
     }
 }
@@ -209,12 +215,12 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -243,12 +249,12 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         &mut self,
         _codec: &mut WideCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
@@ -428,7 +434,7 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
 }
 
 #[test]
-#[should_panic(expected = "TranscodeEncodeEngine hook wrote beyond available output")]
+#[should_panic(expected = "EncodeOutcome::Consumed wrote beyond available output")]
 fn test_buffered_encode_engine_panics_when_hook_reports_too_many_written_units() {
     let mut encoder = TranscodeEncodeEngine::new(WideCodec, OverreportingWriteHooks);
     let mut output = [0_u8; 1];
@@ -568,20 +574,12 @@ impl TranscodeEncodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
         &mut self,
         _codec: &mut ResetFailCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::consumed(1))
-    }
-
-    fn map_encode_reset_error(
-        &mut self,
-        _codec: &mut ResetFailCodec,
-        error: ResetFailError,
-    ) -> Self::Error {
-        error
+        Ok(EncodeOutcome::consumed(1))
     }
 }
 
@@ -609,12 +607,12 @@ impl TranscodeEncodeHooks<ResetEmittingCodec> for ResetPassthroughHooks {
         &mut self,
         _codec: &mut ResetEmittingCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::need_output(crate::nz(1)));
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 }
 
@@ -632,13 +630,13 @@ fn test_buffered_encode_engine_reset_emits_codec_reset_output() {
 }
 
 #[test]
-fn test_buffered_encode_engine_reset_maps_codec_reset_errors() {
+fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
     let mut encoder = TranscodeEncodeEngine::<_, _>::new(ResetFailCodec, ResetErrorMappingHooks);
     let mut output = [0_u8; 1];
 
     let error = encoder
         .reset(&mut output, 0)
-        .expect_err("reset should map codec reset errors");
+        .expect_err("reset should convert codec reset errors");
 
     assert_eq!(TranscodeError::Domain(ResetFailError), error);
 }

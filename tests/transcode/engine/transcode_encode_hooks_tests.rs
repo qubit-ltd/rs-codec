@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{EncodeContext, EncodeValueResult, TranscodeEncodeHooks};
+use qubit_codec::{EncodeContext, EncodeOutcome, TranscodeEncodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -58,9 +58,6 @@ impl qubit_codec::Codec for UnitCodec {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct DefaultOnlyHooks;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct DefaultResetHooks;
-
 impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
     type Error = UnitEncodeError;
 
@@ -68,75 +65,15 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
         &mut self,
         _codec: &mut UnitCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         if context.available_output() < 1 {
-            return Ok(EncodeValueResult::NeedOutput {
+            return Ok(EncodeOutcome::NeedOutput {
                 required: core::num::NonZeroUsize::MIN,
             });
         }
         context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::Consumed { written: 1 })
+        Ok(EncodeOutcome::Consumed { written: 1 })
     }
-}
-
-impl TranscodeEncodeHooks<UnitCodec> for DefaultResetHooks {
-    type Error = UnitEncodeError;
-
-    fn map_encode_reset_error(
-        &mut self,
-        _codec: &mut UnitCodec,
-        error: UnitEncodeError,
-    ) -> Self::Error {
-        error
-    }
-
-    fn encode_value(
-        &mut self,
-        _codec: &mut UnitCodec,
-        context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
-        if context.available_output() < 1 {
-            return Ok(EncodeValueResult::NeedOutput {
-                required: core::num::NonZeroUsize::MIN,
-            });
-        }
-        context.output[context.output_index] = *context.input_value;
-        Ok(EncodeValueResult::Consumed { written: 1 })
-    }
-}
-
-#[test]
-#[should_panic(
-    expected = "TranscodeEncodeHooks::map_encode_reset_error must be implemented for fallible reset codecs"
-)]
-fn test_transcode_encode_hooks_default_map_encode_reset_error_panics() {
-    let mut hooks = DefaultOnlyHooks;
-    let mut codec = UnitCodec;
-
-    let _ = TranscodeEncodeHooks::<UnitCodec>::map_encode_reset_error(
-        &mut hooks,
-        &mut codec,
-        UnitEncodeError,
-    );
-}
-
-#[test]
-fn test_transcode_encode_hooks_default_write_encode_reset_maps_errors() {
-    let mut hooks = DefaultResetHooks;
-    let mut codec = UnitCodec;
-    let mut output = [0_u8; 1];
-
-    let error = unsafe {
-        TranscodeEncodeHooks::<UnitCodec>::write_encode_reset(
-            &mut hooks,
-            &mut codec,
-            &mut output,
-            0,
-        )
-    }
-    .expect_err("default reset writer should map codec reset errors");
-
-    assert_eq!(UnitEncodeError, error);
 }
 
 #[test]
@@ -149,4 +86,12 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
         .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
+}
+
+#[test]
+fn test_transcode_encode_hooks_default_before_reset_is_noop() {
+    let mut hooks = DefaultOnlyHooks;
+    let mut codec = UnitCodec;
+
+    TranscodeEncodeHooks::<UnitCodec>::before_reset(&mut hooks, &mut codec);
 }

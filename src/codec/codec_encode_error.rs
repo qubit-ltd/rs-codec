@@ -250,3 +250,15 @@ impl<E> CodecEncodeError<E> {
         Ok(())
     }
 }
+
+impl<E> From<E> for CodecEncodeError<E> {
+    /// Wraps a codec encode error without a current input value.
+    ///
+    /// Lifecycle calls such as encode reset do not correspond to a caller
+    /// input value. The adapter uses input index `0` for that synthetic
+    /// position.
+    #[inline(always)]
+    fn from(source: E) -> Self {
+        Self::encode(source, 0)
+    }
+}

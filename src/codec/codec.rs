@@ -304,7 +304,7 @@ pub trait Codec {
     }
 }
 
-/// Asserts the public unit-bound invariant required by [`Codec`].
+/// Debug-asserts the public unit-bound invariant required by [`Codec`].
 ///
 /// # Type Parameters
 ///
@@ -323,7 +323,7 @@ pub(crate) fn assert_unit_bounds<C>()
 where
     C: Codec,
 {
-    assert!(
+    debug_assert!(
         C::MIN_UNITS_PER_VALUE <= C::MAX_UNITS_PER_VALUE,
         "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
     );

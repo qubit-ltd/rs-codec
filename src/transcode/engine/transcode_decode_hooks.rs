@@ -122,7 +122,11 @@ where
     C: Codec,
 {
     /// Domain error type returned by the buffered decoder policy.
-    type Error;
+    ///
+    /// The error type must also accept codec decode errors so the engine can
+    /// report lifecycle failures such as [`Codec::decode_flush`] without a
+    /// hook-specific mapping method.
+    type Error: From<C::DecodeError>;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -191,43 +195,13 @@ where
         context: DecodeContext,
     ) -> Result<DecodeInvalidAction<C::Value>, Self::Error>;
 
-    /// Maps a codec-level flush error into this hook's public error type.
+    /// Runs hook-owned cleanup before stream reset.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `error`: Error returned by [`Codec::decode_flush`].
-    ///
-    /// # Returns
-    ///
-    /// Returns the hook-specific error.
-    ///
-    /// # Required Overrides
-    ///
-    /// The default implementation panics. Override this method whenever
-    /// [`Codec::decode_flush`] can return an error for `C`. Leaving the default
-    /// is appropriate only when flush is infallible or unreachable for the
-    /// codec and hook pairing.
-    #[inline]
-    fn map_decode_flush_error(&mut self, _codec: &mut C, _error: C::DecodeError) -> Self::Error {
-        panic!(
-            "TranscodeDecodeHooks::map_decode_flush_error must be implemented for fallible flush codecs"
-        )
-    }
-
-    /// Resets hook-owned policy state.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Low-level codec owned by the engine.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::Error` when hook-owned state cannot be reset.
-    #[inline]
-    fn reset(&mut self, _codec: &mut C) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    #[inline(always)]
+    fn before_reset(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output.
     ///

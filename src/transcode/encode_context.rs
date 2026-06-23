@@ -5,13 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Encode context for one buffered encode step.
+//! Encode context for one buffered encode attempt.
 
 /// Context for one encode attempt inside a buffered encoder engine.
 ///
 /// The context carries the current input value and output cursor. The hook
 /// decides whether the value can be consumed with the visible output capacity
-/// and reports that decision through [`crate::EncodeValueResult`].
+/// and reports that decision through [`crate::EncodeOutcome`].
 ///
 /// # Type Parameters
 ///
@@ -37,7 +37,7 @@ impl<Value, Unit> EncodeContext<'_, Value, Unit> {
     ///
     /// # Returns
     ///
-    /// Returns output capacity visible to this encode step.
+    /// Returns output capacity visible to this encode attempt.
     #[must_use]
     #[inline(always)]
     pub fn available_output(&self) -> usize {

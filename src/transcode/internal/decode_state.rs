@@ -221,7 +221,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// call.
     #[must_use]
     #[inline]
-    pub(in crate::transcode) fn apply_step(
+    pub(in crate::transcode) fn apply_decode_step(
         &mut self,
         step: DecodeStep<Value>,
     ) -> Option<TranscodeProgress> {

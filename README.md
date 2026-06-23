@@ -22,7 +22,7 @@ This crate provides:
   `CodecTranscodeEncoder`,
   `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodeValueResult`, and
+- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodeOutcome`, and
   `EncodeContext` for reusing the common buffered encoding loop in policy-aware
   downstream encoders.
 - `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
@@ -89,7 +89,7 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`TranscodeEncodeHooks<C>`**: policy hook trait used by
   codec-backed encoders that need custom transcode/finalization behavior while
   sharing the common loop.
-- **`EncodeValueResult`**: result returned by encode hooks for one value:
+- **`EncodeOutcome`**: outcome returned by encode hooks for one value:
   consumed with a written count, or not consumed because more output is needed.
 - **`EncodeContext<'a, Value, Unit>`**: input value, input index, output slice,
   and cursor passed to encode hooks.
@@ -208,8 +208,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeEncodeHooks<C>` | Hook contract for encoding one value, resetting, and finalizing encoded output |
-| `EncodeValueResult` | Per-value hook result: consumed with written output, or needs more output without consuming |
+| `TranscodeEncodeHooks<C>` | Hook contract for encoding one value, preparing for reset, and finalizing encoded output |
+| `EncodeOutcome` | Per-value hook outcome: consumed with written output, or needs more output without consuming |
 | `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor passed to encode hooks |
 
 ### Decoder Hooks And Engines

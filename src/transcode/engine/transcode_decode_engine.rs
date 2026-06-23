@@ -12,8 +12,8 @@ use core::num::NonZeroUsize;
 use super::super::internal::{decode_state::DecodeState, decode_step::DecodeStep};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError, Codec, CodecDecodeFailure, DecodeContext, DecodeInvalidAction,
-    TranscodeDecodeHooks, TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError, Codec, CodecDecodeFailure, DecodeContext, TranscodeDecodeHooks, TranscodeError,
+    TranscodeProgress, Transcoder,
 };
 
 /// Reusable buffered decoding engine for codec-backed decoders.
@@ -225,7 +225,7 @@ where
         0
     }
 
-    /// Resets codec decode state and hook-owned state.
+    /// Runs hook-owned cleanup before a logical decoder reset.
     ///
     /// # Parameters
     ///
@@ -238,16 +238,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when `output_index` is invalid or reset fails.
+    /// Returns an error when `output_index` is invalid.
     pub fn reset(
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeError<H::Error>> {
         TranscodeError::ensure_output_index(output.len(), output_index)?;
-        self.hooks
-            .reset(&mut self.codec)
-            .map_err(TranscodeError::domain)?;
+        self.hooks.before_reset(&mut self.codec);
         Ok(0)
     }
 
@@ -296,7 +294,7 @@ where
                 return Ok(state.need_output_progress());
             }
             let step = self.decode_step(state.input(), context)?;
-            if let Some(progress) = state.apply_step(step) {
+            if let Some(progress) = state.apply_decode_step(step) {
                 return Ok(progress);
             }
         }
@@ -324,8 +322,8 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, when codec flush errors are mapped by the hooks, or
-    /// when hook finalization fails.
+    /// output capacity, when codec flush errors are converted with [`From`],
+    /// or when hook finalization fails.
     ///
     /// # Panics
     ///
@@ -342,10 +340,8 @@ where
             .max_finish_output_len()
             .map_err(|_| TranscodeError::output_length_overflow())?;
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
-        let flushed =
-            unsafe { self.codec.decode_flush(output, output_index) }.map_err(|error| {
-                TranscodeError::domain(self.hooks.map_decode_flush_error(&mut self.codec, error))
-            })?;
+        let flushed = unsafe { self.codec.decode_flush(output, output_index) }
+            .map_err(|error| TranscodeError::domain(H::Error::from(error)))?;
         assert!(
             flushed <= C::MAX_DECODE_FLUSH_VALUES,
             "Codec::decode_flush wrote beyond its flush bound",
@@ -372,22 +368,21 @@ where
     /// # Returns
     ///
     /// Returns one internal decode step, including successful decode, policy
-    /// skip/emit, or need-input state.
+    /// skip/emit, or variable-width need-input state.
     ///
     /// # Errors
     ///
     /// Returns hook errors when the decode policy rejects the input.
-    #[inline]
+    #[inline(always)]
     pub(super) fn decode_step(
         &mut self,
         input: &[C::Unit],
         context: DecodeContext,
     ) -> Result<DecodeStep<C::Value>, TranscodeError<H::Error>> {
-        let min_units = C::MIN_UNITS_PER_VALUE;
-        let available = context.available();
-        if available < min_units.get() {
-            return Ok(DecodeStep::need_input(min_units, available));
-        }
+        debug_assert!(
+            context.available() >= C::MIN_UNITS_PER_VALUE.get(),
+            "decode_step requires at least Codec::MIN_UNITS_PER_VALUE input units",
+        );
 
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
         // units available from `context.input_index()`.
@@ -411,7 +406,6 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the policy rejects the input.
-    #[inline]
     fn handle_decode_result(
         &mut self,
         context: DecodeContext,
@@ -436,36 +430,12 @@ where
             }
             Err(CodecDecodeFailure::Invalid { source, consumed }) => {
                 let action = self
-                    .handle_invalid_decode(source, consumed, context)
+                    .hooks
+                    .handle_invalid_decode(&mut self.codec, source, consumed, context)
                     .map_err(TranscodeError::domain)?;
                 Ok(action.into_step(context.input_index(), context.available()))
             }
         }
-    }
-
-    /// Lets the configured decode hooks classify a low-level decode error.
-    ///
-    /// # Parameters
-    ///
-    /// - `error`: Decode error returned by [`Codec::decode`].
-    /// - `context`: Decode context used by policy hooks.
-    ///
-    /// # Returns
-    ///
-    /// Returns the decoded action chosen by policy hooks.
-    ///
-    /// # Errors
-    ///
-    /// Returns a hook-level error when the decode policy rejects the value.
-    #[inline(always)]
-    pub(crate) fn handle_invalid_decode(
-        &mut self,
-        error: C::DecodeError,
-        consumed: Option<NonZeroUsize>,
-        context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, H::Error> {
-        self.hooks
-            .handle_invalid_decode(&mut self.codec, error, consumed, context)
     }
 }
 
@@ -496,7 +466,7 @@ where
         Ok(TranscodeDecodeEngine::max_reset_output_len(self))
     }
 
-    /// Resets codec decode state and hook-owned state.
+    /// Runs hook-owned cleanup before a logical decoder reset.
     #[inline(always)]
     fn reset(
         &mut self,

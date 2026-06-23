@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for the reusable buffered decoder engine.
 
-use core::num::NonZeroUsize;
+use core::{cell::Cell, num::NonZeroUsize};
 
 use qubit_codec::{
     Codec, DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks,
@@ -164,7 +164,28 @@ impl Codec for OverconsumingCodec {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
-enum EngineError {}
+enum EngineError {
+    #[error("decode error")]
+    Decode,
+}
+
+impl From<core::convert::Infallible> for EngineError {
+    fn from(error: core::convert::Infallible) -> Self {
+        match error {}
+    }
+}
+
+impl From<PrefixDecodeError> for EngineError {
+    fn from(_error: PrefixDecodeError) -> Self {
+        Self::Decode
+    }
+}
+
+impl From<HintOnlyDecodeError> for EngineError {
+    fn from(_error: HintOnlyDecodeError) -> Self {
+        Self::Decode
+    }
+}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct ReplacingHooks;
@@ -961,20 +982,14 @@ impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
             context.input_index(),
         ))
     }
-
-    fn map_decode_flush_error(
-        &mut self,
-        _codec: &mut FlushFailCodec,
-        error: FlushFailError,
-    ) -> Self::Error {
-        qubit_codec::CodecDecodeError::decode(error, 0)
-    }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetFailHooks;
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ResetObservingHooks {
+    called: std::rc::Rc<Cell<bool>>,
+}
 
-impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
+impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
     type Error = PrefixDecodeError;
 
     fn handle_invalid_decode(
@@ -987,8 +1002,8 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetFailHooks {
         Err(error)
     }
 
-    fn reset(&mut self, _codec: &mut PrefixCodec) -> Result<(), Self::Error> {
-        Err(PrefixDecodeError::Invalid { consumed: 0 })
+    fn before_reset(&mut self, _codec: &mut PrefixCodec) {
+        self.called.set(true);
     }
 }
 
@@ -1017,27 +1032,26 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
 }
 
 #[test]
-fn test_transcode_decode_engine_reset_maps_hook_reset_errors() {
-    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ResetFailHooks);
+fn test_transcode_decode_engine_reset_calls_hook_before_reset() {
+    let called = std::rc::Rc::new(Cell::new(false));
+    let hooks = ResetObservingHooks {
+        called: called.clone(),
+    };
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, hooks);
 
-    let error = decoder
-        .reset(&mut [], 0)
-        .expect_err("hook reset errors should be mapped through the engine");
+    decoder.reset(&mut [], 0).expect("reset should succeed");
 
-    assert_eq!(
-        TranscodeError::Domain(PrefixDecodeError::Invalid { consumed: 0 }),
-        error,
-    );
+    assert!(called.get(), "decode hook before_reset should be called");
 }
 
 #[test]
-fn test_transcode_decode_engine_finish_maps_decode_flush_errors() {
+fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
     let mut output = [0_u8; 1];
 
     let error = decoder
         .finish(&mut output, 0)
-        .expect_err("flush errors should be mapped through hooks");
+        .expect_err("flush errors should be converted through the hook error type");
 
     assert_eq!(
         TranscodeError::Domain(qubit_codec::CodecDecodeError::Decode {

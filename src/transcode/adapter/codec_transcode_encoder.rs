@@ -94,7 +94,7 @@ where
         Ok(self.engine.max_finish_output_len())
     }
 
-    /// Resets hook-owned state and emits stream-start output.
+    /// Runs before-reset cleanup and emits stream-start output.
     #[inline(always)]
     fn reset(
         &mut self,

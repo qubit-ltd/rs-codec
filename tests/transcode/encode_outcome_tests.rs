@@ -6,18 +6,18 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::EncodeValueResult;
+use qubit_codec::EncodeOutcome;
 
 #[test]
-fn test_encode_value_result_constructors_match_variants() {
+fn test_encode_outcome_constructors_match_variants() {
     assert_eq!(
-        EncodeValueResult::Consumed { written: 2 },
-        EncodeValueResult::consumed(2),
+        EncodeOutcome::Consumed { written: 2 },
+        EncodeOutcome::consumed(2),
     );
     assert_eq!(
-        EncodeValueResult::NeedOutput {
+        EncodeOutcome::NeedOutput {
             required: qubit_io::nz!(3),
         },
-        EncodeValueResult::need_output(qubit_io::nz!(3)),
+        EncodeOutcome::need_output(qubit_io::nz!(3)),
     );
 }

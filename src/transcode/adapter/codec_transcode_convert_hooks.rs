@@ -63,7 +63,7 @@ where
         CodecConvertError::encode(error)
     }
 
-    /// Resets stateless codec-backed converter hooks.
+    /// Runs stateless codec-backed converter cleanup before reset.
     ///
     /// # Parameters
     ///
@@ -73,5 +73,5 @@ where
     ///
     /// Returns unit `()`.
     #[inline(always)]
-    fn reset(&mut self) {}
+    fn before_reset(&mut self) {}
 }

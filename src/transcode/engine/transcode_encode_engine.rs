@@ -7,12 +7,9 @@
 // =============================================================================
 //! Reusable buffered encoder engine.
 
-use super::super::internal::{encode_state::EncodeState, encode_step::EncodeStep};
+use super::super::internal::encode_state::EncodeState;
 use crate::codec::assert_unit_bounds;
-use crate::{
-    CapacityError, Codec, EncodeContext, EncodeValueResult, TranscodeEncodeHooks, TranscodeError,
-    TranscodeProgress,
-};
+use crate::{CapacityError, Codec, TranscodeEncodeHooks, TranscodeError, TranscodeProgress};
 
 /// Reusable buffered encoding engine for codec-backed encoders.
 ///
@@ -47,7 +44,7 @@ use crate::{
 ///     CodecDecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
-///     EncodeValueResult,
+///     EncodeOutcome,
 ///     TranscodeStatus,
 /// };
 ///
@@ -91,17 +88,17 @@ use crate::{
 ///         &mut self,
 ///         codec: &mut ByteCodec,
 ///         context: EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeValueResult, Self::Error> {
+///     ) -> Result<EncodeOutcome, Self::Error> {
 ///         let required = ByteCodec::MAX_UNITS_PER_VALUE;
 ///         if context.available_output() < required.get() {
-///             return Ok(EncodeValueResult::need_output(required));
+///             return Ok(EncodeOutcome::need_output(required));
 ///         }
 ///         let written = unsafe {
 ///             codec.encode(context.input_value, context.output, context.output_index)
 ///         }
 ///         .map(NonZeroUsize::get)
 ///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
-///         Ok(EncodeValueResult::consumed(written))
+///         Ok(EncodeOutcome::consumed(written))
 ///     }
 /// }
 ///
@@ -216,7 +213,8 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, or when reset output cannot be emitted.
+    /// output capacity, or when reset output cannot be emitted. Codec reset
+    /// errors are converted with [`From`].
     pub fn reset(
         &mut self,
         output: &mut [C::Unit],
@@ -224,14 +222,13 @@ where
     ) -> Result<usize, TranscodeError<H::Error>> {
         let required = self.max_reset_output_len();
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
-        self.hooks.reset(&mut self.codec);
+        self.hooks.before_reset(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // reset-output bound at `output_index`.
-            self.hooks
-                .write_encode_reset(&mut self.codec, output, output_index)
+            self.codec.encode_reset(output, output_index)
         }
-        .map_err(TranscodeError::domain)?;
+        .map_err(|error| TranscodeError::domain(H::Error::from(error)))?;
         assert!(
             written <= required,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -280,8 +277,11 @@ where
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
             let context = unsafe { state.context_unchecked() };
-            let step = self.encode_step(context)?;
-            if let Some(progress) = state.apply_step(step) {
+            let outcome = self
+                .hooks
+                .encode_value(&mut self.codec, context)
+                .map_err(TranscodeError::domain)?;
+            if let Some(progress) = state.apply_encode_outcome(outcome) {
                 return Ok(progress);
             }
         }
@@ -330,48 +330,6 @@ where
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
         );
         Ok(written)
-    }
-
-    /// Encodes one value attempt into a normalized encode step.
-    ///
-    /// # Parameters
-    ///
-    /// - `context`: Current value, absolute input index, and target output
-    ///   cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns an encode step describing either written output or missing
-    /// output capacity.
-    ///
-    /// # Errors
-    ///
-    /// Returns hook errors when the policy rejects the value.
-    pub(super) fn encode_step(
-        &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeStep, TranscodeError<H::Error>> {
-        let available = context.available_output();
-        match self
-            .hooks
-            .encode_value(&mut self.codec, context)
-            .map_err(TranscodeError::domain)?
-        {
-            EncodeValueResult::Consumed { written } => {
-                assert!(
-                    written <= available,
-                    "TranscodeEncodeEngine hook wrote beyond available output",
-                );
-                Ok(EncodeStep::written(written))
-            }
-            EncodeValueResult::NeedOutput { required } => {
-                assert!(
-                    required.get() > available,
-                    "EncodeValueResult::NeedOutput required capacity must exceed available output",
-                );
-                Ok(EncodeStep::need_output(required, available))
-            }
-        }
     }
 }
 

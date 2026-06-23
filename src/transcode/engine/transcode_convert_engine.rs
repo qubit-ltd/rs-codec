@@ -9,9 +9,8 @@
 
 use super::super::internal::{
     convert_error_of::ConvertErrorOf, convert_progress_result::ConvertProgressResult,
-    convert_state::ConvertState, convert_step_result::ConvertStepResult, encode_step::EncodeStep,
-    pending_encode_step::PendingEncodeStep, pending_value::PendingValue,
-    pending_value_slot::PendingValueSlot,
+    convert_state::ConvertState, convert_step_result::ConvertStepResult,
+    pending_value::PendingValue, pending_value_slot::PendingValueSlot,
 };
 use super::{
     transcode_decode_engine::TranscodeDecodeEngine, transcode_encode_engine::TranscodeEncodeEngine,
@@ -177,7 +176,13 @@ where
             return Ok(progress);
         }
 
+        let min_input_units = D::MIN_UNITS_PER_VALUE;
         while state.has_input() {
+            let available = state.available_input();
+            if available < min_input_units.get() {
+                return Ok(state.need_input_progress(min_input_units, available));
+            }
+
             let previous_read = state.read();
             // Each hot-path step decodes one source value and immediately tries
             // to encode it, preserving backpressure at the target output.
@@ -248,8 +253,8 @@ where
         Ok(state.written())
     }
 
-    /// Resets hook-owned and component-owned state and emits stream-start
-    /// encode output.
+    /// Clears retained conversion state, runs before-reset hooks, and emits
+    /// stream-start encode output.
     ///
     /// # Parameters
     ///
@@ -262,7 +267,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a converter error if reset validation or finalization fails.
+    /// Returns a converter error if reset validation or target reset output
+    /// emission fails.
     pub fn reset(
         &mut self,
         output: &mut [E::Unit],
@@ -272,7 +278,7 @@ where
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
 
         self.pending.clear();
-        self.hooks.reset();
+        self.hooks.before_reset();
         self.decode_engine
             .reset(&mut [], 0)
             .map_err(|error| error.map_domain(|domain| self.hooks.map_decode_error(domain)))?;
@@ -353,18 +359,16 @@ where
             output: state.output_mut(),
             output_index,
         };
-        let step = self
+        let outcome = self
             .encode_engine
-            .encode_step(context)
-            .map_err(|error| error.map_domain(|domain| self.hooks.map_encode_error(domain)))?;
-        let step = match step {
-            EncodeStep::Written { written } => PendingEncodeStep::written(written),
-            EncodeStep::NeedOutput {
-                required,
-                available,
-            } => PendingEncodeStep::need_output(pending, required, available),
-        };
-        Ok(self.pending.apply_pending_encode_step(step, state))
+            .hooks
+            .encode_value(&mut self.encode_engine.codec, context)
+            .map_err(|error| TranscodeError::domain(self.hooks.map_encode_error(error)))?;
+        let progress = state.apply_encode_outcome(outcome);
+        if progress.is_some() {
+            self.pending.put(pending);
+        }
+        Ok(progress)
     }
 }
 

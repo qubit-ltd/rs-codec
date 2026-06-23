@@ -10,7 +10,7 @@
 use core::{cell::Cell, num::NonZeroUsize};
 
 use qubit_codec::{
-    CapacityError, Codec, DecodeContext, DecodeInvalidAction, EncodeContext, EncodeValueResult,
+    CapacityError, Codec, DecodeContext, DecodeInvalidAction, EncodeContext, EncodeOutcome,
     TranscodeConvertEngine, TranscodeConvertHooks, TranscodeDecodeHooks, TranscodeEncodeHooks,
     TranscodeError, TranscodeStatus,
 };
@@ -37,6 +37,12 @@ enum EngineError {
     Decode,
     #[error("encode error")]
     Encode,
+}
+
+impl From<core::convert::Infallible> for EngineError {
+    fn from(error: core::convert::Infallible) -> Self {
+        match error {}
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -217,10 +223,10 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
         &mut self,
         codec: &mut ResetEmittingTargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = <ResetEmittingTargetCodec as Codec>::MAX_UNITS_PER_VALUE;
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         let written = unsafe {
             // SAFETY: The hook checked that the codec output range is writable.
@@ -229,7 +235,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
                 .expect("infallible target encode")
                 .get()
         };
-        Ok(EncodeValueResult::consumed(written))
+        Ok(EncodeOutcome::consumed(written))
     }
 }
 
@@ -257,25 +263,17 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
         &mut self,
         codec: &mut ResetFailTargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = <ResetFailTargetCodec as Codec>::MAX_UNITS_PER_VALUE;
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         let written = unsafe {
             // SAFETY: The hook checked that the codec output range is writable.
             codec.encode(context.input_value, context.output, context.output_index)
         }?
         .get();
-        Ok(EncodeValueResult::consumed(written))
-    }
-
-    fn map_encode_reset_error(
-        &mut self,
-        _codec: &mut ResetFailTargetCodec,
-        error: TargetResetFailError,
-    ) -> Self::Error {
-        error
+        Ok(EncodeOutcome::consumed(written))
     }
 }
 
@@ -389,10 +387,10 @@ impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
         &mut self,
         codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = <TargetCodec as Codec>::MAX_UNITS_PER_VALUE;
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         let EncodeContext {
             input_value,
@@ -405,7 +403,7 @@ impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
             codec.encode(input_value, output, output_index)
         }?
         .get();
-        Ok(EncodeValueResult::consumed(written))
+        Ok(EncodeOutcome::consumed(written))
     }
 }
 
@@ -427,10 +425,10 @@ impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
         &mut self,
         _codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = qubit_io::nz!(2);
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         unsafe {
             // SAFETY: The hook checked that two output units are writable.
@@ -438,7 +436,7 @@ impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
             *context.output.get_unchecked_mut(context.output_index + 1) =
                 context.input_value.wrapping_add(1);
         }
-        Ok(EncodeValueResult::consumed(2))
+        Ok(EncodeOutcome::consumed(2))
     }
 }
 
@@ -639,7 +637,7 @@ impl TranscodeConvertHooks<SourceCodec, TargetCodec> for CopyHooks {
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
         ConvertEngineError::Encode(error)
     }
-    fn reset(&mut self) {
+    fn before_reset(&mut self) {
         self.reset_called = true;
     }
 }
@@ -800,10 +798,10 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
         &mut self,
         codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = <TargetCodec as Codec>::MAX_UNITS_PER_VALUE;
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         let EncodeContext {
             input_value,
@@ -816,7 +814,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
             codec.encode(input_value, output, output_index)
         }?
         .get();
-        Ok(EncodeValueResult::consumed(written))
+        Ok(EncodeOutcome::consumed(written))
     }
 
     fn max_finish_output_len(&self, _codec: &TargetCodec) -> usize {
@@ -951,15 +949,15 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         &mut self,
         _codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         match self.mode {
             ErrorPathEncodeMode::PrepareError => Err(EngineError::Encode),
             ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::FinishError => {
                 let required = <TargetCodec as Codec>::MAX_UNITS_PER_VALUE;
                 if context.available_output() < required.get() {
-                    Ok(EncodeValueResult::need_output(required))
+                    Ok(EncodeOutcome::need_output(required))
                 } else {
-                    Ok(EncodeValueResult::consumed(0))
+                    Ok(EncodeOutcome::consumed(0))
                 }
             }
         }
@@ -1041,10 +1039,10 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
         &mut self,
         _codec: &mut TargetCodec,
         context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeValueResult, Self::Error> {
+    ) -> Result<EncodeOutcome, Self::Error> {
         let required = <TargetCodec as Codec>::MAX_UNITS_PER_VALUE;
         if context.available_output() < required.get() {
-            return Ok(EncodeValueResult::need_output(required));
+            return Ok(EncodeOutcome::need_output(required));
         }
         let EncodeContext {
             input_value,
@@ -1053,7 +1051,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
             ..
         } = context;
         output[output_index] = input_value.wrapping_add(self.offset);
-        Ok(EncodeValueResult::consumed(1))
+        Ok(EncodeOutcome::consumed(1))
     }
 }
 
@@ -1766,10 +1764,12 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     assert_eq!(Ok(0), engine.max_finish_output_len());
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetFailDecodeHooks;
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ResetObservingDecodeHooks {
+    called: std::rc::Rc<Cell<bool>>,
+}
 
-impl TranscodeDecodeHooks<SourceCodec> for ResetFailDecodeHooks {
+impl TranscodeDecodeHooks<SourceCodec> for ResetObservingDecodeHooks {
     type Error = EngineError;
 
     fn handle_invalid_decode(
@@ -1782,8 +1782,8 @@ impl TranscodeDecodeHooks<SourceCodec> for ResetFailDecodeHooks {
         match error {}
     }
 
-    fn reset(&mut self, _codec: &mut SourceCodec) -> Result<(), Self::Error> {
-        Err(EngineError::Decode)
+    fn before_reset(&mut self, _codec: &mut SourceCodec) {
+        self.called.set(true);
     }
 }
 
@@ -1825,23 +1825,21 @@ fn test_buffered_convert_engine_reset_emits_target_reset_output() {
 }
 
 #[test]
-fn test_buffered_convert_engine_reset_maps_decode_reset_errors() {
+fn test_buffered_convert_engine_reset_calls_decode_before_reset() {
+    let called = std::rc::Rc::new(Cell::new(false));
     let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
-        ResetFailDecodeHooks,
+        ResetObservingDecodeHooks {
+            called: called.clone(),
+        },
         StrictEncodeHooks,
         ResetFailDecodeConvertHooks,
     );
 
-    let error = engine
-        .reset(&mut [], 0)
-        .expect_err("decode reset errors should be mapped through convert hooks");
+    engine.reset(&mut [], 0).expect("reset should succeed");
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
-        error,
-    );
+    assert!(called.get(), "decode before_reset should be called");
 }
 
 #[test]

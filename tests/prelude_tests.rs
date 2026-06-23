@@ -9,7 +9,7 @@
 use qubit_codec::{
     BigEndian, ByteOrder, ByteOrderSpec, Codec, CodecConvertError, CodecDecodeError,
     CodecEncodeError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
-    CodecValueDecoder, CodecValueEncoder, CodecValueExt, EncodeContext, EncodeValueResult,
+    CodecValueDecoder, CodecValueEncoder, CodecValueExt, EncodeContext, EncodeOutcome,
     TranscodeConvertHooks, TranscodeConverter, TranscodeDecoder, TranscodeEncoder,
     TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder,
 };
@@ -161,12 +161,12 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(1, context.available_output());
 
     assert_eq!(
-        EncodeValueResult::consumed(3),
-        EncodeValueResult::Consumed { written: 3 }
+        EncodeOutcome::consumed(3),
+        EncodeOutcome::Consumed { written: 3 }
     );
     assert_eq!(
-        EncodeValueResult::need_output(qubit_io::nz!(4)),
-        EncodeValueResult::NeedOutput {
+        EncodeOutcome::need_output(qubit_io::nz!(4)),
+        EncodeOutcome::NeedOutput {
             required: qubit_io::nz!(4),
         },
     );

@@ -5,17 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Result of one buffered encode value attempt.
+//! Outcome of one buffered encode value attempt.
 
 use core::num::NonZeroUsize;
 
-/// Result returned by encode-side per-value hooks.
+/// Outcome returned by encode-side per-value hooks.
 ///
 /// This is deliberately smaller than [`crate::TranscodeProgress`]. It only
 /// describes what happened to the current input value; the encode engine owns
 /// input/output cursor updates and progress construction.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum EncodeValueResult {
+pub enum EncodeOutcome {
     /// The current input value was consumed.
     Consumed {
         /// Output units written for this value.
@@ -29,15 +29,15 @@ pub enum EncodeValueResult {
     },
 }
 
-impl EncodeValueResult {
-    /// Creates a result for a consumed input value.
+impl EncodeOutcome {
+    /// Creates an outcome for a consumed input value.
     #[must_use]
     #[inline(always)]
     pub const fn consumed(written: usize) -> Self {
         Self::Consumed { written }
     }
 
-    /// Creates a result for insufficient output capacity.
+    /// Creates an outcome for insufficient output capacity.
     #[must_use]
     #[inline(always)]
     pub const fn need_output(required: NonZeroUsize) -> Self {

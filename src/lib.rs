@@ -28,7 +28,7 @@ pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
 pub use codec::{Codec, CodecConvertError, CodecDecodeError, CodecDecodeFailure, CodecEncodeError};
 pub use transcode::{
     CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
-    DecodeContext, DecodeInvalidAction, EncodeContext, EncodeValueResult, TranscodeConvertEngine,
+    DecodeContext, DecodeInvalidAction, EncodeContext, EncodeOutcome, TranscodeConvertEngine,
     TranscodeConvertHooks, TranscodeConverter, TranscodeDecodeEngine, TranscodeDecodeHooks,
     TranscodeDecodeInput, TranscodeDecoder, TranscodeEncodeEngine, TranscodeEncodeHooks,
     TranscodeEncodeOutput, TranscodeEncoder, TranscodeError, TranscodeProgress, TranscodeStatus,
