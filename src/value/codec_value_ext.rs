@@ -297,7 +297,7 @@ fn map_decode_failure<E>(
 ) -> CodecDecodeError<E> {
     match failure {
         CodecDecodeFailure::Incomplete { required_total } => {
-            CodecDecodeError::incomplete(input_index, required_total, available)
+            CodecDecodeError::incomplete(input_index, required_total.get(), available)
         }
         CodecDecodeFailure::Invalid { source, .. } => {
             CodecDecodeError::decode(source, input_index)

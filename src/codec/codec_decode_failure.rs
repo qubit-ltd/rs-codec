@@ -24,8 +24,8 @@ use core::num::NonZeroUsize;
 pub enum CodecDecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
     Incomplete {
-        /// Total units required from the current value start.
-        required_total: usize,
+        /// Non-zero total units required from the current value start.
+        required_total: NonZeroUsize,
     },
 
     /// The input is invalid for the codec.
@@ -42,14 +42,15 @@ impl<E> CodecDecodeFailure<E> {
     ///
     /// # Parameters
     ///
-    /// - `required_total`: Total units required from the current value start.
+    /// - `required_total`: Non-zero total units required from the current value
+    ///   start.
     ///
     /// # Returns
     ///
     /// Returns an incomplete decode failure.
     #[inline(always)]
     #[must_use]
-    pub const fn incomplete(required_total: usize) -> Self {
+    pub const fn incomplete(required_total: NonZeroUsize) -> Self {
         Self::Incomplete { required_total }
     }
 
@@ -98,7 +99,7 @@ impl<E> CodecDecodeFailure<E> {
     /// invalid-input failures.
     #[inline(always)]
     #[must_use]
-    pub const fn required_total(&self) -> Option<usize> {
+    pub const fn required_total(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Incomplete { required_total } => Some(*required_total),
             Self::Invalid { .. } => None,

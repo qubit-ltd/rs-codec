@@ -180,9 +180,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the supplied codec violates the
+    /// In debug builds, panics when the supplied codec violates the
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant.
+    /// invariant. Release builds skip this check because the invariant is the
+    /// responsibility of the [`Codec`] implementation.
     #[inline]
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
@@ -441,12 +442,10 @@ where
             }
             Err(CodecDecodeFailure::Incomplete { required_total }) => {
                 assert!(
-                    required_total > context.available(),
+                    required_total.get() > context.available(),
                     "Codec::decode incomplete required_total must exceed available input",
                 );
-                let required = NonZeroUsize::new(required_total)
-                    .expect("codec incomplete required_total must be non-zero");
-                Ok(DecodeStep::need_input(required, context.available()))
+                Ok(DecodeStep::need_input(required_total, context.available()))
             }
             Err(CodecDecodeFailure::Invalid { source, consumed }) => {
                 let action = self

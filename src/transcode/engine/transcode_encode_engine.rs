@@ -156,9 +156,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the supplied codec violates the
+    /// In debug builds, panics when the supplied codec violates the
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant.
+    /// invariant. Release builds skip this check because the invariant is the
+    /// responsibility of the [`Codec`] implementation.
     #[inline]
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {

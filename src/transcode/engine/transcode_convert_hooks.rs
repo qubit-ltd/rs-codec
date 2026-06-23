@@ -11,10 +11,9 @@ use crate::Codec;
 
 /// Error mapping hooks for [`crate::TranscodeConvertEngine`].
 ///
-/// Convert hooks no longer create decode or encode policy hooks. The converter
-/// engine owns those components directly. This trait only maps decode-side and
-/// encode-side errors into one converter-level error type, plus optional
-/// conversion-level reset state.
+/// The converter engine owns decode and encode policy hooks directly. This
+/// trait maps decode-side and encode-side errors into one converter-level error
+/// type and can reset conversion-level hook state.
 ///
 /// # Type Parameters
 ///

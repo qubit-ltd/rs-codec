@@ -319,8 +319,9 @@ pub trait Codec {
 ///
 /// # Panics
 ///
-/// Panics when [`Codec::MIN_UNITS_PER_VALUE`] is greater than
-/// [`Codec::MAX_UNITS_PER_VALUE`].
+/// In debug builds, panics when [`Codec::MIN_UNITS_PER_VALUE`] is greater than
+/// [`Codec::MAX_UNITS_PER_VALUE`]. Release builds skip this check; maintaining
+/// the invariant is the responsibility of each [`Codec`] implementation.
 #[inline(always)]
 pub(crate) fn assert_unit_bounds<C>()
 where

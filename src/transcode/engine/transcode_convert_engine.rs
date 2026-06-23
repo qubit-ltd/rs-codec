@@ -105,9 +105,10 @@ where
     /// Returns a buffered converter engine.
     /// # Panics
     ///
-    /// Panics when either codec violates the
+    /// In debug builds, panics when either codec violates the
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant.
+    /// invariant. Release builds skip this check because the invariant is the
+    /// responsibility of each [`Codec`] implementation.
     #[inline]
     #[must_use]
     pub fn new(

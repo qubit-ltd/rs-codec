@@ -543,7 +543,7 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
             (u8, core::num::NonZeroUsize),
             qubit_codec::CodecDecodeFailure<Self::DecodeError>,
         > {
-            Err(qubit_codec::CodecDecodeFailure::incomplete(2))
+            Err(qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)))
         }
 
         unsafe fn encode(

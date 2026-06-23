@@ -61,7 +61,7 @@ impl Codec for PrefixCodec {
         let first = unsafe { *input.as_ptr().add(index) };
         match first {
             0xfe if input.len() - index < 2 => {
-                Err(qubit_codec::CodecDecodeFailure::incomplete(2))
+                Err(qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)))
             }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
