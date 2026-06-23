@@ -47,8 +47,8 @@ where
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
     /// invariant. Validating once at construction lets the hot decode path
     /// skip the check.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(codec: C) -> Self {
         assert_unit_bounds::<C>();
         Self { codec }

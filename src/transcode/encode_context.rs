@@ -38,8 +38,8 @@ impl<Value, Unit> EncodeContext<'_, Value, Unit> {
     /// # Returns
     ///
     /// Returns output capacity visible to this encode attempt.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn available_output(&self) -> usize {
         self.output.len().saturating_sub(self.output_index)
     }

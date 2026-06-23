@@ -174,8 +174,8 @@ where
     /// Panics when the supplied codec violates the
     /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
     /// invariant.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
         assert_unit_bounds::<C>();
         Self { codec, hooks }
@@ -219,8 +219,8 @@ where
     /// Returns the maximum values emitted when resetting stream state.
     ///
     /// Decoders do not emit reset output; this bound is always `0`.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn max_reset_output_len(&self) -> usize {
         0
     }

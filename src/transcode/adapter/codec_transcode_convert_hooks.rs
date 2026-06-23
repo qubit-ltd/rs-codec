@@ -19,8 +19,8 @@ impl CodecTranscodeConvertHooks {
     /// # Returns
     ///
     /// Returns stateless converter hooks.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub(in crate::transcode) const fn new() -> Self {
         Self
     }

@@ -47,8 +47,8 @@ impl<D, E> CodecConvertError<D, E> {
     /// # Returns
     ///
     /// Returns a decode-side conversion error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn decode(source: CodecDecodeError<D>) -> Self {
         Self::Decode { source }
     }
@@ -62,8 +62,8 @@ impl<D, E> CodecConvertError<D, E> {
     /// # Returns
     ///
     /// Returns an encode-side conversion error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn encode(source: CodecEncodeError<E>) -> Self {
         Self::Encode { source }
     }

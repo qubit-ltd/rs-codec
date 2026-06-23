@@ -76,22 +76,22 @@ impl<E> TranscodeError<E> {
     }
 
     /// Creates an invalid-input-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
 
     /// Creates an invalid-output-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
         Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn insufficient_output(
         output_index: usize,
         required: usize,
@@ -105,8 +105,8 @@ impl<E> TranscodeError<E> {
     }
 
     /// Creates an output-length-overflow error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn output_length_overflow() -> Self {
         Self::OutputLengthOverflow
     }
@@ -116,8 +116,8 @@ impl<E> TranscodeError<E> {
     /// # Returns
     ///
     /// Returns `true` for [`TranscodeError::Domain`].
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn is_domain(&self) -> bool {
         matches!(self, Self::Domain(_))
     }
@@ -128,8 +128,8 @@ impl<E> TranscodeError<E> {
     ///
     /// Returns `Some(error)` for [`TranscodeError::Domain`] and `None` for
     /// buffer contract errors.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
             Self::Domain(error) => Some(error),

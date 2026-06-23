@@ -49,8 +49,8 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(inner: O) -> Self {
         Self {
             output: BufferedOutput::new(inner),
@@ -67,8 +67,8 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
             output: BufferedOutput::with_capacity(inner, capacity),
@@ -80,8 +80,8 @@ where
     /// # Returns
     ///
     /// A shared reference to the wrapped unit output.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn inner(&self) -> &O {
         self.output.inner()
     }
@@ -101,8 +101,8 @@ where
     /// # Returns
     ///
     /// The number of output units that can still be appended without flushing.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn spare_capacity(&self) -> usize {
         self.output.spare_capacity()
     }
@@ -151,8 +151,8 @@ where
     /// # Returns
     ///
     /// The wrapped output and the buffer holding pending units.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }

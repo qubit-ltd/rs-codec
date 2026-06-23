@@ -101,72 +101,6 @@ where
     }
 }
 
-impl<D, E> Default for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: Default,
-{
-    /// Creates a default codec-backed buffered converter.
-    ///
-    /// # Returns
-    ///
-    /// Returns a converter with default codecs and hooks.
-    #[inline(always)]
-    fn default() -> Self {
-        Self {
-            engine: TranscodeConvertEngine::default(),
-        }
-    }
-}
-
-impl<D, E> Eq for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: Eq,
-{
-}
-
-impl<D, E> PartialEq for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
-    >: PartialEq,
-{
-    /// Compares the wrapped converter engine.
-    ///
-    /// # Parameters
-    ///
-    /// - `other`: Another converter to compare with.
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` when the wrapped engines are equal.
-    #[inline(always)]
-    fn eq(&self, other: &Self) -> bool {
-        self.engine == other.engine
-    }
-}
-
 impl<D, E> CodecTranscodeConverter<D, E>
 where
     D: Codec,
@@ -182,8 +116,8 @@ where
     /// # Returns
     ///
     /// Returns a buffered converter adapter for the supplied codecs.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
             engine: TranscodeConvertEngine::new(
@@ -415,4 +349,71 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Default,
 {
+    // empty
+}
+
+impl<D, E> Default for CodecTranscodeConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: Default,
+{
+    /// Creates a default codec-backed buffered converter.
+    ///
+    /// # Returns
+    ///
+    /// Returns a converter with default codecs and hooks.
+    #[inline(always)]
+    fn default() -> Self {
+        Self {
+            engine: TranscodeConvertEngine::default(),
+        }
+    }
+}
+
+impl<D, E> Eq for CodecTranscodeConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: Eq,
+{
+}
+
+impl<D, E> PartialEq for CodecTranscodeConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+        CodecTranscodeConvertHooks,
+    >: PartialEq,
+{
+    /// Compares the wrapped converter engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `other`: Another converter to compare with.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the wrapped engines are equal.
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.engine == other.engine
+    }
 }

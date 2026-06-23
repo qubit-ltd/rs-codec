@@ -58,8 +58,8 @@ impl<Value> DecodeInvalidAction<Value> {
     /// # Panics
     ///
     /// Panics when a consuming action exceeds `available`.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub(super) fn into_step(self, input_index: usize, available: usize) -> DecodeStep<Value> {
         match self {
             Self::Skip { consumed } => {
@@ -88,8 +88,8 @@ impl<Value> DecodeInvalidAction<Value> {
     /// # Panics
     ///
     /// Panics when `available == 0` or when `consumed > available`.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
         assert!(
             available > 0,

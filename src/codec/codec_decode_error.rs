@@ -93,8 +93,8 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns a codec decode error wrapper.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn decode(source: E, input_index: usize) -> Self {
         Self::Decode {
             source,
@@ -113,8 +113,8 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns an incomplete-input error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn incomplete(input_index: usize, required_total: usize, available: usize) -> Self {
         Self::Incomplete {
             input_index,
@@ -133,8 +133,8 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns a trailing-input error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
         Self::TrailingInput {
             consumed,
@@ -152,8 +152,8 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns an invalid-input-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
@@ -168,15 +168,15 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns an invalid-output-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
         Self::InvalidOutputIndex { index, len }
     }
 
     /// Creates an insufficient-output error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn insufficient_output(
         output_index: usize,
         required: usize,
@@ -194,8 +194,8 @@ impl<E> CodecDecodeError<E> {
     /// # Returns
     ///
     /// Returns `true` only for the [`Incomplete`](Self::Incomplete) variant.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn is_incomplete(&self) -> bool {
         matches!(self, Self::Incomplete { .. })
     }
@@ -212,8 +212,8 @@ impl<E> CodecDecodeError<E> {
     /// where `needed` is the strictly positive difference between the minimum
     /// units required and those already available. Returns `None` for all
     /// other variants.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn needed_additional(&self) -> Option<core::num::NonZeroUsize> {
         match *self {
             Self::Incomplete {

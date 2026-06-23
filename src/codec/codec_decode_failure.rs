@@ -47,8 +47,8 @@ impl<E> CodecDecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an incomplete decode failure.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn incomplete(required_total: usize) -> Self {
         Self::Incomplete { required_total }
     }
@@ -63,8 +63,8 @@ impl<E> CodecDecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an invalid decode failure.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid(source: E, consumed: NonZeroUsize) -> Self {
         Self::Invalid {
             source,
@@ -81,8 +81,8 @@ impl<E> CodecDecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an invalid decode failure.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_without_consumed(source: E) -> Self {
         Self::Invalid {
             source,
@@ -96,8 +96,8 @@ impl<E> CodecDecodeFailure<E> {
     ///
     /// Returns `Some(required_total)` for incomplete failures, or `None` for
     /// invalid-input failures.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn required_total(&self) -> Option<usize> {
         match self {
             Self::Incomplete { required_total } => Some(*required_total),
@@ -111,8 +111,8 @@ impl<E> CodecDecodeFailure<E> {
     ///
     /// Returns `Some(source)` for invalid-input failures, or `None` for
     /// incomplete failures.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_source(&self) -> Option<&E> {
         match self {
             Self::Invalid { source, .. } => Some(source),
@@ -126,8 +126,8 @@ impl<E> CodecDecodeFailure<E> {
     ///
     /// Returns `Some(consumed)` when the invalid failure carries a consumption
     /// hint, or `None` otherwise.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn consumed_units(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Invalid { consumed, .. } => *consumed,

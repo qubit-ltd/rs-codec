@@ -15,16 +15,12 @@ use super::super::{
     encode_context::EncodeContext, encode_outcome::EncodeOutcome,
     transcode_progress::TranscodeProgress,
 };
-use super::cursor_state::CursorState;
+use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
-    /// Complete input value slice visible to the encoder.
-    input: &'a [Value],
-    /// Complete output unit slice visible to the encoder.
-    output: &'a mut [Unit],
-    /// Shared absolute input/output cursors.
-    cursor: CursorState,
+    /// Shared input/output state for this encode call.
+    state: TranscodeState<'a, Value, Unit>,
 }
 
 impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
@@ -48,15 +44,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         output: &'a mut [Unit],
         output_index: usize,
     ) -> Self {
-        debug_assert!(
-            input_index <= input.len(),
-            "input index must be within the input slice"
-        );
-
         Self {
-            input,
-            output,
-            cursor: CursorState::new(input_index, output_index),
+            state: TranscodeState::new(input, input_index, output, output_index),
         }
     }
 
@@ -67,7 +56,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns `true` when more input values remain.
     #[inline(always)]
     pub(in crate::transcode) fn has_input(&self) -> bool {
-        self.cursor.input_cursor() < self.input.len()
+        self.state.has_input()
     }
 
     /// Returns an encode context at the current cursors.
@@ -79,13 +68,16 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     pub(in crate::transcode) unsafe fn context_unchecked(
         &mut self,
     ) -> EncodeContext<'_, Value, Unit> {
+        let input_index = self.state.input_cursor();
+        let output_index = self.state.output_cursor();
+        let (input, output) = self.state.input_output_mut();
         // SAFETY: Guaranteed by the caller.
-        let value = unsafe { UncheckedSlice::get(self.input, self.cursor.input_cursor()) };
+        let value = unsafe { UncheckedSlice::get(input, input_index) };
         EncodeContext {
             input_value: value,
-            input_index: self.cursor.input_cursor(),
-            output: &mut *self.output,
-            output_index: self.cursor.output_cursor(),
+            input_index,
+            output,
+            output_index,
         }
     }
 
@@ -96,9 +88,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns writable output capacity from the current output cursor.
     #[inline(always)]
     fn available_output(&self) -> usize {
-        self.output
-            .len()
-            .saturating_sub(self.cursor.output_cursor())
+        self.state.available_output()
     }
 
     /// Accepts a completed one-value write and advances both cursors.
@@ -116,7 +106,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
             written <= self.available_output(),
             "EncodeOutcome::Consumed wrote beyond available output",
         );
-        self.cursor.advance(1, written);
+        self.state.advance(1, written);
     }
 
     /// Returns completed progress for the current cursors.
@@ -127,7 +117,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// counters.
     #[inline(always)]
     pub(in crate::transcode) fn complete_progress(&self) -> TranscodeProgress {
-        TranscodeProgress::complete(self.cursor.read(), self.cursor.written())
+        self.state.complete_progress()
     }
 
     /// Returns progress for a known missing output capacity.
@@ -148,13 +138,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         required: NonZeroUsize,
         available: usize,
     ) -> TranscodeProgress {
-        TranscodeProgress::need_output(
-            self.cursor.output_cursor(),
-            required,
-            available,
-            self.cursor.read(),
-            self.cursor.written(),
-        )
+        self.state.need_output_progress(required, available)
     }
 
     /// Applies one encode outcome to this encode state.

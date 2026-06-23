@@ -46,8 +46,8 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(inner: I) -> Self {
         Self {
             input: BufferedInput::new(inner),
@@ -64,8 +64,8 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
@@ -77,8 +77,8 @@ where
     /// # Returns
     ///
     /// A shared reference to the wrapped unit input.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn inner(&self) -> &I {
         self.input.inner()
     }
@@ -98,8 +98,8 @@ where
     /// # Returns
     ///
     /// The number of unread units in the internal buffer.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn available(&self) -> usize {
         self.input.available()
     }
@@ -110,8 +110,8 @@ where
     ///
     /// Returns a shared slice over the unread portion of the internal unit
     /// buffer. The slice is valid until this adapter is mutated.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn unread(&self) -> &[I::Item] {
         self.input.unread()
     }
@@ -121,8 +121,8 @@ where
     /// # Returns
     ///
     /// The maximum number of units retained in the internal buffer.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub fn capacity(&self) -> usize {
         self.input.capacity()
     }
@@ -205,8 +205,8 @@ where
     /// # Returns
     ///
     /// The wrapped input and the buffer holding unread units.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
     }

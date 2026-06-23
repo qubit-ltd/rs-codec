@@ -81,8 +81,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns a codec encode error wrapper.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn encode(source: E, input_index: usize) -> Self {
         Self::Encode {
             source,
@@ -99,8 +99,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns an unencodable-value error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn unencodable_value(input_index: usize) -> Self {
         Self::UnencodableValue { input_index }
     }
@@ -115,8 +115,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns an invalid-input-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
         Self::InvalidInputIndex { index, len }
     }
@@ -131,8 +131,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns an invalid-output-index error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
         Self::InvalidOutputIndex { index, len }
     }
@@ -148,8 +148,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns an insufficient-output error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn insufficient_output(
         output_index: usize,
         required: usize,
@@ -167,8 +167,8 @@ impl<E> CodecEncodeError<E> {
     /// # Returns
     ///
     /// Returns an output-length-overflow error.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn output_length_overflow() -> Self {
         Self::OutputLengthOverflow
     }

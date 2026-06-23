@@ -10,17 +10,13 @@
 use core::num::NonZeroUsize;
 
 use super::super::{decode_context::DecodeContext, transcode_progress::TranscodeProgress};
-use super::cursor_state::CursorState;
 use super::decode_step::DecodeStep;
+use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered decode call.
 pub(in crate::transcode) struct DecodeState<'a, Unit, Value> {
-    /// Complete input unit slice visible to the decoder.
-    input: &'a [Unit],
-    /// Complete output value slice visible to the decoder.
-    output: &'a mut [Value],
-    /// Shared absolute input/output cursors.
-    cursor: CursorState,
+    /// Shared input/output state for this decode call.
+    state: TranscodeState<'a, Unit, Value>,
 }
 
 impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
@@ -44,15 +40,8 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         output: &'a mut [Value],
         output_index: usize,
     ) -> Self {
-        debug_assert!(
-            input_index <= input.len(),
-            "input index must be within the input slice"
-        );
-
         Self {
-            input,
-            output,
-            cursor: CursorState::new(input_index, output_index),
+            state: TranscodeState::new(input, input_index, output, output_index),
         }
     }
 
@@ -63,7 +52,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns the full input slice visible to this decode call.
     #[inline(always)]
     pub(in crate::transcode) fn input(&self) -> &[Unit] {
-        self.input
+        self.state.input()
     }
 
     /// Returns whether there is still input to decode.
@@ -73,7 +62,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns `true` when there are input units remaining.
     #[inline(always)]
     pub(in crate::transcode) fn has_input(&self) -> bool {
-        self.cursor.input_cursor() < self.input.len()
+        self.state.has_input()
     }
 
     /// Returns whether the output slice has no slot for the next value.
@@ -83,13 +72,13 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns `true` when no output slot remains for the next value.
     #[inline(always)]
     pub(in crate::transcode) fn needs_output(&self) -> bool {
-        self.cursor.output_cursor() == self.output.len()
+        self.state.needs_output()
     }
 
     /// Returns input units visible from the current input cursor.
     #[inline(always)]
     fn available(&self) -> usize {
-        self.input.len() - self.cursor.input_cursor()
+        self.state.available_input()
     }
 
     /// Returns a public decode context snapshot.
@@ -100,10 +89,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     #[inline(always)]
     pub(in crate::transcode) fn context(&self) -> DecodeContext {
         DecodeContext::new(
-            self.cursor.input_start(),
-            self.cursor.input_cursor(),
-            self.cursor.output_start(),
-            self.cursor.output_cursor(),
+            self.state.input_start(),
+            self.state.input_cursor(),
+            self.state.output_start(),
+            self.state.output_cursor(),
             self.available(),
         )
     }
@@ -124,7 +113,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
             consumed <= self.available(),
             "decode step consumed beyond available input",
         );
-        self.cursor.advance_input(consumed);
+        self.state.advance_input(consumed);
     }
 
     /// Emits a decoded value and advances both cursors.
@@ -150,10 +139,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         );
         // SAFETY: `needs_output()` returned false, so the output cursor points
         // at a writable slot.
+        let output_cursor = self.state.output_cursor();
         unsafe {
-            *qubit_io::UncheckedSlice::get_mut(self.output, self.cursor.output_cursor()) = value;
+            *qubit_io::UncheckedSlice::get_mut(self.state.output_mut(), output_cursor) = value;
         }
-        self.cursor.advance(consumed, 1);
+        self.state.advance(consumed, 1);
     }
 
     /// Returns completed progress for the current cursors.
@@ -163,7 +153,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns a completed [`TranscodeProgress`].
     #[inline(always)]
     pub(in crate::transcode) fn complete_progress(&self) -> TranscodeProgress {
-        TranscodeProgress::complete(self.cursor.read(), self.cursor.written())
+        self.state.complete_progress()
     }
 
     /// Returns progress for a missing output slot.
@@ -173,14 +163,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
-        let context = self.context();
-        TranscodeProgress::need_output(
-            context.output_index(),
-            NonZeroUsize::MIN,
-            0,
-            self.cursor.read(),
-            self.cursor.written(),
-        )
+        self.state.need_output_progress(NonZeroUsize::MIN, 0)
     }
 
     /// Returns progress for a policy-selected need-input stop.
@@ -200,13 +183,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         required: NonZeroUsize,
         available: usize,
     ) -> TranscodeProgress {
-        TranscodeProgress::need_input(
-            self.cursor.input_cursor(),
-            required,
-            available,
-            self.cursor.read(),
-            self.cursor.written(),
-        )
+        self.state.need_input_progress(required, available)
     }
 
     /// Applies one normalized decode step to this decode state.
@@ -219,8 +196,8 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns optional [`TranscodeProgress`] when decoding must stop in this
     /// call.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub(in crate::transcode) fn apply_decode_step(
         &mut self,
         step: DecodeStep<Value>,

@@ -31,15 +31,15 @@ pub enum EncodeOutcome {
 
 impl EncodeOutcome {
     /// Creates an outcome for a consumed input value.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn consumed(written: usize) -> Self {
         Self::Consumed { written }
     }
 
     /// Creates an outcome for insufficient output capacity.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub const fn need_output(required: NonZeroUsize) -> Self {
         Self::NeedOutput { required }
     }

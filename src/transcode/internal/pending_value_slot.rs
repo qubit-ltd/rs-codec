@@ -19,8 +19,8 @@ pub(in crate::transcode) struct PendingValueSlot<Value> {
 
 impl<Value> PendingValueSlot<Value> {
     /// Creates an empty pending-value slot.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub(in crate::transcode) const fn empty() -> Self {
         Self { value: None }
     }

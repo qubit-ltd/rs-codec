@@ -38,8 +38,8 @@ impl<Value> PendingValue<Value> {
     ///
     /// Returns the absolute source input index used for downstream encode
     /// errors.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub(in crate::transcode) const fn input_index(&self) -> usize {
         self.input_index
     }
@@ -49,8 +49,8 @@ impl<Value> PendingValue<Value> {
     /// # Returns
     ///
     /// Returns the retained decoded value by shared reference.
-    #[must_use]
     #[inline(always)]
+    #[must_use]
     pub(in crate::transcode) const fn value(&self) -> &Value {
         &self.value
     }

@@ -43,8 +43,8 @@ where
     /// # Returns
     ///
     /// Returns a buffered decoder adapter for the supplied codec.
-    #[must_use]
     #[inline]
+    #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
             engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
