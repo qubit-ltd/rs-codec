@@ -28,6 +28,14 @@ pub enum CodecDecodeError<E> {
         input_index: usize,
     },
 
+    /// The wrapped codec reported an error while resetting decode state.
+    #[error("codec decode reset error: {source}")]
+    DecodeReset {
+        /// Error returned by [`crate::Codec::decode_reset`].
+        #[source]
+        source: E,
+    },
+
     /// The wrapped codec reported an error while flushing decode state.
     #[error("codec decode flush error: {source}")]
     DecodeFlush {
@@ -110,6 +118,21 @@ impl<E> CodecDecodeError<E> {
             source,
             input_index,
         }
+    }
+
+    /// Creates an error wrapping a codec-specific decode-reset error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Error returned by [`crate::Codec::decode_reset`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec decode-reset error wrapper.
+    #[inline(always)]
+    #[must_use]
+    pub const fn decode_reset(source: E) -> Self {
+        Self::DecodeReset { source }
     }
 
     /// Creates an error wrapping a codec-specific decode-flush error.

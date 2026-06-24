@@ -15,6 +15,7 @@ use core::{
 use qubit_codec::{
     Codec,
     CodecDecodeFlushError,
+    CodecDecodeResetError,
     DecodeContext,
     DecodeInvalidAction,
     TranscodeDecodeEngine,
@@ -234,6 +235,25 @@ impl From<CodecDecodeFlushError<PrefixDecodeError>> for PrefixDecodeError {
     }
 }
 
+impl From<CodecDecodeResetError<PrefixDecodeError>> for EngineError {
+    fn from(_error: CodecDecodeResetError<PrefixDecodeError>) -> Self {
+        Self::Decode
+    }
+}
+
+impl From<CodecDecodeResetError<core::convert::Infallible>> for EngineError {
+    #[allow(unreachable_code)]
+    fn from(error: CodecDecodeResetError<core::convert::Infallible>) -> Self {
+        match error.into_source() {}
+    }
+}
+
+impl From<CodecDecodeResetError<PrefixDecodeError>> for PrefixDecodeError {
+    fn from(error: CodecDecodeResetError<PrefixDecodeError>) -> Self {
+        error.into_source()
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct ReplacingHooks;
 
@@ -354,7 +374,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
         usize::from(self.pending_suffix)
     }
 
-    fn finish(
+    fn finish_hooks(
         &mut self,
         _codec: &mut PrefixCodec,
         output: &mut [u8],
@@ -433,7 +453,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
         1
     }
 
-    fn finish(
+    fn finish_hooks(
         &mut self,
         _codec: &mut PrefixCodec,
         output: &mut [u8],
@@ -471,7 +491,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
         1
     }
 
-    fn finish(
+    fn finish_hooks(
         &mut self,
         _codec: &mut PrefixCodec,
         output: &mut [u8],
@@ -734,7 +754,7 @@ fn test_buffered_decode_hooks_default_finish_is_noop() {
     let mut hooks = ReplacingHooks;
     let mut output = [];
 
-    let written = TranscodeDecodeHooks::<PrefixCodec>::finish(
+    let written = TranscodeDecodeHooks::<PrefixCodec>::finish_hooks(
         &mut hooks,
         &mut PrefixCodec,
         &mut output,
@@ -1104,7 +1124,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
         Err(error)
     }
 
-    fn before_reset(&mut self, _codec: &mut PrefixCodec) {
+    fn reset_hooks(&mut self, _codec: &mut PrefixCodec) {
         self.called.set(true);
     }
 }

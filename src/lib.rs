@@ -36,7 +36,9 @@ pub use codec::{
     CodecDecodeError,
     CodecDecodeFailure,
     CodecDecodeFlushError,
+    CodecDecodeResetError,
     CodecEncodeError,
+    CodecEncodeFlushError,
     CodecEncodeResetError,
 };
 pub use transcode::{

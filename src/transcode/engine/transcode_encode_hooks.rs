@@ -24,8 +24,8 @@ use crate::{
 /// individual values while reusing the common engine loop. Examples include
 /// rejecting unsupported values with adapter-level context, consuming values
 /// without writing output, writing replacement units, resetting hook-owned
-/// state in [`before_reset`](Self::before_reset), or emitting final state in
-/// [`finish`](Self::finish).
+/// state in [`reset_hooks`](Self::reset_hooks), or emitting final state in
+/// [`finish_hooks`](Self::finish_hooks).
 ///
 /// The engine calls [`encode_value`](Self::encode_value) for the current input
 /// value. The hook either consumes that value and reports written output units,
@@ -100,11 +100,10 @@ use crate::{
 ///         if context.available_output() < required.get() {
 ///             return Ok(EncodeOutcome::need_output(required));
 ///         }
-///         let written = unsafe {
-///             codec.encode(context.input_value, context.output, context.output_index)
-///         }
-///         .map(NonZeroUsize::get)
-///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
+///         let (value, input_index, output, output_index) = context.into_parts();
+///         let written = unsafe { codec.encode(value, output, output_index) }
+///             .map(NonZeroUsize::get)
+///             .map_err(|error| CodecEncodeError::encode(error, input_index))?;
 ///         Ok(EncodeOutcome::consumed(written))
 ///     }
 /// }
@@ -189,13 +188,16 @@ where
         context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, Self::Error>;
 
-    /// Runs hook-owned cleanup before stream reset.
+    /// Runs hook-owned cleanup as part of stream reset.
+    ///
+    /// Called before [`Codec::encode_reset`](crate::Codec::encode_reset) writes
+    /// its own reset output. Stateless hooks may use the default no-op.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
     #[inline(always)]
-    fn before_reset(&mut self, _codec: &mut C) {}
+    fn reset_hooks(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output units.
     ///
@@ -205,6 +207,9 @@ where
     /// [`TranscodeEncodeHooks::max_finish_output_len`] writable units from
     /// `output_index`. Implementations must not write beyond that declared
     /// final-output bound.
+    ///
+    /// Called after [`Codec::encode_flush`](crate::Codec::encode_flush) has
+    /// written its own flush output.
     ///
     /// # Parameters
     ///
@@ -221,7 +226,7 @@ where
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
     #[inline(always)]
-    fn finish(
+    fn finish_hooks(
         &mut self,
         _codec: &mut C,
         _output: &mut [C::Unit],

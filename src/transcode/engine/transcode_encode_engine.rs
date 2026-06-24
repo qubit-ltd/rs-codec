@@ -12,6 +12,7 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecEncodeFlushError,
     CodecEncodeResetError,
     TranscodeEncodeHooks,
     TranscodeError,
@@ -101,11 +102,10 @@ use crate::{
 ///         if context.available_output() < required.get() {
 ///             return Ok(EncodeOutcome::need_output(required));
 ///         }
-///         let written = unsafe {
-///             codec.encode(context.input_value, context.output, context.output_index)
-///         }
-///         .map(NonZeroUsize::get)
-///         .map_err(|error| CodecEncodeError::encode(error, context.input_index))?;
+///         let (value, input_index, output, output_index) = context.into_parts();
+///         let written = unsafe { codec.encode(value, output, output_index) }
+///             .map(NonZeroUsize::get)
+///             .map_err(|error| CodecEncodeError::encode(error, input_index))?;
 ///         Ok(EncodeOutcome::consumed(written))
 ///     }
 /// }
@@ -200,15 +200,23 @@ where
         Ok(C::MAX_ENCODE_RESET_UNITS)
     }
 
-    /// Gets the maximum output units emitted by finishing hook-owned state.
+    /// Gets the maximum output units emitted by finishing codec and hook state.
+    ///
+    /// Returns the sum of [`Codec::MAX_ENCODE_FLUSH_UNITS`] and the
+    /// hook-provided final-output bound. The codec flush portion covers units
+    /// written by [`Codec::encode_flush`]; hook implementations must not
+    /// include that portion in
+    /// [`TranscodeEncodeHooks::max_finish_output_len`].
     ///
     /// # Returns
     ///
-    /// the hook-provided final output bound.
+    /// the combined codec-flush and hook-finish output bound.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(self.hooks.max_finish_output_len(&self.codec))
+        C::MAX_ENCODE_FLUSH_UNITS
+            .checked_add(self.hooks.max_finish_output_len(&self.codec))
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Resets codec encode state, hook-owned state, and stream-start output.
@@ -241,7 +249,7 @@ where
             output_index,
             required,
         )?;
-        self.hooks.before_reset(&mut self.codec);
+        self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // reset-output bound at `output_index`.
@@ -313,12 +321,13 @@ where
         Ok(state.complete_progress())
     }
 
-    /// Finishes hook-owned output after EOF.
+    /// Finishes codec and hook-owned output after EOF.
     ///
-    /// The engine owns no final output state itself. Hook implementations may
-    /// finish their own retained state and emit final output after the caller
-    /// has supplied all input values. The caller must provide enough output
-    /// capacity for [`TranscodeEncodeEngine::max_finish_output_len`].
+    /// Finalization first flushes encode-side codec state through
+    /// [`Codec::encode_flush`], then lets hook implementations finish their
+    /// own retained state. The caller must provide enough output capacity for
+    /// [`TranscodeEncodeEngine::max_finish_output_len`], which includes both
+    /// the codec flush bound and the hook-owned finish bound.
     ///
     /// # Parameters
     ///
@@ -332,32 +341,50 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, or when hook finalization fails.
+    /// output capacity, when codec flush errors are converted with [`From`],
+    /// or when hook finalization fails.
     ///
     /// # Panics
     ///
-    /// Panics when the hook writes or reports more final output units than
-    /// [`TranscodeEncodeEngine::max_finish_output_len`] declared.
+    /// Panics when the codec flush writes beyond
+    /// [`Codec::MAX_ENCODE_FLUSH_UNITS`] or when the combined codec and hook
+    /// finalization writes beyond
+    /// [`TranscodeEncodeEngine::max_finish_output_len`].
     pub fn finish(
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>> {
+    ) -> Result<usize, TranscodeError<H::Error>>
+    where
+        H::Error: From<CodecEncodeFlushError<C::EncodeError>>,
+    {
         let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
+        let flushed = unsafe {
+            // SAFETY: The capacity check above reserves the codec's declared
+            // flush-output bound at `output_index`.
+            self.codec.encode_flush(output, output_index)
+        }
+        .map_err(|error| {
+            TranscodeError::domain(H::Error::from(CodecEncodeFlushError::new(error)))
+        })?;
+        assert!(
+            flushed <= C::MAX_ENCODE_FLUSH_UNITS,
+            "Codec::encode_flush wrote beyond its flush bound",
+        );
         let written = self
             .hooks
-            .finish(&mut self.codec, output, output_index)
+            .finish_hooks(&mut self.codec, output, output_index + flushed)
             .map_err(TranscodeError::domain)?;
         assert!(
-            written <= required,
+            flushed + written <= required,
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
         );
-        Ok(written)
+        Ok(flushed + written)
     }
 }
 
@@ -382,6 +409,7 @@ where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
     H::Error: From<CodecEncodeResetError<C::EncodeError>>,
+    H::Error: From<CodecEncodeFlushError<C::EncodeError>>,
 {
     type Error = H::Error;
 

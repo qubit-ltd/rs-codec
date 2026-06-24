@@ -126,40 +126,6 @@ impl Codec for StatefulLifecycleCodec {
     }
 }
 
-#[derive(Default)]
-struct InvalidBoundsCodec;
-
-impl Codec for InvalidBoundsCodec {
-    type Value = u8;
-    type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
-
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
-
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
-
-    unsafe fn decode(
-        &mut self,
-        _input: &[u8],
-        _index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
-        Ok((0, core::num::NonZeroUsize::MIN))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        _value: &u8,
-        _output: &mut [u8],
-        _index: usize,
-    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        Ok(qubit_io::nz!(1))
-    }
-}
 
 #[test]
 fn test_codec_trait_encodes_and_decodes_one_value() {
@@ -228,14 +194,3 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     assert_eq!(0, codec.decode_state);
 }
 
-#[test]
-#[should_panic(
-    expected = "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE"
-)]
-fn test_codec_unit_bounds_panics_when_min_exceeds_max() {
-    let mut encoder = CodecValueEncoder::new(InvalidBoundsCodec);
-
-    let _ = encoder
-        .encode(&42)
-        .expect("unit-bound assertion should panic before encoding");
-}

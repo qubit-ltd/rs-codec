@@ -22,6 +22,8 @@ use crate::{
     CapacityError,
     Codec,
     CodecDecodeFlushError,
+    CodecDecodeResetError,
+    CodecEncodeFlushError,
     CodecEncodeResetError,
     EncodeContext,
     TranscodeConvertHooks,
@@ -147,10 +149,19 @@ where
     }
 
     /// Returns the maximum target units emitted when resetting stream state.
-    #[inline(always)]
+    ///
+    /// Covers decode-side reset values (encoded to target units) plus
+    /// encode-side reset units. Most codecs are stateless and return `0`
+    /// for `MAX_DECODE_RESET_VALUES`; in that case this equals the encode
+    /// reset bound only.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        self.encode_engine.max_reset_output_len()
+        let decode_reset_units =
+            self.encode_engine.max_output_len(D::MAX_DECODE_RESET_VALUES)?;
+        let encode_reset_units = self.encode_engine.max_reset_output_len()?;
+        decode_reset_units
+            .checked_add(encode_reset_units)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum target units emitted by finishing retained state.
@@ -265,6 +276,7 @@ where
     where
         D::Value: Default,
         DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
+        EH::Error: From<CodecEncodeFlushError<E::EncodeError>>,
     {
         let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
@@ -320,9 +332,10 @@ where
         output_index: usize,
     ) -> Result<usize, ConvertErrorOf<D, E, H>>
     where
+        DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
         EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
     {
-        let required = self.encode_engine.max_reset_output_len()?;
+        let required = self.max_reset_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_index,
@@ -330,16 +343,22 @@ where
         )?;
 
         self.pending.clear();
-        self.hooks.before_reset();
-        // Decoder reset only validates its output cursor and runs decode-side
-        // reset hooks; decoders never emit reset output, so an empty output at
-        // index 0 is the canonical non-writing reset path.
-        let decoder_reset = self.decode_engine.reset(&mut [], 0);
+        self.hooks.reset_hooks();
+        // For stateless decoders (MAX_DECODE_RESET_VALUES == 0) this is a
+        // correct no-op: ensure_output_capacity(0, 0, 0) passes, decode_reset
+        // writes nothing. Decoders with MAX_DECODE_RESET_VALUES > 0 require a
+        // custom converter; debug_assert catches accidental misuse.
         debug_assert!(
-            decoder_reset.is_ok(),
-            "decoder reset with empty output at index 0 cannot fail",
+            D::MAX_DECODE_RESET_VALUES == 0,
+            "TranscodeConvertEngine::reset does not handle decode-side reset \
+             output; implement a custom converter for codecs with \
+             MAX_DECODE_RESET_VALUES > 0",
         );
-        drop(decoder_reset);
+        self.decode_engine
+            .reset(&mut [], 0)
+            .map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+            })?;
         self.encode_engine
             .reset(output, output_index)
             .map_err(|error| {
@@ -393,6 +412,9 @@ where
         DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     {
         let value_count = self.decode_engine.max_finish_output_len()?;
+        // D::Value: Default is required only when value_count > 0. The bound
+        // remains on the method signature for the general case; stateless
+        // codecs never reach the allocation branch.
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written =
@@ -422,12 +444,12 @@ where
     ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, H>> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
-        let context = EncodeContext {
-            input_value: pending.value(),
+        let context = EncodeContext::new(
+            pending.value(),
             input_index,
-            output: state.output_mut(),
+            state.output_mut(),
             output_index,
-        };
+        );
         let outcome = self
             .encode_engine
             .hooks
@@ -481,8 +503,10 @@ where
     D::Value: Default,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
+    DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
     DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
+    EH::Error: From<CodecEncodeFlushError<E::EncodeError>>,
     H: TranscodeConvertHooks<
             D,
             E,

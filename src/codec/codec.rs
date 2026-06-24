@@ -92,6 +92,19 @@ pub trait Codec {
     /// Stateless codecs should use the default `0`.
     const MAX_ENCODE_RESET_UNITS: usize = 0;
 
+    /// The maximum unit count emitted when flushing encode state at EOF.
+    ///
+    /// Stateless codecs should use the default `0`. Codecs that emit a
+    /// stream trailer (padding, checksum, or end-of-stream marker) should
+    /// override this with the exact maximum unit count.
+    const MAX_ENCODE_FLUSH_UNITS: usize = 0;
+
+    /// The maximum value count emitted when resetting decode state.
+    ///
+    /// Stateless codecs should use the default `0`. Codecs that emit a
+    /// stream-start sentinel or BOM on reset should override this.
+    const MAX_DECODE_RESET_VALUES: usize = 0;
+
     /// The maximum value count emitted when flushing decode state.
     ///
     /// Stateless codecs should use the default `0`.
@@ -186,6 +199,78 @@ pub trait Codec {
         _output: &mut [Self::Unit],
         _index: usize,
     ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+
+    /// Emits EOF trailer output and flushes encode-side state.
+    ///
+    /// This is the encode-side counterpart of [`decode_flush`](Self::decode_flush).
+    /// Codecs that append stream trailers (padding, checksums, end-of-stream
+    /// markers) emit them here. Stateless codecs use the default no-op.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination unit buffer.
+    /// - `index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of flush units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::EncodeError` when flush output cannot be emitted.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`MAX_ENCODE_FLUSH_UNITS`](Self::MAX_ENCODE_FLUSH_UNITS) units starting
+    /// at `index`.
+    #[inline(always)]
+    #[must_use = "flush output and flush errors must be handled"]
+    unsafe fn encode_flush(
+        &mut self,
+        _output: &mut [Self::Unit],
+        _index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+
+    /// Emits stream-start values and resets decode-side state.
+    ///
+    /// This is the decode-side counterpart of [`encode_reset`](Self::encode_reset).
+    /// Codecs that emit a stream-start marker or BOM before decoding a new
+    /// stream emit them here. Stateless codecs use the default no-op.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination value buffer.
+    /// - `index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset values written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::DecodeError` when reset output cannot be emitted.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) values
+    /// starting at `index`.
+    #[inline(always)]
+    #[must_use = "reset output and reset errors must be handled"]
+    unsafe fn decode_reset(
+        &mut self,
+        _output: &mut [Self::Value],
+        _index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         Ok(0)
     }
 
@@ -307,7 +392,7 @@ pub trait Codec {
     }
 }
 
-/// Debug-asserts the public unit-bound invariant required by [`Codec`].
+/// Compile-time asserts the public unit-bound invariant required by [`Codec`].
 ///
 /// # Type Parameters
 ///
@@ -319,16 +404,18 @@ pub trait Codec {
 ///
 /// # Panics
 ///
-/// In debug builds, panics when [`Codec::MIN_UNITS_PER_VALUE`] is greater than
-/// [`Codec::MAX_UNITS_PER_VALUE`]. Release builds skip this check; maintaining
-/// the invariant is the responsibility of each [`Codec`] implementation.
+/// Panics at compile time when [`Codec::MIN_UNITS_PER_VALUE`] is greater than
+/// [`Codec::MAX_UNITS_PER_VALUE`], because the invariant must hold for any
+/// well-formed [`Codec`] implementation and violating it is always a bug.
 #[inline(always)]
 pub(crate) fn assert_unit_bounds<C>()
 where
     C: Codec,
 {
-    debug_assert!(
-        C::MIN_UNITS_PER_VALUE <= C::MAX_UNITS_PER_VALUE,
-        "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
-    );
+    const {
+        assert!(
+            C::MIN_UNITS_PER_VALUE.get() <= C::MAX_UNITS_PER_VALUE.get(),
+            "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
+        );
+    }
 }

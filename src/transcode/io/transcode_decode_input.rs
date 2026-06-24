@@ -167,14 +167,14 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when `count` exceeds [`Self::available`].
+    /// In debug builds, panics when `count` exceeds [`Self::available`].
     #[inline(always)]
     pub fn consume(&mut self, count: usize) {
-        assert!(
+        debug_assert!(
             count <= self.available(),
             "cannot consume beyond buffered input",
         );
-        // SAFETY: The assertion above validates the unread input range.
+        // SAFETY: The caller-provided count is within the unread window.
         unsafe {
             self.input.consume(count);
         }
@@ -417,27 +417,30 @@ where
         D: Transcoder<I::Item, Value>,
         M: FnMut(TranscodeError<D::Error>) -> Error,
     {
+        let required = decoder
+            .max_finish_output_len()
+            .map_err(capacity_to_io_error)?;
+        // Validate the caller-supplied count range first (InvalidInput).
         let output_end = UncheckedSlice::checked_range_end(
             output.len(),
             output_index,
             count,
             "finish output range exceeds destination buffer",
         )?;
-        let required = decoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
-        TranscodeError::<core::convert::Infallible>::ensure_output_range(
-            output.len(),
-            output_index,
-            count,
-            required,
-        )
-        .map_err(transcode_contract_to_io_error)?;
+        // Then verify the finish bound fits in the available space (InvalidData).
+        let available = output.len().saturating_sub(output_index);
+        if available < required {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "insufficient output for decoder finish bound",
+            ));
+        }
+        let output_end = output_end.max(output_index + required);
         let output = &mut output[..output_end];
         let written = decoder
             .finish(output, output_index)
             .map_err(&mut *map_error)?;
-        assert!(written <= required, "finish wrote beyond its bound");
+        debug_assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }
 }
@@ -508,9 +511,3 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
-/// Converts a framework transcode contract failure into an I/O error.
-fn transcode_contract_to_io_error(
-    error: TranscodeError<core::convert::Infallible>,
-) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
-}

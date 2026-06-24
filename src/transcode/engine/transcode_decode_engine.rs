@@ -19,6 +19,7 @@ use crate::{
     Codec,
     CodecDecodeFailure,
     CodecDecodeFlushError,
+    CodecDecodeResetError,
     DecodeContext,
     TranscodeDecodeHooks,
     TranscodeError,
@@ -232,35 +233,59 @@ where
 
     /// Returns the maximum values emitted when resetting stream state.
     ///
-    /// Decoders do not emit reset output; this bound is always `0`.
+    /// Returns [`Codec::MAX_DECODE_RESET_VALUES`] for the wrapped codec.
+    /// Stateless decoders always return `0`.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(0)
+        Ok(C::MAX_DECODE_RESET_VALUES)
     }
 
-    /// Runs hook-owned cleanup before a logical decoder reset.
+    /// Resets codec decode state, runs reset hooks, and emits stream-start
+    /// values.
+    ///
+    /// The sequence is: validate capacity → run `reset_hooks` → call
+    /// [`Codec::decode_reset`]. Stateless decoders (`MAX_DECODE_RESET_VALUES
+    /// == 0`) write nothing and return `Ok(0)`.
     ///
     /// # Parameters
     ///
     /// - `output`: Complete output value slice visible to the decoder.
-    /// - `output_index`: Absolute output value index where writing would start.
+    /// - `output_index`: Absolute output value index where writing starts.
     ///
     /// # Returns
     ///
-    /// Returns `0` because decoders do not emit stream-start output on reset.
+    /// Returns the number of reset values written.
     ///
     /// # Errors
     ///
-    /// Returns an error when `output_index` is invalid.
+    /// Returns hook errors when the caller provides invalid or insufficient
+    /// output capacity, or when reset output cannot be emitted. Codec reset
+    /// errors are converted with [`From`].
     pub fn reset(
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>> {
-        TranscodeError::ensure_output_index(output.len(), output_index)?;
-        self.hooks.before_reset(&mut self.codec);
-        Ok(0)
+    ) -> Result<usize, TranscodeError<H::Error>>
+    where
+        H::Error: From<CodecDecodeResetError<C::DecodeError>>,
+    {
+        let required = C::MAX_DECODE_RESET_VALUES;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        self.hooks.reset_hooks(&mut self.codec);
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the codec's declared
+            // reset-output bound at `output_index`.
+            self.codec.decode_reset(output, output_index)
+        }
+        .map_err(|error| {
+            TranscodeError::domain(H::Error::from(CodecDecodeResetError::new(error)))
+        })?;
+        assert!(
+            written <= required,
+            "Codec::decode_reset wrote beyond its reset bound",
+        );
+        Ok(written)
     }
 
     /// Decodes source units into caller-provided output values.
@@ -372,7 +397,7 @@ where
         );
         let written = self
             .hooks
-            .finish(&mut self.codec, output, output_index + flushed)
+            .finish_hooks(&mut self.codec, output, output_index + flushed)
             .map_err(TranscodeError::domain)?;
         assert!(
             flushed + written <= required,
@@ -473,6 +498,7 @@ impl<C, H> Transcoder<C::Unit, C::Value> for TranscodeDecodeEngine<C, H>
 where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
+    H::Error: From<CodecDecodeResetError<C::DecodeError>>,
     H::Error: From<CodecDecodeFlushError<C::DecodeError>>,
 {
     type Error = H::Error;

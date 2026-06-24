@@ -78,7 +78,7 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeDecodeHooks::<UnitCodec>::finish(
+    let written = TranscodeDecodeHooks::<UnitCodec>::finish_hooks(
         &mut hooks,
         &mut codec,
         &mut output,
@@ -94,5 +94,5 @@ fn test_transcode_decode_hooks_default_before_reset_is_noop() {
     let mut hooks = DefaultOnlyHooks;
     let mut codec = UnitCodec;
 
-    TranscodeDecodeHooks::<UnitCodec>::before_reset(&mut hooks, &mut codec);
+    TranscodeDecodeHooks::<UnitCodec>::reset_hooks(&mut hooks, &mut codec);
 }

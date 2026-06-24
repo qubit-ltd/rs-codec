@@ -79,7 +79,8 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
                 required: core::num::NonZeroUsize::MIN,
             });
         }
-        context.output[context.output_index] = *context.input_value;
+        let (value, _, output, output_index) = context.into_parts();
+        output[output_index] = *value;
         Ok(EncodeOutcome::Consumed { written: 1 })
     }
 }
@@ -90,7 +91,7 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeEncodeHooks::<UnitCodec>::finish(
+    let written = TranscodeEncodeHooks::<UnitCodec>::finish_hooks(
         &mut hooks,
         &mut codec,
         &mut output,
@@ -106,5 +107,5 @@ fn test_transcode_encode_hooks_default_before_reset_is_noop() {
     let mut hooks = DefaultOnlyHooks;
     let mut codec = UnitCodec;
 
-    TranscodeEncodeHooks::<UnitCodec>::before_reset(&mut hooks, &mut codec);
+    TranscodeEncodeHooks::<UnitCodec>::reset_hooks(&mut hooks, &mut codec);
 }

@@ -37,6 +37,14 @@ pub enum CodecEncodeError<E> {
         source: E,
     },
 
+    /// The wrapped codec reported an error while flushing encode state.
+    #[error("codec encode flush error: {source}")]
+    EncodeFlush {
+        /// Error returned by [`crate::Codec::encode_flush`].
+        #[source]
+        source: E,
+    },
+
     /// The wrapped codec cannot represent the input value.
     #[error("unencodable value at input index {input_index}")]
     UnencodableValue {
@@ -113,6 +121,21 @@ impl<E> CodecEncodeError<E> {
     #[must_use]
     pub const fn encode_reset(source: E) -> Self {
         Self::EncodeReset { source }
+    }
+
+    /// Creates an error wrapping a codec-specific encode-flush error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Error returned by [`crate::Codec::encode_flush`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec encode-flush error wrapper.
+    #[inline(always)]
+    #[must_use]
+    pub const fn encode_flush(source: E) -> Self {
+        Self::EncodeFlush { source }
     }
 
     /// Creates an unencodable-value error.

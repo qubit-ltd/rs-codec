@@ -79,12 +79,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         let (input, output) = self.state.input_output_mut();
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { UncheckedSlice::get(input, input_index) };
-        EncodeContext {
-            input_value: value,
-            input_index,
-            output,
-            output_index,
-        }
+        EncodeContext::new(value, input_index, output, output_index)
     }
 
     /// Returns the number of writable output units from the current cursor.

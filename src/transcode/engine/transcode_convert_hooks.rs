@@ -55,10 +55,10 @@ where
     /// Returns the converter-level error.
     fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
 
-    /// Runs conversion-level hook cleanup before stream reset.
+    /// Runs conversion-level hook cleanup as part of stream reset.
     ///
-    /// The common engine clears pending decoded values and resets internal
-    /// decode/encode engines separately.
+    /// Called before the internal decode and encode engines are individually
+    /// reset. The common engine also clears pending decoded values separately.
     #[inline(always)]
-    fn before_reset(&mut self) {}
+    fn reset_hooks(&mut self) {}
 }

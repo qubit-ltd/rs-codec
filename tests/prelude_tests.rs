@@ -195,13 +195,8 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     ));
 
     let mut output = [0_u8; 1];
-    let context = EncodeContext {
-        input_value: &1_u8,
-        input_index: 0,
-        output: &mut output,
-        output_index: 0,
-    };
-    assert_eq!(0, context.input_index);
+    let context = EncodeContext::new(&1_u8, 0, &mut output, 0);
+    assert_eq!(0, context.input_index());
     assert_eq!(1, context.available_output());
 
     assert_eq!(

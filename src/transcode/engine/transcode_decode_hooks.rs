@@ -205,13 +205,16 @@ where
         context: DecodeContext,
     ) -> Result<DecodeInvalidAction<C::Value>, Self::Error>;
 
-    /// Runs hook-owned cleanup before stream reset.
+    /// Runs hook-owned cleanup as part of stream reset.
+    ///
+    /// Called after [`Codec::decode_reset`](crate::Codec::decode_reset) has
+    /// written its own reset output. Stateless hooks may use the default no-op.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
     #[inline(always)]
-    fn before_reset(&mut self, _codec: &mut C) {}
+    fn reset_hooks(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output.
     ///
@@ -221,6 +224,9 @@ where
     /// [`TranscodeDecodeHooks::max_finish_output_len`] writable slots from
     /// `output_index`. Implementations must not write beyond that declared
     /// final-output bound.
+    ///
+    /// Called after [`Codec::decode_flush`](crate::Codec::decode_flush) has
+    /// written its own flush output.
     ///
     /// # Parameters
     ///
@@ -237,7 +243,7 @@ where
     ///
     /// Returns `Self::Error` when hook-owned state cannot be finalized.
     #[inline]
-    fn finish(
+    fn finish_hooks(
         &mut self,
         _codec: &mut C,
         _output: &mut [C::Value],
