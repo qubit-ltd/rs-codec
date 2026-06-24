@@ -412,9 +412,23 @@ where
         DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     {
         let value_count = self.decode_engine.max_finish_output_len()?;
+        if value_count == 0 {
+            // Skip the Vec allocation when the decoder declares no finish output.
+            // We still call finish() so that codec.decode_flush and
+            // hooks.finish_hooks both run — hooks may do validation or teardown
+            // (e.g. checksum verification) that can fail even when emitting zero
+            // values. Passing an empty slice is safe here because the capacity
+            // check inside finish() accepts required == 0 against any slice.
+            self.decode_engine
+                .finish(&mut [], 0)
+                .map_err(|error| {
+                    error.map_domain(|domain| self.hooks.map_decode_error(domain))
+                })?;
+            return Ok(());
+        }
         // D::Value: Default is required only when value_count > 0. The bound
         // remains on the method signature for the general case; stateless
-        // codecs never reach the allocation branch.
+        // codecs never reach this branch.
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written =
@@ -452,8 +466,7 @@ where
         );
         let outcome = self
             .encode_engine
-            .hooks
-            .encode_value(&mut self.encode_engine.codec, context)
+            .encode_one(context)
             .map_err(|error| {
                 TranscodeError::domain(self.hooks.map_encode_error(error))
             })?;

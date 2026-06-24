@@ -7,6 +7,7 @@
 // =============================================================================
 //! Reusable buffered encoder engine.
 
+use super::super::encode_context::EncodeContext;
 use super::super::internal::encode_state::EncodeState;
 use crate::codec::assert_unit_bounds;
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     Codec,
     CodecEncodeFlushError,
     CodecEncodeResetError,
+    EncodeOutcome,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
@@ -134,10 +136,8 @@ use crate::{
 /// - `H`: Policy hook object used by the engine.
 #[derive(Debug)]
 pub struct TranscodeEncodeEngine<C, H> {
-    /// Low-level codec used for one-value encoding.
-    pub(super) codec: C,
-    /// Policy hooks used for planning and writing values.
-    pub(super) hooks: H,
+    codec: C,
+    hooks: H,
 }
 
 impl<C, H> TranscodeEncodeEngine<C, H>
@@ -167,6 +167,30 @@ where
     pub fn new(codec: C, hooks: H) -> Self {
         assert_unit_bounds::<C>();
         Self { codec, hooks }
+    }
+
+    /// Encodes one value through the hook and codec.
+    ///
+    /// This is the single entry point for `TranscodeConvertEngine` to drive
+    /// the encode side without accessing `codec` and `hooks` directly.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Encode context for the current value.
+    ///
+    /// # Returns
+    ///
+    /// Returns whether the value was consumed or needs more output capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns `H::Error` when the hook rejects or cannot encode the value.
+    #[inline(always)]
+    pub(crate) fn encode_one(
+        &mut self,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, H::Error> {
+        self.hooks.encode_value(&mut self.codec, context)
     }
 
     /// Gets a conservative upper bound for output units needed for
