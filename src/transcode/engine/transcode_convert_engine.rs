@@ -166,7 +166,7 @@ where
         let decode_reset_units = self
             .encode_engine
             .max_output_len(D::MAX_DECODE_RESET_VALUES)?;
-        let encode_reset_units = self.encode_engine.max_reset_output_len()?;
+        let encode_reset_units = E::MAX_ENCODE_RESET_UNITS;
         decode_reset_units
             .checked_add(encode_reset_units)
             .ok_or(CapacityError::OutputLengthOverflow)

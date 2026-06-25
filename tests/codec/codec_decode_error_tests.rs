@@ -9,6 +9,7 @@
 use qubit_codec::{
     CodecDecodeError,
     CodecDecodeFlushError,
+    CodecDecodeResetError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -67,6 +68,25 @@ fn test_codec_decode_error_wraps_decode_flush_error() {
     assert_eq!(
         TestDecodeError::Invalid { consumed: 3 },
         lifecycle.into_source(),
+    );
+}
+
+#[test]
+fn test_codec_decode_error_wraps_decode_reset_error() {
+    let lifecycle =
+        CodecDecodeResetError::new(TestDecodeError::Invalid { consumed: 4 });
+    assert_eq!(
+        TestDecodeError::Invalid { consumed: 4 },
+        *lifecycle.source()
+    );
+
+    let error: CodecDecodeError<TestDecodeError> = lifecycle.into();
+
+    assert_eq!(
+        CodecDecodeError::DecodeReset {
+            source: TestDecodeError::Invalid { consumed: 4 },
+        },
+        error,
     );
 }
 

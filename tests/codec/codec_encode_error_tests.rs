@@ -9,6 +9,7 @@
 use qubit_codec::{
     CapacityError,
     CodecEncodeError,
+    CodecEncodeFlushError,
     CodecEncodeResetError,
 };
 
@@ -53,6 +54,26 @@ fn test_codec_encode_error_wraps_encode_reset_error() {
     assert!(error.to_string().contains("codec encode reset error"));
 
     let lifecycle: CodecEncodeResetError<TestEncodeError> =
+        TestEncodeError.into();
+    assert_eq!(TestEncodeError, lifecycle.into_source());
+}
+
+#[test]
+fn test_codec_encode_error_wraps_encode_flush_error() {
+    let lifecycle = CodecEncodeFlushError::new(TestEncodeError);
+    assert_eq!(TestEncodeError, *lifecycle.source());
+
+    let error: CodecEncodeError<TestEncodeError> = lifecycle.into();
+
+    assert_eq!(
+        CodecEncodeError::EncodeFlush {
+            source: TestEncodeError,
+        },
+        error,
+    );
+    assert!(error.to_string().contains("codec encode flush error"));
+
+    let lifecycle: CodecEncodeFlushError<TestEncodeError> =
         TestEncodeError.into();
     assert_eq!(TestEncodeError, lifecycle.into_source());
 }

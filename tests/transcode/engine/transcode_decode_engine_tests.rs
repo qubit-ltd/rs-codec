@@ -1130,6 +1130,74 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+struct ResetFailCodec;
+
+impl Codec for ResetFailCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = PrefixDecodeError;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(1);
+
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
+        Ok((0u8, core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        debug_assert!(output_index < output.len());
+
+        // SAFETY: Caller guarantees that `output_index` is writable.
+        unsafe {
+            *output.get_unchecked_mut(output_index) = 0;
+        }
+        Ok(qubit_io::nz!(1))
+    }
+
+    unsafe fn decode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err(PrefixDecodeError::Invalid { consumed: 1 })
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct ResetErrorMappingHooks;
+
+impl TranscodeDecodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
+    type Error = EngineError;
+
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut ResetFailCodec,
+        error: PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
+        Err(error.into())
+    }
+}
+
 #[test]
 fn test_transcode_decode_engine_reports_max_reset_output_len() {
     let decoder = TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::new(
@@ -1187,6 +1255,21 @@ fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
         }),
         error,
     );
+}
+
+#[test]
+fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(
+        ResetFailCodec,
+        ResetErrorMappingHooks,
+    );
+    let mut output = [0_u8; 1];
+
+    let error = decoder.reset(&mut output, 0).expect_err(
+        "decode reset errors should be converted through the hook error type",
+    );
+
+    assert_eq!(TranscodeError::Domain(EngineError::Decode), error);
 }
 
 // ============================================================================

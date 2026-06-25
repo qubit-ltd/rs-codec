@@ -86,6 +86,12 @@ impl From<CodecEncodeResetError<core::convert::Infallible>> for EngineError {
     }
 }
 
+impl From<CodecEncodeFlushError<EngineError>> for EngineError {
+    fn from(error: CodecEncodeFlushError<EngineError>) -> Self {
+        error.into_source()
+    }
+}
+
 impl From<CodecEncodeFlushError<core::convert::Infallible>> for EngineError {
     #[allow(unreachable_code)]
     fn from(error: CodecEncodeFlushError<core::convert::Infallible>) -> Self {
@@ -183,6 +189,70 @@ impl TranscodeEncodeHooks<WideCodec> for FailingFinishHooks {
         Err(EngineError::Rejected {
             input_index: output_index,
         })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FlushFailingCodec;
+
+impl Codec for FlushFailingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = EngineError;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(1);
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(qubit_io::nz!(1))
+    }
+
+    unsafe fn encode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Err(EngineError::Rejected { input_index: 0 })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FlushFailingHooks;
+
+impl TranscodeEncodeHooks<FlushFailingCodec> for FlushFailingHooks {
+    type Error = EngineError;
+
+    fn encode_value(
+        &mut self,
+        _codec: &mut FlushFailingCodec,
+        context: EncodeContext<'_, u8, u8>,
+    ) -> Result<EncodeOutcome, Self::Error> {
+        if context.available_output() < 1 {
+            return Ok(EncodeOutcome::need_output(crate::nz(1)));
+        }
+        let (v, _, out, oi) = context.into_parts();
+        out[oi] = *v;
+        Ok(EncodeOutcome::consumed(1))
     }
 }
 
@@ -439,6 +509,24 @@ fn test_buffered_encode_engine_finish_maps_hook_errors() {
     let error = encoder
         .finish(&mut output, 0)
         .expect_err("finish hook error should be propagated");
+
+    assert_eq!(
+        TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
+        error,
+    );
+}
+
+#[test]
+fn test_buffered_encode_engine_finish_converts_codec_flush_errors() {
+    let mut encoder = TranscodeEncodeEngine::<_, _>::new(
+        FlushFailingCodec,
+        FlushFailingHooks,
+    );
+    let mut output = [0_u8; 1];
+
+    let error = encoder
+        .finish(&mut output, 0)
+        .expect_err("finish should convert codec flush errors");
 
     assert_eq!(
         TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
