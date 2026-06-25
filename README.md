@@ -322,8 +322,16 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `TranscodeError` is the streaming framework wrapper. Concrete codec,
   charset, or policy failures remain the associated domain error.
 - `NeedInput` means the reported tail was not consumed and must remain available
-  when the caller retries with more input. `NeedOutput` means the reported input
-  was not fully consumed because the output slice reached its bound.
+  when the caller retries with more input. It is a streaming boundary signal,
+  not an EOF error; `finish` does not receive that source tail. Callers must
+  apply their own EOF policy before finalization.
+- Default codec-backed decoders and converters are intended for formats whose
+  value boundary is locally decidable from the visible prefix plus codec state.
+  Formats that require EOF-aware maximal-munch parsing, delayed boundary
+  decisions, or reinterpretation of a pending prefix at EOF should use a custom
+  `Transcoder` or value-level facade for that policy.
+- `NeedOutput` means the reported input was not fully consumed because the
+  output slice reached its bound.
 
 ### Byte Order Types
 

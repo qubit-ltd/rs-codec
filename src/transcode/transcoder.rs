@@ -37,6 +37,14 @@ use super::{
 /// - stateless and stateful codecs that all return progress-oriented stopping
 ///   reasons.
 ///
+/// `finish` finalizes retained state only; it does not receive source input and
+/// does not reinterpret a tail previously reported by `NeedInput`. For
+/// codec-backed decoders, this means the underlying codec should be able to
+/// decide each value boundary from the visible prefix plus its own state. If a
+/// format needs EOF-aware maximal-munch parsing or must delay whether a prefix
+/// is complete until the next chunk or EOF, implement that policy in a custom
+/// `Transcoder` or a value-level facade.
+///
 /// `Transcoder` is intentionally independent from any charset
 /// semantics:
 ///

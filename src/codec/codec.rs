@@ -35,6 +35,17 @@ use super::codec_decode_failure::CodecDecodeFailure;
 /// it; implementations must keep their own state internally consistent across
 /// every public operation, including operations that return `Err`.
 ///
+/// Decode operations see only the currently supplied input slice and codec
+/// state. They do not receive an explicit EOF marker and they cannot look past
+/// the visible input. Returning [`CodecDecodeFailure::Incomplete`] requests
+/// more input for the current value; it is not itself an EOF error. The default
+/// codec-backed streaming adapters therefore fit formats whose value boundary
+/// is locally decidable from the visible prefix plus codec state. Formats that
+/// require EOF-aware maximal-munch parsing, delayed boundary decisions, or
+/// reinterpretation of an incomplete tail at EOF should put that policy in a
+/// custom [`crate::Transcoder`] or value-level facade instead of relying on the
+/// default `Codec` bridge.
+///
 /// # Associated Types
 ///
 /// - `Value`: Logical value decoded from or encoded into the buffer. This may
@@ -332,6 +343,9 @@ pub trait Codec {
     ///
     /// Returns [`CodecDecodeFailure::Incomplete`] when the visible input is a
     /// valid prefix but more units are needed to decide or complete a value.
+    /// This reports a streaming boundary, not a final EOF condition; the
+    /// caller or higher-level adapter decides what an incomplete tail means
+    /// when the upstream source is closed.
     /// Returns [`CodecDecodeFailure::Invalid`] when the units are malformed,
     /// non-canonical, unmappable, or otherwise invalid for this codec. The
     /// concrete error type carries only codec-domain invalidity.
@@ -363,6 +377,12 @@ pub trait Codec {
     >;
 
     /// Flushes decode-side EOF state into `output`.
+    ///
+    /// `decode_flush` receives no source input. Callers must have already
+    /// handled any tail reported by [`CodecDecodeFailure::Incomplete`] before
+    /// flushing decode state. Implementations may emit retained values or
+    /// validate internal EOF state, but they must not depend on re-reading the
+    /// incomplete source tail.
     ///
     /// # Parameters
     ///

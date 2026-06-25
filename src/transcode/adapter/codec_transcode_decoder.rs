@@ -27,6 +27,12 @@ use crate::{
 /// leaves incomplete input tails in the caller-provided input slice; callers
 /// own input-buffer refill and EOF incomplete-tail policy.
 ///
+/// Because [`Transcoder::finish`] receives no source input, this adapter is
+/// intended for codecs whose decode boundary is locally decidable from the
+/// visible prefix plus codec state. Formats that require EOF-aware
+/// maximal-munch parsing or need to reinterpret a pending prefix at EOF should
+/// provide a custom streaming decoder or a value-level facade.
+///
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode values.

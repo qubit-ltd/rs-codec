@@ -39,6 +39,12 @@ type CodecTranscodeConvertError<D, E> =
 /// Incomplete source tails are left in the caller-provided input slice; callers
 /// own input-buffer refill and EOF incomplete-tail policy.
 ///
+/// Because finalization receives no source input, the source codec should have
+/// locally decidable decode boundaries for the default converter bridge. Source
+/// formats that require EOF-aware maximal-munch parsing or delayed boundary
+/// decisions should implement that source-side policy in a custom transcoder or
+/// facade before conversion.
+///
 /// # Type Parameters
 ///
 /// - `D`: Low-level codec used to decode source units.

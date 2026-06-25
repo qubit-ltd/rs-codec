@@ -18,7 +18,8 @@ pub enum TranscodeStatus {
     /// The transcoder does not consume incomplete input tails. The caller
     /// should preserve `input[input_index..]`, refill the input buffer when
     /// more data is available, or apply its EOF policy when the upstream
-    /// source is closed.
+    /// source is closed. Calling [`crate::Transcoder::finish`] does not pass
+    /// this tail back to the transcoder.
     ///
     /// - `input_index`: Absolute input index where input ended while decoding.
     /// - `required`: Total input units required from the current input
