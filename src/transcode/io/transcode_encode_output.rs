@@ -238,46 +238,25 @@ where
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
+            progress
+                .validate(
+                    input_index + read_total,
+                    remaining_input,
+                    output_index,
+                    available_output,
+                )
+                .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
             let read = progress.read();
             let written = progress.written();
-            if read > remaining_input {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "transcoder consumed beyond input range",
-                ));
-            }
-            if written > available_output {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "transcoder wrote beyond spare output",
-                ));
-            }
-            // SAFETY: The encoder reported initialized units in the spare
-            // output window, and the count was validated above.
+            // SAFETY: TranscodeProgress::validate proved that the encoder
+            // initialized no more than the available spare output window.
             unsafe {
                 self.output.advance(written);
             }
             read_total += read;
             match progress.status() {
                 TranscodeStatus::Complete => return Ok(read_total),
-                TranscodeStatus::NeedOutput {
-                    output_index: status_output_index,
-                    required,
-                    available,
-                    ..
-                } => {
-                    if status_output_index != output_index + written {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder reported inconsistent NeedOutput index",
-                        ));
-                    }
-                    if required.get() <= available {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder reported satisfied NeedOutput requirement",
-                        ));
-                    }
+                TranscodeStatus::NeedOutput { required, .. } => {
                     self.output.ensure_spare_capacity(required.get())?;
                 }
                 TranscodeStatus::NeedInput { .. } => {

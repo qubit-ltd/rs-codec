@@ -7,6 +7,7 @@
 // =============================================================================
 
 use qubit_codec::{
+    TranscodeContractError,
     TranscodeProgress,
     TranscodeStatus,
 };
@@ -98,4 +99,102 @@ fn test_transcoder_progress_predicates_match_status() {
     assert!(!need_output.is_complete());
     assert!(!need_output.is_need_input());
     assert!(need_output.is_need_output());
+}
+
+#[test]
+fn test_transcoder_progress_validate_accepts_consistent_progress() {
+    let complete = TranscodeProgress::complete(2, 3);
+    assert_eq!(Ok(()), complete.validate(10, 2, 20, 3));
+
+    let need_input = TranscodeProgress::need_input(12, crate::nz(4), 1, 2, 3);
+    assert_eq!(Ok(()), need_input.validate(10, 3, 20, 5));
+
+    let need_output = TranscodeProgress::need_output(23, crate::nz(4), 1, 2, 3);
+    assert_eq!(Ok(()), need_output.validate(10, 4, 20, 4));
+}
+
+#[test]
+fn test_transcoder_progress_validate_rejects_counter_bounds() {
+    let progress = TranscodeProgress::complete(3, 1);
+    assert_eq!(
+        Err(TranscodeContractError::OverRead {
+            read: 3,
+            available: 2,
+        }),
+        progress.validate(0, 2, 0, 1),
+    );
+
+    let progress = TranscodeProgress::complete(1, 3);
+    assert_eq!(
+        Err(TranscodeContractError::OverWritten {
+            written: 3,
+            available: 2,
+        }),
+        progress.validate(0, 1, 0, 2),
+    );
+}
+
+#[test]
+fn test_transcoder_progress_validate_rejects_status_index_mismatch() {
+    let need_input = TranscodeProgress::need_input(11, crate::nz(3), 1, 2, 0);
+    assert_eq!(
+        Err(TranscodeContractError::StatusIndexMismatch {
+            reported: 11,
+            expected: 12,
+        }),
+        need_input.validate(10, 3, 20, 0),
+    );
+
+    let need_output = TranscodeProgress::need_output(22, crate::nz(3), 1, 0, 2);
+    assert_eq!(
+        Err(TranscodeContractError::StatusIndexMismatch {
+            reported: 22,
+            expected: 23,
+        }),
+        need_output.validate(10, 0, 21, 3),
+    );
+}
+
+#[test]
+fn test_transcoder_progress_validate_rejects_satisfied_requirements() {
+    let need_input = TranscodeProgress::need_input(12, crate::nz(1), 1, 2, 0);
+    assert_eq!(
+        Err(TranscodeContractError::SatisfiedNeed {
+            required: 1,
+            available: 1,
+        }),
+        need_input.validate(10, 3, 20, 0),
+    );
+
+    let need_output = TranscodeProgress::need_output(23, crate::nz(1), 1, 0, 3);
+    assert_eq!(
+        Err(TranscodeContractError::SatisfiedNeed {
+            required: 1,
+            available: 1,
+        }),
+        need_output.validate(10, 0, 20, 4),
+    );
+}
+
+#[test]
+fn test_transcoder_progress_validate_rejects_index_overflow() {
+    let need_input =
+        TranscodeProgress::need_input(usize::MAX, crate::nz(2), 0, 1, 0);
+    assert_eq!(
+        Err(TranscodeContractError::ProgressIndexOverflow {
+            index: usize::MAX,
+            advanced: 1,
+        }),
+        need_input.validate(usize::MAX, 1, 0, 0),
+    );
+
+    let need_output =
+        TranscodeProgress::need_output(usize::MAX, crate::nz(2), 0, 0, 1);
+    assert_eq!(
+        Err(TranscodeContractError::ProgressIndexOverflow {
+            index: usize::MAX,
+            advanced: 1,
+        }),
+        need_output.validate(0, 0, usize::MAX, 1),
+    );
 }

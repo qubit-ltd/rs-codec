@@ -14,6 +14,7 @@ use crate::{
     Codec,
     CodecDecodeError,
     CodecValueExt,
+    TranscodeError,
     codec::assert_unit_bounds,
 };
 
@@ -101,7 +102,7 @@ where
     C::Value: Default,
 {
     type Output = C::Value;
-    type Error = CodecDecodeError<C::DecodeError>;
+    type Error = TranscodeError<CodecDecodeError<C::DecodeError>>;
 
     /// Decodes exactly one encoded value from `input`.
     ///

@@ -16,14 +16,19 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecEncodeFlushError,
-    CodecEncodeResetError,
+    CodecEncodeError,
     EncodeOutcome,
+    TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
+
+type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
+    <C as Codec>::EncodeError,
+    <H as TranscodeEncodeHooks<C>>::Error,
+>;
 
 /// Reusable buffered encoding engine for codec-backed encoders.
 ///
@@ -55,7 +60,7 @@ use crate::{
 ///     TranscodeEncodeEngine,
 ///     TranscodeEncodeHooks,
 ///     Codec,
-///     CodecDecodeFailure,
+///     DecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
 ///     EncodeOutcome,
@@ -78,7 +83,7 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
+///     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
 ///         Ok((input[index], NonZeroUsize::MIN))
 ///     }
 ///
@@ -130,7 +135,7 @@ use crate::{
 ///     }
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),
 /// }
-/// # Ok::<(), qubit_codec::TranscodeError<CodecEncodeError<Infallible>>>(())
+/// # Ok::<(), qubit_codec::TranscodeError<qubit_codec::TranscodeEncodeEngineError<Infallible, CodecEncodeError<Infallible>>>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -266,17 +271,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, or when reset output cannot be emitted. Codec reset
-    /// errors are converted with [`From`].
+    /// Returns framework errors when the caller provides invalid or
+    /// insufficient output capacity. Returns domain errors when codec reset or
+    /// hook reset handling fails.
     pub fn reset(
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>>
-    where
-        H::Error: From<CodecEncodeResetError<C::EncodeError>>,
-    {
+    ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
         TranscodeError::ensure_output_capacity(
@@ -291,9 +293,9 @@ where
             self.codec.encode_reset(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(H::Error::from(CodecEncodeResetError::new(
-                error,
-            )))
+            TranscodeError::domain(TranscodeEncodeEngineError::codec(
+                CodecEncodeError::encode_reset(error),
+            ))
         })?;
         assert!(
             written <= required,
@@ -330,7 +332,8 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<H::Error>> {
+    ) -> Result<TranscodeProgress, TranscodeError<EncodeEngineErrorOf<C, H>>>
+    {
         self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
@@ -348,7 +351,11 @@ where
             let outcome = self
                 .hooks
                 .encode_value(&mut self.codec, context)
-                .map_err(TranscodeError::domain)?;
+                .map_err(|error| {
+                    TranscodeError::domain(TranscodeEncodeEngineError::hook(
+                        error,
+                    ))
+                })?;
             if let Some(progress) = state.apply_encode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -376,9 +383,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when the caller provides invalid or insufficient
-    /// output capacity, when codec flush errors are converted with [`From`],
-    /// or when hook finalization fails.
+    /// Returns framework errors when the caller provides invalid or
+    /// insufficient output capacity. Returns domain errors when codec flush or
+    /// hook finalization fails.
     ///
     /// # Panics
     ///
@@ -390,10 +397,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<H::Error>>
-    where
-        H::Error: From<CodecEncodeFlushError<C::EncodeError>>,
-    {
+    ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
@@ -407,9 +411,9 @@ where
             self.codec.encode_flush(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(H::Error::from(CodecEncodeFlushError::new(
-                error,
-            )))
+            TranscodeError::domain(TranscodeEncodeEngineError::codec(
+                CodecEncodeError::encode_flush(error),
+            ))
         })?;
         assert!(
             flushed <= C::MAX_ENCODE_FLUSH_UNITS,
@@ -418,7 +422,9 @@ where
         let written = self
             .hooks
             .finish_hooks(&mut self.codec, output, output_index + flushed)
-            .map_err(TranscodeError::domain)?;
+            .map_err(|error| {
+                TranscodeError::domain(TranscodeEncodeEngineError::hook(error))
+            })?;
         assert!(
             flushed + written <= required,
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
@@ -448,10 +454,8 @@ impl<C, H> Transcoder<C::Value, C::Unit> for TranscodeEncodeEngine<C, H>
 where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
-    H::Error: From<CodecEncodeResetError<C::EncodeError>>,
-    H::Error: From<CodecEncodeFlushError<C::EncodeError>>,
 {
-    type Error = H::Error;
+    type Error = EncodeEngineErrorOf<C, H>;
 
     /// Returns an upper bound for units produced from `input_len` values.
     #[inline(always)]

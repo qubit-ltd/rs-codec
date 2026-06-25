@@ -925,7 +925,8 @@ fn test_buffered_encode_output_rejects_overreported_read_progress() {
         .expect_err("overreported input progress should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("consumed beyond input range"));
+    assert!(error.to_string().contains("consumed"));
+    assert!(error.to_string().contains("only"));
 }
 
 #[test]
@@ -937,7 +938,8 @@ fn test_buffered_encode_output_rejects_overreported_write_progress() {
         .expect_err("overreported output progress should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("wrote beyond spare output"));
+    assert!(error.to_string().contains("wrote"));
+    assert!(error.to_string().contains("output slots"));
 }
 
 #[test]
@@ -949,11 +951,7 @@ fn test_buffered_encode_output_rejects_overflowing_need_output() {
         .expect_err("satisfied NeedOutput requirement should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(
-        error
-            .to_string()
-            .contains("satisfied NeedOutput requirement")
-    );
+    assert!(error.to_string().contains("reported required"));
 }
 
 #[test]
@@ -965,7 +963,7 @@ fn test_buffered_encode_output_rejects_misindexed_need_output() {
         .expect_err("misindexed NeedOutput status should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("inconsistent NeedOutput index"));
+    assert!(error.to_string().contains("reported status index"));
 }
 
 #[test]

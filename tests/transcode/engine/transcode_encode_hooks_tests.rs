@@ -39,7 +39,7 @@ impl qubit_codec::Codec for UnitCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }

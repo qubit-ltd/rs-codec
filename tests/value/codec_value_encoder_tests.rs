@@ -11,6 +11,7 @@ use qubit_codec::{
     Codec,
     CodecEncodeError,
     CodecValueEncoder,
+    TranscodeError,
     ValueEncoder,
 };
 
@@ -34,7 +35,7 @@ impl Codec for PairByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -86,7 +87,7 @@ impl Codec for RejectOddCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -133,7 +134,7 @@ impl Codec for OverreportingEncodeCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -179,7 +180,7 @@ impl Codec for NonCloneValueCodec {
         input_index: usize,
     ) -> Result<
         (NonCloneValue, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -231,7 +232,7 @@ impl Codec for ResetFailLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -278,7 +279,7 @@ impl Codec for OverflowEncodeBoundCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -319,7 +320,7 @@ impl Codec for StatefulLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -404,7 +405,12 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("odd value should be rejected");
 
-    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 0 }, error);
+    assert_eq!(
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
+            input_index: 0,
+        }),
+        error,
+    );
 }
 
 #[test]
@@ -416,7 +422,7 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
 }
 
 #[test]
@@ -441,9 +447,9 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
         .expect_err("encode reset failure should propagate");
 
     assert_eq!(
-        CodecEncodeError::EncodeReset {
+        TranscodeError::Domain(CodecEncodeError::EncodeReset {
             source: ResetFailError,
-        },
+        }),
         error,
     );
 }

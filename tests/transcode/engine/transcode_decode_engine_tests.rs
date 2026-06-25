@@ -14,11 +14,11 @@ use core::{
 
 use qubit_codec::{
     Codec,
-    CodecDecodeFlushError,
-    CodecDecodeResetError,
+    CodecDecodeError,
     DecodeContext,
     DecodeInvalidAction,
     TranscodeDecodeEngine,
+    TranscodeDecodeEngineError,
     TranscodeDecodeHooks,
     TranscodeError,
     TranscodeStatus,
@@ -55,22 +55,22 @@ impl Codec for PrefixCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let first = unsafe { *input.as_ptr().add(input_index) };
         match first {
-            0xfe if input.len() - input_index < 2 => Err(
-                qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(2)),
-            ),
+            0xfe if input.len() - input_index < 2 => {
+                Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(2)))
+            }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(input_index + 1) };
                 Ok((value, qubit_io::nz!(2)))
             }
-            0xff => Err(qubit_codec::CodecDecodeFailure::invalid(
+            0xff => Err(qubit_codec::DecodeFailure::invalid(
                 PrefixDecodeError::Invalid { consumed: 1 },
                 core::num::NonZeroUsize::MIN,
             )),
@@ -116,14 +116,12 @@ impl Codec for HintOnlyCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(input_index < input.len());
 
         match input[input_index] {
-            0xaa => Err(qubit_codec::CodecDecodeFailure::invalid(
+            0xaa => Err(qubit_codec::DecodeFailure::invalid(
                 HintOnlyDecodeError::Invalid,
                 qubit_io::nz!(2),
             )),
@@ -164,7 +162,7 @@ impl Codec for OverconsumingCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -204,53 +202,9 @@ impl From<PrefixDecodeError> for EngineError {
     }
 }
 
-impl From<CodecDecodeFlushError<PrefixDecodeError>> for EngineError {
-    fn from(error: CodecDecodeFlushError<PrefixDecodeError>) -> Self {
-        Self::from(error.into_source())
-    }
-}
-
 impl From<HintOnlyDecodeError> for EngineError {
     fn from(_error: HintOnlyDecodeError) -> Self {
         Self::Decode
-    }
-}
-
-impl From<CodecDecodeFlushError<HintOnlyDecodeError>> for EngineError {
-    fn from(error: CodecDecodeFlushError<HintOnlyDecodeError>) -> Self {
-        Self::from(error.into_source())
-    }
-}
-
-impl From<CodecDecodeFlushError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecDecodeFlushError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
-
-impl From<CodecDecodeFlushError<PrefixDecodeError>> for PrefixDecodeError {
-    fn from(error: CodecDecodeFlushError<PrefixDecodeError>) -> Self {
-        error.into_source()
-    }
-}
-
-impl From<CodecDecodeResetError<PrefixDecodeError>> for EngineError {
-    fn from(_error: CodecDecodeResetError<PrefixDecodeError>) -> Self {
-        Self::Decode
-    }
-}
-
-impl From<CodecDecodeResetError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecDecodeResetError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
-
-impl From<CodecDecodeResetError<PrefixDecodeError>> for PrefixDecodeError {
-    fn from(error: CodecDecodeResetError<PrefixDecodeError>) -> Self {
-        error.into_source()
     }
 }
 
@@ -521,7 +475,7 @@ impl Codec for MinTwoCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index + 1 < input.len());
 
@@ -567,7 +521,7 @@ impl Codec for OverflowFlushCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -1063,7 +1017,7 @@ impl Codec for FlushFailCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -1152,7 +1106,7 @@ impl Codec for ResetFailCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((0u8, core::num::NonZeroUsize::MIN))
     }
@@ -1250,9 +1204,11 @@ fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
     );
 
     assert_eq!(
-        TranscodeError::Domain(qubit_codec::CodecDecodeError::DecodeFlush {
-            source: FlushFailError,
-        }),
+        TranscodeError::Domain(TranscodeDecodeEngineError::Codec(
+            CodecDecodeError::DecodeFlush {
+                source: FlushFailError,
+            },
+        )),
         error,
     );
 }
@@ -1269,7 +1225,14 @@ fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
         "decode reset errors should be converted through the hook error type",
     );
 
-    assert_eq!(TranscodeError::Domain(EngineError::Decode), error);
+    assert_eq!(
+        TranscodeError::Domain(TranscodeDecodeEngineError::Codec(
+            CodecDecodeError::DecodeReset {
+                source: PrefixDecodeError::Invalid { consumed: 1 },
+            },
+        )),
+        error,
+    );
 }
 
 // ============================================================================

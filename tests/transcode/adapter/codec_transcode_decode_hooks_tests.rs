@@ -41,7 +41,7 @@ impl Codec for FlushFailCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -90,10 +90,10 @@ impl Codec for InvalidByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         if input[input_index] == 0xff {
-            Err(qubit_codec::CodecDecodeFailure::invalid(
+            Err(qubit_codec::DecodeFailure::invalid(
                 InvalidByteError,
                 core::num::NonZeroUsize::MIN,
             ))

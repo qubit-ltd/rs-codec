@@ -14,30 +14,21 @@ use super::{
     codec_encode_error::CodecEncodeError,
 };
 
-/// Error reported by codec-backed buffered converters.
+/// Domain error reported by codec-backed converter adapters.
 ///
 /// A converter first decodes source units into a logical value and then encodes
 /// that value into target units. This error keeps those two failure sources
-/// explicit instead of hiding them behind an implicit conversion. The encode
-/// branch wraps [`CodecEncodeError`] so callers can distinguish codec encode
-/// failures from adapter-level output-index errors.
+/// explicit while framework buffer failures remain in
+/// [`crate::TranscodeError`].
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 pub enum CodecConvertError<D, E> {
     /// Source-unit decoding failed.
-    #[error("codec conversion decode error: {source}")]
-    Decode {
-        /// Decode error reported by the decoder side of the converter.
-        #[source]
-        source: CodecDecodeError<D>,
-    },
+    #[error("codec conversion decode error: {0}")]
+    Decode(#[source] CodecDecodeError<D>),
 
     /// Target-unit encoding failed.
-    #[error("codec conversion encode error: {source}")]
-    Encode {
-        /// Encode error reported by the encoder side of the converter.
-        #[source]
-        source: CodecEncodeError<E>,
-    },
+    #[error("codec conversion encode error: {0}")]
+    Encode(#[source] CodecEncodeError<E>),
 }
 
 impl<D, E> CodecConvertError<D, E> {
@@ -53,7 +44,7 @@ impl<D, E> CodecConvertError<D, E> {
     #[inline(always)]
     #[must_use]
     pub const fn decode(source: CodecDecodeError<D>) -> Self {
-        Self::Decode { source }
+        Self::Decode(source)
     }
 
     /// Creates a conversion error from an encode-side failure.
@@ -68,6 +59,6 @@ impl<D, E> CodecConvertError<D, E> {
     #[inline(always)]
     #[must_use]
     pub const fn encode(source: CodecEncodeError<E>) -> Self {
-        Self::Encode { source }
+        Self::Encode(source)
     }
 }

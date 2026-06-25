@@ -15,6 +15,7 @@ mod encode_outcome_tests;
 mod engine;
 mod internal;
 mod io;
+mod transcode_contract_error_tests;
 mod transcode_converter_tests;
 mod transcode_decoder_tests;
 mod transcode_encoder_tests;

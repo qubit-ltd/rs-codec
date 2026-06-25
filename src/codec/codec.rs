@@ -9,7 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::codec_decode_failure::CodecDecodeFailure;
+use super::decode_failure::DecodeFailure;
 
 /// Encodes and decodes one value or codec quantum against a unit buffer.
 ///
@@ -37,7 +37,7 @@ use super::codec_decode_failure::CodecDecodeFailure;
 ///
 /// Decode operations see only the currently supplied input slice and codec
 /// state. They do not receive an explicit EOF marker and they cannot look past
-/// the visible input. Returning [`CodecDecodeFailure::Incomplete`] requests
+/// the visible input. Returning [`DecodeFailure::Incomplete`] requests
 /// more input for the current value; it is not itself an EOF error. The default
 /// codec-backed streaming adapters therefore fit formats whose value boundary
 /// is locally decidable from the visible prefix plus codec state. Formats that
@@ -341,12 +341,12 @@ pub trait Codec {
     ///
     /// # Errors
     ///
-    /// Returns [`CodecDecodeFailure::Incomplete`] when the visible input is a
+    /// Returns [`DecodeFailure::Incomplete`] when the visible input is a
     /// valid prefix but more units are needed to decide or complete a value.
     /// This reports a streaming boundary, not a final EOF condition; the
     /// caller or higher-level adapter decides what an incomplete tail means
     /// when the upstream source is closed.
-    /// Returns [`CodecDecodeFailure::Invalid`] when the units are malformed,
+    /// Returns [`DecodeFailure::Invalid`] when the units are malformed,
     /// non-canonical, unmappable, or otherwise invalid for this codec. The
     /// concrete error type carries only codec-domain invalidity.
     /// Implementations must leave their internal state consistent when
@@ -359,7 +359,7 @@ pub trait Codec {
     /// [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE)
     /// units are readable from `input_index`. Implementations must not read
     /// beyond the currently available units under that precondition. They
-    /// may return [`CodecDecodeFailure::Incomplete`] when those units are a
+    /// may return [`DecodeFailure::Incomplete`] when those units are a
     /// valid but incomplete prefix.
     ///
     /// On success, implementations must return a consumed unit count no larger
@@ -371,15 +371,12 @@ pub trait Codec {
         &mut self,
         input: &[Self::Unit],
         input_index: usize,
-    ) -> Result<
-        (Self::Value, NonZeroUsize),
-        CodecDecodeFailure<Self::DecodeError>,
-    >;
+    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>>;
 
     /// Flushes decode-side EOF state into `output`.
     ///
     /// `decode_flush` receives no source input. Callers must have already
-    /// handled any tail reported by [`CodecDecodeFailure::Incomplete`] before
+    /// handled any tail reported by [`DecodeFailure::Incomplete`] before
     /// flushing decode state. Implementations may emit retained values or
     /// validate internal EOF state, but they must not depend on re-reading the
     /// incomplete source tail.

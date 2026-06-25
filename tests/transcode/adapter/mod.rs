@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod codec_transcode_convert_hooks_tests;
 mod codec_transcode_converter_tests;
 mod codec_transcode_decode_hooks_tests;
 mod codec_transcode_decoder_tests;

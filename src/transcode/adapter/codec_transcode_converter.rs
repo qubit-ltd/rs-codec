@@ -10,7 +10,6 @@
 use core::fmt;
 
 use super::{
-    CodecTranscodeConvertHooks,
     CodecTranscodeDecodeHooks,
     CodecTranscodeEncodeHooks,
 };
@@ -18,8 +17,13 @@ use crate::{
     CapacityError,
     Codec,
     CodecConvertError,
+    CodecDecodeError,
+    CodecEncodeError,
     TranscodeConvertEngine,
+    TranscodeConvertEngineError,
     TranscodeConverter,
+    TranscodeDecodeEngineError,
+    TranscodeEncodeEngineError,
     TranscodeError,
     TranscodeProgress,
     Transcoder,
@@ -28,6 +32,17 @@ use crate::{
 /// Strict codec-backed converter error type.
 type CodecTranscodeConvertError<D, E> =
     CodecConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError>;
+
+type CodecTranscodeConvertEngineError<D, E> = TranscodeConvertEngineError<
+    TranscodeDecodeEngineError<
+        <D as Codec>::DecodeError,
+        CodecDecodeError<<D as Codec>::DecodeError>,
+    >,
+    TranscodeEncodeEngineError<
+        <E as Codec>::EncodeError,
+        CodecEncodeError<<E as Codec>::EncodeError>,
+    >,
+>;
 
 /// Converts source units to target units through a decoded value by using
 /// codecs.
@@ -60,7 +75,6 @@ where
         E,
         CodecTranscodeDecodeHooks,
         CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
     >,
 }
 
@@ -73,7 +87,6 @@ where
         E,
         CodecTranscodeDecodeHooks,
         CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
     >: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
@@ -116,7 +129,6 @@ where
                 encoder,
                 CodecTranscodeDecodeHooks,
                 CodecTranscodeEncodeHooks,
-                CodecTranscodeConvertHooks::new(),
             ),
         }
     }
@@ -179,7 +191,9 @@ where
     where
         D::Value: Default,
     {
-        self.engine.reset(output, output_index)
+        self.engine.reset(output, output_index).map_err(|error| {
+            error.map_domain(flatten_convert_engine_error::<D, E>)
+        })
     }
 
     /// Converts source units into target units.
@@ -216,6 +230,9 @@ where
     > {
         self.engine
             .transcode(input, input_index, output, output_index)
+            .map_err(|error| {
+                error.map_domain(flatten_convert_engine_error::<D, E>)
+            })
     }
 
     /// Finishes internally retained output after EOF.
@@ -245,7 +262,9 @@ where
     where
         D::Value: Default,
     {
-        self.engine.finish(output, output_index)
+        self.engine.finish(output, output_index).map_err(|error| {
+            error.map_domain(flatten_convert_engine_error::<D, E>)
+        })
     }
 }
 
@@ -376,7 +395,6 @@ where
         E,
         CodecTranscodeDecodeHooks,
         CodecTranscodeEncodeHooks,
-        CodecTranscodeConvertHooks,
     >: Default,
 {
     /// Creates a default codec-backed buffered converter.
@@ -389,5 +407,29 @@ where
         Self {
             engine: TranscodeConvertEngine::default(),
         }
+    }
+}
+
+#[inline(always)]
+fn flatten_convert_engine_error<D, E>(
+    error: CodecTranscodeConvertEngineError<D, E>,
+) -> CodecTranscodeConvertError<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+{
+    match error {
+        TranscodeConvertEngineError::Decode(error) => match error {
+            TranscodeDecodeEngineError::Codec(error)
+            | TranscodeDecodeEngineError::Hook(error) => {
+                CodecConvertError::decode(error)
+            }
+        },
+        TranscodeConvertEngineError::Encode(error) => match error {
+            TranscodeEncodeEngineError::Codec(error)
+            | TranscodeEncodeEngineError::Hook(error) => {
+                CodecConvertError::encode(error)
+            }
+        },
     }
 }

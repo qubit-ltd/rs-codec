@@ -16,17 +16,17 @@ use std::rc::Rc;
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecDecodeFlushError,
-    CodecDecodeResetError,
-    CodecEncodeFlushError,
-    CodecEncodeResetError,
+    CodecDecodeError,
+    CodecEncodeError,
     DecodeContext,
     DecodeInvalidAction,
     EncodeContext,
     EncodeOutcome,
     TranscodeConvertEngine,
-    TranscodeConvertHooks,
+    TranscodeConvertEngineError,
+    TranscodeDecodeEngineError,
     TranscodeDecodeHooks,
+    TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
@@ -64,56 +64,17 @@ impl From<core::convert::Infallible> for EngineError {
     }
 }
 
-impl From<CodecDecodeFlushError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecDecodeFlushError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
+#[allow(dead_code)]
+trait LegacyConvertHooks<D: Codec, E: Codec<Value = D::Value>> {
+    type DecodeError;
+    type EncodeError;
+    type Error;
 
-impl From<CodecEncodeResetError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecEncodeResetError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error;
 
-impl From<CodecDecodeFlushError<EngineError>> for EngineError {
-    fn from(error: CodecDecodeFlushError<EngineError>) -> Self {
-        error.into_source()
-    }
-}
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
 
-impl From<CodecEncodeResetError<EngineError>> for EngineError {
-    fn from(error: CodecEncodeResetError<EngineError>) -> Self {
-        error.into_source()
-    }
-}
-
-impl From<CodecDecodeResetError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecDecodeResetError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
-
-impl From<CodecDecodeResetError<EngineError>> for EngineError {
-    fn from(error: CodecDecodeResetError<EngineError>) -> Self {
-        error.into_source()
-    }
-}
-
-impl From<CodecEncodeFlushError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecEncodeFlushError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
-
-impl From<CodecEncodeFlushError<EngineError>> for EngineError {
-    fn from(error: CodecEncodeFlushError<EngineError>) -> Self {
-        error.into_source()
-    }
+    fn reset_hooks(&mut self) {}
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -138,10 +99,8 @@ impl Codec for SourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: The caller proved that at least one input unit is readable.
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value.wrapping_add(1), NonZeroUsize::MIN))
@@ -175,10 +134,8 @@ impl Codec for TargetCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: The caller proved that at least one input unit is readable.
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
@@ -220,10 +177,8 @@ impl Codec for ResetEmittingTargetCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
     }
 
@@ -257,14 +212,6 @@ struct FinishOverflowTargetCodec;
 #[error("target reset failed")]
 struct TargetResetFailError;
 
-impl From<CodecEncodeResetError<TargetResetFailError>>
-    for TargetResetFailError
-{
-    fn from(error: CodecEncodeResetError<TargetResetFailError>) -> Self {
-        error.into_source()
-    }
-}
-
 impl Codec for ResetFailTargetCodec {
     type Value = u8;
     type Unit = u8;
@@ -281,10 +228,8 @@ impl Codec for ResetFailTargetCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
     }
 
@@ -321,10 +266,8 @@ impl Codec for FinishOverflowTargetCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
     }
 
@@ -366,7 +309,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, ResetEmittingTargetCodec>
+impl LegacyConvertHooks<SourceCodec, ResetEmittingTargetCodec>
     for ResetTargetHooks
 {
     type DecodeError = EngineError;
@@ -422,7 +365,7 @@ impl TranscodeEncodeHooks<FinishOverflowTargetCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FinishOverflowConvertHooks;
 
-impl TranscodeConvertHooks<SourceCodec, FinishOverflowTargetCodec>
+impl LegacyConvertHooks<SourceCodec, FinishOverflowTargetCodec>
     for FinishOverflowConvertHooks
 {
     type DecodeError = EngineError;
@@ -463,7 +406,7 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, ResetFailTargetCodec>
+impl LegacyConvertHooks<SourceCodec, ResetFailTargetCodec>
     for ResetFailTargetHooks
 {
     type DecodeError = EngineError;
@@ -493,11 +436,9 @@ impl Codec for ErrorSourceCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
-        Err(qubit_codec::CodecDecodeFailure::invalid_without_consumed(
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
+        Err(qubit_codec::DecodeFailure::invalid_without_consumed(
             EngineError::Decode,
         ))
     }
@@ -532,10 +473,8 @@ impl<const FLUSH_BOUND: usize> Codec for FlushValueSourceCodec<FLUSH_BOUND> {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: The caller proved that at least one input unit is readable.
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
@@ -632,7 +571,7 @@ impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchPendingFinishHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+impl LegacyConvertHooks<SourceCodec, TargetCodec>
     for MismatchPendingFinishHooks
 {
     type DecodeError = EngineError;
@@ -651,7 +590,7 @@ impl TranscodeConvertHooks<SourceCodec, TargetCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchDecoderFinishHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+impl LegacyConvertHooks<SourceCodec, TargetCodec>
     for MismatchDecoderFinishHooks
 {
     type DecodeError = EngineError;
@@ -710,7 +649,7 @@ struct RepairHooks {
     action: RepairAction,
 }
 
-impl TranscodeConvertHooks<ErrorSourceCodec, TargetCodec> for RepairHooks {
+impl LegacyConvertHooks<ErrorSourceCodec, TargetCodec> for RepairHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -790,7 +729,7 @@ struct FixedFinishBoundHooks {
 }
 
 impl<const FLUSH_BOUND: usize>
-    TranscodeConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
+    LegacyConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
     for FixedFinishBoundHooks
 {
     type DecodeError = EngineError;
@@ -810,7 +749,7 @@ impl<const FLUSH_BOUND: usize>
 struct ChangingFinishBoundHooks;
 
 impl<const FLUSH_BOUND: usize>
-    TranscodeConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
+    LegacyConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
     for ChangingFinishBoundHooks
 {
     type DecodeError = EngineError;
@@ -826,7 +765,7 @@ impl<const FLUSH_BOUND: usize>
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for CopyHooks {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for CopyHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -897,7 +836,7 @@ impl Default for FinishHooks {
     }
 }
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for FinishHooks {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for FinishHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -967,7 +906,7 @@ impl TranscodeDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct BatchFinishHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for BatchFinishHooks {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for BatchFinishHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -1035,7 +974,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FinishEncodeHooksOnly;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for FinishEncodeHooksOnly {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for FinishEncodeHooksOnly {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -1184,7 +1123,7 @@ struct ErrorPathHooks {
     encode_mode: ErrorPathEncodeMode,
 }
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for ErrorPathHooks {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for ErrorPathHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -1254,7 +1193,7 @@ struct DirectConvertHooks {
     encode_offset: u8,
 }
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec> for DirectConvertHooks {
+impl LegacyConvertHooks<SourceCodec, TargetCodec> for DirectConvertHooks {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
     type Error = ConvertEngineError<EngineError>;
@@ -1273,7 +1212,6 @@ type CopyConvertEngine = TranscodeConvertEngine<
     TargetCodec,
     StrictDecodeHooks,
     StrictEncodeHooks,
-    CopyHooks,
 >;
 
 fn new_copy_engine() -> CopyConvertEngine {
@@ -1282,7 +1220,6 @@ fn new_copy_engine() -> CopyConvertEngine {
         TargetCodec,
         StrictDecodeHooks,
         StrictEncodeHooks,
-        CopyHooks::default(),
     )
 }
 
@@ -1293,7 +1230,6 @@ fn new_error_path_engine(
     TargetCodec,
     ErrorPathDecodeHooks,
     ErrorPathEncodeHooks,
-    ErrorPathHooks,
 > {
     let decode_hooks = ErrorPathDecodeHooks {
         finish: hooks.decode_finish,
@@ -1310,7 +1246,6 @@ fn new_error_path_engine(
         TargetCodec,
         decode_hooks,
         encode_hooks,
-        hooks,
     )
 }
 
@@ -1321,7 +1256,6 @@ fn new_finish_engine(
     TargetCodec,
     FinishDecodeHooks,
     StrictEncodeHooks,
-    FinishHooks,
 > {
     TranscodeConvertEngine::new(
         SourceCodec,
@@ -1330,7 +1264,6 @@ fn new_finish_engine(
             value: Some(hooks.value),
         },
         StrictEncodeHooks,
-        hooks,
     )
 }
 
@@ -1339,14 +1272,12 @@ fn new_batch_finish_engine() -> TranscodeConvertEngine<
     TargetCodec,
     BatchFinishDecodeHooks,
     StrictEncodeHooks,
-    BatchFinishHooks,
 > {
     TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         BatchFinishDecodeHooks::default(),
         StrictEncodeHooks,
-        BatchFinishHooks,
     )
 }
 
@@ -1355,14 +1286,12 @@ fn new_finish_encode_engine() -> TranscodeConvertEngine<
     TargetCodec,
     StrictDecodeHooks,
     FinishEncodeHooks,
-    FinishEncodeHooksOnly,
 > {
     TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         StrictDecodeHooks,
         FinishEncodeHooks::default(),
-        FinishEncodeHooksOnly,
     )
 }
 
@@ -1373,14 +1302,12 @@ fn new_repair_engine(
     TargetCodec,
     RepairDecodeHooks,
     StrictEncodeHooks,
-    RepairHooks,
 > {
     TranscodeConvertEngine::new(
         ErrorSourceCodec,
         TargetCodec,
         RepairDecodeHooks { action },
         StrictEncodeHooks,
-        RepairHooks { action },
     )
 }
 
@@ -1398,8 +1325,18 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
 
 #[test]
 fn test_buffered_convert_engine_implements_transcoder() {
-    type EngineResult<T> =
-        Result<T, TranscodeError<ConvertEngineError<EngineError>>>;
+    type EngineResult<T> = Result<
+        T,
+        TranscodeError<
+            TranscodeConvertEngineError<
+                TranscodeDecodeEngineError<
+                    core::convert::Infallible,
+                    EngineError,
+                >,
+                TranscodeEncodeEngineError<EngineError, EngineError>,
+            >,
+        >,
+    >;
     type TranscodeFn = fn(
         &mut CopyConvertEngine,
         &[u8],
@@ -1463,7 +1400,6 @@ fn test_buffered_convert_engine_default_builds_engine() {
         TargetCodec,
         StrictDecodeHooks,
         StrictEncodeHooks,
-        CopyHooks,
     >::default();
     let mut output = [0_u8; 1];
 
@@ -1485,7 +1421,6 @@ fn test_buffered_convert_engine_new_uses_supplied_components() {
         TargetCodec,
         StrictDecodeHooks,
         StrictEncodeHooks,
-        CopyHooks::default(),
     );
     let mut output = [0_u8; 1];
 
@@ -1505,10 +1440,6 @@ fn test_buffered_convert_engine_new_uses_supplied_policy_hooks() {
         TargetCodec,
         FactoryDecodeHooks { marker: 11 },
         FactoryEncodeHooks { offset: 7 },
-        DirectConvertHooks {
-            decode_marker: 11,
-            encode_offset: 7,
-        },
     );
 
     assert_eq!(Ok(11), engine.max_output_len(1));
@@ -1615,10 +1546,12 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
         "pending encode error should be mapped before new input is consumed",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -1723,7 +1656,6 @@ fn test_buffered_convert_engine_finish_maps_encoder_finish_bound_overflow() {
         FinishOverflowTargetCodec,
         StrictDecodeHooks,
         FinishOverflowEncodeHooks,
-        FinishOverflowConvertHooks,
     );
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
@@ -1745,7 +1677,6 @@ fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow
         TargetCodec,
         FixedFinishBoundDecodeHooks { finish_len: 1 },
         StrictEncodeHooks,
-        FixedFinishBoundHooks { finish_len: 1 },
     );
     let mut output = [];
 
@@ -1766,7 +1697,6 @@ fn test_buffered_convert_engine_finish_maps_late_decode_finish_bound_overflow()
             calls: Cell::new(0),
         },
         StrictEncodeHooks,
-        ChangingFinishBoundHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -1790,10 +1720,12 @@ fn test_buffered_convert_engine_maps_encode_value_error() {
         "encode value error should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -1825,10 +1757,12 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
         "decode finish error should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Decode(
+            TranscodeDecodeEngineError::Hook(EngineError::Decode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -1845,10 +1779,12 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
         "encode finish error should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -1869,10 +1805,12 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
         .finish(&mut output, 0)
         .expect_err("finish should map pending encode error");
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -1885,10 +1823,12 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
         "finish should map encode errors for decoder-emitted values",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
-        error
-    );
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
     assert_eq!([0], output);
 }
 
@@ -2086,7 +2026,7 @@ impl TranscodeDecodeHooks<SourceCodec> for ResetObservingDecodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailDecodeConvertHooks;
 
-impl TranscodeConvertHooks<SourceCodec, TargetCodec>
+impl LegacyConvertHooks<SourceCodec, TargetCodec>
     for ResetFailDecodeConvertHooks
 {
     type DecodeError = EngineError;
@@ -2122,10 +2062,8 @@ impl Codec for StatelessResetSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -2165,10 +2103,8 @@ impl Codec for StatelessResetFailingSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -2245,7 +2181,7 @@ impl TranscodeDecodeHooks<StatelessResetFailingSourceCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct StatelessResetSourceConvertHooks;
 
-impl TranscodeConvertHooks<StatelessResetSourceCodec, TargetCodec>
+impl LegacyConvertHooks<StatelessResetSourceCodec, TargetCodec>
     for StatelessResetSourceConvertHooks
 {
     type DecodeError = EngineError;
@@ -2264,7 +2200,7 @@ impl TranscodeConvertHooks<StatelessResetSourceCodec, TargetCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct StatelessResetFailingSourceConvertHooks;
 
-impl TranscodeConvertHooks<StatelessResetFailingSourceCodec, TargetCodec>
+impl LegacyConvertHooks<StatelessResetFailingSourceCodec, TargetCodec>
     for StatelessResetFailingSourceConvertHooks
 {
     type DecodeError = EngineError;
@@ -2297,10 +2233,8 @@ impl Codec for OverflowResetSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -2343,10 +2277,8 @@ impl Codec for OverflowResetTargetCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -2418,7 +2350,7 @@ impl TranscodeEncodeHooks<OverflowResetTargetCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverflowResetConvertHooks;
 
-impl TranscodeConvertHooks<OverflowResetSourceCodec, OverflowResetTargetCodec>
+impl LegacyConvertHooks<OverflowResetSourceCodec, OverflowResetTargetCodec>
     for OverflowResetConvertHooks
 {
     type DecodeError = core::convert::Infallible;
@@ -2462,7 +2394,7 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchCapacityResetEmittingConvertHooks;
 
-impl TranscodeConvertHooks<ResetEmittingSourceCodec, TargetCodec>
+impl LegacyConvertHooks<ResetEmittingSourceCodec, TargetCodec>
     for MismatchCapacityResetEmittingConvertHooks
 {
     type DecodeError = EngineError;
@@ -2484,7 +2416,6 @@ fn test_buffered_convert_engine_reset_emits_target_reset_output() {
         SourceCodec,
         ResetEmittingTargetCodec,
         StrictDecodeHooks,
-        ResetTargetHooks,
         ResetTargetHooks,
     );
     let mut output = [0_u8; 1];
@@ -2508,7 +2439,6 @@ fn test_buffered_convert_engine_reset_calls_decode_before_reset() {
             called: called.clone(),
         },
         StrictEncodeHooks,
-        ResetFailDecodeConvertHooks,
     );
 
     engine.reset(&mut [], 0).expect("reset should succeed");
@@ -2523,7 +2453,6 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
         ResetFailTargetCodec,
         StrictDecodeHooks,
         ResetFailTargetHooks,
-        ResetFailTargetHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -2531,12 +2460,14 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
         "target reset errors should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(
-            TargetResetFailError
-        )),
+    assert!(matches!(
         error,
-    );
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Codec(CodecEncodeError::EncodeReset {
+                source: TargetResetFailError,
+            },),
+        )),
+    ));
 }
 
 #[test]
@@ -2545,7 +2476,6 @@ fn test_buffered_convert_engine_reset_rejects_invalid_output_index() {
         SourceCodec,
         ResetEmittingTargetCodec,
         StrictDecodeHooks,
-        ResetTargetHooks,
         ResetTargetHooks,
     );
     let mut output = [0_u8; 1];
@@ -2570,7 +2500,6 @@ fn test_buffered_convert_engine_reset_with_stateless_decode_reset_values() {
             called: called.clone(),
         },
         StrictEncodeHooks,
-        StatelessResetSourceConvertHooks,
     );
 
     assert_eq!(Ok(0), engine.max_reset_output_len());
@@ -2593,14 +2522,20 @@ fn test_buffered_convert_engine_reset_maps_stateless_decoder_reset_error() {
         TargetCodec,
         StatelessResetFailingSourceDecodeHooks,
         StrictEncodeHooks,
-        StatelessResetFailingSourceConvertHooks,
     );
 
     let error = engine
         .reset(&mut [], 0)
         .expect_err("stateless decoder reset errors should be mapped");
 
-    assert_eq!(TranscodeError::Domain(EngineError::Decode), error);
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(TranscodeConvertEngineError::Decode(
+            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeReset {
+                source: EngineError::Decode,
+            },),
+        )),
+    ));
 }
 
 #[test]
@@ -2610,7 +2545,6 @@ fn test_buffered_convert_engine_max_reset_output_len_overflow() {
         OverflowResetTargetCodec,
         OverflowResetSourceDecodeHooks,
         OverflowResetTargetEncodeHooks,
-        OverflowResetConvertHooks,
     );
 
     let error = engine
@@ -2630,7 +2564,6 @@ fn test_buffered_convert_engine_reset_reaches_unreachable_decode_reset_path() {
         TargetCodec,
         MismatchCapacityResetEmittingDecodeHooks,
         MismatchCapacityEncodeHooks,
-        MismatchCapacityResetEmittingConvertHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -2678,7 +2611,6 @@ fn test_buffered_convert_engine_finish_hits_pending_unreachable() {
         TargetCodec,
         StrictDecodeHooks,
         MismatchCapacityEncodeHooks,
-        MismatchPendingFinishHooks,
     );
     let mut empty_output = [0_u8; 0];
 
@@ -2698,7 +2630,6 @@ fn test_buffered_convert_engine_finish_hits_decoder_finish_unreachable() {
         TargetCodec,
         FinishDecodeHooks::default(),
         MismatchCapacityEncodeHooks,
-        MismatchDecoderFinishHooks,
     );
     let required = engine.max_finish_output_len().expect("finish bound");
     let mut output = vec![0_u8; required];
@@ -2735,10 +2666,8 @@ impl Codec for ResetEmittingSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: The caller proved that at least one input unit is readable.
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
@@ -2785,10 +2714,8 @@ impl Codec for ResetEncodingFailSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: The caller proved that at least one input unit is readable.
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
@@ -2860,7 +2787,7 @@ impl TranscodeDecodeHooks<ResetEncodingFailSourceCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetSourceConvertHooks;
 
-impl TranscodeConvertHooks<ResetEmittingSourceCodec, TargetCodec>
+impl LegacyConvertHooks<ResetEmittingSourceCodec, TargetCodec>
     for ResetSourceConvertHooks
 {
     type DecodeError = EngineError;
@@ -2879,7 +2806,7 @@ impl TranscodeConvertHooks<ResetEmittingSourceCodec, TargetCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetEncodingFailSourceConvertHooks;
 
-impl TranscodeConvertHooks<ResetEncodingFailSourceCodec, TargetCodec>
+impl LegacyConvertHooks<ResetEncodingFailSourceCodec, TargetCodec>
     for ResetEncodingFailSourceConvertHooks
 {
     type DecodeError = EngineError;
@@ -2912,10 +2839,8 @@ impl Codec for ResetFailingSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -2968,7 +2893,7 @@ impl TranscodeDecodeHooks<ResetFailingSourceCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailSourceDecodeConvertHooks;
 
-impl TranscodeConvertHooks<ResetFailingSourceCodec, TargetCodec>
+impl LegacyConvertHooks<ResetFailingSourceCodec, TargetCodec>
     for ResetFailSourceDecodeConvertHooks
 {
     type DecodeError = EngineError;
@@ -3001,10 +2926,8 @@ impl Codec for FlushFailingSourceCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
         let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
@@ -3057,7 +2980,7 @@ impl TranscodeDecodeHooks<FlushFailingSourceCodec>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailConvertHooks;
 
-impl TranscodeConvertHooks<FlushFailingSourceCodec, TargetCodec>
+impl LegacyConvertHooks<FlushFailingSourceCodec, TargetCodec>
     for FlushFailConvertHooks
 {
     type DecodeError = EngineError;
@@ -3080,7 +3003,6 @@ fn test_buffered_convert_engine_reset_includes_decode_reset_in_bound() {
         TargetCodec,
         ResetSourceDecodeHooks,
         StrictEncodeHooks,
-        ResetSourceConvertHooks,
     );
 
     let bound = engine
@@ -3099,7 +3021,6 @@ fn test_buffered_convert_engine_reset_pipes_decode_reset_values_into_encoder() {
         TargetCodec,
         ResetSourceDecodeHooks,
         StrictEncodeHooks,
-        ResetSourceConvertHooks,
     );
 
     let required = engine
@@ -3128,7 +3049,6 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
         TargetCodec,
         ResetEncodingFailSourceDecodeHooks,
         StrictEncodeHooks,
-        ResetEncodingFailSourceConvertHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -3136,10 +3056,12 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
         "errors while encoding decode-reset values should be mapped",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Encode(EngineError::Encode)),
+    assert!(matches!(
         error,
-    );
+        TranscodeError::Domain(TranscodeConvertEngineError::Encode(
+            TranscodeEncodeEngineError::Hook(EngineError::Encode),
+        )),
+    ));
 }
 
 #[test]
@@ -3149,7 +3071,6 @@ fn test_buffered_convert_engine_reset_maps_decoder_reset_error() {
         TargetCodec,
         ResetFailSourceDecodeHooks,
         StrictEncodeHooks,
-        ResetFailSourceDecodeConvertHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -3157,10 +3078,14 @@ fn test_buffered_convert_engine_reset_maps_decoder_reset_error() {
         "decoder reset errors should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
+    assert!(matches!(
         error,
-    );
+        TranscodeError::Domain(TranscodeConvertEngineError::Decode(
+            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeReset {
+                source: EngineError::Decode,
+            },),
+        )),
+    ));
 }
 
 #[test]
@@ -3170,7 +3095,6 @@ fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
         TargetCodec,
         FlushFailSourceDecodeHooks,
         StrictEncodeHooks,
-        FlushFailConvertHooks,
     );
     let mut output = [0_u8; 1];
 
@@ -3178,10 +3102,14 @@ fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
         "decoder finish error should be mapped through convert hooks",
     );
 
-    assert_eq!(
-        TranscodeError::Domain(ConvertEngineError::Decode(EngineError::Decode)),
+    assert!(matches!(
         error,
-    );
+        TranscodeError::Domain(TranscodeConvertEngineError::Decode(
+            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeFlush {
+                source: EngineError::Decode,
+            },),
+        )),
+    ));
 }
 
 // ============================================================================

@@ -46,7 +46,7 @@ use crate::{
 /// use qubit_codec::{
 ///     TranscodeEncodeHooks,
 ///     Codec,
-///     CodecDecodeFailure,
+///     DecodeFailure,
 ///     CodecEncodeError,
 ///     EncodeContext,
 ///     EncodeOutcome,
@@ -68,7 +68,7 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
+///     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
 ///         Ok((input[index], NonZeroUsize::MIN))
 ///     }
 ///
@@ -118,9 +118,10 @@ where
 {
     /// Domain error type returned by the buffered encoder policy.
     ///
-    /// Engine methods that call encode lifecycle hooks, such as
-    /// [`crate::TranscodeEncodeEngine::reset`], require this type to accept
-    /// [`crate::CodecEncodeResetError`] through [`From`].
+    /// Engine methods wrap this type in
+    /// [`crate::TranscodeEncodeEngineError::Hook`]. Codec lifecycle failures
+    /// are reported separately through
+    /// [`crate::TranscodeEncodeEngineError::Codec`].
     type Error;
 
     /// Returns the maximum output units needed for `input_len` values.

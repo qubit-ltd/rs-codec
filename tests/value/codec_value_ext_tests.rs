@@ -13,6 +13,7 @@ use qubit_codec::{
     CodecDecodeError,
     CodecEncodeError,
     CodecValueExt,
+    TranscodeError,
 };
 
 #[derive(Default)]
@@ -38,7 +39,7 @@ impl Codec for ResetByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -91,7 +92,7 @@ impl Codec for StatefulLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
@@ -160,7 +161,7 @@ impl Codec for VariableWidthResetCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -221,7 +222,7 @@ impl Codec for OverflowEncodeBoundCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
@@ -261,7 +262,7 @@ impl Codec for RejectingCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((0, core::num::NonZeroUsize::MIN))
     }
@@ -299,9 +300,9 @@ impl Codec for FallibleCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
-        Err(qubit_codec::CodecDecodeFailure::invalid_without_consumed(
+        Err(qubit_codec::DecodeFailure::invalid_without_consumed(
             "decode failure",
         ))
     }
@@ -398,7 +399,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_invalid_output_index() {
         .expect_err("output index beyond the slice should fail");
 
     assert_eq!(
-        CodecEncodeError::InvalidOutputIndex { index: 1, len: 0 },
+        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
         error,
     );
 }
@@ -413,7 +414,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_insufficient_output() {
         .expect_err("output must hold reset bytes and encoded value");
 
     assert_eq!(
-        CodecEncodeError::InsufficientOutput {
+        TranscodeError::InsufficientOutput {
             output_index: 0,
             required: 2,
             available: 1,
@@ -431,7 +432,12 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_unencodable_value() {
         .encode_value_with_reset(&41, &mut output, 0)
         .expect_err("unencodable values should be rejected before encoding");
 
-    assert_eq!(CodecEncodeError::UnencodableValue { input_index: 0 }, error);
+    assert_eq!(
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
+            input_index: 0,
+        }),
+        error,
+    );
 }
 
 #[test]
@@ -444,7 +450,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow()
         .encode_value_with_reset(&41, &mut output, 0)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(CodecEncodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
 }
 
 #[test]
@@ -457,10 +463,10 @@ fn test_codec_value_ext_encode_value_with_reset_wraps_encode_error() {
         .expect_err("codec encode errors should be wrapped");
 
     assert_eq!(
-        CodecEncodeError::Encode {
+        TranscodeError::Domain(CodecEncodeError::Encode {
             source: "encode failure",
             input_index: 0,
-        },
+        }),
         error,
     );
 }
@@ -493,11 +499,11 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_incomplete_input() {
         );
 
     assert_eq!(
-        CodecDecodeError::Incomplete {
+        TranscodeError::Domain(CodecDecodeError::Incomplete {
             input_index: 0,
             required_total: 1,
             available: 0,
-        },
+        }),
         error,
     );
 }
@@ -512,10 +518,10 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_decode_error() {
         .expect_err("codec decode errors should be wrapped");
 
     assert_eq!(
-        CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecDecodeError::Decode {
             source: "decode failure",
             input_index: 0,
-        },
+        }),
         error,
     );
 }
@@ -541,11 +547,9 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
             _input_index: usize,
         ) -> Result<
             (u8, core::num::NonZeroUsize),
-            qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+            qubit_codec::DecodeFailure<Self::DecodeError>,
         > {
-            Err(qubit_codec::CodecDecodeFailure::incomplete(qubit_io::nz!(
-                2
-            )))
+            Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(2)))
         }
 
         unsafe fn encode(
@@ -565,11 +569,11 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
         .expect_err("codec-level incomplete failure should be mapped");
 
     assert_eq!(
-        CodecDecodeError::Incomplete {
+        TranscodeError::Domain(CodecDecodeError::Incomplete {
             input_index: 0,
             required_total: 2,
             available: 1,
-        },
+        }),
         error,
     );
 }
@@ -598,7 +602,7 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
             input_index: usize,
         ) -> Result<
             (u8, core::num::NonZeroUsize),
-            qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+            qubit_codec::DecodeFailure<Self::DecodeError>,
         > {
             Ok((input[input_index], core::num::NonZeroUsize::MIN))
         }
@@ -629,9 +633,9 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
         .expect_err("decode flush errors should be wrapped after consumption");
 
     assert_eq!(
-        CodecDecodeError::DecodeFlush {
+        TranscodeError::Domain(CodecDecodeError::DecodeFlush {
             source: "flush failure",
-        },
+        }),
         error,
     );
 }
@@ -662,7 +666,7 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush
         .expect_err("flush output must reserve the codec flush bound");
 
     assert_eq!(
-        CodecDecodeError::InsufficientOutput {
+        TranscodeError::InsufficientOutput {
             output_index: 0,
             required: 1,
             available: 0,
@@ -682,10 +686,10 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_fl
         .expect_err("exact decode should reject trailing input");
 
     assert_eq!(
-        CodecDecodeError::TrailingInput {
+        TranscodeError::Domain(CodecDecodeError::TrailingInput {
             consumed: 1,
             remaining: 1,
-        },
+        }),
         error,
     );
     assert_eq!(1, codec.decode_state);
@@ -702,7 +706,7 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_invalid_input_index() {
         .expect_err("input index beyond the slice should fail");
 
     assert_eq!(
-        CodecDecodeError::InvalidInputIndex { index: 2, len: 1 },
+        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
         error,
     );
 }
@@ -718,7 +722,7 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_outpu
         .expect_err("flush output must reserve the codec flush bound");
 
     assert_eq!(
-        CodecDecodeError::InsufficientOutput {
+        TranscodeError::InsufficientOutput {
             output_index: 0,
             required: 1,
             available: 0,

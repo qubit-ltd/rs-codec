@@ -51,9 +51,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 ### 核心转换 Trait
 
 - **`Codec`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
+- **`DecodeFailure`**：区分 `Codec::decode` 返回的 incomplete-prefix 流程控制
+  与 codec-domain invalid input。
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
-  adapter 自己产生的 encode / decode / convert 错误，包括非法缓冲区下标，
-  同时保留 codec-specific failure。
+  adapter 自己产生的 encode / decode / convert 错误，同时保留
+  codec-specific failure。缓冲区下标和容量错误由 `TranscodeError` 表达。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -92,14 +94,17 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`DecodeInvalidAction<Value>`**：decoder engine hook 针对非法输入返回的策略动作。
 - **`CodecTranscodeConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
-- **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，通过
-  `decode_into` 驱动调用方传入的 `Codec`。需要状态化 streaming decoder 时
-  使用 `transcode_into` / `finish_transcode_into`。
+- **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，并通过
+  `transcode_into` / `finish_transcode_into` 驱动调用方传入的 streaming
+  decoder。
 - **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`；普通
   `flush` 只排空 unit buffer。状态化 streaming encoder 使用 `transcode_from`
   和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
+- **`TranscodeError` / `CapacityError` / `TranscodeContractError`**：把
+  framework 层的缓冲区、容量规划和错误进度契约失败，与 codec 或策略
+  domain error 分开表达。
 
 ### 字节序标记
 
@@ -149,7 +154,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一个解码 codec
 和一个编码 codec：
 - 严格管线   → CodecTranscodeConverter<D, E>
-- 带策略钩子 → TranscodeConvertEngine<D, E, DH, EH, H>
+- 带策略钩子 → TranscodeConvertEngine<D, E, DH, EH>
 ```
 
 ### 层次总览
@@ -229,9 +234,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `CodecEncodeError<E>` | adapter 层 encode error，包装 codec error 或非法缓冲区下标 |
-| `CodecDecodeError<E>` | adapter 层 decode error，包装 codec error、不完整输入、非法缓冲区下标或尾随输入 |
+| `DecodeFailure<E>` | 底层 decode 结果，表示可见输入是 incomplete prefix，或 codec-domain invalid input |
+| `CodecEncodeError<E>` | adapter 层 encode error，包装 codec reset/encode/flush error 或不可编码值 |
+| `CodecDecodeError<E>` | adapter 层 decode error，包装 codec reset/decode/flush error、不完整输入或尾随输入 |
 | `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 失败和完整的 encode-side `CodecEncodeError<E>` 失败 |
+| `TranscodeError<E>` | streaming framework error，表示非法下标、输出不足、输出长度溢出或 domain error |
+| `CapacityError` | 在分配或写入输出前返回的容量规划错误 |
+| `TranscodeContractError` | 自定义 `Transcoder` 返回不一致进度时报告的错误 |
 
 ### Codec Adapter
 
@@ -248,7 +257,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `TranscodeDecodeInput<I>` | 调用时传入 caller-owned `Codec`，通过 `decode_into` 把 `qubit_io::Input` 中的 unit 解码为 value；状态化 streaming decoder 使用 `transcode_into` 和 `finish_transcode_into` |
+| `TranscodeDecodeInput<I>` | 持有 `qubit_io::Input`，调用时传入 caller-owned streaming decoder，并通过 `transcode_into` 和 `finish_transcode_into` 解码 unit |
 | `TranscodeEncodeOutput<O>` | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
@@ -257,6 +266,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
 | `TranscodeEncodeHooks<C>` | 编码单个 value、reset 前清理并完成 encoded output 收尾的 hook 契约 |
+| `TranscodeEncodeEngineError<C, H>` | 区分 codec 生命周期失败和 encode-hook 策略失败 |
 | `EncodeOutcome` | 单值 hook 结果：已消费并写出 output，或需要更多 output 且不消费 |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
@@ -266,8 +276,16 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
 | `TranscodeDecodeHooks<C>` | invalid-input decode 策略 hook 契约 |
+| `TranscodeDecodeEngineError<C, H>` | 区分 codec 生命周期失败和 decode-hook 策略失败 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeInvalidAction<Value>` | 非法输入策略动作：跳过输入或输出替换值 |
+
+### Converter Engine
+
+| 类型 | 用途 |
+|------|------|
+| `TranscodeConvertEngine<D, E, DH, EH>` | 可复用 unit-to-unit converter，用 `D` 解码、用 `E` 编码，并应用 decode/encode hooks |
+| `TranscodeConvertEngineError<D, E>` | 区分 converter decode-side 与 encode-side 失败 |
 
 ### `Transcoder` 操作
 
@@ -292,6 +310,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - `Codec::MIN_UNITS_PER_VALUE` 是调用 `Codec::decode` 的安全下界；
   `Codec::MAX_UNITS_PER_VALUE` 是单值输出/读取上界。checked adapter 在使用前会断言
   `min <= max`。
+- `Codec::decode` 用 `DecodeFailure::Incomplete` 表示当前可见输入是合法前缀但还需要更多
+  unit，用 `DecodeFailure::Invalid` 表示 codec-domain 的畸形、非规范或其他非法输入。
 - `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
   实际写入的 unit 数量，并且不能超过 `Codec::MAX_UNITS_PER_VALUE`。
 - 需要处理状态化单值编码时，应配合使用
@@ -303,7 +323,12 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `TranscodeError` 是 streaming framework 层 wrapper。具体 codec、charset
   或策略失败仍由关联的 domain error 表达。
 - `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。
-  `NeedOutput` 表示输出切片到达容量边界，因此输入没有被完全消费。
+  它是 streaming 边界信号，不是 EOF 错误；`finish` 不会接收这段 source tail。
+  调用方必须在 finalization 前自己应用 EOF 策略。
+- 默认 codec-backed decoder 和 converter 适用于“值边界可由可见前缀加 codec 状态局部决定”的格式。
+  如果格式需要 EOF-aware maximal-munch 解析、延迟边界决策，或在 EOF 时重新解释 pending prefix，
+  应使用自定义 `Transcoder` 或 value-level facade 承载该策略。
+- `NeedOutput` 表示输出切片到达容量边界，因此输入没有被完全消费。
 
 ### 字节序类型
 

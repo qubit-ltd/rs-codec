@@ -16,6 +16,7 @@ mod encode_outcome;
 mod engine;
 mod internal;
 mod io;
+mod transcode_contract_error;
 mod transcode_converter;
 mod transcode_decoder;
 mod transcode_encoder;
@@ -36,16 +37,19 @@ pub use encode_context::EncodeContext;
 pub use encode_outcome::EncodeOutcome;
 pub use engine::{
     TranscodeConvertEngine,
-    TranscodeConvertHooks,
+    TranscodeConvertEngineError,
     TranscodeDecodeEngine,
+    TranscodeDecodeEngineError,
     TranscodeDecodeHooks,
     TranscodeEncodeEngine,
+    TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
 };
 pub use io::{
     TranscodeDecodeInput,
     TranscodeEncodeOutput,
 };
+pub use transcode_contract_error::TranscodeContractError;
 pub use transcode_converter::TranscodeConverter;
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_encoder::TranscodeEncoder;

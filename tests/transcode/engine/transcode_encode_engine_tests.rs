@@ -10,11 +10,11 @@
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecEncodeFlushError,
-    CodecEncodeResetError,
+    CodecEncodeError,
     EncodeContext,
     EncodeOutcome,
     TranscodeEncodeEngine,
+    TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
@@ -42,7 +42,7 @@ impl Codec for WideCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -76,26 +76,6 @@ enum EngineError {
 impl From<core::convert::Infallible> for EngineError {
     fn from(error: core::convert::Infallible) -> Self {
         match error {}
-    }
-}
-
-impl From<CodecEncodeResetError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecEncodeResetError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
-    }
-}
-
-impl From<CodecEncodeFlushError<EngineError>> for EngineError {
-    fn from(error: CodecEncodeFlushError<EngineError>) -> Self {
-        error.into_source()
-    }
-}
-
-impl From<CodecEncodeFlushError<core::convert::Infallible>> for EngineError {
-    #[allow(unreachable_code)]
-    fn from(error: CodecEncodeFlushError<core::convert::Infallible>) -> Self {
-        match error.into_source() {}
     }
 }
 
@@ -212,7 +192,7 @@ impl Codec for FlushFailingCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -450,7 +430,12 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
 #[test]
 fn test_buffered_encode_engine_implements_transcoder() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
-    type EngineResult<T> = Result<T, TranscodeError<EngineError>>;
+    type EngineResult<T> = Result<
+        T,
+        TranscodeError<
+            TranscodeEncodeEngineError<core::convert::Infallible, EngineError>,
+        >,
+    >;
     type TranscodeFn = fn(
         &mut Engine,
         &[u8],
@@ -511,7 +496,9 @@ fn test_buffered_encode_engine_finish_maps_hook_errors() {
         .expect_err("finish hook error should be propagated");
 
     assert_eq!(
-        TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
+        TranscodeError::Domain(TranscodeEncodeEngineError::Hook(
+            EngineError::Rejected { input_index: 0 },
+        )),
         error,
     );
 }
@@ -529,7 +516,11 @@ fn test_buffered_encode_engine_finish_converts_codec_flush_errors() {
         .expect_err("finish should convert codec flush errors");
 
     assert_eq!(
-        TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
+        TranscodeError::Domain(TranscodeEncodeEngineError::Codec(
+            CodecEncodeError::EncodeFlush {
+                source: EngineError::Rejected { input_index: 0 },
+            },
+        )),
         error,
     );
 }
@@ -685,7 +676,9 @@ fn test_buffered_encode_engine_propagates_encode_value_error_without_consuming_i
         .expect_err("encode hook error should be propagated");
 
     assert_eq!(
-        TranscodeError::Domain(EngineError::Rejected { input_index: 0 }),
+        TranscodeError::Domain(TranscodeEncodeEngineError::Hook(
+            EngineError::Rejected { input_index: 0 },
+        )),
         error
     );
     assert_eq!([0, 0, 0, 0], output);
@@ -729,7 +722,7 @@ impl Codec for ResetEmittingCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -761,12 +754,6 @@ struct ResetFailCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
-impl From<CodecEncodeResetError<ResetFailError>> for ResetFailError {
-    fn from(error: CodecEncodeResetError<ResetFailError>) -> Self {
-        error.into_source()
-    }
-}
-
 impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
@@ -787,7 +774,7 @@ impl Codec for ResetFailCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -916,7 +903,14 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
         .reset(&mut output, 0)
         .expect_err("reset should convert codec reset errors");
 
-    assert_eq!(TranscodeError::Domain(ResetFailError), error);
+    assert_eq!(
+        TranscodeError::Domain(TranscodeEncodeEngineError::Codec(
+            CodecEncodeError::EncodeReset {
+                source: ResetFailError,
+            },
+        )),
+        error,
+    );
 }
 
 // ============================================================================

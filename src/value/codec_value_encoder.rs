@@ -12,6 +12,7 @@ use crate::{
     Codec,
     CodecEncodeError,
     CodecValueExt,
+    TranscodeError,
     codec::assert_unit_bounds,
 };
 
@@ -66,7 +67,7 @@ where
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
-    type Error = CodecEncodeError<C::EncodeError>;
+    type Error = TranscodeError<CodecEncodeError<C::EncodeError>>;
 
     /// Encodes one borrowed value into owned units.
     ///
@@ -93,11 +94,13 @@ where
         input: &C::Value,
     ) -> Result<Self::Output, Self::Error> {
         if !self.codec.can_encode_value(input) {
-            return Err(CodecEncodeError::unencodable_value(0));
+            return Err(TranscodeError::domain(
+                CodecEncodeError::unencodable_value(0),
+            ));
         }
         let units = C::MAX_ENCODE_RESET_UNITS
             .checked_add(self.codec.encode_len(input).get())
-            .ok_or_else(CodecEncodeError::output_length_overflow)?;
+            .ok_or_else(TranscodeError::output_length_overflow)?;
         let mut output = Vec::with_capacity(units);
         output.resize_with(units, C::Unit::default);
         let written =

@@ -58,9 +58,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 - **`Codec`**: encodes and decodes one value or codec quantum
   against a caller-managed unit buffer.
+- **`DecodeFailure`**: separates incomplete-prefix flow control from
+  codec-domain invalid input returned by `Codec::decode`.
 - **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
-  adapter-level encode, decode, and conversion errors, including invalid buffer
-  indices, without hiding codec-specific failures.
+  adapter-level encode, decode, and conversion errors without hiding
+  codec-specific failures. Buffer index and capacity failures are represented by
+  `TranscodeError`.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -115,6 +118,9 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
   `NeedOutput` stops.
+- **`TranscodeError` / `CapacityError` / `TranscodeContractError`**: report
+  framework-level buffer, capacity-planning, and broken-progress contract
+  failures separately from codec or policy domain errors.
 
 ### Byte Order Markers
 
@@ -166,7 +172,7 @@ What are you writing?
 For unit-to-unit conversion (e.g. UTF-8 bytes → UTF-16 bytes), compose a
 decode codec + an encode codec:
 - strict pipeline    → CodecTranscodeConverter<D, E>
-- with policy hooks  → TranscodeConvertEngine<D, E, DH, EH, H>
+- with policy hooks  → TranscodeConvertEngine<D, E, DH, EH>
 ```
 
 ### Layer overview
@@ -247,9 +253,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec errors or invalid buffer indices |
-| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec errors, incomplete input, invalid buffer indices, or trailing input |
+| `DecodeFailure<E>` | Low-level decode result for incomplete visible prefixes or invalid codec-domain input |
+| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec reset/encode/flush errors or unencodable values |
+| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec reset/decode/flush errors, incomplete input, or trailing input |
 | `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
+| `TranscodeError<E>` | Streaming framework error for invalid indices, insufficient output, output-length overflow, or a domain error |
+| `CapacityError` | Capacity-planning error returned before allocating or writing output |
+| `TranscodeContractError` | Error reported when a custom `Transcoder` returns inconsistent progress |
 
 ### Codec Adapters
 
@@ -275,6 +285,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeEncodeHooks<C>` | Hook contract for encoding one value, preparing for reset, and finalizing encoded output |
+| `TranscodeEncodeEngineError<C, H>` | Separates codec lifecycle failures from encode-hook policy failures |
 | `EncodeOutcome` | Per-value hook outcome: consumed with written output, or needs more output without consuming |
 | `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor passed to encode hooks |
 
@@ -284,8 +295,16 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeDecodeHooks<C>` | Hook contract for invalid-input decode policy |
+| `TranscodeDecodeEngineError<C, H>` | Separates codec lifecycle failures from decode-hook policy failures |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeInvalidAction<Value>` | Invalid-input policy action: skip input or emit a replacement value |
+
+### Converter Engines
+
+| Type | Purpose |
+|------|---------|
+| `TranscodeConvertEngine<D, E, DH, EH>` | Reusable unit-to-unit converter that decodes with `D`, encodes with `E`, and applies decode/encode hooks |
+| `TranscodeConvertEngineError<D, E>` | Separates decode-side and encode-side converter failures |
 
 ### `Transcoder` Operations
 
@@ -310,6 +329,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - `Codec::MIN_UNITS_PER_VALUE` is the safety lower bound for calling `Codec::decode`;
   `Codec::MAX_UNITS_PER_VALUE` is the per-value output/read upper bound. Checked
   adapters assert `min <= max` before using these values.
+- `Codec::decode` returns `DecodeFailure::Incomplete` when the visible input is a
+  valid prefix that needs more units, and `DecodeFailure::Invalid` for
+  codec-domain malformed, non-canonical, or otherwise invalid input.
 - `encode_len(value)` must equal the number of units `Codec::encode` writes for
   the same value and codec state, and it must not exceed
   `Codec::MAX_UNITS_PER_VALUE`.

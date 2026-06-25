@@ -15,6 +15,11 @@ mod value_encoder;
 
 pub use codec_value_decoder::CodecValueDecoder;
 pub use codec_value_encoder::CodecValueEncoder;
-pub use codec_value_ext::CodecValueExt;
+pub use codec_value_ext::{
+    CodecDecodeExactValueWithFlushResult,
+    CodecDecodeValueWithFlushResult,
+    CodecEncodeValueResult,
+    CodecValueExt,
+};
 pub use value_decoder::ValueDecoder;
 pub use value_encoder::ValueEncoder;

@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CodecDecodeError,
-    CodecDecodeFlushError,
-    CodecDecodeResetError,
-};
+use qubit_codec::CodecDecodeError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
@@ -46,14 +42,9 @@ fn test_codec_decode_error_wraps_codec_error() {
 
 #[test]
 fn test_codec_decode_error_wraps_decode_flush_error() {
-    let lifecycle =
-        CodecDecodeFlushError::new(TestDecodeError::Invalid { consumed: 1 });
-    assert_eq!(
-        TestDecodeError::Invalid { consumed: 1 },
-        *lifecycle.source(),
-    );
-
-    let error: CodecDecodeError<TestDecodeError> = lifecycle.into();
+    let error = CodecDecodeError::decode_flush(TestDecodeError::Invalid {
+        consumed: 1,
+    });
 
     assert_eq!(
         CodecDecodeError::DecodeFlush {
@@ -62,31 +53,50 @@ fn test_codec_decode_error_wraps_decode_flush_error() {
         error,
     );
     assert!(error.to_string().contains("codec decode flush error"));
-
-    let lifecycle: CodecDecodeFlushError<TestDecodeError> =
-        TestDecodeError::Invalid { consumed: 3 }.into();
-    assert_eq!(
-        TestDecodeError::Invalid { consumed: 3 },
-        lifecycle.into_source(),
-    );
 }
 
 #[test]
 fn test_codec_decode_error_wraps_decode_reset_error() {
-    let lifecycle =
-        CodecDecodeResetError::new(TestDecodeError::Invalid { consumed: 4 });
-    assert_eq!(
-        TestDecodeError::Invalid { consumed: 4 },
-        *lifecycle.source()
-    );
-
-    let error: CodecDecodeError<TestDecodeError> = lifecycle.into();
+    let error = CodecDecodeError::decode_reset(TestDecodeError::Invalid {
+        consumed: 4,
+    });
 
     assert_eq!(
         CodecDecodeError::DecodeReset {
             source: TestDecodeError::Invalid { consumed: 4 },
         },
         error,
+    );
+}
+
+#[test]
+fn test_codec_decode_error_into_source_extracts_codec_errors() {
+    assert_eq!(
+        Some(TestDecodeError::Invalid { consumed: 2 }),
+        CodecDecodeError::decode(TestDecodeError::Invalid { consumed: 2 }, 7)
+            .into_source(),
+    );
+    assert_eq!(
+        Some(TestDecodeError::Invalid { consumed: 4 }),
+        CodecDecodeError::decode_reset(TestDecodeError::Invalid {
+            consumed: 4,
+        })
+        .into_source(),
+    );
+    assert_eq!(
+        Some(TestDecodeError::Invalid { consumed: 1 }),
+        CodecDecodeError::decode_flush(TestDecodeError::Invalid {
+            consumed: 1,
+        })
+        .into_source(),
+    );
+    assert_eq!(
+        None,
+        CodecDecodeError::<TestDecodeError>::incomplete(0, 2, 1).into_source(),
+    );
+    assert_eq!(
+        None,
+        CodecDecodeError::<TestDecodeError>::trailing_input(1, 1).into_source(),
     );
 }
 
@@ -103,6 +113,7 @@ fn test_codec_decode_error_reports_adapter_incomplete_input() {
         error,
     );
     assert!(error.is_incomplete());
+    assert_eq!(Some(crate::nz(2)), error.needed_additional());
 }
 
 #[test]
@@ -116,52 +127,12 @@ fn test_codec_decode_error_reports_trailing_input() {
         },
         error,
     );
-}
-
-#[test]
-fn test_codec_decode_error_reports_invalid_input_index() {
-    let error = CodecDecodeError::<TestDecodeError>::invalid_input_index(5, 2);
-
-    assert_eq!(
-        CodecDecodeError::InvalidInputIndex { index: 5, len: 2 },
-        error
-    );
     assert!(!error.is_incomplete());
     assert_eq!(None, error.needed_additional());
 }
 
 #[test]
-fn test_codec_decode_error_reports_invalid_output_index() {
-    let error = CodecDecodeError::<TestDecodeError>::invalid_output_index(5, 2);
-
-    assert_eq!(
-        CodecDecodeError::InvalidOutputIndex { index: 5, len: 2 },
-        error
-    );
-}
-
-#[test]
-fn test_codec_decode_error_reports_insufficient_output() {
-    let error =
-        CodecDecodeError::<TestDecodeError>::insufficient_output(2, 4, 1);
-
-    assert_eq!(
-        CodecDecodeError::InsufficientOutput {
-            output_index: 2,
-            required: 4,
-            available: 1,
-        },
-        error,
-    );
-    assert!(
-        CodecDecodeError::<&'static str>::insufficient_output(2, 4, 1)
-            .to_string()
-            .contains("insufficient output")
-    );
-}
-
-#[test]
-fn test_codec_decode_error_display_formats_framework_variants() {
+fn test_codec_decode_error_display_formats_domain_variants() {
     assert!(
         CodecDecodeError::<&'static str>::incomplete(0, 2, 1)
             .to_string()
@@ -173,16 +144,6 @@ fn test_codec_decode_error_display_formats_framework_variants() {
             .contains("trailing input")
     );
     assert!(
-        CodecDecodeError::<&'static str>::invalid_input_index(1, 0)
-            .to_string()
-            .contains("invalid input index")
-    );
-    assert!(
-        CodecDecodeError::<&'static str>::invalid_output_index(1, 0)
-            .to_string()
-            .contains("invalid output index")
-    );
-    assert!(
         CodecDecodeError::decode("codec failure", 3)
             .to_string()
             .contains("codec decode error")
@@ -190,106 +151,40 @@ fn test_codec_decode_error_display_formats_framework_variants() {
 }
 
 #[test]
-fn test_codec_decode_error_ensure_min_input_accepts_sufficient_input() {
-    CodecDecodeError::<TestDecodeError>::ensure_min_input(4, 1, 2)
-        .expect("sufficient input");
-}
-
-#[test]
-fn test_codec_decode_error_ensure_input_index_accepts_valid_index() {
-    CodecDecodeError::<TestDecodeError>::ensure_input_index(4, 2)
-        .expect("valid index");
-}
-
-#[test]
-fn test_codec_decode_error_ensure_input_index_rejects_out_of_range() {
-    let error = CodecDecodeError::<TestDecodeError>::ensure_input_index(2, 5)
-        .expect_err("out-of-range index");
-
-    assert_eq!(CodecDecodeError::invalid_input_index(5, 2), error);
-}
-
-#[test]
-fn test_codec_decode_error_ensure_output_index_accepts_valid_index() {
-    CodecDecodeError::<TestDecodeError>::ensure_output_index(4, 4)
-        .expect("valid index");
-}
-
-#[test]
-fn test_codec_decode_error_ensure_output_index_rejects_out_of_range() {
-    let error = CodecDecodeError::<TestDecodeError>::ensure_output_index(1, 2)
-        .expect_err("out-of-range index");
-
-    assert_eq!(CodecDecodeError::invalid_output_index(2, 1), error);
-}
-
-#[test]
-fn test_codec_decode_error_ensure_output_capacity_accepts_sufficient_capacity()
-{
-    CodecDecodeError::<TestDecodeError>::ensure_output_capacity(4, 1, 2)
-        .expect("sufficient capacity");
-}
-
-#[test]
-fn test_codec_decode_error_ensure_output_capacity_delegates_to_output_index() {
-    let error =
-        CodecDecodeError::<TestDecodeError>::ensure_output_capacity(2, 5, 0)
-            .expect_err("out-of-range index");
-
-    assert_eq!(CodecDecodeError::invalid_output_index(5, 2), error);
-}
-
-#[test]
-fn test_codec_decode_error_ensure_output_capacity_rejects_insufficient_capacity()
- {
-    let error =
-        CodecDecodeError::<TestDecodeError>::ensure_output_capacity(4, 2, 3)
-            .expect_err("insufficient capacity");
-
+fn test_codec_decode_error_ensure_min_input_accepts_available_input() {
     assert_eq!(
-        CodecDecodeError::InsufficientOutput {
-            output_index: 2,
-            required: 3,
-            available: 2,
-        },
-        error,
+        Ok(()),
+        CodecDecodeError::<TestDecodeError>::ensure_min_input(5, 2, 3),
     );
 }
 
 #[test]
-fn test_codec_decode_error_ensure_min_input_rejects_incomplete_input() {
-    let error = CodecDecodeError::<TestDecodeError>::ensure_min_input(3, 1, 4)
-        .expect_err("incomplete input");
-
+fn test_codec_decode_error_ensure_min_input_rejects_short_input() {
     assert_eq!(
-        CodecDecodeError::Incomplete {
-            input_index: 1,
+        Err(CodecDecodeError::Incomplete {
+            input_index: 2,
             required_total: 4,
-            available: 2,
-        },
-        error,
+            available: 3,
+        }),
+        CodecDecodeError::<TestDecodeError>::ensure_min_input(5, 2, 4),
     );
-    assert_eq!(core::num::NonZeroUsize::new(2), error.needed_additional());
 }
 
 #[test]
-fn test_codec_decode_error_ensure_no_trailing_input_accepts_exact_consumption()
-{
-    CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(4, 4)
-        .expect("exact consumption");
-}
-
-#[test]
-fn test_codec_decode_error_ensure_no_trailing_input_rejects_remaining_input() {
-    let error =
-        CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(1, 4)
-            .expect_err("trailing input");
-
+fn test_codec_decode_error_ensure_no_trailing_input_accepts_exact_input() {
     assert_eq!(
-        CodecDecodeError::TrailingInput {
-            consumed: 1,
+        Ok(()),
+        CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(3, 3),
+    );
+}
+
+#[test]
+fn test_codec_decode_error_ensure_no_trailing_input_rejects_extra_input() {
+    assert_eq!(
+        Err(CodecDecodeError::TrailingInput {
+            consumed: 2,
             remaining: 3,
-        },
-        error,
+        }),
+        CodecDecodeError::<TestDecodeError>::ensure_no_trailing_input(2, 5),
     );
 }

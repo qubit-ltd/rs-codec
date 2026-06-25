@@ -40,14 +40,14 @@ use crate::{
 ///
 /// This hook replaces malformed units with `b'?'` and otherwise lets the engine
 /// keep decoding. Incomplete input is reported by
-/// [`crate::CodecDecodeFailure`] before policy hooks are called.
+/// [`crate::DecodeFailure`] before policy hooks are called.
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     TranscodeDecodeHooks,
 ///     Codec,
-///     CodecDecodeFailure,
+///     DecodeFailure,
 ///     CodecDecodeError,
 ///     DecodeInvalidAction,
 ///     DecodeContext,
@@ -74,9 +74,9 @@ use crate::{
 ///         &mut self,
 ///         input: &[u8],
 ///         index: usize,
-///     ) -> Result<(u8, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>> {
+///     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
 ///         match input[index] {
-///             0xff => Err(CodecDecodeFailure::invalid(
+///             0xff => Err(DecodeFailure::invalid(
 ///                 MyDecodeError::Malformed {
 ///                     consumed: NonZeroUsize::MIN,
 ///                 },
@@ -130,9 +130,10 @@ where
 {
     /// Domain error type returned by the buffered decoder policy.
     ///
-    /// Engine methods that call decode lifecycle hooks, such as
-    /// [`crate::TranscodeDecodeEngine::finish`], require this type to accept
-    /// [`crate::CodecDecodeFlushError`] through [`From`].
+    /// Engine methods wrap this type in
+    /// [`crate::TranscodeDecodeEngineError::Hook`]. Codec lifecycle failures
+    /// are reported separately through
+    /// [`crate::TranscodeDecodeEngineError::Codec`].
     type Error;
 
     /// Returns an upper bound for decoded values produced from `input_len`

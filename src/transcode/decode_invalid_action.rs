@@ -14,7 +14,7 @@ use super::internal::decode_step::DecodeStep;
 /// Action selected after a codec reports invalid encoded input.
 ///
 /// Incomplete input is not a policy action. Codecs report it with
-/// [`crate::CodecDecodeFailure::Incomplete`], and the decode engine converts it
+/// [`crate::DecodeFailure::Incomplete`], and the decode engine converts it
 /// directly into [`crate::TranscodeStatus::NeedInput`].
 ///
 /// # Type Parameters

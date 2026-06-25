@@ -5,10 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Converter error type alias selected by converter hooks.
+//! Converter error type alias selected by decode and encode hooks.
 
-use super::super::engine::TranscodeConvertHooks;
-use crate::TranscodeError;
+use crate::{
+    Codec,
+    TranscodeConvertEngineError,
+    TranscodeDecodeEngineError,
+    TranscodeDecodeHooks,
+    TranscodeEncodeEngineError,
+    TranscodeEncodeHooks,
+    TranscodeError,
+};
 
 /// Converter error type selected by hooks for one target output unit type.
 ///
@@ -16,6 +23,17 @@ use crate::TranscodeError;
 ///
 /// - `D`: Source codec type.
 /// - `E`: Target codec type.
-/// - `H`: Converter hook type exposing `Error`.
-pub(in crate::transcode) type ConvertErrorOf<D, E, H> =
-    TranscodeError<<H as TranscodeConvertHooks<D, E>>::Error>;
+/// - `DH`: Decode hook type.
+/// - `EH`: Encode hook type.
+pub(in crate::transcode) type ConvertErrorOf<D, E, DH, EH> = TranscodeError<
+    TranscodeConvertEngineError<
+        TranscodeDecodeEngineError<
+            <D as Codec>::DecodeError,
+            <DH as TranscodeDecodeHooks<D>>::Error,
+        >,
+        TranscodeEncodeEngineError<
+            <E as Codec>::EncodeError,
+            <EH as TranscodeEncodeHooks<E>>::Error,
+        >,
+    >,
+>;

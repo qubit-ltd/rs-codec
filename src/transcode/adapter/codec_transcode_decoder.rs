@@ -13,6 +13,7 @@ use crate::{
     Codec,
     CodecDecodeError,
     TranscodeDecodeEngine,
+    TranscodeDecodeEngineError,
     TranscodeDecoder,
     TranscodeError,
     TranscodeProgress,
@@ -112,7 +113,9 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine.reset(output, output_index)
+        self.engine
+            .reset(output, output_index)
+            .map_err(|error| error.map_domain(flatten_decode_engine_error))
     }
 
     /// Decodes source units into logical values.
@@ -142,6 +145,7 @@ where
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
         self.engine
             .transcode(input, input_index, output, output_index)
+            .map_err(|error| error.map_domain(flatten_decode_engine_error))
     }
 
     /// Finishes internally retained output after EOF.
@@ -164,11 +168,23 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine.finish(output, output_index)
+        self.engine
+            .finish(output, output_index)
+            .map_err(|error| error.map_domain(flatten_decode_engine_error))
     }
 }
 
 impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
     C: Codec
 {
+}
+
+#[inline(always)]
+fn flatten_decode_engine_error<E>(
+    error: TranscodeDecodeEngineError<E, CodecDecodeError<E>>,
+) -> CodecDecodeError<E> {
+    match error {
+        TranscodeDecodeEngineError::Codec(error)
+        | TranscodeDecodeEngineError::Hook(error) => error,
+    }
 }

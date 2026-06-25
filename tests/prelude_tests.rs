@@ -22,7 +22,6 @@ use qubit_codec::{
     CodecValueExt,
     EncodeContext,
     EncodeOutcome,
-    TranscodeConvertHooks,
     TranscodeConverter,
     TranscodeDecoder,
     TranscodeEncoder,
@@ -71,7 +70,7 @@ impl Codec for EchoCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -118,11 +117,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         T: qubit_codec::TranscodeEncodeHooks<EchoCodec>,
     >() {
     }
-    fn _accept_transcode_convert_hooks<
-        T: TranscodeConvertHooks<EchoCodec, EchoCodec>,
-    >() {
-    }
-
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec>>();
@@ -173,15 +167,13 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         core::convert::Infallible,
         core::convert::Infallible,
     >::decode(decode_error);
-    assert!(matches!(convert_error, CodecConvertError::Decode { .. }));
+    assert!(matches!(convert_error, CodecConvertError::Decode(_)));
 
     let encode_error =
-        CodecEncodeError::<core::convert::Infallible>::invalid_output_index(
-            2, 1,
-        );
+        CodecEncodeError::<core::convert::Infallible>::unencodable_value(2);
     assert!(matches!(
         encode_error,
-        CodecEncodeError::InvalidOutputIndex { .. }
+        CodecEncodeError::UnencodableValue { input_index: 2 }
     ));
     let convert_error = CodecConvertError::<
         core::convert::Infallible,
@@ -189,9 +181,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     >::encode(encode_error);
     assert!(matches!(
         convert_error,
-        CodecConvertError::Encode {
-            source: CodecEncodeError::InvalidOutputIndex { .. },
-        },
+        CodecConvertError::Encode(CodecEncodeError::UnencodableValue {
+            input_index: 2,
+        }),
     ));
 
     let mut output = [0_u8; 1];

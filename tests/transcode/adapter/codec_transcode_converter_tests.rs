@@ -40,7 +40,7 @@ impl Codec for VariableByteDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -49,16 +49,16 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(qubit_codec::CodecDecodeFailure::incomplete(
-                        qubit_io::nz!(2),
-                    ))
+                    Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(
+                        2
+                    )))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
                     }))
                 }
             }
-            0xff => Err(qubit_codec::CodecDecodeFailure::invalid(
+            0xff => Err(qubit_codec::DecodeFailure::invalid(
                 TestDecodeError::Invalid { consumed: 1 },
                 core::num::NonZeroUsize::MIN,
             )),
@@ -99,7 +99,7 @@ impl Codec for PairByteEncoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -123,6 +123,98 @@ impl Codec for PairByteEncoder {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+struct FlushFailDecoder;
+
+impl Codec for FlushFailDecoder {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = &'static str;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(core::num::NonZeroUsize::MIN)
+    }
+
+    unsafe fn decode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Err("flush failure")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+struct ResetFailEncoder;
+
+impl Codec for ResetFailEncoder {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = &'static str;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(core::num::NonZeroUsize::MIN)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Err("reset failure")
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MinTwoDecoder;
 
@@ -142,7 +234,7 @@ impl Codec for MinTwoDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index + 1 < input.len());
 
@@ -196,7 +288,7 @@ impl Codec for FlushValueDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -251,7 +343,7 @@ impl Codec for NonDefaultDecoder {
         input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -295,7 +387,7 @@ impl Codec for NonDefaultEncoder {
         input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -632,12 +724,12 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[0xff], 0, &mut output, 0)
         .expect_err("invalid decode input should fail");
     assert_eq!(
-        TranscodeError::Domain(CodecConvertError::Decode {
-            source: CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecConvertError::Decode(
+            CodecDecodeError::Decode {
                 source: TestDecodeError::Invalid { consumed: 1 },
                 input_index: 0,
             },
-        }),
+        )),
         error,
     );
 
@@ -645,12 +737,56 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable value should fail");
     assert_eq!(
-        TranscodeError::Domain(CodecConvertError::Encode {
-            source: CodecEncodeError::Encode {
+        TranscodeError::Domain(CodecConvertError::Encode(
+            CodecEncodeError::Encode {
                 source: TestEncodeError,
                 input_index: 0,
             },
-        }),
+        )),
+        error,
+    );
+}
+
+#[test]
+fn test_codec_transcode_converter_wraps_decode_flush_error() {
+    let mut converter = CodecTranscodeConverter::<
+        FlushFailDecoder,
+        PairByteEncoder,
+    >::new(FlushFailDecoder, PairByteEncoder);
+    let mut output = [];
+
+    let error = converter
+        .finish(&mut output, 0)
+        .expect_err("decode flush errors should be flattened");
+
+    assert_eq!(
+        TranscodeError::Domain(CodecConvertError::Decode(
+            CodecDecodeError::DecodeFlush {
+                source: "flush failure",
+            },
+        )),
+        error,
+    );
+}
+
+#[test]
+fn test_codec_transcode_converter_wraps_encode_reset_error() {
+    let mut converter = CodecTranscodeConverter::<
+        VariableByteDecoder,
+        ResetFailEncoder,
+    >::new(VariableByteDecoder, ResetFailEncoder);
+    let mut output = [0_u8; 1];
+
+    let error = converter
+        .reset(&mut output, 0)
+        .expect_err("encode reset errors should be flattened");
+
+    assert_eq!(
+        TranscodeError::Domain(CodecConvertError::Encode(
+            CodecEncodeError::EncodeReset {
+                source: "reset failure",
+            },
+        )),
         error,
     );
 }

@@ -21,7 +21,7 @@ use core::num::NonZeroUsize;
 ///
 /// - `E`: Codec-specific invalid-input error type.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum CodecDecodeFailure<E> {
+pub enum DecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
     Incomplete {
         /// Non-zero total units required from the current value start.
@@ -37,7 +37,7 @@ pub enum CodecDecodeFailure<E> {
     },
 }
 
-impl<E> CodecDecodeFailure<E> {
+impl<E> DecodeFailure<E> {
     /// Creates an incomplete-input decode failure.
     ///
     /// # Parameters

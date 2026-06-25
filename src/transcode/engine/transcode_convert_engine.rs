@@ -22,13 +22,11 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecDecodeFlushError,
-    CodecDecodeResetError,
-    CodecEncodeFlushError,
-    CodecEncodeResetError,
     EncodeContext,
-    TranscodeConvertHooks,
+    TranscodeConvertEngineError,
+    TranscodeDecodeEngineError,
     TranscodeDecodeHooks,
+    TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
     TranscodeError,
     TranscodeProgress,
@@ -37,11 +35,10 @@ use crate::{
 
 /// Reusable buffered conversion engine.
 ///
-/// The engine owns reusable buffered decode and encode engines plus a small
-/// conversion-level error mapper. It keeps common converter control flow
-/// private: index validation, pending-value retention, pending flush,
-/// decode-error policy dispatch, encode attempts, output-capacity checks, and
-/// progress reporting.
+/// The engine owns reusable buffered decode and encode engines. It keeps
+/// common converter control flow private: index validation, pending-value
+/// retention, pending flush, decode-error policy dispatch, encode attempts,
+/// output-capacity checks, and progress reporting.
 ///
 /// `TranscodeConvertEngine` is intentionally batch-oriented. Its public
 /// `transcode` method drives a source/output buffer loop and reuses the same
@@ -55,27 +52,18 @@ use crate::{
 /// - `E`: Target-side encoder codec.
 /// - `DH`: Source-side decode hooks.
 /// - `EH`: Target-side encode hooks.
-/// - `H`: Conversion-level error mapper.
 #[derive(Debug)]
-pub struct TranscodeConvertEngine<D, E, DH, EH, H>
+pub struct TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
-    H: TranscodeConvertHooks<
-            D,
-            E,
-            DecodeError = DH::Error,
-            EncodeError = EH::Error,
-        >,
 {
     /// Source-side buffered decoder engine.
     decode_engine: TranscodeDecodeEngine<D, DH>,
     /// Target-side buffered encoder engine.
     encode_engine: TranscodeEncodeEngine<E, EH>,
-    /// Conversion-level error mapper.
-    hooks: H,
     /// Decoded value waiting for target output capacity.
     pending: PendingValueSlot<D::Value>,
     /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
@@ -85,31 +73,23 @@ where
     lifecycle: LifecycleGuard,
 }
 
-impl<D, E, DH, EH, H> TranscodeConvertEngine<D, E, DH, EH, H>
+impl<D, E, DH, EH> TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
-    H: TranscodeConvertHooks<
-            D,
-            E,
-            DecodeError = DH::Error,
-            EncodeError = EH::Error,
-        >,
 {
     /// Creates a buffered converter engine.
     ///
-    /// The caller supplies decode hooks, encode hooks, and the converter-level
-    /// error mapper directly.
+    /// The caller supplies decode hooks and encode hooks directly.
     ///
     /// # Parameters
     ///
-    /// - `decoder`: Low-level codec used for source decoding.-
+    /// - `decoder`: Low-level codec used for source decoding.
     /// - `encoder`: Low-level codec used for target encoding.
     /// - `decode_hooks`: Decode-side policy hooks.
     /// - `encode_hooks`: Encode-side policy hooks.
-    /// - `hooks`: Conversion-level error mapper.
     ///
     /// # Returns
     ///
@@ -127,14 +107,12 @@ where
         encoder: E,
         decode_hooks: DH,
         encode_hooks: EH,
-        hooks: H,
     ) -> Self {
         assert_unit_bounds::<D>();
         assert_unit_bounds::<E>();
         Self {
             decode_engine: TranscodeDecodeEngine::new(decoder, decode_hooks),
             encode_engine: TranscodeEncodeEngine::new(encoder, encode_hooks),
-            hooks,
             pending: PendingValueSlot::empty(),
             lifecycle: LifecycleGuard::new(),
         }
@@ -214,7 +192,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, ConvertErrorOf<D, E, H>> {
+    ) -> Result<TranscodeProgress, ConvertErrorOf<D, E, DH, EH>> {
         self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
@@ -281,11 +259,9 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E, H>>
+    ) -> Result<usize, ConvertErrorOf<D, E, DH, EH>>
     where
         D::Value: Default,
-        DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
-        EH::Error: From<CodecEncodeFlushError<E::EncodeError>>,
     {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
@@ -314,7 +290,7 @@ where
             .encode_engine
             .finish(state.output_mut(), output_cursor)
             .map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_encode_error(domain))
+                error.map_domain(TranscodeConvertEngineError::encode)
             })?;
         state.advance_output(written);
         self.lifecycle.on_finish_success();
@@ -341,11 +317,9 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E, H>>
+    ) -> Result<usize, ConvertErrorOf<D, E, DH, EH>>
     where
         D::Value: Default,
-        DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
-        EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
     {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
@@ -356,7 +330,6 @@ where
         )?;
 
         self.pending.clear();
-        self.hooks.reset_hooks();
 
         // Source-side reset may emit stream-start values (such as a BOM) that
         // must be piped through the target encoder before any encoder-owned
@@ -372,7 +345,7 @@ where
             .encode_engine
             .reset(state.output_mut(), output_cursor)
             .map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_encode_error(domain))
+                error.map_domain(TranscodeConvertEngineError::encode)
             })?;
         state.advance_output(encoder_written);
         Ok(state.written())
@@ -383,10 +356,9 @@ where
     fn drain_decoder_reset(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), ConvertErrorOf<D, E, H>>
+    ) -> Result<(), ConvertErrorOf<D, E, DH, EH>>
     where
         D::Value: Default,
-        DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
     {
         let value_count = D::MAX_DECODE_RESET_VALUES;
         if value_count == 0 {
@@ -395,7 +367,7 @@ where
             // run them. The empty slice is safe because the capacity check
             // inside `reset` accepts `required == 0` against any slice.
             self.decode_engine.reset(&mut [], 0).map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+                error.map_domain(TranscodeConvertEngineError::decode)
             })?;
             return Ok(());
         }
@@ -404,9 +376,7 @@ where
         let mut reset_values: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
         let written = self.decode_engine.reset(&mut reset_values, 0).map_err(
-            |error| {
-                error.map_domain(|domain| self.hooks.map_decode_error(domain))
-            },
+            |error| error.map_domain(TranscodeConvertEngineError::decode),
         )?;
         for value in reset_values.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
@@ -424,12 +394,12 @@ where
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, H>> {
+    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, DH, EH>> {
         let step = self
             .decode_engine
             .decode_step(state.input(), state.decode_context())
             .map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+                error.map_domain(TranscodeConvertEngineError::decode)
             })?;
         state.apply_decode_step(step, |pending, state| {
             self.encode_pending(pending, state)
@@ -447,7 +417,7 @@ where
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, H>> {
+    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, DH, EH>> {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
@@ -459,10 +429,9 @@ where
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), ConvertErrorOf<D, E, H>>
+    ) -> Result<(), ConvertErrorOf<D, E, DH, EH>>
     where
         D::Value: Default,
-        DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
     {
         let value_count = self.decode_engine.max_finish_output_len()?;
         if value_count == 0 {
@@ -474,7 +443,7 @@ where
             // values. Passing an empty slice is safe here because the capacity
             // check inside finish() accepts required == 0 against any slice.
             self.decode_engine.finish(&mut [], 0).map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+                error.map_domain(TranscodeConvertEngineError::decode)
             })?;
             return Ok(());
         }
@@ -487,9 +456,7 @@ where
             self.decode_engine
                 .finish(&mut decoded, 0)
                 .map_err(|error| {
-                    error.map_domain(|domain| {
-                        self.hooks.map_decode_error(domain)
-                    })
+                    error.map_domain(TranscodeConvertEngineError::decode)
                 })?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
@@ -507,7 +474,7 @@ where
         &mut self,
         pending: PendingValue<D::Value>,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, H>> {
+    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, DH, EH>> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let context = EncodeContext::new(
@@ -518,7 +485,9 @@ where
         );
         let outcome =
             self.encode_engine.encode_one(context).map_err(|error| {
-                TranscodeError::domain(self.hooks.map_encode_error(error))
+                TranscodeError::domain(TranscodeConvertEngineError::encode(
+                    TranscodeEncodeEngineError::hook(error),
+                ))
             })?;
         let progress = state.apply_encode_outcome(outcome);
         if progress.is_some() {
@@ -528,18 +497,12 @@ where
     }
 }
 
-impl<D, E, DH, EH, H> Default for TranscodeConvertEngine<D, E, DH, EH, H>
+impl<D, E, DH, EH> Default for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec + Default,
     E: Codec<Value = D::Value> + Default,
     DH: TranscodeDecodeHooks<D> + Default,
     EH: TranscodeEncodeHooks<E> + Default,
-    H: TranscodeConvertHooks<
-            D,
-            E,
-            DecodeError = DH::Error,
-            EncodeError = EH::Error,
-        > + Default,
 {
     /// Creates a default buffered converter engine.
     ///
@@ -548,36 +511,23 @@ where
     /// Returns a converter engine constructed from default codecs and hooks.
     #[inline(always)]
     fn default() -> Self {
-        Self::new(
-            D::default(),
-            E::default(),
-            DH::default(),
-            EH::default(),
-            H::default(),
-        )
+        Self::new(D::default(), E::default(), DH::default(), EH::default())
     }
 }
 
-impl<D, E, DH, EH, H> Transcoder<D::Unit, E::Unit>
-    for TranscodeConvertEngine<D, E, DH, EH, H>
+impl<D, E, DH, EH> Transcoder<D::Unit, E::Unit>
+    for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
     D::Value: Default,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
-    DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
-    DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
-    EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
-    EH::Error: From<CodecEncodeFlushError<E::EncodeError>>,
-    H: TranscodeConvertHooks<
-            D,
-            E,
-            DecodeError = DH::Error,
-            EncodeError = EH::Error,
-        >,
 {
-    type Error = H::Error;
+    type Error = TranscodeConvertEngineError<
+        TranscodeDecodeEngineError<D::DecodeError, DH::Error>,
+        TranscodeEncodeEngineError<E::EncodeError, EH::Error>,
+    >;
 
     /// Returns an upper bound for target units produced from `input_len` units.
     #[inline(always)]

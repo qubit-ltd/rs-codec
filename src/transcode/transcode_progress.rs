@@ -7,7 +7,10 @@
 // =============================================================================
 use core::num::NonZeroUsize;
 
-use super::TranscodeStatus;
+use super::{
+    TranscodeContractError,
+    TranscodeStatus,
+};
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
@@ -194,5 +197,107 @@ impl TranscodeProgress {
     #[must_use]
     pub const fn written(self) -> usize {
         self.written
+    }
+
+    /// Validates this progress against the call bounds supplied to a
+    /// transcoder.
+    ///
+    /// Buffered drivers should call this before using [`Self::read`] or
+    /// [`Self::written`] to advance unchecked input or output cursors. The
+    /// method checks relative counters, absolute status indices, and
+    /// unsatisfied `NeedInput` / `NeedOutput` requirements.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_index`: Input index originally passed to the transcoder.
+    /// - `available_input`: Number of input units visible from `input_index`.
+    /// - `output_index`: Output index originally passed to the transcoder.
+    /// - `available_output`: Number of output slots visible from
+    ///   `output_index`.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when progress is internally consistent with the
+    /// supplied call bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TranscodeContractError`] when a custom transcoder reports
+    /// counters, status indices, or missing-capacity requirements that do not
+    /// match the buffers supplied by the caller.
+    pub fn validate(
+        &self,
+        input_index: usize,
+        available_input: usize,
+        output_index: usize,
+        available_output: usize,
+    ) -> Result<(), TranscodeContractError> {
+        if self.read > available_input {
+            return Err(TranscodeContractError::OverRead {
+                read: self.read,
+                available: available_input,
+            });
+        }
+        if self.written > available_output {
+            return Err(TranscodeContractError::OverWritten {
+                written: self.written,
+                available: available_output,
+            });
+        }
+
+        let expected_input_index = input_index.checked_add(self.read).ok_or(
+            TranscodeContractError::ProgressIndexOverflow {
+                index: input_index,
+                advanced: self.read,
+            },
+        )?;
+        let expected_output_index = output_index
+            .checked_add(self.written)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
+                index: output_index,
+                advanced: self.written,
+            })?;
+
+        match self.status {
+            TranscodeStatus::Complete => Ok(()),
+            TranscodeStatus::NeedInput {
+                input_index,
+                required,
+                available,
+            } => {
+                if input_index != expected_input_index {
+                    return Err(TranscodeContractError::StatusIndexMismatch {
+                        reported: input_index,
+                        expected: expected_input_index,
+                    });
+                }
+                if required.get() <= available {
+                    return Err(TranscodeContractError::SatisfiedNeed {
+                        required: required.get(),
+                        available,
+                    });
+                }
+                Ok(())
+            }
+            TranscodeStatus::NeedOutput {
+                output_index,
+                required,
+                available,
+            } => {
+                if output_index != expected_output_index {
+                    return Err(TranscodeContractError::StatusIndexMismatch {
+                        reported: output_index,
+                        expected: expected_output_index,
+                    });
+                }
+                if required.get() <= available {
+                    return Err(TranscodeContractError::SatisfiedNeed {
+                        required: required.get(),
+                        available,
+                    });
+                }
+                Ok(())
+            }
+        }
     }
 }

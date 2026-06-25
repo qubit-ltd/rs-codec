@@ -11,6 +11,7 @@ use qubit_codec::{
     Codec,
     CodecDecodeError,
     CodecValueDecoder,
+    TranscodeError,
     ValueDecoder,
 };
 use std::sync::atomic::{
@@ -39,14 +40,14 @@ impl Codec for SingleByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
         if value == 0xff {
-            Err(qubit_codec::CodecDecodeFailure::invalid(
+            Err(qubit_codec::DecodeFailure::invalid(
                 TestDecodeError::Invalid { consumed: 1 },
                 core::num::NonZeroUsize::MIN,
             ))
@@ -90,7 +91,7 @@ impl Codec for FixedPairCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index + 1 < input.len());
 
@@ -135,7 +136,7 @@ impl Codec for OverconsumingCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -182,7 +183,7 @@ impl Codec for FlushFailStatelessCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -229,7 +230,7 @@ impl Codec for FlushFailStatefulCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -278,7 +279,7 @@ impl Codec for StatefulLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
@@ -341,7 +342,7 @@ impl Codec for CountingFlushCodec {
         input_index: usize,
     ) -> Result<
         (CountingFlushValue, core::num::NonZeroUsize),
-        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+        qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((
             CountingFlushValue(input[input_index]),
@@ -432,11 +433,11 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
         .expect_err("one byte is incomplete");
 
     assert_eq!(
-        CodecDecodeError::Incomplete {
+        TranscodeError::Domain(CodecDecodeError::Incomplete {
             input_index: 0,
             required_total: 2,
             available: 1,
-        },
+        }),
         error,
     );
 }
@@ -450,10 +451,10 @@ fn test_codec_value_decoder_rejects_trailing_input() {
         .expect_err("trailing input should fail");
 
     assert_eq!(
-        CodecDecodeError::TrailingInput {
+        TranscodeError::Domain(CodecDecodeError::TrailingInput {
             consumed: 1,
             remaining: 1,
-        },
+        }),
         error,
     );
 }
@@ -467,10 +468,10 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
         .expect_err("0xff should fail");
 
     assert_eq!(
-        CodecDecodeError::Decode {
+        TranscodeError::Domain(CodecDecodeError::Decode {
             source: TestDecodeError::Invalid { consumed: 1 },
             input_index: 0,
-        },
+        }),
         error,
     );
 }
@@ -494,9 +495,9 @@ fn test_codec_value_decoder_wraps_stateless_decode_flush_error() {
         .expect_err("stateless flush failure should be wrapped");
 
     assert_eq!(
-        CodecDecodeError::DecodeFlush {
+        TranscodeError::Domain(CodecDecodeError::DecodeFlush {
             source: TestDecodeError::FlushFailed,
-        },
+        }),
         error,
     );
 }
@@ -511,9 +512,9 @@ fn test_codec_value_decoder_wraps_stateful_decode_flush_error() {
         .expect_err("stateful flush failure should be wrapped");
 
     assert_eq!(
-        CodecDecodeError::DecodeFlush {
+        TranscodeError::Domain(CodecDecodeError::DecodeFlush {
             source: TestDecodeError::FlushFailed,
-        },
+        }),
         error,
     );
 }

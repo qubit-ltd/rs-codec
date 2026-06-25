@@ -321,22 +321,18 @@ where
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
+            progress
+                .validate(
+                    0,
+                    available_input,
+                    output_index + written_total,
+                    remaining_output,
+                )
+                .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
             let consumed = progress.read();
             let written = progress.written();
-            if consumed > available_input {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "transcoder consumed beyond available input",
-                ));
-            }
-            if written > remaining_output {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "transcoder wrote beyond output range",
-                ));
-            }
-            // SAFETY: The decoder reported consumed units from the currently
-            // unread input window, and the count was validated above.
+            // SAFETY: TranscodeProgress::validate proved that the decoder
+            // consumed no more than the currently unread input window.
             unsafe {
                 self.input.consume(consumed);
             }
@@ -347,36 +343,10 @@ where
                         return Ok(written_total);
                     }
                 }
-                TranscodeStatus::NeedOutput {
-                    output_index: status_output_index,
-                    ..
-                } => {
-                    if status_output_index != output_index + written_total {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder reported inconsistent NeedOutput index",
-                        ));
-                    }
+                TranscodeStatus::NeedOutput { .. } => {
                     return Ok(written_total);
                 }
-                TranscodeStatus::NeedInput {
-                    input_index,
-                    required,
-                    available,
-                    ..
-                } => {
-                    if input_index != consumed {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder reported inconsistent NeedInput index",
-                        ));
-                    }
-                    if required.get() <= available {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "transcoder reported satisfied NeedInput requirement",
-                        ));
-                    }
+                TranscodeStatus::NeedInput { required, .. } => {
                     if self.input.fill_until(required.get())? {
                         continue;
                     }

@@ -10,7 +10,7 @@ use core::num::NonZeroUsize;
 
 use qubit_codec::{
     Codec,
-    CodecDecodeFailure,
+    DecodeFailure,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,10 +33,9 @@ impl Codec for PlainCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(Vec<u8>, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(Vec<u8>, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
-            return Err(CodecDecodeFailure::invalid(
+            return Err(DecodeFailure::invalid(
                 DomainDecodeError,
                 NonZeroUsize::MIN,
             ));
@@ -56,24 +55,24 @@ impl Codec for PlainCodec {
 }
 
 #[test]
-fn test_codec_decode_failure_reports_incomplete_control_flow() {
+fn test_decode_failure_reports_incomplete_control_flow() {
     let required_total = qubit_io::nz!(3);
     let failure =
-        CodecDecodeFailure::<DomainDecodeError>::incomplete(required_total);
+        DecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
-    assert_eq!(CodecDecodeFailure::Incomplete { required_total }, failure);
+    assert_eq!(DecodeFailure::Incomplete { required_total }, failure);
     assert_eq!(Some(required_total), failure.required_total());
     assert_eq!(None, failure.invalid_source());
     assert_eq!(None, failure.consumed_units());
 }
 
 #[test]
-fn test_codec_decode_failure_reports_invalid_domain_error() {
+fn test_decode_failure_reports_invalid_domain_error() {
     let consumed = qubit_io::nz!(2);
-    let failure = CodecDecodeFailure::invalid(DomainDecodeError, consumed);
+    let failure = DecodeFailure::invalid(DomainDecodeError, consumed);
 
     assert_eq!(
-        CodecDecodeFailure::Invalid {
+        DecodeFailure::Invalid {
             source: DomainDecodeError,
             consumed: Some(consumed),
         },
