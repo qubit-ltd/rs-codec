@@ -127,6 +127,72 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **No concrete formats**: binary, text, and miscellaneous codecs are published
   in sibling crates.
 
+## Choosing the Right Abstraction
+
+`qubit-codec` ships several layers because real codec stacks have different
+needs. Use this decision tree to pick the smallest piece that fits your case.
+
+```text
+What are you writing?
+
+├── A new codec for one logical value (a UTF-8 char, a LEB128 integer,
+│   a Base64 quantum, a fixed-width scalar, …)
+│       → implement Codec
+│         (unchecked single-value contract; the foundation everything else builds on)
+│
+├── A whole-string codec where "one logical value" has no useful meaning
+│   (Base64 padding, hex with separators, percent encoding, C string literal, …)
+│       → implement ValueEncoder<Input> / ValueDecoder<Input> directly
+│         (skip Codec; these two traits also serve as the convenience layer)
+│
+├── A streaming wrapper around an existing Codec, with no error policy:
+│   strict pass-through that surfaces every codec error as-is
+│       → use CodecTranscodeDecoder<C> / CodecTranscodeEncoder<C>
+│         / CodecTranscodeConverter<D, E>
+│         (no custom code; you get a fully wired Transcoder)
+│
+├── An owned-output wrapper around a Codec (one call → one Vec<Unit>
+│   or one Value)
+│       → use CodecValueEncoder<C> / CodecValueDecoder<C>
+│         (allocates per call; convenience-layer ValueEncoder/Decoder)
+│
+└── A streaming codec that needs to make decisions on malformed input:
+    skip, replace, count, or report — not just propagate
+        → implement TranscodeDecodeHooks<C> / TranscodeEncodeHooks<C>
+          and wrap them in TranscodeDecodeEngine<C, H> / TranscodeEncodeEngine<C, H>
+          (you only write the policy; the engine owns the buffered loop,
+           cursor bookkeeping, NeedInput/NeedOutput reporting, and capacity checks)
+
+For unit-to-unit conversion (e.g. UTF-8 bytes → UTF-16 bytes), compose a
+decode codec + an encode codec:
+- strict pipeline    → CodecTranscodeConverter<D, E>
+- with policy hooks  → TranscodeConvertEngine<D, E, DH, EH, H>
+```
+
+### Layer overview
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  qubit-io-binary / qubit-io-text             (concrete I/O)    │
+├────────────────────────────────────────────────────────────────┤
+│  TranscodeDecodeInput / TranscodeEncodeOutput  (I/O bridges)   │
+├────────────────────────────────────────────────────────────────┤
+│  TranscodeXxxEngine + TranscodeXxxHooks       (policy + loop)  │
+│  CodecTranscodeDecoder / Encoder / Converter  (strict bridges) │
+├────────────────────────────────────────────────────────────────┤
+│  Transcoder<Input, Output> + TranscodeProgress + TranscodeStatus│
+│  ValueEncoder<Input> / ValueDecoder<Input>      (convenience)  │
+├────────────────────────────────────────────────────────────────┤
+│  Codec                                  (single-value, unchecked) │
+└────────────────────────────────────────────────────────────────┘
+```
+
+Implementing further up the stack does *not* mean rewriting the lower layers:
+`CodecValueEncoder<C>` and `CodecTranscodeDecoder<C>` are concrete adapters
+that turn any `Codec` into the higher-layer trait for free. Only drop down to
+the engine + hooks layer when you actually need policy decisions on invalid
+input, replacement output, or stateful finish output.
+
 ## Installation
 
 Add this to your `Cargo.toml`:

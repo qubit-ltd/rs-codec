@@ -824,3 +824,58 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
 
     assert_eq!(TranscodeError::Domain(ResetFailError), error);
 }
+
+// ============================================================================
+// Lifecycle guard wiring
+// ============================================================================
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::finish called twice without an intervening reset"
+)]
+fn test_buffered_encode_engine_lifecycle_rejects_double_finish() {
+    let mut engine =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let mut output = [0_u8; 0];
+    engine
+        .finish(&mut output, 0)
+        .expect("first finish should succeed for a stateless encoder");
+    let _ = engine.finish(&mut output, 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::transcode called after finish without an \
+                intervening reset"
+)]
+fn test_buffered_encode_engine_lifecycle_rejects_transcode_after_finish() {
+    let mut engine =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+    let _ = engine.transcode(&[1_u8], 0, &mut output, 0);
+}
+
+#[test]
+fn test_buffered_encode_engine_lifecycle_allows_reuse_after_reset() {
+    let mut engine =
+        TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let mut output = [0_u8; 2];
+    engine
+        .finish(&mut output, 0)
+        .expect("first logical stream finalizes");
+    engine
+        .reset(&mut output, 0)
+        .expect("reset reopens the engine");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode after reset");
+    assert_eq!(1, progress.read());
+    engine
+        .finish(&mut output, 1)
+        .expect("second logical stream finalizes");
+}

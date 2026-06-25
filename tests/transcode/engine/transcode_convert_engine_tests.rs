@@ -2125,3 +2125,202 @@ fn test_buffered_convert_engine_finish_hits_decoder_finish_unreachable() {
     let mut output = vec![0_u8; required];
     let _ = engine.finish(&mut output, 0);
 }
+
+// Decode-reset emit fixtures for regression testing
+// `TranscodeConvertEngine::reset` against codecs whose
+// `MAX_DECODE_RESET_VALUES > 0`. The previous implementation hard-asserted that
+// decode-side resets are absent, which silently dropped any stream-start values
+// the source decoder wanted to emit (such as a BOM) before they reached the
+// target encoder.
+
+/// Decode value sentinel written by [`ResetEmittingSourceCodec::decode_reset`].
+const SOURCE_RESET_SENTINEL: u8 = 0xbb;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetEmittingSourceCodec;
+
+impl Codec for ResetEmittingSourceCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<
+        (u8, NonZeroUsize),
+        qubit_codec::CodecDecodeFailure<Self::DecodeError>,
+    > {
+        // SAFETY: The caller proved that at least one input unit is readable.
+        let value = unsafe { *input.get_unchecked(index) };
+        Ok((value, NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<NonZeroUsize, Self::EncodeError> {
+        // SAFETY: The caller proved that one output unit is writable.
+        unsafe {
+            *output.get_unchecked_mut(index) = *value;
+        }
+        Ok(qubit_io::nz!(1))
+    }
+
+    unsafe fn decode_reset(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        // SAFETY: The caller guarantees room for one reset value at `index`.
+        unsafe {
+            *output.get_unchecked_mut(index) = SOURCE_RESET_SENTINEL;
+        }
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetSourceDecodeHooks;
+
+impl TranscodeDecodeHooks<ResetEmittingSourceCodec> for ResetSourceDecodeHooks {
+    type Error = EngineError;
+
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut ResetEmittingSourceCodec,
+        error: core::convert::Infallible,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
+        match error {}
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetSourceConvertHooks;
+
+impl TranscodeConvertHooks<ResetEmittingSourceCodec, TargetCodec>
+    for ResetSourceConvertHooks
+{
+    type DecodeError = EngineError;
+    type EncodeError = EngineError;
+    type Error = ConvertEngineError<EngineError>;
+
+    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
+        ConvertEngineError::Decode(error)
+    }
+
+    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
+        ConvertEngineError::Encode(error)
+    }
+}
+
+#[test]
+fn test_buffered_convert_engine_reset_includes_decode_reset_in_bound() {
+    let engine = TranscodeConvertEngine::new(
+        ResetEmittingSourceCodec,
+        TargetCodec,
+        ResetSourceDecodeHooks,
+        StrictEncodeHooks,
+        ResetSourceConvertHooks,
+    );
+
+    let bound = engine
+        .max_reset_output_len()
+        .expect("reset bound should be representable");
+    assert!(
+        bound >= 1,
+        "decode-reset value must be reserved in reset bound, got {bound}",
+    );
+}
+
+#[test]
+fn test_buffered_convert_engine_reset_pipes_decode_reset_values_into_encoder() {
+    let mut engine = TranscodeConvertEngine::new(
+        ResetEmittingSourceCodec,
+        TargetCodec,
+        ResetSourceDecodeHooks,
+        StrictEncodeHooks,
+        ResetSourceConvertHooks,
+    );
+
+    let required = engine
+        .max_reset_output_len()
+        .expect("reset bound should be representable");
+    let mut output = vec![0_u8; required];
+
+    let written = engine
+        .reset(&mut output, 0)
+        .expect("reset should succeed when the source emits a reset value");
+
+    assert!(
+        written >= 1,
+        "reset must report the encoded decode-reset value, got {written}",
+    );
+    assert_eq!(
+        SOURCE_RESET_SENTINEL,
+        output[0],
+        "decode-reset value must be encoded into the target output",
+    );
+}
+
+// ============================================================================
+// Lifecycle guard wiring
+// ============================================================================
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::finish called twice without an intervening reset"
+)]
+fn test_buffered_convert_engine_lifecycle_rejects_double_finish() {
+    let mut engine = new_copy_engine();
+    let mut output = [0_u8; 0];
+    engine
+        .finish(&mut output, 0)
+        .expect("first finish should succeed for a stateless converter");
+    let _ = engine.finish(&mut output, 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::transcode called after finish without an \
+                intervening reset"
+)]
+fn test_buffered_convert_engine_lifecycle_rejects_transcode_after_finish() {
+    let mut engine = new_copy_engine();
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+    let _ = engine.transcode(&[1_u8], 0, &mut output, 0);
+}
+
+#[test]
+fn test_buffered_convert_engine_lifecycle_allows_reuse_after_reset() {
+    let mut engine = new_copy_engine();
+    let mut output = [0_u8; 2];
+    engine
+        .finish(&mut output, 0)
+        .expect("first logical stream finalizes");
+    engine
+        .reset(&mut output, 0)
+        .expect("reset reopens the engine");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode after reset");
+    assert_eq!(1, progress.read());
+    engine
+        .finish(&mut output, 1)
+        .expect("second logical stream finalizes");
+}

@@ -111,6 +111,70 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - **不包含具体格式**：binary、text 和 misc codec 发布在相邻 crate 中。
 
+## 如何选择合适的抽象层
+
+`qubit-codec` 提供了多个层次，因为真实的 codec 栈需求差异很大。按下面的决策
+树挑选最小够用的那一层。
+
+```text
+你正在写什么？
+
+├── 一个"单值"级别的 codec（一个 UTF-8 字符、一个 LEB128 整数、
+│   一个 Base64 quantum、一个定宽标量……）
+│       → 实现 Codec
+│         （unchecked 的单值契约；所有上层都建立在它之上）
+│
+├── 一个"整串"型 codec，"单值"对它没有合理含义
+│   （Base64 padding、带分隔符的 hex、percent 编码、C 字符串字面量……）
+│       → 直接实现 ValueEncoder<Input> / ValueDecoder<Input>
+│         （跳过 Codec；这两个 trait 同时也充当便利层）
+│
+├── 在已有 Codec 之上做严格透传的流式包装（codec 报什么错就原样返回）
+│       → 用 CodecTranscodeDecoder<C> / CodecTranscodeEncoder<C>
+│         / CodecTranscodeConverter<D, E>
+│         （零代码；现成的 Transcoder 实现）
+│
+├── 在 Codec 之上做"拥有所有权"的便利包装（一次调用 → 一个 Vec<Unit>
+│   或一个 Value）
+│       → 用 CodecValueEncoder<C> / CodecValueDecoder<C>
+│         （每次调用分配；便利层的 ValueEncoder/Decoder）
+│
+└── 需要对非法输入做策略决策的流式 codec：
+    跳过、替换、计数、报错——不只是原样透传
+        → 实现 TranscodeDecodeHooks<C> / TranscodeEncodeHooks<C>，
+          再包装成 TranscodeDecodeEngine<C, H> / TranscodeEncodeEngine<C, H>
+          （只需写策略；engine 负责缓冲循环、游标、NeedInput/NeedOutput
+           报告、容量检查）
+
+unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一个解码 codec
+和一个编码 codec：
+- 严格管线   → CodecTranscodeConverter<D, E>
+- 带策略钩子 → TranscodeConvertEngine<D, E, DH, EH, H>
+```
+
+### 层次总览
+
+```text
+┌────────────────────────────────────────────────────────────────┐
+│  qubit-io-binary / qubit-io-text             （具体 I/O）       │
+├────────────────────────────────────────────────────────────────┤
+│  TranscodeDecodeInput / TranscodeEncodeOutput  （I/O bridge）   │
+├────────────────────────────────────────────────────────────────┤
+│  TranscodeXxxEngine + TranscodeXxxHooks       （策略 + 循环）   │
+│  CodecTranscodeDecoder / Encoder / Converter  （严格 bridge）   │
+├────────────────────────────────────────────────────────────────┤
+│  Transcoder<Input, Output> + TranscodeProgress + TranscodeStatus│
+│  ValueEncoder<Input> / ValueDecoder<Input>      （便利层）      │
+├────────────────────────────────────────────────────────────────┤
+│  Codec                              （单值、unchecked）         │
+└────────────────────────────────────────────────────────────────┘
+```
+
+选择更上层并不意味着要重写下层：`CodecValueEncoder<C>` 与
+`CodecTranscodeDecoder<C>` 之类的现成适配器能直接把任意 `Codec` 升级到
+上层 trait。**只有当你真的需要对非法输入、替换输出、stateful finish 输出
+做策略决策时，才下沉到 engine + hooks 这一层。**
+
 ## 安装
 
 在 `Cargo.toml` 中添加：

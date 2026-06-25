@@ -156,12 +156,23 @@ where
 
     /// Clears retained pending output and hook state and emits stream-start
     /// encode output.
+    ///
+    /// `D::Value: Default` is required so the engine can allocate scratch
+    /// storage for any stream-start values the source decoder emits through
+    /// [`Codec::decode_reset`](crate::Codec::decode_reset) before they are
+    /// piped through the target encoder. Stateless decoders never reach the
+    /// allocating path; the bound is consulted only when
+    /// [`Codec::MAX_DECODE_RESET_VALUES`](crate::Codec::MAX_DECODE_RESET_VALUES)
+    /// is non-zero.
     #[inline(always)]
     pub fn reset(
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>> {
+    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>>
+    where
+        D::Value: Default,
+    {
         self.engine.reset(output, output_index)
     }
 

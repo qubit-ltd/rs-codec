@@ -12,6 +12,7 @@ use core::num::NonZeroUsize;
 use super::super::internal::{
     decode_state::DecodeState,
     decode_step::DecodeStep,
+    lifecycle::LifecycleGuard,
 };
 use crate::codec::assert_unit_bounds;
 use crate::{
@@ -162,6 +163,9 @@ pub struct TranscodeDecodeEngine<C, H> {
     pub(super) codec: C,
     /// Policy hooks used for decode failures.
     pub(super) hooks: H,
+    /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
+    /// Zero-sized in release builds.
+    lifecycle: LifecycleGuard,
 }
 
 impl<C, H> TranscodeDecodeEngine<C, H>
@@ -190,7 +194,11 @@ where
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
         assert_unit_bounds::<C>();
-        Self { codec, hooks }
+        Self {
+            codec,
+            hooks,
+            lifecycle: LifecycleGuard::new(),
+        }
     }
 
     /// Returns an upper bound for decoded values produced from `input_len`
@@ -270,6 +278,7 @@ where
     where
         H::Error: From<CodecDecodeResetError<C::DecodeError>>,
     {
+        self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
         TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         self.hooks.reset_hooks(&mut self.codec);
@@ -314,6 +323,7 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<H::Error>> {
+        self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
             input_index,
@@ -379,6 +389,7 @@ where
     where
         H::Error: From<CodecDecodeFlushError<C::DecodeError>>,
     {
+        self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
@@ -403,6 +414,7 @@ where
             flushed + written <= required,
             "TranscodeDecodeEngine hook wrote beyond its finish bound",
         );
+        self.lifecycle.on_finish_success();
         Ok(flushed + written)
     }
 

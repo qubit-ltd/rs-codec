@@ -10,6 +10,7 @@
 use super::super::internal::{
     convert_error_of::ConvertErrorOf,
     convert_state::ConvertState,
+    lifecycle::LifecycleGuard,
     pending_value::PendingValue,
     pending_value_slot::PendingValueSlot,
 };
@@ -77,6 +78,11 @@ where
     hooks: H,
     /// Decoded value waiting for target output capacity.
     pending: PendingValueSlot<D::Value>,
+    /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
+    /// Zero-sized in release builds. The converter owns its own guard rather
+    /// than delegating to the inner decode/encode engines, because lifecycle
+    /// events here describe the converter as a whole.
+    lifecycle: LifecycleGuard,
 }
 
 impl<D, E, DH, EH, H> TranscodeConvertEngine<D, E, DH, EH, H>
@@ -130,6 +136,7 @@ where
             encode_engine: TranscodeEncodeEngine::new(encoder, encode_hooks),
             hooks,
             pending: PendingValueSlot::empty(),
+            lifecycle: LifecycleGuard::new(),
         }
     }
 
@@ -207,6 +214,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, ConvertErrorOf<D, E, H>> {
+        self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
             input_index,
@@ -278,6 +286,7 @@ where
         DH::Error: From<CodecDecodeFlushError<D::DecodeError>>,
         EH::Error: From<CodecEncodeFlushError<E::EncodeError>>,
     {
+        self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
@@ -307,6 +316,7 @@ where
                 error.map_domain(|domain| self.hooks.map_encode_error(domain))
             })?;
         state.advance_output(written);
+        self.lifecycle.on_finish_success();
         Ok(state.written())
     }
 
@@ -332,9 +342,11 @@ where
         output_index: usize,
     ) -> Result<usize, ConvertErrorOf<D, E, H>>
     where
+        D::Value: Default,
         DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
         EH::Error: From<CodecEncodeResetError<E::EncodeError>>,
     {
+        self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
         TranscodeError::ensure_output_capacity(
             output.len(),
@@ -344,26 +356,74 @@ where
 
         self.pending.clear();
         self.hooks.reset_hooks();
-        // For stateless decoders (MAX_DECODE_RESET_VALUES == 0) this is a
-        // correct no-op: ensure_output_capacity(0, 0, 0) passes, decode_reset
-        // writes nothing. Decoders with MAX_DECODE_RESET_VALUES > 0 require a
-        // custom converter; debug_assert catches accidental misuse.
-        debug_assert!(
-            D::MAX_DECODE_RESET_VALUES == 0,
-            "TranscodeConvertEngine::reset does not handle decode-side reset \
-             output; implement a custom converter for codecs with \
-             MAX_DECODE_RESET_VALUES > 0",
-        );
-        self.decode_engine
-            .reset(&mut [], 0)
-            .map_err(|error| {
-                error.map_domain(|domain| self.hooks.map_decode_error(domain))
-            })?;
-        self.encode_engine
-            .reset(output, output_index)
+
+        // Source-side reset may emit stream-start values (such as a BOM) that
+        // must be piped through the target encoder before any encoder-owned
+        // reset output. `max_reset_output_len` already reserves space for both
+        // halves of the pipeline, so encode_pending should never report
+        // `NeedOutput` here.
+        let empty_input: &[D::Unit] = &[];
+        let mut state =
+            ConvertState::new(empty_input, 0, output, output_index);
+        self.drain_decoder_reset(&mut state)?;
+
+        let output_cursor = state.output_cursor();
+        let encoder_written = self
+            .encode_engine
+            .reset(state.output_mut(), output_cursor)
             .map_err(|error| {
                 error.map_domain(|domain| self.hooks.map_encode_error(domain))
-            })
+            })?;
+        state.advance_output(encoder_written);
+        Ok(state.written())
+    }
+
+    /// Drains source-side decode reset output and encodes emitted reset
+    /// values.
+    fn drain_decoder_reset(
+        &mut self,
+        state: &mut ConvertState<'_, D::Unit, E::Unit>,
+    ) -> Result<(), ConvertErrorOf<D, E, H>>
+    where
+        D::Value: Default,
+        DH::Error: From<CodecDecodeResetError<D::DecodeError>>,
+    {
+        let value_count = D::MAX_DECODE_RESET_VALUES;
+        if value_count == 0 {
+            // Stateless decoder: still call decode_reset so codecs whose
+            // hooks own teardown side effects (e.g. clearing accumulators)
+            // run them. The empty slice is safe because the capacity check
+            // inside `reset` accepts `required == 0` against any slice.
+            self.decode_engine
+                .reset(&mut [], 0)
+                .map_err(|error| {
+                    error.map_domain(|domain| {
+                        self.hooks.map_decode_error(domain)
+                    })
+                })?;
+            return Ok(());
+        }
+        // `D::Value: Default` is only consulted when the decoder declares
+        // reset output. Stateless codecs never reach this branch.
+        let mut reset_values: Vec<D::Value> =
+            (0..value_count).map(|_| D::Value::default()).collect();
+        let written = self
+            .decode_engine
+            .reset(&mut reset_values, 0)
+            .map_err(|error| {
+                error.map_domain(|domain| {
+                    self.hooks.map_decode_error(domain)
+                })
+            })?;
+        for value in reset_values.into_iter().take(written) {
+            let pending = PendingValue::new(value, 0);
+            if self.encode_pending(pending, state)?.is_some() {
+                unreachable!(
+                    "converter reset bound must reserve space for decode reset values"
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Converts one value from the current state cursors.

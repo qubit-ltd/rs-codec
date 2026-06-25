@@ -1187,3 +1187,114 @@ fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
         error,
     );
 }
+
+// ============================================================================
+// Lifecycle guard wiring
+//
+// The guard is a debug-only check that the documented `reset → transcode* →
+// finish` lifecycle is respected. `#[should_panic]` tests are gated behind
+// `cfg(debug_assertions)` because the guard collapses to a ZST in release
+// builds, so panic-shape tests would not fire there.
+// ============================================================================
+
+fn new_stateless_finish_engine()
+-> TranscodeDecodeEngine<PrefixCodec, FinishHooks> {
+    TranscodeDecodeEngine::<_, _>::new(
+        PrefixCodec,
+        FinishHooks {
+            pending_suffix: false,
+        },
+    )
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::finish called twice without an intervening reset"
+)]
+fn test_transcode_decode_engine_lifecycle_rejects_double_finish() {
+    let mut engine = new_stateless_finish_engine();
+    let mut output = [0_u8; 0];
+    engine
+        .finish(&mut output, 0)
+        .expect("first finish should succeed on a stateless decoder");
+    let _ = engine.finish(&mut output, 0);
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(
+    expected = "Transcoder::transcode called after finish without an \
+                intervening reset"
+)]
+fn test_transcode_decode_engine_lifecycle_rejects_transcode_after_finish() {
+    let mut engine = new_stateless_finish_engine();
+    let mut output = [0_u8; 0];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+    let mut grown = [0_u8; 1];
+    let _ = engine.transcode(&[0x10], 0, &mut grown, 0);
+}
+
+#[test]
+fn test_transcode_decode_engine_lifecycle_allows_finish_without_transcode() {
+    let mut engine = new_stateless_finish_engine();
+    let mut output = [0_u8; 0];
+    let written = engine
+        .finish(&mut output, 0)
+        .expect("fresh stateless engine may finalize an empty stream");
+    assert_eq!(0, written);
+}
+
+#[test]
+fn test_transcode_decode_engine_lifecycle_allows_finish_retry_after_capacity_failure()
+ {
+    // FinishHooks::default() declares `pending_suffix = true`, which reserves
+    // one output value at finish time. Passing an empty slice triggers an
+    // `InsufficientOutput` failure; the guard must not mark the engine
+    // closed when finish fails before doing any work.
+    let mut engine = TranscodeDecodeEngine::<_, _>::new(
+        PrefixCodec,
+        FinishHooks::default(),
+    );
+    let mut tiny = [0_u8; 0];
+    let _ = engine
+        .finish(&mut tiny, 0)
+        .expect_err("finish should reject insufficient output");
+    let mut output = [0_u8; 1];
+    let written = engine
+        .finish(&mut output, 0)
+        .expect("retry after capacity failure must succeed");
+    assert_eq!(1, written);
+}
+
+#[test]
+fn test_transcode_decode_engine_lifecycle_allows_reuse_after_reset() {
+    let mut engine = new_stateless_finish_engine();
+    let mut buf = [0_u8; 4];
+    engine
+        .finish(&mut buf, 0)
+        .expect("close the first logical stream");
+    engine
+        .reset(&mut buf, 0)
+        .expect("reset must reopen the engine for a new logical stream");
+    let progress = engine
+        .transcode(&[0x10, 0x20], 0, &mut buf, 0)
+        .expect("transcode should resume after reset");
+    assert_eq!(2, progress.read());
+    engine
+        .finish(&mut buf, 2)
+        .expect("finish must close the second logical stream");
+}
+
+#[test]
+fn test_transcode_decode_engine_lifecycle_allows_multiple_resets() {
+    let mut engine = new_stateless_finish_engine();
+    let mut buf = [0_u8; 0];
+    for _ in 0..3 {
+        engine
+            .reset(&mut buf, 0)
+            .expect("reset must always be legal");
+    }
+}
