@@ -27,6 +27,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
   `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeInvalidAction` 和
   `DecodeContext`。
+- 用于组合 decode side 与 encode side 的带策略 unit-to-unit 转换管线的
+  `TranscodeConvertEngine` 和 `TranscodeConvertEngineError`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress`
   和 `TranscodeStatus`。
@@ -94,6 +96,9 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`DecodeInvalidAction<Value>`**：decoder engine hook 针对非法输入返回的策略动作。
 - **`CodecTranscodeConverter<D, E>`**：组合一个解码
   codec 和一个编码 codec，形成无策略的 `TranscodeConverter`。
+- **`TranscodeConvertEngine<D, E, DH, EH>`**：组合 decode hooks、
+  encode hooks 与公共 buffered conversion 循环的可复用 unit-to-unit
+  converter engine。
 - **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，并通过
   `transcode_into` / `finish_transcode_into` 驱动调用方传入的 streaming
   decoder。
@@ -247,6 +252,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `CodecValueExt` | 为所有 `C: Codec` 提供带检查的单值 helper，同时不扩大底层 `Codec` 契约 |
+| `CodecEncodeValueResult<E>` | reset-prefixed 单值 encode helper 返回的结果类型别名 |
+| `CodecDecodeValueWithFlushResult<V, E>` | decode-and-flush 单值 helper 返回的结果类型别名，成功时包含 consumed 与 flushed 计数 |
+| `CodecDecodeExactValueWithFlushResult<V, E>` | exact decode-and-flush 单值 helper 返回的结果类型别名 |
 | `CodecValueEncoder<C>` | 通过 `C: Codec` 把一个借用 `C::Value` 编码成自有 `Vec<C::Unit>`，不要求 `C::Value: Clone` |
 | `CodecValueDecoder<C>` | 通过 `C: Codec` 把恰好一个借用 `[C::Unit]` slice 解码成 `C::Value` |
 | `CodecTranscodeEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |

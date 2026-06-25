@@ -28,6 +28,8 @@ This crate provides:
 - `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
+- `TranscodeConvertEngine` and `TranscodeConvertEngineError` for policy-aware
+  unit-to-unit conversion pipelines built from a decode side and an encode side.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for
   caller-managed logical-stream conversion.
@@ -108,6 +110,9 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   for invalid-input policy decisions.
 - **`CodecTranscodeConverter<D, E>`**: composes a
   decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
+- **`TranscodeConvertEngine<D, E, DH, EH>`**: reusable unit-to-unit converter
+  engine that composes decode hooks, encode hooks, and the common buffered
+  conversion loop.
 - **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
   caller-provided streaming decoders through `transcode_into` /
   `finish_transcode_into`.
@@ -266,6 +271,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `CodecValueExt` | Provide checked one-value helper methods for all `C: Codec` without expanding the low-level `Codec` contract |
+| `CodecEncodeValueResult<E>` | Result alias returned by reset-prefixed one-value encode helpers |
+| `CodecDecodeValueWithFlushResult<V, E>` | Result alias returned by decode-and-flush one-value helpers with consumed and flushed counts |
+| `CodecDecodeExactValueWithFlushResult<V, E>` | Result alias returned by exact decode-and-flush one-value helpers |
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
 | `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
 | `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |

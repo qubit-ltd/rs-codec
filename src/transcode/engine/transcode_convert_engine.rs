@@ -5,7 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Reusable buffered converter engine.
+//! Reusable buffered converter engine for codec-backed transcoding.
+//!
+//! Bridges a source [`crate::TranscodeDecodeEngine`] and a target
+//! [`crate::TranscodeEncodeEngine`] into one unit-to-unit conversion pipeline.
 
 use super::super::internal::{
     convert_error_of::ConvertErrorOf,
@@ -33,18 +36,181 @@ use crate::{
     Transcoder,
 };
 
-/// Reusable buffered conversion engine.
+/// Reusable buffered conversion engine for codec-backed converters.
 ///
 /// The engine owns reusable buffered decode and encode engines. It keeps
 /// common converter control flow private: index validation, pending-value
 /// retention, pending flush, decode-error policy dispatch, encode attempts,
-/// output-capacity checks, and progress reporting.
+/// output-capacity checks, and [`crate::TranscodeStatus`] reporting.
+///
+/// Use this type to build a streaming converter over two one-value [`Codec`]
+/// implementations that share the same logical value type. Each hot-path step
+/// decodes one source unit sequence into a value, then immediately tries to
+/// encode that value into the target output buffer. If the target buffer lacks
+/// capacity, the decoded value is retained in an internal pending slot and
+/// must be drained before more source input is consumed, preserving output
+/// order across buffer turns.
 ///
 /// `TranscodeConvertEngine` is intentionally batch-oriented. Its public
-/// `transcode` method drives a source/output buffer loop and reuses the same
-/// unchecked codec and hook primitives as [`crate::TranscodeDecodeEngine`] and
-/// [`crate::TranscodeEncodeEngine`]. It does not call one-value public
+/// [`Self::transcode`] method drives a source/output buffer loop and reuses the
+/// same unchecked codec and hook primitives as [`crate::TranscodeDecodeEngine`]
+/// and [`crate::TranscodeEncodeEngine`]. It does not call one-value public
 /// transcoders in the hot path.
+///
+/// For strict codec-backed conversion with default decode and encode policies,
+/// use [`crate::CodecTranscodeConverter`]. Use `TranscodeConvertEngine`
+/// directly when either side needs custom malformed-input repair, encode
+/// planning, skipped values, or finish-time output.
+///
+/// The engine follows the same lifecycle as [`crate::Transcoder`]:
+/// `reset → transcode* → finish → reset`. Call [`Self::reset`] before starting
+/// a new logical stream and [`Self::finish`] after EOF once any incomplete
+/// source tail has been handled.
+///
+/// # Example
+///
+/// ```rust
+/// use core::{
+///     convert::Infallible,
+///     num::NonZeroUsize,
+/// };
+/// use qubit_codec::{
+///     Codec,
+///     DecodeContext,
+///     DecodeFailure,
+///     EncodeContext,
+///     EncodeOutcome,
+///     TranscodeConvertEngine,
+///     TranscodeDecodeHooks,
+///     TranscodeEncodeHooks,
+///     TranscodeStatus,
+/// };
+///
+/// #[derive(Clone, Copy)]
+/// struct SourceCodec;
+///
+/// #[derive(Clone, Copy)]
+/// struct TargetCodec;
+///
+/// impl Codec for SourceCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///
+///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///
+///     unsafe fn decode(
+///         &mut self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+///         Ok((input[index].wrapping_add(1), NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode(
+///         &mut self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(NonZeroUsize::MIN)
+///     }
+/// }
+///
+/// impl Codec for TargetCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///
+///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///
+///     unsafe fn decode(
+///         &mut self,
+///         input: &[u8],
+///         index: usize,
+///     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode(
+///         &mut self,
+///         value: &u8,
+///         output: &mut [u8],
+///         index: usize,
+///     ) -> Result<NonZeroUsize, Self::EncodeError> {
+///         output[index] = *value;
+///         Ok(NonZeroUsize::MIN)
+///     }
+/// }
+///
+/// struct StrictDecodeHooks;
+///
+/// impl TranscodeDecodeHooks<SourceCodec> for StrictDecodeHooks {
+///     type Error = Infallible;
+///
+///     fn handle_invalid_decode(
+///         &mut self,
+///         _codec: &mut SourceCodec,
+///         error: Infallible,
+///         _consumed: Option<NonZeroUsize>,
+///         _context: DecodeContext,
+///     ) -> Result<qubit_codec::DecodeInvalidAction<u8>, Self::Error> {
+///         match error {}
+///     }
+/// }
+///
+/// struct StrictEncodeHooks;
+///
+/// impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
+///     type Error = Infallible;
+///
+///     fn encode_value(
+///         &mut self,
+///         codec: &mut TargetCodec,
+///         context: EncodeContext<'_, u8, u8>,
+///     ) -> Result<EncodeOutcome, Self::Error> {
+///         let required = TargetCodec::MAX_UNITS_PER_VALUE;
+///         if context.available_output() < required.get() {
+///             return Ok(EncodeOutcome::need_output(required));
+///         }
+///         let (value, _, output, output_index) = context.into_parts();
+///         let written = unsafe { codec.encode(value, output, output_index) }
+///             .map(NonZeroUsize::get)
+///             .unwrap();
+///         Ok(EncodeOutcome::consumed(written))
+///     }
+/// }
+///
+/// let mut engine = TranscodeConvertEngine::new(
+///     SourceCodec,
+///     TargetCodec,
+///     StrictDecodeHooks,
+///     StrictEncodeHooks,
+/// );
+/// let input = [1_u8, 2, 3];
+/// let mut output = [0_u8; 2];
+///
+/// let progress = engine.transcode(&input, 0, &mut output, 0)?;
+/// match progress.status() {
+///     TranscodeStatus::NeedOutput { output_index, .. } => {
+///         assert_eq!(2, output_index);
+///         assert_eq!([2, 3], output);
+///         // Drain `output[..output_index]`, then resume at
+///         // `progress.read()` with fresh output capacity.
+///     }
+///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
+///     TranscodeStatus::NeedInput { .. } => unreachable!("input is complete"),
+/// }
+/// # Ok::<(), qubit_codec::TranscodeError<qubit_codec::TranscodeConvertEngineError<
+/// #     qubit_codec::TranscodeDecodeEngineError<Infallible, Infallible>,
+/// #     qubit_codec::TranscodeEncodeEngineError<Infallible, Infallible>,
+/// # >>>(())
+/// ```
 ///
 /// # Type Parameters
 ///
@@ -94,6 +260,7 @@ where
     /// # Returns
     ///
     /// Returns a buffered converter engine.
+    ///
     /// # Panics
     ///
     /// In debug builds, panics when either codec violates the
@@ -119,6 +286,19 @@ where
     }
 
     /// Returns an upper bound for target units produced from `input_len` units.
+    ///
+    /// The bound sums three parts: any retained pending value, the maximum
+    /// decoded values from the source side, and the maximum target units for
+    /// those values on the encode side.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of source units the caller plans to convert.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound, or a capacity error on arithmetic
+    /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_output_len(
         &self,
@@ -137,8 +317,13 @@ where
     ///
     /// Covers decode-side reset values (encoded to target units) plus
     /// encode-side reset units. Most codecs are stateless and return `0`
-    /// for `MAX_DECODE_RESET_VALUES`; in that case this equals the encode
-    /// reset bound only.
+    /// for [`Codec::MAX_DECODE_RESET_VALUES`]; in that case this equals the
+    /// encode reset bound only.
+    ///
+    /// # Returns
+    ///
+    /// Returns the combined decode-reset and encode-reset output bound, or a
+    /// capacity error on arithmetic overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         let decode_reset_units = self
@@ -151,6 +336,14 @@ where
     }
 
     /// Returns the maximum target units emitted by finishing retained state.
+    ///
+    /// The bound covers a retained pending value, decode-side finish values
+    /// (encoded to target units), and encode-side finish units.
+    ///
+    /// # Returns
+    ///
+    /// Returns the combined pending, decode-finish, and encode-finish output
+    /// bound, or a capacity error on arithmetic overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
@@ -170,6 +363,12 @@ where
 
     /// Converts source units into target units.
     ///
+    /// The engine drains any retained pending value before consuming new input.
+    /// Each loop iteration decodes one source value and immediately attempts to
+    /// encode it. Conversion stops when the input tail is incomplete, when the
+    /// output buffer cannot hold the next encoded value, or when the visible
+    /// input is exhausted.
+    ///
     /// # Parameters
     ///
     /// - `input`: Complete input unit slice visible to the converter.
@@ -179,7 +378,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns conversion progress.
+    /// Returns conversion progress describing input units consumed, target
+    /// units written, and why conversion stopped.
     ///
     /// # Errors
     ///
@@ -240,7 +440,8 @@ where
     /// source-side decode hooks emit final values, encodes those values through
     /// the target-side encode hooks, and finally finishes target-side encode
     /// hook state. The decode-finish value buffer used for this cold path
-    /// requires `D::Value: Default`; the normal `transcode` loop does not.
+    /// requires `D::Value: Default`; the normal [`Self::transcode`] loop does
+    /// not.
     ///
     /// # Parameters
     ///
@@ -255,6 +456,12 @@ where
     ///
     /// Returns a converter error when output capacity checks fail or when
     /// hook finalization fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds when a retained pending value or decode-finish
+    /// value cannot be encoded within the capacity reserved by
+    /// [`Self::max_finish_output_len`].
     pub fn finish(
         &mut self,
         output: &mut [E::Unit],
@@ -300,6 +507,11 @@ where
     /// Clears retained conversion state, runs before-reset hooks, and emits
     /// stream-start encode output.
     ///
+    /// Reset clears any retained pending value, drains decode-side reset
+    /// values through the target encoder, then emits encode-side reset units.
+    /// The caller must provide enough output capacity for
+    /// [`Self::max_reset_output_len`].
+    ///
     /// # Parameters
     ///
     /// - `output`: Complete output unit slice visible to the converter.
@@ -313,6 +525,11 @@ where
     ///
     /// Returns a converter error if reset validation or target reset output
     /// emission fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds when decode-reset values cannot be encoded
+    /// within the capacity reserved by [`Self::max_reset_output_len`].
     pub fn reset(
         &mut self,
         output: &mut [E::Unit],
@@ -353,6 +570,27 @@ where
 
     /// Drains source-side decode reset output and encodes emitted reset
     /// values.
+    ///
+    /// Stateless decoders still call [`TranscodeDecodeEngine::reset`] so hook
+    /// teardown side effects run even when no reset values are emitted.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Current conversion cursors and output buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after all decode-reset values have been encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when decode reset or encode reset handling
+    /// fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a decode-reset value cannot be encoded within the capacity
+    /// reserved by [`Self::max_reset_output_len`].
     fn drain_decoder_reset(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -389,7 +627,23 @@ where
         Ok(())
     }
 
-    /// Converts one value from the current state cursors.
+    /// Converts one source value from the current state cursors.
+    ///
+    /// Decodes one value through the source engine, then immediately attempts
+    /// to encode it through the target engine.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Current conversion cursors and output buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress when the step stops early, or `None` when
+    /// the value was fully consumed and encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when decode or encode handling fails.
     #[inline(always)]
     fn convert_next(
         &mut self,
@@ -407,12 +661,31 @@ where
     }
 
     /// Returns the output bound for the retained pending value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the maximum target units needed to encode the pending value,
+    /// or `0` when no value is retained. Returns a capacity error when hook
+    /// planning overflows.
     #[inline(always)]
     fn pending_output_len(&self) -> Result<usize, CapacityError> {
         self.pending.max_output_len(&self.encode_engine)
     }
 
     /// Writes a retained decoded value before new input is consumed.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Current conversion cursors and output buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress when the pending value needs more output
+    /// capacity, or `None` when the pending value was fully encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when encode handling fails.
     #[inline(always)]
     fn drain_pending(
         &mut self,
@@ -426,6 +699,27 @@ where
 
     /// Drains source-side decode finish output and encodes emitted final
     /// values.
+    ///
+    /// When the decoder declares no finish output, still calls
+    /// [`TranscodeDecodeEngine::finish`] so codec flush and hook teardown can
+    /// run and fail even when zero values are emitted.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Current conversion cursors and output buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after all decode-finish values have been encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when decode finish or encode handling fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a decode-finish value cannot be encoded within the
+    /// capacity reserved by [`Self::max_finish_output_len`].
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
@@ -470,6 +764,23 @@ where
     }
 
     /// Encodes one pending value and applies output/pending state changes.
+    ///
+    /// When the target buffer lacks capacity, the value is put back into the
+    /// pending slot and progress reports [`crate::TranscodeStatus::NeedOutput`].
+    ///
+    /// # Parameters
+    ///
+    /// - `pending`: Decoded value waiting for target output capacity.
+    /// - `state`: Current conversion cursors and output buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns conversion progress when the value needs more output capacity,
+    /// or `None` when the value was fully encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when encode hook handling fails.
     fn encode_pending(
         &mut self,
         pending: PendingValue<D::Value>,
@@ -529,19 +840,22 @@ where
         TranscodeEncodeEngineError<E::EncodeError, EH::Error>,
     >;
 
-    /// Returns an upper bound for target units produced from `input_len` units.
+    /// Returns an upper bound for target units produced from `input_len`
+    /// units.
     #[inline(always)]
     fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeConvertEngine::max_output_len(self, input_len)
     }
 
-    /// Returns the maximum target units emitted by finishing retained state.
+    /// Returns an upper bound for target units emitted by finishing retained
+    /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeConvertEngine::max_finish_output_len(self)
     }
 
-    /// Returns the maximum target units emitted when resetting stream state.
+    /// Returns an upper bound for target units emitted when resetting stream
+    /// state.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeConvertEngine::max_reset_output_len(self)
