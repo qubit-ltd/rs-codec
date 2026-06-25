@@ -407,7 +407,9 @@ where
             self.codec.encode_flush(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(H::Error::from(CodecEncodeFlushError::new(error)))
+            TranscodeError::domain(H::Error::from(CodecEncodeFlushError::new(
+                error,
+            )))
         })?;
         assert!(
             flushed <= C::MAX_ENCODE_FLUSH_UNITS,

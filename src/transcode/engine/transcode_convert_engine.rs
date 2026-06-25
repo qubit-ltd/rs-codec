@@ -163,8 +163,9 @@ where
     /// reset bound only.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        let decode_reset_units =
-            self.encode_engine.max_output_len(D::MAX_DECODE_RESET_VALUES)?;
+        let decode_reset_units = self
+            .encode_engine
+            .max_output_len(D::MAX_DECODE_RESET_VALUES)?;
         let encode_reset_units = self.encode_engine.max_reset_output_len()?;
         decode_reset_units
             .checked_add(encode_reset_units)
@@ -363,8 +364,7 @@ where
         // halves of the pipeline, so encode_pending should never report
         // `NeedOutput` here.
         let empty_input: &[D::Unit] = &[];
-        let mut state =
-            ConvertState::new(empty_input, 0, output, output_index);
+        let mut state = ConvertState::new(empty_input, 0, output, output_index);
         self.drain_decoder_reset(&mut state)?;
 
         let output_cursor = state.output_cursor();
@@ -394,27 +394,20 @@ where
             // hooks own teardown side effects (e.g. clearing accumulators)
             // run them. The empty slice is safe because the capacity check
             // inside `reset` accepts `required == 0` against any slice.
-            self.decode_engine
-                .reset(&mut [], 0)
-                .map_err(|error| {
-                    error.map_domain(|domain| {
-                        self.hooks.map_decode_error(domain)
-                    })
-                })?;
+            self.decode_engine.reset(&mut [], 0).map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+            })?;
             return Ok(());
         }
         // `D::Value: Default` is only consulted when the decoder declares
         // reset output. Stateless codecs never reach this branch.
         let mut reset_values: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
-        let written = self
-            .decode_engine
-            .reset(&mut reset_values, 0)
-            .map_err(|error| {
-                error.map_domain(|domain| {
-                    self.hooks.map_decode_error(domain)
-                })
-            })?;
+        let written = self.decode_engine.reset(&mut reset_values, 0).map_err(
+            |error| {
+                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+            },
+        )?;
         for value in reset_values.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self.encode_pending(pending, state)?.is_some() {
@@ -473,17 +466,16 @@ where
     {
         let value_count = self.decode_engine.max_finish_output_len()?;
         if value_count == 0 {
-            // Skip the Vec allocation when the decoder declares no finish output.
-            // We still call finish() so that codec.decode_flush and
-            // hooks.finish_hooks both run — hooks may do validation or teardown
-            // (e.g. checksum verification) that can fail even when emitting zero
+            // Skip the Vec allocation when the decoder declares no finish
+            // output. We still call finish() so that
+            // codec.decode_flush and hooks.finish_hooks both run —
+            // hooks may do validation or teardown (e.g. checksum
+            // verification) that can fail even when emitting zero
             // values. Passing an empty slice is safe here because the capacity
             // check inside finish() accepts required == 0 against any slice.
-            self.decode_engine
-                .finish(&mut [], 0)
-                .map_err(|error| {
-                    error.map_domain(|domain| self.hooks.map_decode_error(domain))
-                })?;
+            self.decode_engine.finish(&mut [], 0).map_err(|error| {
+                error.map_domain(|domain| self.hooks.map_decode_error(domain))
+            })?;
             return Ok(());
         }
         // D::Value: Default is required only when value_count > 0. The bound
@@ -524,10 +516,8 @@ where
             state.output_mut(),
             output_index,
         );
-        let outcome = self
-            .encode_engine
-            .encode_one(context)
-            .map_err(|error| {
+        let outcome =
+            self.encode_engine.encode_one(context).map_err(|error| {
                 TranscodeError::domain(self.hooks.map_encode_error(error))
             })?;
         let progress = state.apply_encode_outcome(outcome);

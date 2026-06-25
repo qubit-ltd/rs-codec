@@ -280,7 +280,11 @@ where
     {
         self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
-        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -288,7 +292,9 @@ where
             self.codec.decode_reset(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(H::Error::from(CodecDecodeResetError::new(error)))
+            TranscodeError::domain(H::Error::from(CodecDecodeResetError::new(
+                error,
+            )))
         })?;
         assert!(
             written <= required,

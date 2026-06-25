@@ -37,23 +37,23 @@ impl Codec for VariableByteDecoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        let first = input[index];
+        let first = input[input_index];
         match first {
             0x80 => {
-                let available = input.len() - index;
+                let available = input.len() - input_index;
                 if available < 2 {
                     Err(qubit_codec::CodecDecodeFailure::incomplete(
                         qubit_io::nz!(2),
                     ))
                 } else {
-                    Ok((input[index + 1], unsafe {
+                    Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
                     }))
                 }
@@ -70,11 +70,11 @@ impl Codec for VariableByteDecoder {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 }
@@ -96,29 +96,29 @@ impl Codec for PairByteEncoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         if *value == 13 {
             return Err(TestEncodeError);
         }
-        debug_assert!(index + 1 < output.len());
+        debug_assert!(output_index + 1 < output.len());
 
-        output[index] = *value;
-        output[index + 1] = value.wrapping_add(1);
+        output[output_index] = *value;
+        output[output_index + 1] = value.wrapping_add(1);
         Ok(qubit_io::nz!(2))
     }
 }
@@ -139,27 +139,28 @@ impl Codec for MinTwoDecoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index + 1 < input.len());
+        debug_assert!(input_index + 1 < input.len());
 
-        Ok((input[index].wrapping_add(input[index + 1]), unsafe {
-            core::num::NonZeroUsize::new_unchecked(2)
-        }))
+        Ok((
+            input[input_index].wrapping_add(input[input_index + 1]),
+            unsafe { core::num::NonZeroUsize::new_unchecked(2) },
+        ))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 }
@@ -192,36 +193,36 @@ impl Codec for FlushValueDecoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 
     unsafe fn decode_flush(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = 9;
+        output[output_index] = 9;
         Ok(1)
     }
 }
@@ -247,25 +248,28 @@ impl Codec for NonDefaultDecoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
+        Ok((
+            NonDefaultValue(input[input_index]),
+            core::num::NonZeroUsize::MIN,
+        ))
     }
 
     unsafe fn encode(
         &mut self,
         value: &NonDefaultValue,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = value.0;
+        output[output_index] = value.0;
         Ok(qubit_io::nz!(1))
     }
 }
@@ -288,25 +292,28 @@ impl Codec for NonDefaultEncoder {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        Ok((NonDefaultValue(input[index]), core::num::NonZeroUsize::MIN))
+        Ok((
+            NonDefaultValue(input[input_index]),
+            core::num::NonZeroUsize::MIN,
+        ))
     }
 
     unsafe fn encode(
         &mut self,
         value: &NonDefaultValue,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        output[index] = value.0.wrapping_add(1);
+        output[output_index] = value.0.wrapping_add(1);
         Ok(qubit_io::nz!(1))
     }
 }

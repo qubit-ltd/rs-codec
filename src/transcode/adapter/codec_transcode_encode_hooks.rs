@@ -39,7 +39,9 @@ where
         context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, Self::Error> {
         if !codec.can_encode_value(context.input_value()) {
-            return Err(CodecEncodeError::unencodable_value(context.input_index()));
+            return Err(CodecEncodeError::unencodable_value(
+                context.input_index(),
+            ));
         }
         // Fixed-width codecs: skip the encode_len call and use the constant.
         // Variable-width codecs: query the exact length for this value.

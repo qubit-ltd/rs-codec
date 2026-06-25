@@ -32,8 +32,9 @@ use crate::{
 ///
 /// The hook receives a [`DecodeContext`] with absolute input/output cursors, so
 /// errors can include useful positions without duplicating engine arithmetic.
-/// Stateful hooks may also use [`finish`](Self::finish) to emit final values
-/// after the caller has supplied all input and handled any incomplete tail.
+/// Stateful hooks may also use [`finish_hooks`](Self::finish_hooks) to emit
+/// final values after the caller has supplied all input and handled any
+/// incomplete tail.
 ///
 /// # Example
 ///

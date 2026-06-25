@@ -1,0 +1,1 @@
+multiple-public-types | src/transcode/internal/lifecycle.rs | Lifecycle types remain co-located to keep lifecycle state and guard in one module and avoid breaking cross-module imports.

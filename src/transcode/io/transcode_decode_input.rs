@@ -427,7 +427,8 @@ where
             count,
             "finish output range exceeds destination buffer",
         )?;
-        // Then verify the finish bound fits in the available space (InvalidData).
+        // Then verify the finish bound fits in the available space
+        // (InvalidData).
         let available = output.len().saturating_sub(output_index);
         if available < required {
             return Err(Error::new(
@@ -510,4 +511,3 @@ where
 fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
-

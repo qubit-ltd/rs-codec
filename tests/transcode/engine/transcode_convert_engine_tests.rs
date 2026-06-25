@@ -136,13 +136,13 @@ impl Codec for SourceCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
         // SAFETY: The caller proved that at least one input unit is readable.
-        let value = unsafe { *input.get_unchecked(index) };
+        let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value.wrapping_add(1), NonZeroUsize::MIN))
     }
 
@@ -150,11 +150,11 @@ impl Codec for SourceCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
-            *output.get_unchecked_mut(index) = *value;
+            *output.get_unchecked_mut(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }
@@ -173,13 +173,13 @@ impl Codec for TargetCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
         // SAFETY: The caller proved that at least one input unit is readable.
-        let value = unsafe { *input.get_unchecked(index) };
+        let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
 
@@ -187,14 +187,14 @@ impl Codec for TargetCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         if *value == 13 {
             return Err(EngineError::Encode);
         }
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
-            *output.get_unchecked_mut(index) = *value;
+            *output.get_unchecked_mut(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }
@@ -218,30 +218,30 @@ impl Codec for ResetEmittingTargetCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        unsafe { Ok((*input.get_unchecked(index), NonZeroUsize::MIN)) }
+        unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[index] = 0xaa;
+        output[output_index] = 0xaa;
         Ok(1)
     }
 }
@@ -276,28 +276,28 @@ impl Codec for ResetFailTargetCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        unsafe { Ok((*input.get_unchecked(index), NonZeroUsize::MIN)) }
+        unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
         &mut self,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
         Err(TargetResetFailError)
     }
@@ -400,7 +400,7 @@ impl Codec for ErrorSourceCodec {
     unsafe fn decode(
         &mut self,
         _input: &[u8],
-        _index: usize,
+        _input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
@@ -414,11 +414,11 @@ impl Codec for ErrorSourceCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
-            *output.get_unchecked_mut(index) = *value;
+            *output.get_unchecked_mut(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }
@@ -439,13 +439,13 @@ impl<const FLUSH_BOUND: usize> Codec for FlushValueSourceCodec<FLUSH_BOUND> {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
         // SAFETY: The caller proved that at least one input unit is readable.
-        let value = unsafe { *input.get_unchecked(index) };
+        let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
 
@@ -453,11 +453,11 @@ impl<const FLUSH_BOUND: usize> Codec for FlushValueSourceCodec<FLUSH_BOUND> {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
-            *output.get_unchecked_mut(index) = *value;
+            *output.get_unchecked_mut(output_index) = *value;
         }
         Ok(NonZeroUsize::MIN)
     }
@@ -2152,13 +2152,13 @@ impl Codec for ResetEmittingSourceCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
         // SAFETY: The caller proved that at least one input unit is readable.
-        let value = unsafe { *input.get_unchecked(index) };
+        let value = unsafe { *input.get_unchecked(input_index) };
         Ok((value, NonZeroUsize::MIN))
     }
 
@@ -2166,11 +2166,11 @@ impl Codec for ResetEmittingSourceCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
         // SAFETY: The caller proved that one output unit is writable.
         unsafe {
-            *output.get_unchecked_mut(index) = *value;
+            *output.get_unchecked_mut(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }
@@ -2178,11 +2178,12 @@ impl Codec for ResetEmittingSourceCodec {
     unsafe fn decode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        // SAFETY: The caller guarantees room for one reset value at `index`.
+        // SAFETY: The caller guarantees room for one reset value at
+        // `output_index`.
         unsafe {
-            *output.get_unchecked_mut(index) = SOURCE_RESET_SENTINEL;
+            *output.get_unchecked_mut(output_index) = SOURCE_RESET_SENTINEL;
         }
         Ok(1)
     }
@@ -2267,8 +2268,7 @@ fn test_buffered_convert_engine_reset_pipes_decode_reset_values_into_encoder() {
         "reset must report the encoded decode-reset value, got {written}",
     );
     assert_eq!(
-        SOURCE_RESET_SENTINEL,
-        output[0],
+        SOURCE_RESET_SENTINEL, output[0],
         "decode-reset value must be encoded into the target output",
     );
 }

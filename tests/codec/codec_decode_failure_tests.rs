@@ -32,25 +32,25 @@ impl Codec for PlainCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<(Vec<u8>, NonZeroUsize), CodecDecodeFailure<Self::DecodeError>>
     {
-        if input[index] == 0xff {
+        if input[input_index] == 0xff {
             return Err(CodecDecodeFailure::invalid(
                 DomainDecodeError,
                 NonZeroUsize::MIN,
             ));
         }
-        Ok((vec![input[index]], NonZeroUsize::MIN))
+        Ok((vec![input[input_index]], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &Vec<u8>,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError> {
-        output[index] = value[0];
+        output[output_index] = value[0];
         Ok(NonZeroUsize::MIN)
     }
 }

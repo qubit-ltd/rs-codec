@@ -42,28 +42,28 @@ impl Codec for ResetFailCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 
     unsafe fn encode_reset(
         &mut self,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
         Err(ResetFailError)
     }
@@ -91,22 +91,22 @@ impl Codec for RejectOddCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(self.can_encode_value(value));
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(qubit_io::nz!(1))
     }
 }

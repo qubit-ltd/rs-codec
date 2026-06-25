@@ -121,6 +121,11 @@ impl<'a, Value, Unit> EncodeContext<'a, Value, Unit> {
     #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
-        (self.input_value, self.input_index, self.output, self.output_index)
+        (
+            self.input_value,
+            self.input_index,
+            self.output,
+            self.output_index,
+        )
     }
 }

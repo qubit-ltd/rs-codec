@@ -68,15 +68,15 @@ impl Codec for EchoCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        // SAFETY: The caller guarantees that `index` is readable.
-        let value = unsafe { *input.as_ptr().add(index) };
+        // SAFETY: The caller guarantees that `input_index` is readable.
+        let value = unsafe { *input.as_ptr().add(input_index) };
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
@@ -84,13 +84,13 @@ impl Codec for EchoCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        // SAFETY: The caller guarantees that `index` is writable.
+        // SAFETY: The caller guarantees that `output_index` is writable.
         unsafe {
-            *output.as_mut_ptr().add(index) = *value;
+            *output.as_mut_ptr().add(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }

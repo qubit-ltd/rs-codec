@@ -35,15 +35,15 @@ impl Codec for PairByteCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        // SAFETY: The caller guarantees that `index` is readable.
-        let value = unsafe { *input.as_ptr().add(index) };
+        // SAFETY: The caller guarantees that `input_index` is readable.
+        let value = unsafe { *input.as_ptr().add(input_index) };
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
@@ -51,15 +51,15 @@ impl Codec for PairByteCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index + 2 <= output.len());
+        debug_assert!(output_index + 2 <= output.len());
 
         // SAFETY: The caller guarantees that two bytes are writable from
-        // `index`.
+        // `output_index`.
         unsafe {
-            *output.as_mut_ptr().add(index) = *value;
-            *output.as_mut_ptr().add(index + 1) = value.wrapping_add(1);
+            *output.as_mut_ptr().add(output_index) = *value;
+            *output.as_mut_ptr().add(output_index + 1) = value.wrapping_add(1);
         }
         Ok(qubit_io::nz!(2))
     }
@@ -90,15 +90,15 @@ impl Codec for VariableWidthCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        // SAFETY: The caller guarantees that `index` is readable.
-        let value = unsafe { *input.as_ptr().add(index) };
+        // SAFETY: The caller guarantees that `input_index` is readable.
+        let value = unsafe { *input.as_ptr().add(input_index) };
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
@@ -106,16 +106,16 @@ impl Codec for VariableWidthCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         let written = self.encode_len(value);
-        debug_assert!(index + written.get() <= output.len());
+        debug_assert!(output_index + written.get() <= output.len());
 
         for offset in 0..written.get() {
             // SAFETY: The caller guarantees that `written` units are writable
-            // from `index`.
+            // from `output_index`.
             unsafe {
-                *output.as_mut_ptr().add(index + offset) = *value;
+                *output.as_mut_ptr().add(output_index + offset) = *value;
             }
         }
         Ok(written)
@@ -144,15 +144,15 @@ impl Codec for RejectOddCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        // SAFETY: The caller guarantees that `index` is readable.
-        let value = unsafe { *input.as_ptr().add(index) };
+        // SAFETY: The caller guarantees that `input_index` is readable.
+        let value = unsafe { *input.as_ptr().add(input_index) };
         Ok((value, core::num::NonZeroUsize::MIN))
     }
 
@@ -160,14 +160,14 @@ impl Codec for RejectOddCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         debug_assert!(self.can_encode_value(value));
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        // SAFETY: The caller guarantees that `index` is writable.
+        // SAFETY: The caller guarantees that `output_index` is writable.
         unsafe {
-            *output.as_mut_ptr().add(index) = *value;
+            *output.as_mut_ptr().add(output_index) = *value;
         }
         Ok(qubit_io::nz!(1))
     }

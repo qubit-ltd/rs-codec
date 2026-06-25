@@ -35,30 +35,30 @@ impl Codec for ResetByteCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        output[index] = *value;
+        output[output_index] = *value;
         Ok(core::num::NonZeroUsize::MIN)
     }
 
     unsafe fn encode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[index] = 0xfe;
+        output[output_index] = 0xfe;
         Ok(1)
     }
 }
@@ -88,12 +88,12 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        let decoded = input[index].wrapping_sub(self.decode_state as u8);
+        let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
         Ok((decoded, core::num::NonZeroUsize::MIN))
     }
@@ -102,9 +102,9 @@ impl Codec for StatefulLifecycleCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        output[index] = value.wrapping_add(self.encode_state as u8);
+        output[output_index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
         Ok(qubit_io::nz!(1))
     }
@@ -112,9 +112,9 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn encode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[index] = 0xfe;
+        output[output_index] = 0xfe;
         self.encode_state = 1;
         Ok(1)
     }
@@ -122,9 +122,9 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn decode_flush(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        output[index] = self.decode_state as u8;
+        output[output_index] = self.decode_state as u8;
         self.decode_state = 0;
         Ok(1)
     }
@@ -157,32 +157,32 @@ impl Codec for VariableWidthResetCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        Ok((input[index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         let required = self.encode_len(value).get();
         debug_assert!(
-            index
+            output_index
                 .checked_add(required)
                 .is_some_and(|end| end <= output.len())
         );
         unsafe {
             // SAFETY: The caller guarantees that `required` units are writable
-            // from `index`.
-            *output.as_mut_ptr().add(index) = *value;
+            // from `output_index`.
+            *output.as_mut_ptr().add(output_index) = *value;
             if required == 2 {
-                *output.as_mut_ptr().add(index + 1) = 0;
+                *output.as_mut_ptr().add(output_index + 1) = 0;
             }
         }
         Ok(self.encode_len(value))
@@ -191,9 +191,9 @@ impl Codec for VariableWidthResetCodec {
     unsafe fn encode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[index] = 0xfe;
+        output[output_index] = 0xfe;
         Ok(1)
     }
 }
@@ -218,7 +218,7 @@ impl Codec for OverflowEncodeBoundCodec {
     unsafe fn decode(
         &mut self,
         _input: &[u8],
-        _index: usize,
+        _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
@@ -230,7 +230,7 @@ impl Codec for OverflowEncodeBoundCodec {
         &mut self,
         _value: &u8,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         Ok(qubit_io::nz!(1))
     }
@@ -258,7 +258,7 @@ impl Codec for RejectingCodec {
     unsafe fn decode(
         &mut self,
         _input: &[u8],
-        _index: usize,
+        _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
@@ -270,7 +270,7 @@ impl Codec for RejectingCodec {
         &mut self,
         _value: &u8,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         Ok(core::num::NonZeroUsize::MIN)
     }
@@ -296,7 +296,7 @@ impl Codec for FallibleCodec {
     unsafe fn decode(
         &mut self,
         _input: &[u8],
-        _index: usize,
+        _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
@@ -310,7 +310,7 @@ impl Codec for FallibleCodec {
         &mut self,
         _value: &u8,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
         Err("encode failure")
     }
@@ -318,7 +318,7 @@ impl Codec for FallibleCodec {
     unsafe fn decode_flush(
         &mut self,
         _output: &mut [u8],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
         Err("flush failure")
     }
@@ -538,7 +538,7 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
         unsafe fn decode(
             &mut self,
             _input: &[u8],
-            _index: usize,
+            _input_index: usize,
         ) -> Result<
             (u8, core::num::NonZeroUsize),
             qubit_codec::CodecDecodeFailure<Self::DecodeError>,
@@ -552,7 +552,7 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
             &mut self,
             _value: &u8,
             _output: &mut [u8],
-            _index: usize,
+            _output_index: usize,
         ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
             Ok(core::num::NonZeroUsize::MIN)
         }
@@ -595,19 +595,19 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
         unsafe fn decode(
             &mut self,
             input: &[u8],
-            index: usize,
+            input_index: usize,
         ) -> Result<
             (u8, core::num::NonZeroUsize),
             qubit_codec::CodecDecodeFailure<Self::DecodeError>,
         > {
-            Ok((input[index], core::num::NonZeroUsize::MIN))
+            Ok((input[input_index], core::num::NonZeroUsize::MIN))
         }
 
         unsafe fn encode(
             &mut self,
             _value: &u8,
             _output: &mut [u8],
-            _index: usize,
+            _output_index: usize,
         ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
             Ok(core::num::NonZeroUsize::MIN)
         }
@@ -615,7 +615,7 @@ fn test_codec_value_ext_decode_value_with_flush_wraps_flush_error() {
         unsafe fn decode_flush(
             &mut self,
             _output: &mut [u8],
-            _index: usize,
+            _output_index: usize,
         ) -> Result<usize, Self::DecodeError> {
             Err("flush failure")
         }

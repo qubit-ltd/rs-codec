@@ -175,7 +175,7 @@ pub trait Codec {
     /// # Parameters
     ///
     /// - `output`: Destination unit buffer.
-    /// - `index`: Start index in `output`.
+    /// - `output_index`: Start index in `output`.
     ///
     /// # Returns
     ///
@@ -191,96 +191,24 @@ pub trait Codec {
     ///
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_ENCODE_RESET_UNITS`](Self::MAX_ENCODE_RESET_UNITS) units starting
-    /// at `index`.
+    /// at `output_index`.
     #[inline(always)]
     #[must_use = "reset output and reset errors must be handled"]
     unsafe fn encode_reset(
         &mut self,
         _output: &mut [Self::Unit],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
         Ok(0)
     }
 
-    /// Emits EOF trailer output and flushes encode-side state.
-    ///
-    /// This is the encode-side counterpart of [`decode_flush`](Self::decode_flush).
-    /// Codecs that append stream trailers (padding, checksums, end-of-stream
-    /// markers) emit them here. Stateless codecs use the default no-op.
-    ///
-    /// # Parameters
-    ///
-    /// - `output`: Destination unit buffer.
-    /// - `index`: Start index in `output`.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of flush units written.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::EncodeError` when flush output cannot be emitted.
-    /// Implementations must leave their internal state consistent when
-    /// returning an error.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that the implementation can write up to
-    /// [`MAX_ENCODE_FLUSH_UNITS`](Self::MAX_ENCODE_FLUSH_UNITS) units starting
-    /// at `index`.
-    #[inline(always)]
-    #[must_use = "flush output and flush errors must be handled"]
-    unsafe fn encode_flush(
-        &mut self,
-        _output: &mut [Self::Unit],
-        _index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        Ok(0)
-    }
-
-    /// Emits stream-start values and resets decode-side state.
-    ///
-    /// This is the decode-side counterpart of [`encode_reset`](Self::encode_reset).
-    /// Codecs that emit a stream-start marker or BOM before decoding a new
-    /// stream emit them here. Stateless codecs use the default no-op.
-    ///
-    /// # Parameters
-    ///
-    /// - `output`: Destination value buffer.
-    /// - `index`: Start index in `output`.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of reset values written.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Self::DecodeError` when reset output cannot be emitted.
-    /// Implementations must leave their internal state consistent when
-    /// returning an error.
-    ///
-    /// # Safety
-    ///
-    /// The caller must guarantee that the implementation can write up to
-    /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) values
-    /// starting at `index`.
-    #[inline(always)]
-    #[must_use = "reset output and reset errors must be handled"]
-    unsafe fn decode_reset(
-        &mut self,
-        _output: &mut [Self::Value],
-        _index: usize,
-    ) -> Result<usize, Self::DecodeError> {
-        Ok(0)
-    }
-
-    /// Encodes one borrowed value into `output` starting at `index`.
+    /// Encodes one borrowed value into `output` starting at `output_index`.
     ///
     /// # Parameters
     ///
     /// - `value`: Value to encode.
     /// - `output`: Destination unit buffer.
-    /// - `index`: Start index in `output`.
+    /// - `output_index`: Start index in `output`.
     ///
     /// # Returns
     ///
@@ -304,23 +232,97 @@ pub trait Codec {
     /// [`can_encode_value`](Self::can_encode_value) returned `true` for
     /// `value`, and that the implementation can write at least
     /// [`encode_len`](Self::encode_len) units for the same `value` and codec
-    /// state starting at `index`. On success, implementations must return that
-    /// exact written unit count, and the count must be no larger than
-    /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
+    /// state starting at `output_index`. On success, implementations must
+    /// return that exact written unit count, and the count must be no
+    /// larger than [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
     #[must_use = "encoded length and encode errors must be handled"]
     unsafe fn encode(
         &mut self,
         value: &Self::Value,
         output: &mut [Self::Unit],
-        index: usize,
+        output_index: usize,
     ) -> Result<NonZeroUsize, Self::EncodeError>;
 
-    /// Decodes one value from `input` starting at `index`.
+    /// Emits EOF trailer output and flushes encode-side state.
+    ///
+    /// This is the encode-side counterpart of
+    /// [`decode_flush`](Self::decode_flush). Codecs that append stream
+    /// trailers (padding, checksums, end-of-stream markers) emit them here.
+    /// Stateless codecs use the default no-op.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination unit buffer.
+    /// - `output_index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of flush units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::EncodeError` when flush output cannot be emitted.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`MAX_ENCODE_FLUSH_UNITS`](Self::MAX_ENCODE_FLUSH_UNITS) units starting
+    /// at `output_index`.
+    #[inline(always)]
+    #[must_use = "flush output and flush errors must be handled"]
+    unsafe fn encode_flush(
+        &mut self,
+        _output: &mut [Self::Unit],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+
+    /// Emits stream-start values and resets decode-side state.
+    ///
+    /// This is the decode-side counterpart of
+    /// [`encode_reset`](Self::encode_reset). Codecs that emit a
+    /// stream-start marker or BOM before decoding a new stream emit them
+    /// here. Stateless codecs use the default no-op.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination value buffer.
+    /// - `output_index`: Start index in `output`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset values written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Self::DecodeError` when reset output cannot be emitted.
+    /// Implementations must leave their internal state consistent when
+    /// returning an error.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that the implementation can write up to
+    /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) values
+    /// starting at `output_index`.
+    #[inline(always)]
+    #[must_use = "reset output and reset errors must be handled"]
+    unsafe fn decode_reset(
+        &mut self,
+        _output: &mut [Self::Value],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        Ok(0)
+    }
+
+    /// Decodes one value from `input` starting at `input_index`.
     ///
     /// # Parameters
     ///
     /// - `input`: Source unit buffer.
-    /// - `index`: Start index in `input`.
+    /// - `input_index`: Start index in `input`.
     ///
     /// # Returns
     ///
@@ -338,12 +340,13 @@ pub trait Codec {
     ///
     /// # Safety
     ///
-    /// The caller must guarantee that `index` is a valid boundary in `input`
-    /// and that at least [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE)
-    /// units are readable from `index`. Implementations must not read beyond
-    /// the currently available units under that precondition. They may
-    /// return [`CodecDecodeFailure::Incomplete`] when those units are a valid
-    /// but incomplete prefix.
+    /// The caller must guarantee that `input_index` is a valid boundary in
+    /// `input` and that at least
+    /// [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE)
+    /// units are readable from `input_index`. Implementations must not read
+    /// beyond the currently available units under that precondition. They
+    /// may return [`CodecDecodeFailure::Incomplete`] when those units are a
+    /// valid but incomplete prefix.
     ///
     /// On success, implementations must return a consumed unit count no larger
     /// than the available input. The return type guarantees that successful
@@ -353,7 +356,7 @@ pub trait Codec {
     unsafe fn decode(
         &mut self,
         input: &[Self::Unit],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (Self::Value, NonZeroUsize),
         CodecDecodeFailure<Self::DecodeError>,
@@ -364,7 +367,7 @@ pub trait Codec {
     /// # Parameters
     ///
     /// - `output`: Destination value buffer.
-    /// - `index`: Start index in `output`.
+    /// - `output_index`: Start index in `output`.
     ///
     /// # Returns
     ///
@@ -380,13 +383,13 @@ pub trait Codec {
     ///
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_DECODE_FLUSH_VALUES`](Self::MAX_DECODE_FLUSH_VALUES) values
-    /// starting at `index`.
+    /// starting at `output_index`.
     #[inline(always)]
     #[must_use = "flush output length and flush errors must be handled"]
     unsafe fn decode_flush(
         &mut self,
         _output: &mut [Self::Value],
-        _index: usize,
+        _output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
         Ok(0)
     }

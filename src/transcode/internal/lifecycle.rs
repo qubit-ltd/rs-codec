@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Debug-only lifecycle guard for transcode engines.
+//
+// qubit-style: allow multiple-public-types
 //!
 //! [`Transcoder`](crate::Transcoder) documents a lifecycle of
 //! `reset → transcode* → finish` and then `reset` again before reusing the
@@ -20,8 +22,7 @@
 ///
 /// The variant ordering mirrors the documented call sequence:
 ///
-/// 1. `Fresh` — newly constructed, or just reset; first input may be
-///    supplied.
+/// 1. `Fresh` — newly constructed, or just reset; first input may be supplied.
 /// 2. `Streaming` — at least one `transcode` call has been observed.
 /// 3. `Finished` — `finish` has been called; the only legal next step is
 ///    `reset` (which returns to `Fresh`).

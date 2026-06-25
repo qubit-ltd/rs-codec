@@ -7,11 +7,7 @@
 // =============================================================================
 //! Tests for the low-level codec trait.
 
-use qubit_codec::{
-    Codec,
-    CodecValueEncoder,
-    ValueEncoder,
-};
+use qubit_codec::Codec;
 
 #[derive(Default)]
 struct ByteIncrementCodec;
@@ -31,15 +27,15 @@ impl Codec for ByteIncrementCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        debug_assert!(index < input.len());
+        debug_assert!(input_index < input.len());
 
-        // SAFETY: The caller guarantees that `index` is readable.
-        let value = unsafe { *input.as_ptr().add(index) };
+        // SAFETY: The caller guarantees that `input_index` is readable.
+        let value = unsafe { *input.as_ptr().add(input_index) };
         Ok((value.wrapping_sub(1), core::num::NonZeroUsize::MIN))
     }
 
@@ -47,13 +43,13 @@ impl Codec for ByteIncrementCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        debug_assert!(index < output.len());
+        debug_assert!(output_index < output.len());
 
-        // SAFETY: The caller guarantees that `index` is writable.
+        // SAFETY: The caller guarantees that `output_index` is writable.
         unsafe {
-            *output.as_mut_ptr().add(index) = value.wrapping_add(1);
+            *output.as_mut_ptr().add(output_index) = value.wrapping_add(1);
         }
         Ok(qubit_io::nz!(1))
     }
@@ -84,12 +80,12 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn decode(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
         qubit_codec::CodecDecodeFailure<Self::DecodeError>,
     > {
-        let decoded = input[index].wrapping_sub(self.decode_state as u8);
+        let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
         Ok((decoded, core::num::NonZeroUsize::MIN))
     }
@@ -98,9 +94,9 @@ impl Codec for StatefulLifecycleCodec {
         &mut self,
         value: &u8,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
-        output[index] = value.wrapping_add(self.encode_state as u8);
+        output[output_index] = value.wrapping_add(self.encode_state as u8);
         self.encode_state += 1;
         Ok(qubit_io::nz!(1))
     }
@@ -108,9 +104,9 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn encode_reset(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[index] = 0xfe;
+        output[output_index] = 0xfe;
         self.encode_state = 1;
         Ok(1)
     }
@@ -118,14 +114,13 @@ impl Codec for StatefulLifecycleCodec {
     unsafe fn decode_flush(
         &mut self,
         output: &mut [u8],
-        index: usize,
+        output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        output[index] = self.decode_state as u8;
+        output[output_index] = self.decode_state as u8;
         self.decode_state = 0;
         Ok(1)
     }
 }
-
 
 #[test]
 fn test_codec_trait_encodes_and_decodes_one_value() {
@@ -193,4 +188,3 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     assert_eq!([1], flushed);
     assert_eq!(0, codec.decode_state);
 }
-

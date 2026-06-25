@@ -180,6 +180,24 @@ pub trait Transcoder<Input, Output> {
     /// Domain error reported by semantic conversion failures.
     type Error;
 
+    /// Returns an upper bound for output units emitted when resetting stream
+    /// state.
+    ///
+    /// Stateful encoders may need a stream-start sequence, such as a byte
+    /// order mark, before the first encoded value. Callers use this bound to
+    /// size the output buffer passed to [`Transcoder::reset`].
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
+    /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
+    /// overflows. Stateless transcoders default to `Ok(0)`.
+    #[must_use = "capacity planning can fail on overflow"]
+    #[inline(always)]
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
     /// Returns an upper bound for output units produced from `input_len` units.
     ///
     /// For stateful transcoders, this bound is evaluated against the current
@@ -214,24 +232,6 @@ pub trait Transcoder<Input, Output> {
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(0)
-    }
-
-    /// Returns an upper bound for output units emitted when resetting stream
-    /// state.
-    ///
-    /// Stateful encoders may need a stream-start sequence, such as a byte
-    /// order mark, before the first encoded value. Callers use this bound to
-    /// size the output buffer passed to [`Transcoder::reset`].
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
-    /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
-    /// overflows. Stateless transcoders default to `Ok(0)`.
-    #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
-    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
