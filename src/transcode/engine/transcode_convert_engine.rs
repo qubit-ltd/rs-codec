@@ -766,7 +766,8 @@ where
     /// Encodes one pending value and applies output/pending state changes.
     ///
     /// When the target buffer lacks capacity, the value is put back into the
-    /// pending slot and progress reports [`crate::TranscodeStatus::NeedOutput`].
+    /// pending slot and progress reports
+    /// [`crate::TranscodeStatus::NeedOutput`].
     ///
     /// # Parameters
     ///
