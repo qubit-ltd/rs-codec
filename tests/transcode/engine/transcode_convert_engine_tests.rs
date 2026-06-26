@@ -1223,6 +1223,27 @@ fn new_copy_engine() -> CopyConvertEngine {
     )
 }
 
+#[test]
+fn test_transcode_convert_engine_exposes_codecs_hooks_and_parts() {
+    let mut engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        TargetCodec,
+        StrictDecodeHooks,
+        StrictEncodeHooks,
+    );
+
+    assert_eq!(&SourceCodec, engine.source_codec());
+    assert_eq!(&TargetCodec, engine.target_codec());
+    *engine.source_codec_mut() = SourceCodec;
+    *engine.target_codec_mut() = TargetCodec;
+
+    let (source, target, decode_hooks, encode_hooks) = engine.into_parts();
+    assert_eq!(SourceCodec, source);
+    assert_eq!(TargetCodec, target);
+    assert_eq!(StrictDecodeHooks, decode_hooks);
+    assert_eq!(StrictEncodeHooks, encode_hooks);
+}
+
 fn new_error_path_engine(
     hooks: ErrorPathHooks,
 ) -> TranscodeConvertEngine<

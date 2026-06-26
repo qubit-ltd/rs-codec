@@ -184,6 +184,64 @@ where
         }
     }
 
+    /// Returns the wrapped low-level codec.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub const fn codec(&self) -> &C {
+        &self.codec
+    }
+
+    /// Returns the wrapped low-level codec mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn codec_mut(&mut self) -> &mut C {
+        &mut self.codec
+    }
+
+    /// Returns the encode hooks used by this engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the hook object owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub const fn hooks(&self) -> &H {
+        &self.hooks
+    }
+
+    /// Returns the encode hooks mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the hook object owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn hooks_mut(&mut self) -> &mut H {
+        &mut self.hooks
+    }
+
+    /// Consumes the engine and returns its codec and hooks.
+    ///
+    /// Any lifecycle state owned by the engine is discarded.
+    ///
+    /// # Returns
+    ///
+    /// Returns the wrapped codec followed by the encode hooks.
+    #[inline]
+    #[must_use]
+    pub fn into_parts(self) -> (C, H) {
+        let Self { codec, hooks, .. } = self;
+        (codec, hooks)
+    }
+
     /// Encodes one value through the hook and codec.
     ///
     /// This is the single entry point for `TranscodeConvertEngine` to drive

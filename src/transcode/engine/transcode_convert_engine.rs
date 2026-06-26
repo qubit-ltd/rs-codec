@@ -285,6 +285,72 @@ where
         }
     }
 
+    /// Returns the source-side codec.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the decoder codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn source_codec(&self) -> &D {
+        self.decode_engine.codec()
+    }
+
+    /// Returns the source-side codec mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the decoder codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn source_codec_mut(&mut self) -> &mut D {
+        self.decode_engine.codec_mut()
+    }
+
+    /// Returns the target-side codec.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the encoder codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn target_codec(&self) -> &E {
+        self.encode_engine.codec()
+    }
+
+    /// Returns the target-side codec mutably.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the encoder codec owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn target_codec_mut(&mut self) -> &mut E {
+        self.encode_engine.codec_mut()
+    }
+
+    /// Consumes the engine and returns its codecs and hooks.
+    ///
+    /// Any pending value and lifecycle state owned by the converter are
+    /// discarded. Callers should use this only when no further conversion state
+    /// needs to be preserved.
+    ///
+    /// # Returns
+    ///
+    /// Returns the source codec, target codec, decode hooks, and encode hooks.
+    #[inline]
+    #[must_use]
+    pub fn into_parts(self) -> (D, E, DH, EH) {
+        let Self {
+            decode_engine,
+            encode_engine,
+            ..
+        } = self;
+        let (source, decode_hooks) = decode_engine.into_parts();
+        let (target, encode_hooks) = encode_engine.into_parts();
+        (source, target, decode_hooks, encode_hooks)
+    }
+
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
     /// The bound sums three parts: any retained pending value, the maximum

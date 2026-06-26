@@ -379,6 +379,20 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
 }
 
 #[test]
+fn test_transcode_encode_engine_exposes_codec_hooks_and_parts() {
+    let mut engine = TranscodeEncodeEngine::new(WideCodec, ExactWidthHooks);
+
+    assert_eq!(&WideCodec, engine.codec());
+    assert_eq!(&ExactWidthHooks, engine.hooks());
+    *engine.codec_mut() = WideCodec;
+    *engine.hooks_mut() = ExactWidthHooks;
+
+    let (codec, hooks) = engine.into_parts();
+    assert_eq!(WideCodec, codec);
+    assert_eq!(ExactWidthHooks, hooks);
+}
+
+#[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
     type EngineErrorType =

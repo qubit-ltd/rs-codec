@@ -580,6 +580,20 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
 }
 
 #[test]
+fn test_transcode_decode_engine_exposes_codec_hooks_and_parts() {
+    let mut engine = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+
+    assert_eq!(&PrefixCodec, engine.codec());
+    assert_eq!(&ReplacingHooks, engine.hooks());
+    *engine.codec_mut() = PrefixCodec;
+    *engine.hooks_mut() = ReplacingHooks;
+
+    let (codec, hooks) = engine.into_parts();
+    assert_eq!(PrefixCodec, codec);
+    assert_eq!(ReplacingHooks, hooks);
+}
+
+#[test]
 fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(
         OverflowFlushCodec,
