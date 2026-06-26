@@ -209,6 +209,11 @@ where
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     ///
+    /// This bound covers only the streaming decode phase. It is delegated to
+    /// [`TranscodeDecodeHooks::max_transcode_output_len`], so it includes hook
+    /// policy. Downstream decoders must use this engine-level API for capacity
+    /// planning instead of recomputing the bound from [`Codec`] constants.
+    ///
     /// # Parameters
     ///
     /// - `input_len`: Number of source units the caller plans to decode.
@@ -219,11 +224,11 @@ where
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(
+    pub fn max_transcode_output_len(
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        self.hooks.max_output_len(&self.codec, input_len)
+        self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
     /// Returns the maximum values emitted by flushing codec state and finishing
@@ -252,6 +257,37 @@ where
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(C::MAX_DECODE_RESET_VALUES)
+    }
+
+    /// Returns the maximum values needed by a complete one-shot decode stream.
+    ///
+    /// The returned bound covers reset output, the streaming decode phase for
+    /// `input_len` units, and finish output. Higher-level complete decode
+    /// helpers should use this engine-level bound instead of recomputing
+    /// capacity from [`Codec`] constants, because hook policy may change
+    /// streaming or finish output.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of source units in the complete stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns the complete-stream output bound, or a capacity error on
+    /// arithmetic overflow.
+    #[inline]
+    #[must_use = "capacity planning can fail on overflow"]
+    pub fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        let reset = self.max_reset_output_len()?;
+        let transcode = self.max_transcode_output_len(input_len)?;
+        let finish = self.max_finish_output_len()?;
+        reset
+            .checked_add(transcode)
+            .and_then(|len| len.checked_add(finish))
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Resets codec decode state, runs reset hooks, and emits stream-start
@@ -426,6 +462,39 @@ where
         Ok(flushed + written)
     }
 
+    /// Runs a complete one-shot `reset -> transcode -> finish` decode stream.
+    ///
+    /// The complete input is supplied as `input`, and output starts at index
+    /// `0` in `output`. Callers that need subranges should slice their
+    /// buffers before calling this method. Downstream one-shot decoder
+    /// helpers should call this engine method instead of reproducing the
+    /// reset, transcode, and finish sequence themselves.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete source unit slice.
+    /// - `output`: Output value slice for the whole decoded stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of output values written.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors for insufficient output, capacity overflow, or
+    /// an incomplete EOF tail, and domain errors from reset, decode, or
+    /// finish.
+    #[inline]
+    pub fn transcode_all_into(
+        &mut self,
+        input: &[C::Unit],
+        output: &mut [C::Value],
+    ) -> Result<usize, TranscodeError<DecodeEngineErrorOf<C, H>>> {
+        <Self as Transcoder<C::Unit, C::Value>>::transcode_all_into(
+            self, input, output,
+        )
+    }
+
     /// Decodes one source value attempt into a normalized decode step.
     ///
     /// # Parameters
@@ -527,8 +596,11 @@ where
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     #[inline(always)]
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        TranscodeDecodeEngine::max_output_len(self, input_len)
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        TranscodeDecodeEngine::max_transcode_output_len(self, input_len)
     }
 
     /// Returns an upper bound for values produced by finishing codec and hook

@@ -23,7 +23,10 @@ impl Transcoder<u8, char> for ByteToChar {
     type Error =
         CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
 
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 

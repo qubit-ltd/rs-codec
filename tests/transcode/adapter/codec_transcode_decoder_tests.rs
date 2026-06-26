@@ -257,7 +257,7 @@ fn test_codec_transcode_decoder_reports_bounds_and_resets_state() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 1];
 
-    assert_eq!(Ok(3), decoder.max_output_len(3));
+    assert_eq!(Ok(3), decoder.max_transcode_output_len(3));
     assert_eq!(Ok(0), decoder.max_finish_output_len());
 
     decoder.reset(&mut [], 0).expect("reset");

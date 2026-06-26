@@ -40,6 +40,10 @@ fn test_transcode_error_domain_helpers() {
         None,
         TranscodeError::<&'static str>::output_length_overflow().domain_ref(),
     );
+    assert_eq!(
+        None,
+        TranscodeError::<&'static str>::incomplete_input(2, 4, 1).domain_ref(),
+    );
 }
 
 #[test]
@@ -81,6 +85,17 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
         .map_domain(|error: &'static str| format!("mapped {error}"));
     assert_eq!(TranscodeError::OutputLengthOverflow, mapped);
 
+    let mapped = TranscodeError::<&'static str>::incomplete_input(2, 4, 1)
+        .map_domain(|error: &'static str| format!("mapped {error}"));
+    assert_eq!(
+        TranscodeError::IncompleteInput {
+            input_index: 2,
+            required: 4,
+            available: 1,
+        },
+        mapped,
+    );
+
     let mapped = TranscodeError::<String>::domain("inner".to_string())
         .map_domain(|error| format!("mapped {error}"));
     assert_eq!(TranscodeError::Domain("mapped inner".to_string()), mapped,);
@@ -103,6 +118,10 @@ fn test_transcode_error_display_formats_all_variants() {
     assert_eq!(
         "output length arithmetic overflow",
         TranscodeError::<DomainError>::output_length_overflow().to_string(),
+    );
+    assert_eq!(
+        "incomplete input at index 2: required 4 units, available 1",
+        TranscodeError::<DomainError>::incomplete_input(2, 4, 1).to_string(),
     );
     assert_eq!(
         "domain failure",

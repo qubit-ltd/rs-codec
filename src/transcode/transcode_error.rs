@@ -57,6 +57,19 @@ pub enum TranscodeError<E> {
     #[error("output length arithmetic overflow")]
     OutputLengthOverflow,
 
+    /// The complete input ended with an incomplete value.
+    #[error(
+        "incomplete input at index {input_index}: required {required} units, available {available}"
+    )]
+    IncompleteInput {
+        /// Absolute input index where the incomplete value starts.
+        input_index: usize,
+        /// Input units required to complete the value.
+        required: usize,
+        /// Input units available from `input_index`.
+        available: usize,
+    },
+
     /// Domain-specific codec, charset, or policy error.
     #[error("{0}")]
     Domain(#[source] E),
@@ -108,6 +121,20 @@ impl<E> TranscodeError<E> {
         Self::OutputLengthOverflow
     }
 
+    /// Creates an incomplete-input error.
+    #[must_use]
+    pub const fn incomplete_input(
+        input_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::IncompleteInput {
+            input_index,
+            required,
+            available,
+        }
+    }
+
     /// Returns whether this error wraps a domain error.
     ///
     /// # Returns
@@ -131,6 +158,7 @@ impl<E> TranscodeError<E> {
             Self::InvalidInputIndex { .. }
             | Self::InvalidOutputIndex { .. }
             | Self::InsufficientOutput { .. }
+            | Self::IncompleteInput { .. }
             | Self::OutputLengthOverflow => None,
         }
     }
@@ -171,6 +199,15 @@ impl<E> TranscodeError<E> {
                 available,
             },
             Self::OutputLengthOverflow => TranscodeError::OutputLengthOverflow,
+            Self::IncompleteInput {
+                input_index,
+                required,
+                available,
+            } => TranscodeError::IncompleteInput {
+                input_index,
+                required,
+                available,
+            },
             Self::Domain(error) => TranscodeError::Domain(f(error)),
         }
     }

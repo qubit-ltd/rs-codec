@@ -380,17 +380,37 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
 
 #[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
+    type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
+    type EngineErrorType =
+        TranscodeEncodeEngineError<core::convert::Infallible, EngineError>;
+    type TranscodeAllIntoFn =
+        fn(
+            &mut Engine,
+            &[u8],
+            &mut [u8],
+        ) -> Result<usize, TranscodeError<EngineErrorType>>;
+
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
+    let max_total_output_len: fn(
+        &Engine,
+        usize,
+    ) -> Result<usize, CapacityError> = Engine::max_total_output_len;
+    let transcode_all_into: TranscodeAllIntoFn = Engine::transcode_all_into;
 
-    assert_eq!(Ok(8), encoder.max_output_len(2));
+    assert_eq!(Ok(8), encoder.max_transcode_output_len(2));
+    assert_eq!(Ok(8), max_total_output_len(&encoder, 2));
     assert_eq!(Ok(0), encoder.max_finish_output_len());
     assert_eq!(Ok(0), encoder.max_reset_output_len());
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
-        encoder.max_output_len(usize::MAX),
+        encoder.max_transcode_output_len(usize::MAX),
     );
-    encoder.reset(&mut [], 0).expect("reset");
+    let mut output = [0_u8; 8];
+    let written = transcode_all_into(&mut encoder, &[1, 2], &mut output)
+        .expect("complete encode should fit the planned output");
+    assert_eq!(2, written);
+    assert_eq!(&[11, 12], &output[..written]);
 }
 
 #[test]
@@ -448,8 +468,12 @@ fn test_buffered_encode_engine_implements_transcoder() {
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
     let mut output = [0_u8; 2];
-    let max_output_len: fn(&Engine, usize) -> Result<usize, CapacityError> =
-        std::hint::black_box(<Engine as Transcoder<u8, u8>>::max_output_len);
+    let max_transcode_output_len: fn(
+        &Engine,
+        usize,
+    ) -> Result<usize, CapacityError> = std::hint::black_box(
+        <Engine as Transcoder<u8, u8>>::max_transcode_output_len,
+    );
     let max_finish_output_len: fn(&Engine) -> Result<usize, CapacityError> =
         std::hint::black_box(
             <Engine as Transcoder<u8, u8>>::max_finish_output_len,
@@ -465,7 +489,7 @@ fn test_buffered_encode_engine_implements_transcoder() {
     let finish: OutputFn =
         std::hint::black_box(<Engine as Transcoder<u8, u8>>::finish);
 
-    assert_eq!(Ok(8), max_output_len(&encoder, 2));
+    assert_eq!(Ok(8), max_transcode_output_len(&encoder, 2));
     assert_eq!(Ok(0), max_finish_output_len(&encoder));
     assert_eq!(Ok(0), max_reset_output_len(&encoder));
     let progress = transcode(&mut encoder, &[1, 2], 0, &mut output, 0)
@@ -620,7 +644,7 @@ fn test_buffered_encode_engine_uses_hook_capacity_instead_of_codec_max_width() {
     assert_eq!(1, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([11], output);
-    assert_eq!(Ok(8), encoder.max_output_len(2));
+    assert_eq!(Ok(8), encoder.max_transcode_output_len(2));
 }
 
 #[test]

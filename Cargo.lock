@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-codec"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "qubit-io",
  "thiserror",
@@ -27,9 +27,9 @@ checksum = "0075646ff0a349a44693dd75b10b7ec365992dec79402aeaf9590e854afbcfb8"
 
 [[package]]
 name = "quote"
-version = "1.0.45"
+version = "1.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
+checksum = "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368"
 dependencies = [
  "proc-macro2",
 ]

@@ -97,7 +97,10 @@ fn test_transcode_decode_input_exposes_unread_window() {
 impl Transcoder<u16, u32> for PairDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / 2)
     }
 
@@ -167,7 +170,7 @@ struct FinishDecoder {
 impl Transcoder<u16, u32> for FinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -227,7 +230,7 @@ struct ZeroWidthFailingFinishDecoder;
 impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -307,7 +310,7 @@ struct TwoUnitFinishDecoder;
 impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -355,7 +358,7 @@ struct CapacityBoundDecoder;
 impl Transcoder<u16, u32> for CapacityBoundDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -390,7 +393,7 @@ struct FailingTranscodeDecoder;
 impl Transcoder<u16, u32> for FailingTranscodeDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -421,7 +424,7 @@ struct OverreadingProgressDecoder;
 impl Transcoder<u16, u32> for OverreadingProgressDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -452,7 +455,7 @@ struct OverwritingProgressDecoder;
 impl Transcoder<u16, u32> for OverwritingProgressDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -483,7 +486,7 @@ struct OverflowingNeedInputDecoder;
 impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -520,7 +523,7 @@ struct MisindexedNeedInputDecoder;
 impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -557,7 +560,7 @@ struct MisindexedNeedOutputDecoder;
 impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {
@@ -602,7 +605,7 @@ struct FailingFinishDecoder {
 impl Transcoder<u16, u32> for FailingFinishDecoder {
     type Error = PairDecodeError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _input_len: usize,
     ) -> Result<usize, CapacityError> {

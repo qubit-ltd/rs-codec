@@ -126,6 +126,16 @@ where
 
     /// Returns the maximum output units needed for `input_len` values.
     ///
+    /// This bound covers only the streaming encode phase implemented by
+    /// [`encode_value`](Self::encode_value). It must not include codec reset
+    /// output, codec flush output, or hook finish output.
+    ///
+    /// The default implementation multiplies `input_len` by
+    /// [`Codec::MAX_UNITS_PER_VALUE`]. Override it when hook policy can emit a
+    /// different number of units than direct codec encoding, for example when
+    /// invalid values are ignored, expanded to replacements, escaped, or when
+    /// hook-owned pending output can be drained during `transcode`.
+    ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
@@ -133,11 +143,10 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a conservative upper bound derived from the codec's
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Returns a conservative upper bound for streaming output.
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _codec: &C,
         input_len: usize,
@@ -152,6 +161,12 @@ where
     /// `finish` never receives more input values. Implementations must only
     /// report output derived from hook-owned state that remains after the
     /// caller has supplied all input.
+    ///
+    /// The default implementation returns `0`. Override it when
+    /// [`finish_hooks`](Self::finish_hooks) can write trailers, checksums,
+    /// delayed replacements, or any other hook-owned final output. Do not
+    /// include [`Codec::MAX_ENCODE_FLUSH_UNITS`]; the engine adds the codec
+    /// flush bound separately.
     ///
     /// # Parameters
     ///

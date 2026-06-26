@@ -289,7 +289,10 @@ where
     ///
     /// The bound sums three parts: any retained pending value, the maximum
     /// decoded values from the source side, and the maximum target units for
-    /// those values on the encode side.
+    /// those values on the encode side. It covers only the streaming convert
+    /// phase. Downstream converters must use this engine-level API for capacity
+    /// planning instead of recomputing the bound from the source or target
+    /// [`Codec`] constants.
     ///
     /// # Parameters
     ///
@@ -300,14 +303,16 @@ where
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_output_len(
+    pub fn max_transcode_output_len(
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
         let pending_units = self.pending_output_len()?;
-        let decoded_values = self.decode_engine.max_output_len(input_len)?;
-        let converted_units =
-            self.encode_engine.max_output_len(decoded_values)?;
+        let decoded_values =
+            self.decode_engine.max_transcode_output_len(input_len)?;
+        let converted_units = self
+            .encode_engine
+            .max_transcode_output_len(decoded_values)?;
         converted_units
             .checked_add(pending_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -328,7 +333,7 @@ where
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         let decode_reset_units = self
             .encode_engine
-            .max_output_len(D::MAX_DECODE_RESET_VALUES)?;
+            .max_transcode_output_len(D::MAX_DECODE_RESET_VALUES)?;
         let encode_reset_units = E::MAX_ENCODE_RESET_UNITS;
         decode_reset_units
             .checked_add(encode_reset_units)
@@ -349,8 +354,9 @@ where
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values =
             self.decode_engine.max_finish_output_len()?;
-        let decoder_finish_units =
-            self.encode_engine.max_output_len(decoder_finish_values)?;
+        let decoder_finish_units = self
+            .encode_engine
+            .max_transcode_output_len(decoder_finish_values)?;
         let encoder_finish_units =
             self.encode_engine.max_finish_output_len()?;
         let pending_and_decoder = pending_units
@@ -358,6 +364,38 @@ where
             .ok_or(CapacityError::OutputLengthOverflow)?;
         pending_and_decoder
             .checked_add(encoder_finish_units)
+            .ok_or(CapacityError::OutputLengthOverflow)
+    }
+
+    /// Returns the maximum target units needed by a complete one-shot
+    /// conversion.
+    ///
+    /// The returned bound covers conversion reset output, the streaming convert
+    /// phase for `input_len` source units, and finish output. Higher-level
+    /// complete conversion helpers should use this engine-level bound instead
+    /// of recomputing capacity from the source or target codec constants,
+    /// because decode and encode hooks may change streaming or finish
+    /// output.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of source units in the complete stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns the complete-stream target-output bound, or a capacity error on
+    /// arithmetic overflow.
+    #[must_use = "capacity planning can fail on overflow"]
+    pub fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        let reset = self.max_reset_output_len()?;
+        let transcode = self.max_transcode_output_len(input_len)?;
+        let finish = self.max_finish_output_len()?;
+        reset
+            .checked_add(transcode)
+            .and_then(|len| len.checked_add(finish))
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
@@ -568,6 +606,42 @@ where
         Ok(state.written())
     }
 
+    /// Runs a complete one-shot `reset -> transcode -> finish` conversion.
+    ///
+    /// The complete input is supplied as `input`, and output starts at index
+    /// `0` in `output`. Callers that need subranges should slice their
+    /// buffers before calling this method. Downstream one-shot converter
+    /// helpers should call this engine method instead of reproducing the
+    /// reset, transcode, and finish sequence themselves.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete source unit slice.
+    /// - `output`: Target unit slice for the whole converted stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of target units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors for insufficient output, capacity overflow, or
+    /// an incomplete EOF tail, and domain errors from reset, conversion, or
+    /// finish.
+    #[inline]
+    pub fn transcode_all_into(
+        &mut self,
+        input: &[D::Unit],
+        output: &mut [E::Unit],
+    ) -> Result<usize, ConvertErrorOf<D, E, DH, EH>>
+    where
+        D::Value: Default,
+    {
+        <Self as Transcoder<D::Unit, E::Unit>>::transcode_all_into(
+            self, input, output,
+        )
+    }
+
     /// Drains source-side decode reset output and encodes emitted reset
     /// values.
     ///
@@ -669,7 +743,7 @@ where
     /// planning overflows.
     #[inline(always)]
     fn pending_output_len(&self) -> Result<usize, CapacityError> {
-        self.pending.max_output_len(&self.encode_engine)
+        self.pending.max_transcode_output_len(&self.encode_engine)
     }
 
     /// Writes a retained decoded value before new input is consumed.
@@ -844,8 +918,11 @@ where
     /// Returns an upper bound for target units produced from `input_len`
     /// units.
     #[inline(always)]
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        TranscodeConvertEngine::max_output_len(self, input_len)
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        TranscodeConvertEngine::max_transcode_output_len(self, input_len)
     }
 
     /// Returns an upper bound for target units emitted by finishing retained

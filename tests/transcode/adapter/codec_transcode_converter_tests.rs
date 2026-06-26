@@ -434,7 +434,7 @@ fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_ap
         CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(2), converter.max_output_len(2));
+    assert_eq!(Ok(2), converter.max_transcode_output_len(2));
     assert_eq!(Ok(0), converter.max_finish_output_len());
 
     let progress = converter
@@ -460,7 +460,9 @@ fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
 
     assert_eq!(
         Ok(2),
-        <Converter as Transcoder<u8, u8>>::max_output_len(&converter, 1)
+        <Converter as Transcoder<u8, u8>>::max_transcode_output_len(
+            &converter, 1
+        )
     );
     assert_eq!(
         Ok(0),
@@ -534,11 +536,11 @@ fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
     >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(6), converter.max_output_len(3));
+    assert_eq!(Ok(6), converter.max_transcode_output_len(3));
     assert_eq!(Ok(0), converter.max_finish_output_len());
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
-        converter.max_output_len(usize::MAX),
+        converter.max_transcode_output_len(usize::MAX),
     );
 
     converter.reset(&mut [], 0).expect("reset");
@@ -647,7 +649,7 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
     assert_eq!(1, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
-    assert_eq!(Ok(8), converter.max_output_len(3));
+    assert_eq!(Ok(8), converter.max_transcode_output_len(3));
 
     let mut output = [0_u8; 2];
     let progress = converter

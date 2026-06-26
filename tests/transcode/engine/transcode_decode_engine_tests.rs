@@ -600,12 +600,36 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
 
 #[test]
 fn test_transcode_decode_engine_reports_finish_bounds() {
+    type Decoder = TranscodeDecodeEngine<PrefixCodec, ReplacingHooks>;
+    type DecoderErrorType =
+        TranscodeDecodeEngineError<PrefixDecodeError, EngineError>;
+    type TranscodeAllIntoFn =
+        fn(
+            &mut Decoder,
+            &[u8],
+            &mut [u8],
+        ) -> Result<usize, TranscodeError<DecoderErrorType>>;
+
     let mut decoder =
         TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
+    let max_total_output_len: fn(
+        &Decoder,
+        usize,
+    )
+        -> Result<usize, qubit_codec::CapacityError> =
+        Decoder::max_total_output_len;
+    let transcode_all_into: TranscodeAllIntoFn = Decoder::transcode_all_into;
     let mut output = [0_u8; 1];
 
-    assert_eq!(Ok(3), decoder.max_output_len(3));
+    assert_eq!(Ok(3), decoder.max_transcode_output_len(3));
+    assert_eq!(Ok(3), max_total_output_len(&decoder, 3));
     assert_eq!(Ok(0), decoder.max_finish_output_len());
+
+    let mut all_output = [0_u8; 3];
+    let written = transcode_all_into(&mut decoder, &[1, 2, 3], &mut all_output)
+        .expect("complete decode should fit the planned output");
+    assert_eq!(3, written);
+    assert_eq!(&[1, 2, 3], &all_output[..written]);
 
     decoder.reset(&mut [], 0).expect("reset");
     let written = decoder
@@ -958,8 +982,8 @@ fn test_transcode_decode_engine_implements_buffered_transcoder() {
     let available = <Decoder as Transcoder<
         <PrefixCodec as Codec>::Unit,
         <PrefixCodec as Codec>::Value,
-    >>::max_output_len(&decoder, 1)
-    .expect("max_output_len should be callable through trait");
+    >>::max_transcode_output_len(&decoder, 1)
+    .expect("max_transcode_output_len should be callable through trait");
     assert_eq!(1, available);
 
     let mut output = [0_u8; 1];

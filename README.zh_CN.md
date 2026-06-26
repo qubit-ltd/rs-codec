@@ -191,7 +191,7 @@ unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一
 
 ```toml
 [dependencies]
-qubit-codec = "0.9"
+qubit-codec = "0.10"
 ```
 
 ## 快速开始
@@ -299,10 +299,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 方法 | 描述 |
 |------|------|
-| `max_output_len(input_len)` | 在可确定时返回输出长度上界 |
+| `max_transcode_output_len(input_len)` | 在可确定时返回 streaming 阶段输出长度上界 |
+| `max_total_output_len(input_len)` | 返回完整 `reset -> transcode -> finish` 流程的输出长度上界 |
+| `max_reset_output_len()` | 在可确定时返回 reset 输出长度上界 |
 | `max_finish_output_len()` | 在可确定时返回 finish 收尾输出长度上界 |
 | `reset()` | 保留配置并重置逻辑流状态 |
 | `transcode(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
+| `transcode_all_into(input, output)` | 从传入 slice 起点运行一次完整转换流程 |
 | `finish(output, output_index)` | 完成内部收尾输出，例如 reset bytes、digest 或 trailer |
 
 ### `TranscodeStatus` 取值

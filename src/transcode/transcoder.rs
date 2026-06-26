@@ -9,6 +9,7 @@ use super::{
     capacity_error::CapacityError,
     transcode_error::TranscodeError,
     transcode_progress::TranscodeProgress,
+    transcode_status::TranscodeStatus,
 };
 
 /// Converts one logical stream of input units into one logical stream of output
@@ -70,7 +71,7 @@ use super::{
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
 ///     type Error = CodecDecodeError<core::convert::Infallible>;
 ///
-///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
+///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
 ///     }
 ///
@@ -206,11 +207,18 @@ pub trait Transcoder<Input, Output> {
         Ok(0)
     }
 
-    /// Returns an upper bound for output units produced from `input_len` units.
+    /// Returns an upper bound for output units produced from `input_len` units
+    /// during the streaming transcode phase.
+    ///
+    /// This bound excludes stream-start output emitted by
+    /// [`Transcoder::reset`] and final output emitted by
+    /// [`Transcoder::finish`]. Callers that need a complete one-shot stream
+    /// bound should use [`Transcoder::max_total_output_len`].
     ///
     /// For stateful transcoders, this bound is evaluated against the current
     /// instance state and must include any already-retained output that may be
-    /// emitted before or alongside output derived from the supplied input.
+    /// emitted before or alongside output derived from the supplied input
+    /// during this phase.
     ///
     /// # Parameters
     ///
@@ -222,7 +230,43 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError>;
+
+    /// Returns an upper bound for a complete `reset -> transcode -> finish`
+    /// stream.
+    ///
+    /// This is a convenience sum of [`Transcoder::max_reset_output_len`],
+    /// [`Transcoder::max_transcode_output_len`], and
+    /// [`Transcoder::max_finish_output_len`]. It is intended for callers that
+    /// are about to run a full one-shot stream on an instance that is ready
+    /// to start a new logical stream.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of input units in the complete stream.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(bound)` when the full-stream upper bound can be represented
+    /// as `usize`. Returns [`CapacityError::OutputLengthOverflow`] when
+    /// capacity arithmetic overflows.
+    #[must_use = "capacity planning can fail on overflow"]
+    #[inline]
+    fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        let reset = self.max_reset_output_len()?;
+        let transcode = self.max_transcode_output_len(input_len)?;
+        let finish = self.max_finish_output_len()?;
+        reset
+            .checked_add(transcode)
+            .and_then(|len| len.checked_add(finish))
+            .ok_or(CapacityError::OutputLengthOverflow)
+    }
 
     /// Returns an upper bound for output units produced by stream finalization.
     ///
@@ -337,7 +381,7 @@ pub trait Transcoder<Input, Output> {
     ///     type Error =
     ///         CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
     ///
-    ///     fn max_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
+    ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
     ///         Ok(input_len)
     ///     }
     ///
@@ -423,4 +467,78 @@ pub trait Transcoder<Input, Output> {
         output: &mut [Output],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::Error>>;
+
+    /// Runs a complete one-shot `reset -> transcode -> finish` stream.
+    ///
+    /// The `input` slice is treated as complete input at EOF, and output is
+    /// written from the beginning of `output`. Callers that need to operate on
+    /// a range inside a larger buffer should slice the input or output
+    /// before calling this method.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete input unit slice.
+    /// - `output`: Complete output unit slice where the stream starts at index
+    ///   `0`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of output units written to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors when the output buffer is too small, when
+    /// capacity arithmetic overflows, or when the complete input ends with
+    /// an incomplete value. The method resets the stream before estimating
+    /// the streaming and finish output, so stale pending output from a
+    /// previous logical stream does not affect one-shot capacity checks.
+    /// Returns domain errors from reset, transcode, or finish.
+    #[inline]
+    fn transcode_all_into(
+        &mut self,
+        input: &[Input],
+        output: &mut [Output],
+    ) -> Result<usize, TranscodeError<Self::Error>> {
+        let mut output_cursor = self.reset(output, 0)?;
+        let transcode_required = self.max_transcode_output_len(input.len())?;
+        let finish_required = self.max_finish_output_len()?;
+        let remaining_required = transcode_required
+            .checked_add(finish_required)
+            .ok_or(CapacityError::OutputLengthOverflow)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_cursor,
+            remaining_required,
+        )?;
+
+        let progress = self.transcode(input, 0, output, output_cursor)?;
+        output_cursor += progress.written();
+        match progress.status() {
+            TranscodeStatus::Complete => {}
+            TranscodeStatus::NeedOutput {
+                output_index,
+                required,
+                available,
+            } => {
+                return Err(TranscodeError::insufficient_output(
+                    output_index,
+                    required.get(),
+                    available,
+                ));
+            }
+            TranscodeStatus::NeedInput {
+                input_index,
+                required,
+                available,
+            } => {
+                return Err(TranscodeError::incomplete_input(
+                    input_index,
+                    required.get(),
+                    available,
+                ));
+            }
+        }
+        output_cursor += self.finish(output, output_cursor)?;
+        Ok(output_cursor)
+    }
 }

@@ -22,7 +22,7 @@ use super::decode_failure::DecodeFailure;
 /// `MIN_UNITS_PER_VALUE` and `MAX_UNITS_PER_VALUE` describe the representation
 /// width bounds for one value. The minimum is a lower-bound hint for checked
 /// layers: if fewer than this many units are available, no complete value can
-/// exist, so a streaming caller can request more input, report an incomplete
+/// exist, so a streaming caller can request more input or report an incomplete
 /// EOF tail. For decoding, this minimum is the smallest safety precondition
 /// checked callers must satisfy before entering
 /// [`decode`](Self::decode). The maximum is a value-independent upper bound
@@ -89,36 +89,50 @@ pub trait Codec {
     /// This is a lower bound used by checked callers for planning and fast
     /// impossibility checks. If a streaming decoder has fewer than this many
     /// readable units, no complete value can be present at the current
-    /// position.
+    /// position. It is also the denominator used by default decode hooks when
+    /// estimating the maximum number of values that can be produced from an
+    /// input unit count.
     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
 
     /// The maximum non-zero unit count needed to encode or decode one value.
     ///
     /// This is a value-independent upper bound for one complete encoded value
-    /// or codec quantum.
+    /// or codec quantum. It is the multiplier used by default encode hooks
+    /// when estimating the maximum number of output units needed for an input
+    /// value count.
     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
 
     /// The maximum unit count emitted when resetting encode state.
     ///
-    /// Stateless codecs should use the default `0`.
+    /// This bound covers only output written by
+    /// [`encode_reset`](Self::encode_reset). It does not include hook-owned
+    /// reset output or any ordinary encoded input values. Stateless codecs
+    /// should use the default `0`.
     const MAX_ENCODE_RESET_UNITS: usize = 0;
 
     /// The maximum unit count emitted when flushing encode state at EOF.
     ///
-    /// Stateless codecs should use the default `0`. Codecs that emit a
-    /// stream trailer (padding, checksum, or end-of-stream marker) should
-    /// override this with the exact maximum unit count.
+    /// This bound covers only output written by
+    /// [`encode_flush`](Self::encode_flush). It does not include hook-owned
+    /// finish output. Stateless codecs should use the default `0`. Codecs
+    /// that emit a stream trailer (padding, checksum, or end-of-stream marker)
+    /// should override this with the exact maximum unit count.
     const MAX_ENCODE_FLUSH_UNITS: usize = 0;
 
     /// The maximum value count emitted when resetting decode state.
     ///
-    /// Stateless codecs should use the default `0`. Codecs that emit a
-    /// stream-start sentinel or BOM on reset should override this.
+    /// This bound covers only values written by
+    /// [`decode_reset`](Self::decode_reset). It does not include hook-owned
+    /// reset output or values decoded from source units. Stateless codecs
+    /// should use the default `0`. Codecs that emit a stream-start sentinel or
+    /// BOM on reset should override this.
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     /// The maximum value count emitted when flushing decode state.
     ///
-    /// Stateless codecs should use the default `0`.
+    /// This bound covers only values written by
+    /// [`decode_flush`](Self::decode_flush). It does not include hook-owned
+    /// finish output. Stateless codecs should use the default `0`.
     const MAX_DECODE_FLUSH_VALUES: usize = 0;
 
     /// Returns whether `value` is in this codec's encodable value domain.

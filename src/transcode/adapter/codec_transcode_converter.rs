@@ -147,11 +147,11 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_output_len(
+    pub fn max_transcode_output_len(
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        self.engine.max_output_len(input_len)
+        self.engine.max_transcode_output_len(input_len)
     }
 
     /// Returns the maximum target units emitted by finishing internal state.
@@ -286,8 +286,11 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        CodecTranscodeConverter::max_output_len(self, input_len)
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
     /// Returns the maximum target units emitted by finishing internal state.

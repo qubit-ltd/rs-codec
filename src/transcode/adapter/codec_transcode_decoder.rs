@@ -85,8 +85,11 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        self.engine.max_output_len(input_len)
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        self.engine.max_transcode_output_len(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.

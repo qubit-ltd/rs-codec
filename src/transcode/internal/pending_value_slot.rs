@@ -46,7 +46,7 @@ impl<Value> PendingValueSlot<Value> {
     /// Returns the output unit bound contributed by the retained value.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    pub(in crate::transcode) fn max_output_len<E, H>(
+    pub(in crate::transcode) fn max_transcode_output_len<E, H>(
         &self,
         engine: &TranscodeEncodeEngine<E, H>,
     ) -> Result<usize, CapacityError>
@@ -55,7 +55,7 @@ impl<Value> PendingValueSlot<Value> {
         H: TranscodeEncodeHooks<E>,
     {
         if self.value.is_some() {
-            engine.max_output_len(1)
+            engine.max_transcode_output_len(1)
         } else {
             Ok(0)
         }

@@ -541,7 +541,7 @@ struct MismatchCapacityEncodeHooks;
 impl TranscodeEncodeHooks<TargetCodec> for MismatchCapacityEncodeHooks {
     type Error = EngineError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _codec: &TargetCodec,
         input_len: usize,
@@ -998,7 +998,7 @@ struct ErrorPathDecodeHooks {
 impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
     type Error = EngineError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _codec: &SourceCodec,
         input_len: usize,
@@ -1062,7 +1062,7 @@ struct ErrorPathEncodeHooks {
 impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     type Error = EngineError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _codec: &TargetCodec,
         input_len: usize,
@@ -1145,7 +1145,7 @@ struct FactoryDecodeHooks {
 impl TranscodeDecodeHooks<SourceCodec> for FactoryDecodeHooks {
     type Error = EngineError;
 
-    fn max_output_len(
+    fn max_transcode_output_len(
         &self,
         _codec: &SourceCodec,
         _input_len: usize,
@@ -1313,11 +1313,35 @@ fn new_repair_engine(
 
 #[test]
 fn test_buffered_convert_engine_reports_bounds_and_resets() {
-    let mut engine = new_copy_engine();
+    type ConvertErrorType = TranscodeConvertEngineError<
+        TranscodeDecodeEngineError<core::convert::Infallible, EngineError>,
+        TranscodeEncodeEngineError<EngineError, EngineError>,
+    >;
+    type TranscodeAllIntoFn =
+        fn(
+            &mut CopyConvertEngine,
+            &[u8],
+            &mut [u8],
+        ) -> Result<usize, TranscodeError<ConvertErrorType>>;
 
-    assert_eq!(Ok(3), engine.max_output_len(3));
+    let mut engine = new_copy_engine();
+    let max_total_output_len: fn(
+        &CopyConvertEngine,
+        usize,
+    ) -> Result<usize, CapacityError> = CopyConvertEngine::max_total_output_len;
+    let transcode_all_into: TranscodeAllIntoFn =
+        CopyConvertEngine::transcode_all_into;
+
+    assert_eq!(Ok(3), engine.max_transcode_output_len(3));
+    assert_eq!(Ok(3), max_total_output_len(&engine, 3));
     assert_eq!(Ok(0), engine.max_finish_output_len());
     assert_eq!(Ok(0), engine.max_reset_output_len());
+
+    let mut output = [0_u8; 3];
+    let written = transcode_all_into(&mut engine, &[1, 2, 3], &mut output)
+        .expect("complete conversion should fit the planned output");
+    assert_eq!(3, written);
+    assert_eq!(&[2, 3, 4], &output[..written]);
 
     engine.reset(&mut [], 0).expect("reset");
     assert_eq!(Ok(0), engine.max_finish_output_len());
@@ -1349,11 +1373,11 @@ fn test_buffered_convert_engine_implements_transcoder() {
 
     let mut engine = new_copy_engine();
     let mut output = [0_u8; 2];
-    let max_output_len: fn(
+    let max_transcode_output_len: fn(
         &CopyConvertEngine,
         usize,
     ) -> Result<usize, CapacityError> = std::hint::black_box(
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_output_len,
+        <CopyConvertEngine as Transcoder<u8, u8>>::max_transcode_output_len,
     );
     let max_finish_output_len: fn(
         &CopyConvertEngine,
@@ -1373,7 +1397,7 @@ fn test_buffered_convert_engine_implements_transcoder() {
     let finish: OutputFn =
         std::hint::black_box(<CopyConvertEngine as Transcoder<u8, u8>>::finish);
 
-    assert_eq!(Ok(2), max_output_len(&engine, 2));
+    assert_eq!(Ok(2), max_transcode_output_len(&engine, 2));
     assert_eq!(Ok(0), max_finish_output_len(&engine));
     assert_eq!(Ok(0), max_reset_output_len(&engine));
     let progress = transcode(&mut engine, &[3, 4], 0, &mut output, 0)
@@ -1442,7 +1466,7 @@ fn test_buffered_convert_engine_new_uses_supplied_policy_hooks() {
         FactoryEncodeHooks { offset: 7 },
     );
 
-    assert_eq!(Ok(11), engine.max_output_len(1));
+    assert_eq!(Ok(11), engine.max_transcode_output_len(1));
 
     let mut output = [0_u8; 1];
     let progress = engine
@@ -1474,7 +1498,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
         progress.status(),
     );
     assert_eq!((1, 0), (progress.read(), progress.written()));
-    assert_eq!(Ok(2), engine.max_output_len(1));
+    assert_eq!(Ok(2), engine.max_transcode_output_len(1));
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
@@ -1518,7 +1542,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
         progress.status(),
     );
     assert_eq!((0, 0), (progress.read(), progress.written()));
-    assert_eq!(Ok(2), engine.max_output_len(1));
+    assert_eq!(Ok(2), engine.max_transcode_output_len(1));
 
     let mut output = [0_u8; 2];
     let progress = engine.transcode(&[9], 0, &mut output, 0).expect(
@@ -1585,7 +1609,11 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     });
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
-        engine.max_output_len(1)
+        engine.max_transcode_output_len(1)
+    );
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_total_output_len(1)
     );
 
     let engine = new_error_path_engine(ErrorPathHooks {
@@ -1596,6 +1624,19 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         engine.max_finish_output_len()
+    );
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_total_output_len(1)
+    );
+
+    let engine = new_error_path_engine(ErrorPathHooks {
+        encode_finish_len: usize::MAX,
+        ..ErrorPathHooks::default()
+    });
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_total_output_len(1)
     );
 
     let mut engine = new_error_path_engine(ErrorPathHooks {
@@ -1625,7 +1666,7 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     ));
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
-        engine.max_output_len(0)
+        engine.max_transcode_output_len(0)
     );
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
@@ -1646,6 +1687,10 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         engine.max_finish_output_len()
+    );
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_total_output_len(0)
     );
 }
 
@@ -2552,6 +2597,10 @@ fn test_buffered_convert_engine_max_reset_output_len_overflow() {
         .expect_err("max reset bound should report overflow");
 
     assert_eq!(CapacityError::OutputLengthOverflow, error);
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_total_output_len(0)
+    );
 }
 
 #[test]

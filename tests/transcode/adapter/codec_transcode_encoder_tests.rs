@@ -197,11 +197,11 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
     assert_eq!(2, progress.read());
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
-    assert_eq!(Ok(6), encoder.max_output_len(3));
+    assert_eq!(Ok(6), encoder.max_transcode_output_len(3));
     assert_eq!(Ok(0), encoder.max_finish_output_len());
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
-        encoder.max_output_len(usize::MAX),
+        encoder.max_transcode_output_len(usize::MAX),
     );
     encoder.reset(&mut [], 0).expect("reset");
 }

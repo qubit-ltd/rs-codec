@@ -210,7 +210,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-codec = "0.9"
+qubit-codec = "0.10"
 ```
 
 ## Quick Start
@@ -318,10 +318,13 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Method | Description |
 |--------|-------------|
-| `max_output_len(input_len)` | Return a finite output upper bound when known |
+| `max_transcode_output_len(input_len)` | Return a finite streaming-phase output upper bound when known |
+| `max_total_output_len(input_len)` | Return the full `reset -> transcode -> finish` output upper bound |
+| `max_reset_output_len()` | Return a finite reset-output upper bound when known |
 | `max_finish_output_len()` | Return a finite final-output upper bound when known |
 | `reset()` | Reset retained stream state while keeping configuration |
 | `transcode(input, input_index, output, output_index)` | Convert input units into output units |
+| `transcode_all_into(input, output)` | Run one complete stream from the start of the supplied slices |
 | `finish(output, output_index)` | Finish internally retained output such as reset bytes, digests, or trailers |
 
 ### `TranscodeStatus` Values
