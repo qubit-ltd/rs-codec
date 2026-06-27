@@ -155,6 +155,81 @@ impl Codec for OverreportingEncodeCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FailingEncodeCodec;
+
+impl Codec for FailingEncodeCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = &'static str;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        Err("encode failed")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct AppendOverflowCodec;
+
+impl Codec for AppendOverflowCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_ENCODE_RESET_UNITS: usize = usize::MAX - 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(qubit_io::nz!(1))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct NonCloneValue {
     value: u8,
 }
@@ -385,6 +460,19 @@ fn test_codec_value_encoder_encodes_one_value_to_owned_units() {
 }
 
 #[test]
+fn test_codec_value_encoder_encode_into_appends_to_existing_vec() {
+    let mut encoder = CodecValueEncoder::<PairByteCodec>::new(PairByteCodec);
+    let mut output = vec![0xaa];
+
+    let written = encoder
+        .encode_into(&7, &mut output)
+        .expect("encoding into caller Vec should be infallible");
+
+    assert_eq!(2, written);
+    assert_eq!(vec![0xaa, 7, 8], output);
+}
+
+#[test]
 fn test_codec_value_encoder_accepts_non_clone_values() {
     let mut encoder =
         CodecValueEncoder::<NonCloneValueCodec>::new(NonCloneValueCodec);
@@ -414,6 +502,26 @@ fn test_codec_value_encoder_propagates_encode_error() {
 }
 
 #[test]
+fn test_codec_value_encoder_truncates_output_after_encode_error() {
+    let mut encoder =
+        CodecValueEncoder::<FailingEncodeCodec>::new(FailingEncodeCodec);
+    let mut output = vec![0xaa];
+
+    let error = encoder
+        .encode_into(&7, &mut output)
+        .expect_err("codec encode error should be propagated");
+
+    assert!(matches!(
+        error,
+        TranscodeError::Domain(CodecEncodeError::Encode {
+            source: "encode failed",
+            input_index: 0,
+        }),
+    ));
+    assert_eq!(vec![0xaa], output);
+}
+
+#[test]
 fn test_codec_value_encoder_rejects_output_length_overflow() {
     let mut encoder = CodecValueEncoder::<OverflowEncodeBoundCodec>::new(
         OverflowEncodeBoundCodec,
@@ -423,6 +531,35 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
         .expect_err("reset plus value bound should overflow");
 
     assert_eq!(TranscodeError::OutputLengthOverflow, error);
+}
+
+#[test]
+fn test_codec_value_encoder_encode_into_rejects_bound_overflow() {
+    let mut encoder = CodecValueEncoder::<OverflowEncodeBoundCodec>::new(
+        OverflowEncodeBoundCodec,
+    );
+    let mut output = vec![0xaa];
+
+    let error = encoder
+        .encode_into(&7, &mut output)
+        .expect_err("reset plus value bound should overflow");
+
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(vec![0xaa], output);
+}
+
+#[test]
+fn test_codec_value_encoder_encode_into_rejects_target_len_overflow() {
+    let mut encoder =
+        CodecValueEncoder::<AppendOverflowCodec>::new(AppendOverflowCodec);
+    let mut output = vec![0xaa];
+
+    let error = encoder
+        .encode_into(&7, &mut output)
+        .expect_err("appending encoded units should report length overflow");
+
+    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(vec![0xaa], output);
 }
 
 #[test]

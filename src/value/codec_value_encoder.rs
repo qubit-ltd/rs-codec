@@ -59,6 +59,71 @@ where
         assert_unit_bounds::<C>();
         Self { codec }
     }
+
+    /// Encodes one borrowed value and appends the emitted units to `output`.
+    ///
+    /// This method is the reusable-buffer counterpart of
+    /// [`ValueEncoder::encode`]. It emits stream-start output through
+    /// [`Codec::encode_reset`], then encodes `input` through [`Codec::encode`],
+    /// appending only the units actually written. When encoding fails, the
+    /// vector length is restored to its original value.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Value to encode.
+    /// - `output`: Destination vector receiving appended encoded units.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of units appended to `output`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the wrapped codec's encode error when reset output or `input`
+    /// cannot be represented. Returns a framework error when output length
+    /// arithmetic overflows.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the wrapped codec reports more reset output than
+    /// [`Codec::MAX_ENCODE_RESET_UNITS`] or a value width different from
+    /// [`Codec::encode_len`].
+    pub fn encode_into(
+        &mut self,
+        input: &C::Value,
+        output: &mut Vec<C::Unit>,
+    ) -> Result<usize, TranscodeError<CodecEncodeError<C::EncodeError>>>
+    where
+        C::Unit: Default,
+    {
+        if !self.codec.can_encode_value(input) {
+            return Err(TranscodeError::domain(
+                CodecEncodeError::unencodable_value(0),
+            ));
+        }
+        let units = C::MAX_ENCODE_RESET_UNITS
+            .checked_add(self.codec.encode_len(input).get())
+            .ok_or_else(TranscodeError::output_length_overflow)?;
+        let original_len = output.len();
+        let target_len = original_len
+            .checked_add(units)
+            .ok_or_else(TranscodeError::output_length_overflow)?;
+        output.resize_with(target_len, C::Unit::default);
+
+        match self
+            .codec
+            .encode_value_with_reset(input, output, original_len)
+        {
+            Ok(written) => {
+                output.truncate(original_len + written);
+                Ok(written)
+            }
+            Err(error) => {
+                output.truncate(original_len);
+                Err(error)
+            }
+        }
+    }
 }
 
 impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
@@ -93,19 +158,9 @@ where
         &mut self,
         input: &C::Value,
     ) -> Result<Self::Output, Self::Error> {
-        if !self.codec.can_encode_value(input) {
-            return Err(TranscodeError::domain(
-                CodecEncodeError::unencodable_value(0),
-            ));
-        }
-        let units = C::MAX_ENCODE_RESET_UNITS
-            .checked_add(self.codec.encode_len(input).get())
-            .ok_or_else(TranscodeError::output_length_overflow)?;
+        let units = self.codec.max_encode_value_units()?;
         let mut output = Vec::with_capacity(units);
-        output.resize_with(units, C::Unit::default);
-        let written =
-            self.codec.encode_value_with_reset(input, &mut output, 0)?;
-        output.truncate(written);
+        self.encode_into(input, &mut output)?;
         Ok(output)
     }
 }
