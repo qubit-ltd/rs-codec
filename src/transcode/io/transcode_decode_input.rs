@@ -117,8 +117,8 @@ where
     /// The number of unread units in the internal buffer.
     #[inline(always)]
     #[must_use]
-    pub fn available(&self) -> usize {
-        self.input.available()
+    pub fn unread_len(&self) -> usize {
+        self.input.unread_len()
     }
 
     /// Returns the currently buffered unread units.
@@ -167,11 +167,11 @@ where
     ///
     /// # Panics
     ///
-    /// In debug builds, panics when `count` exceeds [`Self::available`].
+    /// In debug builds, panics when `count` exceeds [`Self::unread_len`].
     #[inline(always)]
     pub fn consume(&mut self, count: usize) {
         debug_assert!(
-            count <= self.available(),
+            count <= self.unread_len(),
             "cannot consume beyond buffered input",
         );
         // SAFETY: The caller-provided count is within the unread window.
@@ -192,7 +192,7 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output`, that the addition does not overflow, that
-    /// `count <= self.available()`, and that the destination range does not
+    /// `count <= self.unread_len()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
     #[inline(always)]
     pub unsafe fn copy_unread_to(
@@ -312,7 +312,7 @@ where
         let output = &mut output[..output_end];
         let mut written_total = 0;
         loop {
-            if self.input.available() == 0 && !self.input.fill_more()? {
+            if self.input.unread_len() == 0 && !self.input.fill_more()? {
                 return Ok(written_total);
             }
             let units = self.input.unread();

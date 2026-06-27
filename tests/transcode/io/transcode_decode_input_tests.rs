@@ -989,7 +989,7 @@ fn test_buffered_decode_input_returns_partial_values_before_incomplete_eof() {
     let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
         .expect("incomplete EOF tail should stay buffered");
     assert_eq!(0, read);
-    assert_eq!(1, input.available());
+    assert_eq!(1, input.unread_len());
 }
 
 #[test]
@@ -1004,11 +1004,11 @@ fn test_buffered_decode_input_consumes_incomplete_tail() {
     let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
         .expect("incomplete EOF tail should stay buffered");
     assert_eq!(0, read);
-    assert_eq!(1, input.available());
+    assert_eq!(1, input.unread_len());
 
     input.consume(1);
-    assert_eq!(0, input.available());
-    let available = input.available();
+    assert_eq!(0, input.unread_len());
+    let available = input.unread_len();
     input.consume(available);
     assert_eq!(0, available);
 }
@@ -1024,10 +1024,10 @@ fn test_buffered_decode_input_consume_available_discards_tail() {
     let _ = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
         .expect("incomplete EOF tail should stay buffered");
 
-    let available = input.available();
+    let available = input.unread_len();
     input.consume(available);
     assert_eq!(1, available);
-    assert_eq!(0, input.available());
+    assert_eq!(0, input.unread_len());
 }
 
 #[test]
@@ -1150,13 +1150,13 @@ fn test_buffered_decode_input_exposes_buffer_capacity_and_fill_until() {
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
 
     assert!(input.capacity() >= 4);
-    assert_eq!(0, input.available());
+    assert_eq!(0, input.unread_len());
 
     let filled = input
         .fill_until(2)
         .expect("fill should read buffered units");
     assert!(filled);
-    assert_eq!(2, input.available());
+    assert_eq!(2, input.unread_len());
 }
 
 #[test]
@@ -1171,7 +1171,7 @@ fn test_buffered_decode_input_copy_unread_and_read_unchecked() {
         input.copy_unread_to(&mut copied, 0, 2);
     }
     assert_eq!([0x0001, 0x0002, 0], copied);
-    assert_eq!(3, input.available());
+    assert_eq!(3, input.unread_len());
 
     let mut read = [0_u16; 2];
     // SAFETY: The destination range is valid.
@@ -1179,5 +1179,5 @@ fn test_buffered_decode_input_copy_unread_and_read_unchecked() {
         .expect("read should copy unread units");
     assert_eq!(2, read_count);
     assert_eq!([0x0001, 0x0002], read);
-    assert_eq!(1, input.available());
+    assert_eq!(1, input.unread_len());
 }

@@ -349,7 +349,19 @@ where
     /// Writes all raw bytes through the internal buffer.
     #[inline]
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
-        self.output.write_all(input)
+        let mut written = 0;
+        while written < input.len() {
+            let count = Output::write(&mut self.output, &input[written..])?;
+            if count == 0 {
+                return Err(Error::from(ErrorKind::WriteZero));
+            }
+            assert!(
+                count <= input.len() - written,
+                "Output::write returned a count beyond the input length",
+            );
+            written += count;
+        }
+        Ok(())
     }
 
     /// Flushes buffered bytes to the wrapped output.
