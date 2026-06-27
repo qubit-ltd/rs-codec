@@ -177,6 +177,28 @@ fn test_transcoder_progress_validate_rejects_satisfied_requirements() {
 }
 
 #[test]
+fn test_transcoder_progress_validate_rejects_status_available_mismatch() {
+    let need_input = TranscodeProgress::need_input(12, crate::nz(4), 0, 2, 0);
+    assert_eq!(
+        Err(TranscodeContractError::StatusAvailableMismatch {
+            reported: 0,
+            expected: 1,
+        }),
+        need_input.validate(10, 3, 20, 0),
+    );
+
+    let need_output =
+        TranscodeProgress::need_output(23, crate::nz(4), 0, 0, 3);
+    assert_eq!(
+        Err(TranscodeContractError::StatusAvailableMismatch {
+            reported: 0,
+            expected: 1,
+        }),
+        need_output.validate(10, 0, 20, 4),
+    );
+}
+
+#[test]
 fn test_transcoder_progress_validate_rejects_index_overflow() {
     let need_input =
         TranscodeProgress::need_input(usize::MAX, crate::nz(2), 0, 1, 0);

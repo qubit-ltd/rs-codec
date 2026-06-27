@@ -459,8 +459,8 @@ impl Transcoder<u32, u16> for NeedInputEncoder {
         }
         Ok(TranscodeProgress::need_input(
             input_index,
-            crate::nz(1),
-            0,
+            crate::nz(2),
+            input.len() - input_index,
             0,
             0,
         ))
@@ -488,7 +488,7 @@ impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
         &mut self,
         input: &[u32],
         input_index: usize,
-        _output: &mut [u16],
+        output: &mut [u16],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
         if input_index > input.len() {
@@ -497,7 +497,7 @@ impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
         Ok(TranscodeProgress::need_output(
             output_index,
             crate::nz(1),
-            0,
+            output.len() - output_index,
             1,
             0,
         ))
@@ -535,7 +535,7 @@ impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
         Ok(TranscodeProgress::need_output(
             output_index + 1,
             crate::nz(1),
-            0,
+            output.len() - (output_index + 1),
             1,
             1,
         ))
@@ -626,7 +626,7 @@ impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
         &mut self,
         input: &[u32],
         input_index: usize,
-        _output: &mut [u16],
+        output: &mut [u16],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
         if input_index > input.len() {
@@ -635,7 +635,7 @@ impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
         Ok(TranscodeProgress::need_output(
             output_index,
             crate::nz(1),
-            usize::MAX,
+            output.len() - output_index,
             0,
             0,
         ))
@@ -921,10 +921,11 @@ fn test_buffered_encode_output_returns_after_need_output_consumes_input() {
     let output = UnitOutput::default();
     let mut encoder = NeedOutputAfterReadEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-        .expect("need-output after consuming input should return progress");
+    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect_err("NeedOutput with available space violates progress");
 
-    assert_eq!(1, written);
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("reported required"));
 }
 
 #[test]
@@ -1148,7 +1149,7 @@ fn test_buffered_encode_output_transcode_from_flushes_when_spare_is_empty() {
 fn test_buffered_encode_output_flushes_after_partial_need_output_progress() {
     let output = UnitOutput::default();
     let mut encoder = NeedOutputAfterWriteEncoder;
-    let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
     let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
         .expect("partial need-output progress should flush buffered units");
 

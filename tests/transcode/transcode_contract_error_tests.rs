@@ -50,6 +50,14 @@ fn test_transcode_contract_error_display_formats_all_variants() {
         .to_string(),
     );
     assert_eq!(
+        "transcoder reported status available 0, expected 1",
+        TranscodeContractError::StatusAvailableMismatch {
+            reported: 0,
+            expected: 1,
+        }
+        .to_string(),
+    );
+    assert_eq!(
         "transcoder reported required 2 with available 2",
         TranscodeContractError::SatisfiedNeed {
             required: 2,

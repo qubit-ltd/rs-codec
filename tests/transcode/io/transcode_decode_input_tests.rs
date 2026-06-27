@@ -508,7 +508,7 @@ impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
         Ok(TranscodeProgress::need_input(
             input_index,
             crate::nz(1),
-            usize::MAX,
+            input.len() - input_index,
             0,
             0,
         ))
@@ -1042,6 +1042,21 @@ fn test_buffered_decode_input_reports_insufficient_finish_output() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("insufficient output"));
+}
+
+#[test]
+fn test_buffered_decode_input_rejects_finish_count_below_finish_bound() {
+    let input = ChunkedInput::new(Vec::new());
+    let mut decoder = TwoUnitFinishDecoder;
+    let mut input = TranscodeDecodeInput::with_capacity(input, 3);
+    let mut output = [0_u32; 2];
+
+    let error = finish_with(&mut input, &mut decoder, &mut output, 0, 1)
+        .expect_err("count must cap the finish output range");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("insufficient output"));
+    assert_eq!([0, 0], output);
 }
 
 #[test]

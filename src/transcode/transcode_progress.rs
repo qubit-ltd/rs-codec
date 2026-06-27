@@ -257,6 +257,8 @@ impl TranscodeProgress {
                 index: output_index,
                 advanced: self.written,
             })?;
+        let expected_input_available = available_input - self.read;
+        let expected_output_available = available_output - self.written;
 
         match self.status {
             TranscodeStatus::Complete => Ok(()),
@@ -270,6 +272,14 @@ impl TranscodeProgress {
                         reported: input_index,
                         expected: expected_input_index,
                     });
+                }
+                if available != expected_input_available {
+                    return Err(
+                        TranscodeContractError::StatusAvailableMismatch {
+                            reported: available,
+                            expected: expected_input_available,
+                        },
+                    );
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {
@@ -289,6 +299,14 @@ impl TranscodeProgress {
                         reported: output_index,
                         expected: expected_output_index,
                     });
+                }
+                if available != expected_output_available {
+                    return Err(
+                        TranscodeContractError::StatusAvailableMismatch {
+                            reported: available,
+                            expected: expected_output_available,
+                        },
+                    );
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {

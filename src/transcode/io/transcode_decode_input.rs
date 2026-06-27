@@ -397,16 +397,15 @@ where
             count,
             "finish output range exceeds destination buffer",
         )?;
-        // Then verify the finish bound fits in the available space
-        // (InvalidData).
-        let available = output.len().saturating_sub(output_index);
-        if available < required {
+        // `count` is the caller's declared writable finish range.  The
+        // destination slice may be larger, but passing extra capacity to the
+        // decoder would allow it to write beyond the range the caller granted.
+        if count < required {
             return Err(Error::new(
                 ErrorKind::InvalidData,
                 "insufficient output for decoder finish bound",
             ));
         }
-        let output_end = output_end.max(output_index + required);
         let output = &mut output[..output_end];
         let written = decoder
             .finish(output, output_index)

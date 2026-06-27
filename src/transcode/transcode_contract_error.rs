@@ -58,6 +58,17 @@ pub enum TranscodeContractError {
         expected: usize,
     },
 
+    /// A status reported an available count that does not match progress.
+    #[error(
+        "transcoder reported status available {reported}, expected {expected}"
+    )]
+    StatusAvailableMismatch {
+        /// Available count reported by the status.
+        reported: usize,
+        /// Available count implied by the progress counter and call bounds.
+        expected: usize,
+    },
+
     /// A status requested input or output that is already available.
     #[error(
         "transcoder reported required {required} with available {available}"
