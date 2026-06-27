@@ -84,6 +84,8 @@ impl Codec for StatefulLifecycleCodec {
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
+    const MAX_ENCODE_FLUSH_UNITS: usize = 1;
+
     const MAX_DECODE_FLUSH_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -117,6 +119,16 @@ impl Codec for StatefulLifecycleCodec {
     ) -> Result<usize, Self::EncodeError> {
         output[output_index] = 0xfe;
         self.encode_state = 1;
+        Ok(1)
+    }
+
+    unsafe fn encode_flush(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = self.encode_state as u8;
+        self.encode_state = 0;
         Ok(1)
     }
 
@@ -339,7 +351,7 @@ fn test_codec_value_ext_encodes_reset_prefixed_value() {
 
     let written = codec
         .encode_value_with_reset(&0x41, &mut output, 0)
-        .expect("reset-prefixed value should fit");
+        .expect("complete value encode should fit");
 
     assert_eq!(2, written);
     assert_eq!([0xfe, 0x41], output);
@@ -347,14 +359,14 @@ fn test_codec_value_ext_encodes_reset_prefixed_value() {
 }
 
 #[test]
-fn test_codec_value_ext_reports_reset_plus_value_output_bound() {
+fn test_codec_value_ext_reports_complete_encode_output_bound() {
     let codec = StatefulLifecycleCodec::default();
 
-    assert_eq!(Ok(2), codec.max_encode_value_units());
+    assert_eq!(Ok(3), codec.max_encode_value_units());
 }
 
 #[test]
-fn test_codec_value_ext_reports_reset_plus_value_output_bound_overflow() {
+fn test_codec_value_ext_reports_complete_encode_output_bound_overflow() {
     let codec = OverflowEncodeBoundCodec;
 
     assert_eq!(
@@ -364,16 +376,16 @@ fn test_codec_value_ext_reports_reset_plus_value_output_bound_overflow() {
 }
 
 #[test]
-fn test_codec_value_ext_encode_value_with_reset_writes_reset_and_value() {
+fn test_codec_value_ext_encode_value_with_reset_runs_complete_lifecycle() {
     let mut codec = StatefulLifecycleCodec::default();
-    let mut output = [0_u8; 2];
+    let mut output = [0_u8; 3];
 
     let written = codec
         .encode_value_with_reset(&41, &mut output, 0)
         .expect("stateful encode should be infallible");
 
-    assert_eq!(2, written);
-    assert_eq!([0xfe, 42], output);
+    assert_eq!(3, written);
+    assert_eq!([0xfe, 42, 2], output);
 }
 
 #[test]
@@ -416,7 +428,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_insufficient_output() {
     assert_eq!(
         TranscodeError::InsufficientOutput {
             output_index: 0,
-            required: 2,
+            required: 3,
             available: 1,
         },
         error,

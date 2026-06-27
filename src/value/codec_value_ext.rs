@@ -18,7 +18,7 @@ use crate::{
     TranscodeError,
 };
 
-/// Result type returned by reset-prefixed one-value encode helpers.
+/// Result type returned by one-value encode lifecycle helpers.
 ///
 /// Framework buffer failures are reported by [`TranscodeError`]. Codec-domain
 /// encode failures are wrapped in [`CodecEncodeError`] and stored in the
@@ -50,17 +50,17 @@ pub type CodecDecodeExactValueWithFlushResult<V, E> =
 /// implementations. The methods compose primitive reset, encode, decode, and
 /// flush hooks with capacity checks and adapter-level error wrapping.
 pub trait CodecValueExt: Codec {
-    /// Returns the maximum unit count emitted by one reset-prefixed value
-    /// encode.
+    /// Returns the maximum unit count emitted by one complete value encode.
     ///
     /// This is the checked sum of
-    /// [`Codec::MAX_ENCODE_RESET_UNITS`] and
-    /// [`Codec::MAX_UNITS_PER_VALUE`]. It is useful for callers that want to
-    /// reuse scratch storage for repeated one-value encodes.
+    /// [`Codec::MAX_ENCODE_RESET_UNITS`],
+    /// [`Codec::MAX_UNITS_PER_VALUE`], and
+    /// [`Codec::MAX_ENCODE_FLUSH_UNITS`]. It is useful for callers that want
+    /// to reuse scratch storage for repeated one-value encodes.
     ///
     /// # Returns
     ///
-    /// Returns the maximum reset-plus-value output length.
+    /// Returns the maximum reset-value-flush output length.
     ///
     /// # Errors
     ///
@@ -71,15 +71,16 @@ pub trait CodecValueExt: Codec {
     fn max_encode_value_units(&self) -> Result<usize, CapacityError> {
         Self::MAX_ENCODE_RESET_UNITS
             .checked_add(Self::MAX_UNITS_PER_VALUE.get())
+            .and_then(|units| units.checked_add(Self::MAX_ENCODE_FLUSH_UNITS))
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
-    /// Encodes one value after emitting reset output into a caller buffer.
+    /// Encodes one value through the complete encode lifecycle.
     ///
-    /// The method validates the output index and the combined reset-plus-value
-    /// capacity before calling the unchecked codec hooks. It is a convenience
-    /// wrapper for code paths that need one complete value and want to reuse
-    /// caller-owned storage.
+    /// The method validates the output index and the combined reset, value,
+    /// and flush capacity before calling the unchecked codec hooks. It is a
+    /// convenience wrapper for code paths that need one complete value and
+    /// want to reuse caller-owned storage.
     ///
     /// # Parameters
     ///
@@ -89,7 +90,7 @@ pub trait CodecValueExt: Codec {
     ///
     /// # Returns
     ///
-    /// Returns the total number of reset and value units written.
+    /// Returns the total number of reset, value, and flush units written.
     ///
     /// # Errors
     ///
@@ -100,7 +101,7 @@ pub trait CodecValueExt: Codec {
     /// # Panics
     ///
     /// Panics when the codec writes or reports more units than its declared
-    /// reset or value bound.
+    /// reset, value, or flush bound.
     fn encode_value_with_reset(
         &mut self,
         value: &Self::Value,
@@ -116,6 +117,9 @@ pub trait CodecValueExt: Codec {
         let value_units = self.encode_len(value).get();
         let required = reset_units
             .checked_add(value_units)
+            .and_then(|units| {
+                units.checked_add(Self::MAX_ENCODE_FLUSH_UNITS)
+            })
             .ok_or_else(TranscodeError::output_length_overflow)?;
         TranscodeError::ensure_output_capacity(
             output.len(),
@@ -125,7 +129,7 @@ pub trait CodecValueExt: Codec {
 
         let reset_written = unsafe {
             // SAFETY: The capacity check above reserves the combined
-            // reset-plus-value output bound at `output_index`.
+            // reset, value, and flush output bound at `output_index`.
             self.encode_reset(output, output_index)
         }
         .map_err(|error| {
@@ -149,7 +153,21 @@ pub trait CodecValueExt: Codec {
             value_written == value_units,
             "Codec::encode wrote a different length than Codec::encode_len",
         );
-        Ok(reset_written + value_written)
+
+        let flush_index = output_index + reset_written + value_written;
+        let flush_written = unsafe {
+            // SAFETY: The combined capacity check reserves the codec-declared
+            // flush bound after the reset and exact value output.
+            self.encode_flush(output, flush_index)
+        }
+        .map_err(|error| {
+            TranscodeError::domain(CodecEncodeError::encode_flush(error))
+        })?;
+        assert!(
+            flush_written <= Self::MAX_ENCODE_FLUSH_UNITS,
+            "Codec::encode_flush wrote beyond its flush bound",
+        );
+        Ok(reset_written + value_written + flush_written)
     }
 
     /// Decodes one value and flushes decode-side state into caller storage.

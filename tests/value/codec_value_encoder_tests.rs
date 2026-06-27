@@ -389,6 +389,8 @@ impl Codec for StatefulLifecycleCodec {
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
+    const MAX_ENCODE_FLUSH_UNITS: usize = 1;
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -420,10 +422,20 @@ impl Codec for StatefulLifecycleCodec {
         self.encode_state = 1;
         Ok(1)
     }
+
+    unsafe fn encode_flush(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = self.encode_state as u8;
+        self.encode_state = 0;
+        Ok(1)
+    }
 }
 
 #[test]
-fn test_codec_value_encoder_emits_reset_output_before_value() {
+fn test_codec_value_encoder_runs_complete_encode_lifecycle() {
     let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(
         StatefulLifecycleCodec::default(),
     );
@@ -431,7 +443,7 @@ fn test_codec_value_encoder_emits_reset_output_before_value() {
     let output = ValueEncoder::<u8>::encode(&mut encoder, &41)
         .expect("encoding should be infallible");
 
-    assert_eq!(vec![0xfe, 42], output);
+    assert_eq!(vec![0xfe, 42, 2], output);
 }
 
 #[test]
@@ -445,8 +457,8 @@ fn test_codec_value_encoder_resets_stream_state_on_each_call() {
     let second = ValueEncoder::<u8>::encode(&mut encoder, &41)
         .expect("second encoding should be infallible");
 
-    assert_eq!(vec![0xfe, 42], first);
-    assert_eq!(vec![0xfe, 42], second);
+    assert_eq!(vec![0xfe, 42, 2], first);
+    assert_eq!(vec![0xfe, 42, 2], second);
 }
 
 #[test]

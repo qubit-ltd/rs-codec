@@ -20,9 +20,10 @@ use crate::{
 ///
 /// `CodecValueEncoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueEncoder`] contract. Each
-/// call emits stream-start output through [`Codec::encode_reset`], then encodes
-/// one value through [`Codec::encode`], and returns the owned output truncated
-/// to the units actually written.
+/// call emits stream-start output through [`Codec::encode_reset`], encodes one
+/// value through [`Codec::encode`], flushes encode-side state through
+/// [`Codec::encode_flush`], and returns the owned output truncated to the units
+/// actually written.
 ///
 /// # Type Parameters
 ///
@@ -64,9 +65,10 @@ where
     ///
     /// This method is the reusable-buffer counterpart of
     /// [`ValueEncoder::encode`]. It emits stream-start output through
-    /// [`Codec::encode_reset`], then encodes `input` through [`Codec::encode`],
-    /// appending only the units actually written. When encoding fails, the
-    /// vector length is restored to its original value.
+    /// [`Codec::encode_reset`], encodes `input` through [`Codec::encode`], and
+    /// flushes encode-side state through [`Codec::encode_flush`], appending
+    /// only the units actually written. When encoding fails, the vector length
+    /// is restored to its original value.
     ///
     /// # Parameters
     ///
@@ -79,14 +81,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns the wrapped codec's encode error when reset output or `input`
-    /// cannot be represented. Returns a framework error when output length
-    /// arithmetic overflows.
+    /// Returns the wrapped codec's encode error when reset output, `input`, or
+    /// flush output cannot be represented. Returns a framework error when
+    /// output length arithmetic overflows.
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more reset output than
-    /// [`Codec::MAX_ENCODE_RESET_UNITS`] or a value width different from
+    /// Panics when the wrapped codec reports more reset or flush output than
+    /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
     pub fn encode_into(
         &mut self,
@@ -103,6 +105,7 @@ where
         }
         let units = C::MAX_ENCODE_RESET_UNITS
             .checked_add(self.codec.encode_len(input).get())
+            .and_then(|units| units.checked_add(C::MAX_ENCODE_FLUSH_UNITS))
             .ok_or_else(TranscodeError::output_length_overflow)?;
         let original_len = output.len();
         let target_len = original_len
@@ -142,17 +145,18 @@ where
     ///
     /// # Returns
     ///
-    /// Returns stream-start output followed by the units written for `input`.
+    /// Returns stream-start output followed by the units written for `input`
+    /// and any encode-flush output.
     ///
     /// # Errors
     ///
-    /// Returns the wrapped codec's encode error when reset output or `input`
-    /// cannot be represented.
+    /// Returns the wrapped codec's encode error when reset output, `input`, or
+    /// flush output cannot be represented.
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more reset output than
-    /// [`Codec::MAX_ENCODE_RESET_UNITS`] or a value width different from
+    /// Panics when the wrapped codec reports more reset or flush output than
+    /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
     fn encode(
         &mut self,
