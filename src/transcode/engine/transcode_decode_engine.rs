@@ -7,9 +7,10 @@
 // =============================================================================
 //! Reusable buffered decoder engine.
 
+use core::num::NonZeroUsize;
+
 use super::super::internal::{
     decode_state::DecodeState,
-    decode_step::DecodeStep,
     lifecycle::LifecycleGuard,
 };
 use crate::codec::assert_unit_bounds;
@@ -19,6 +20,8 @@ use crate::{
     CodecDecodeError,
     DecodeContext,
     DecodeFailure,
+    DecodeInvalidAction,
+    DecodeOutcome,
     TranscodeDecodeEngineError,
     TranscodeDecodeHooks,
     TranscodeError,
@@ -446,8 +449,22 @@ where
             if state.needs_output() {
                 return Ok(state.need_output_progress());
             }
-            let step = self.decode_step(state.input(), context)?;
-            if let Some(progress) = state.apply_decode_step(step) {
+            let output_index = state.output_cursor();
+            let output = state.output_mut();
+            let (outcome, _) = self
+                .decode_one(input, context, |value, _input_index| {
+                    // SAFETY: `needs_output()` returned false, so the output
+                    // cursor points at a writable slot.
+                    unsafe {
+                        qubit_io::UncheckedSlice::write(
+                            output,
+                            output_index,
+                            value,
+                        );
+                    }
+                })
+                .map_err(TranscodeError::domain)?;
+            if let Some(progress) = state.apply_decode_outcome(outcome) {
                 return Ok(progress);
             }
         }
@@ -553,31 +570,41 @@ where
         )
     }
 
-    /// Decodes one source value attempt into a normalized decode step.
+    /// Decodes one source value attempt and delivers emitted values.
     ///
     /// # Parameters
     ///
     /// - `input`: Complete input unit slice visible to the caller.
     /// - `context`: Decode context describing the current source and output
     ///   cursors.
+    /// - `consume`: Callback invoked exactly once when this attempt emits a
+    ///   logical value.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `R`: Value returned by the consumer when a decoded value is emitted.
+    /// - `F`: Consumer callback type.
     ///
     /// # Returns
     ///
-    /// Returns one internal decode step, including successful decode, policy
-    /// skip/emit, or variable-width need-input state.
+    /// Returns the decode outcome and the consumer result when a value was
+    /// emitted.
     ///
     /// # Errors
     ///
     /// Returns hook errors when the decode policy rejects the input.
-    pub(super) fn decode_step(
+    pub(crate) fn decode_one<R, F>(
         &mut self,
         input: &[C::Unit],
         context: DecodeContext,
-    ) -> Result<DecodeStep<C::Value>, TranscodeError<DecodeEngineErrorOf<C, H>>>
+        consume: F,
+    ) -> Result<(DecodeOutcome, Option<R>), DecodeEngineErrorOf<C, H>>
+    where
+        F: FnOnce(C::Value, usize) -> R,
     {
         debug_assert!(
             context.available() >= C::MIN_UNITS_PER_VALUE.get(),
-            "decode_step requires at least Codec::MIN_UNITS_PER_VALUE input units",
+            "decode_one requires at least Codec::MIN_UNITS_PER_VALUE input units",
         );
 
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
@@ -589,14 +616,18 @@ where
                     consumed.get() <= context.available(),
                     "Codec::decode consumed beyond available input",
                 );
-                Ok(DecodeStep::decoded(value, consumed, context.input_index()))
+                let consumed_value = consume(value, context.input_index());
+                Ok((
+                    DecodeOutcome::emitted(consumed, NonZeroUsize::MIN),
+                    Some(consumed_value),
+                ))
             }
             Err(DecodeFailure::Incomplete { required_total }) => {
                 assert!(
                     required_total.get() > context.available(),
                     "Codec::decode incomplete required_total must exceed available input",
                 );
-                Ok(DecodeStep::need_input(required_total, context.available()))
+                Ok((DecodeOutcome::need_input(required_total), None))
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {
                 let action = self
@@ -607,12 +638,54 @@ where
                         consumed,
                         context,
                     )
-                    .map_err(|error| {
-                        TranscodeError::domain(
-                            TranscodeDecodeEngineError::hook(error),
-                        )
-                    })?;
-                Ok(action.into_step(context.input_index(), context.available()))
+                    .map_err(TranscodeDecodeEngineError::hook)?;
+                Ok(Self::apply_invalid_decode_action(action, context, consume))
+            }
+        }
+    }
+
+    /// Applies a hook-selected invalid-decode action.
+    ///
+    /// # Parameters
+    ///
+    /// - `action`: Policy action selected by the decode hooks.
+    /// - `context`: Decode context for the failed input.
+    /// - `consume`: Callback invoked when the action emits a replacement value.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `R`: Value returned by the consumer when a replacement is emitted.
+    /// - `F`: Consumer callback type.
+    ///
+    /// # Returns
+    ///
+    /// Returns the normalized decode outcome and optional consumer result.
+    fn apply_invalid_decode_action<R, F>(
+        action: DecodeInvalidAction<C::Value>,
+        context: DecodeContext,
+        consume: F,
+    ) -> (DecodeOutcome, Option<R>)
+    where
+        F: FnOnce(C::Value, usize) -> R,
+    {
+        match action {
+            DecodeInvalidAction::Skip { consumed } => {
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(
+                    consumed,
+                    context.available(),
+                );
+                (DecodeOutcome::skipped(read), None)
+            }
+            DecodeInvalidAction::Emit { value, consumed } => {
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(
+                    consumed,
+                    context.available(),
+                );
+                let consumed_value = consume(value, context.input_index());
+                (
+                    DecodeOutcome::emitted(read, NonZeroUsize::MIN),
+                    Some(consumed_value),
+                )
             }
         }
     }

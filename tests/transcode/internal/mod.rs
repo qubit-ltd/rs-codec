@@ -9,7 +9,6 @@
 mod convert_error_of_tests;
 mod convert_state_tests;
 mod decode_state_tests;
-mod decode_step_tests;
 mod encode_state_tests;
 mod pending_value_slot_tests;
 mod pending_value_tests;

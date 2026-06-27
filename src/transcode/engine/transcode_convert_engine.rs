@@ -457,6 +457,70 @@ where
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
+    /// Clears retained conversion state, runs before-reset hooks, and emits
+    /// stream-start encode output.
+    ///
+    /// Reset clears any retained pending value, drains decode-side reset
+    /// values through the target encoder, then emits encode-side reset units.
+    /// The caller must provide enough output capacity for
+    /// [`Self::max_reset_output_len`].
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Complete output unit slice visible to the converter.
+    /// - `output_index`: Absolute output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of target units written while resetting stream state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error if reset validation or target reset output
+    /// emission fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds when decode-reset values cannot be encoded
+    /// within the capacity reserved by [`Self::max_reset_output_len`].
+    pub fn reset(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, ConvertErrorOf<D, E, DH, EH>>
+    where
+        D::Value: Default,
+    {
+        self.lifecycle.on_reset();
+        let required = self.max_reset_output_len()?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
+
+        self.pending.clear();
+
+        // Source-side reset may emit stream-start values (such as a BOM) that
+        // must be piped through the target encoder before any encoder-owned
+        // reset output. `max_reset_output_len` already reserves space for both
+        // halves of the pipeline, so encode_pending should never report
+        // `NeedOutput` here.
+        let empty_input: &[D::Unit] = &[];
+        let mut state = ConvertState::new(empty_input, 0, output, output_index);
+        self.drain_decoder_reset(&mut state)?;
+
+        let output_cursor = state.output_cursor();
+        let encoder_written = self
+            .encode_engine
+            .reset(state.output_mut(), output_cursor)
+            .map_err(|error| {
+                error.map_domain(TranscodeConvertEngineError::encode)
+            })?;
+        state.advance_output(encoder_written);
+        Ok(state.written())
+    }
+
     /// Converts source units into target units.
     ///
     /// The engine drains any retained pending value before consuming new input.
@@ -600,70 +664,6 @@ where
         Ok(state.written())
     }
 
-    /// Clears retained conversion state, runs before-reset hooks, and emits
-    /// stream-start encode output.
-    ///
-    /// Reset clears any retained pending value, drains decode-side reset
-    /// values through the target encoder, then emits encode-side reset units.
-    /// The caller must provide enough output capacity for
-    /// [`Self::max_reset_output_len`].
-    ///
-    /// # Parameters
-    ///
-    /// - `output`: Complete output unit slice visible to the converter.
-    /// - `output_index`: Absolute output index where writing starts.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of target units written while resetting stream state.
-    ///
-    /// # Errors
-    ///
-    /// Returns a converter error if reset validation or target reset output
-    /// emission fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics in debug builds when decode-reset values cannot be encoded
-    /// within the capacity reserved by [`Self::max_reset_output_len`].
-    pub fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E, DH, EH>>
-    where
-        D::Value: Default,
-    {
-        self.lifecycle.on_reset();
-        let required = self.max_reset_output_len()?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
-
-        self.pending.clear();
-
-        // Source-side reset may emit stream-start values (such as a BOM) that
-        // must be piped through the target encoder before any encoder-owned
-        // reset output. `max_reset_output_len` already reserves space for both
-        // halves of the pipeline, so encode_pending should never report
-        // `NeedOutput` here.
-        let empty_input: &[D::Unit] = &[];
-        let mut state = ConvertState::new(empty_input, 0, output, output_index);
-        self.drain_decoder_reset(&mut state)?;
-
-        let output_cursor = state.output_cursor();
-        let encoder_written = self
-            .encode_engine
-            .reset(state.output_mut(), output_cursor)
-            .map_err(|error| {
-                error.map_domain(TranscodeConvertEngineError::encode)
-            })?;
-        state.advance_output(encoder_written);
-        Ok(state.written())
-    }
-
     /// Runs a complete one-shot `reset -> transcode -> finish` conversion.
     ///
     /// The complete input is supplied as `input`, and output starts at index
@@ -781,15 +781,28 @@ where
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
     ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E, DH, EH>> {
-        let step = self
+        let (outcome, pending) = self
             .decode_engine
-            .decode_step(state.input(), state.decode_context())
+            .decode_one(
+                state.input(),
+                state.decode_context(),
+                PendingValue::new,
+            )
             .map_err(|error| {
-                error.map_domain(TranscodeConvertEngineError::decode)
+                TranscodeError::domain(TranscodeConvertEngineError::decode(
+                    error,
+                ))
             })?;
-        state.apply_decode_step(step, |pending, state| {
-            self.encode_pending(pending, state)
-        })
+        if let Some(pending) = pending {
+            self.pending.put(pending);
+        }
+        if let Some(progress) = state.apply_decode_outcome(outcome) {
+            return Ok(Some(progress));
+        }
+        let Some(pending) = self.pending.take() else {
+            return Ok(None);
+        };
+        self.encode_pending(pending, state)
     }
 
     /// Returns the output bound for the retained pending value.

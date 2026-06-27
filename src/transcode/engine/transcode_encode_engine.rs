@@ -257,7 +257,6 @@ where
     ///
     /// Returns an engine-domain error when the codec fails or when the hook
     /// rejects an unencodable value.
-    #[inline(always)]
     pub(crate) fn encode_one(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
@@ -331,6 +330,7 @@ where
     /// # Errors
     ///
     /// Returns a codec error when replacement encoding fails.
+    #[inline(always)]
     fn apply_unencodable_action(
         &mut self,
         action: EncodeUnencodableAction<C::Value>,

@@ -117,9 +117,7 @@ pub trait CodecValueExt: Codec {
         let value_units = self.encode_len(value).get();
         let required = reset_units
             .checked_add(value_units)
-            .and_then(|units| {
-                units.checked_add(Self::MAX_ENCODE_FLUSH_UNITS)
-            })
+            .and_then(|units| units.checked_add(Self::MAX_ENCODE_FLUSH_UNITS))
             .ok_or_else(TranscodeError::output_length_overflow)?;
         TranscodeError::ensure_output_capacity(
             output.len(),

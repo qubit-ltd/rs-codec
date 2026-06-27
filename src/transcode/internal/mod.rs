@@ -10,7 +10,6 @@
 pub(in crate::transcode) mod convert_error_of;
 pub(in crate::transcode) mod convert_state;
 pub(in crate::transcode) mod decode_state;
-pub(in crate::transcode) mod decode_step;
 pub(in crate::transcode) mod encode_state;
 pub(in crate::transcode) mod lifecycle;
 pub(in crate::transcode) mod pending_value;

@@ -337,6 +337,53 @@ impl Codec for FallibleCodec {
     }
 }
 
+#[derive(Default)]
+struct EncodeFlushFallibleCodec;
+
+impl Codec for EncodeFlushFallibleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = &'static str;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_ENCODE_FLUSH_UNITS: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(core::num::NonZeroUsize::MIN)
+    }
+
+    unsafe fn encode_flush(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Err("encode flush failure")
+    }
+}
+
 #[test]
 fn test_codec_value_ext_is_available_for_every_codec() {
     fn assert_value_ext<T: CodecValueExt>() {}
@@ -478,6 +525,23 @@ fn test_codec_value_ext_encode_value_with_reset_wraps_encode_error() {
         TranscodeError::Domain(CodecEncodeError::Encode {
             source: "encode failure",
             input_index: 0,
+        }),
+        error,
+    );
+}
+
+#[test]
+fn test_codec_value_ext_encode_value_with_reset_wraps_encode_flush_error() {
+    let mut codec = EncodeFlushFallibleCodec;
+    let mut output = [0_u8; 2];
+
+    let error = codec
+        .encode_value_with_reset(&41, &mut output, 0)
+        .expect_err("codec encode flush errors should be wrapped");
+
+    assert_eq!(
+        TranscodeError::Domain(CodecEncodeError::EncodeFlush {
+            source: "encode flush failure",
         }),
         error,
     );

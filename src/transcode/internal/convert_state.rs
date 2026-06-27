@@ -12,15 +12,12 @@ use core::num::NonZeroUsize;
 use super::super::{
     engine::{
         DecodeContext,
+        DecodeOutcome,
         EncodeOutcome,
     },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
-use super::{
-    decode_step::DecodeStep,
-    pending_value::PendingValue,
-};
 
 /// Mutable state for one buffered conversion call.
 ///
@@ -254,52 +251,38 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         self.state.need_output_progress(required, available)
     }
 
-    /// Applies one normalized decode step to this conversion state.
+    /// Applies one decode outcome to this conversion state.
     ///
     /// # Parameters
     ///
-    /// - `step`: Decoded step produced by the decode engine.
-    /// - `encode`: Callback to encode a decoded value into the target side.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `Value`: Decoded logical value type.
-    /// - `Error`: Error type produced by the encode callback.
-    /// - `F`: Callback type that consumes one decoded value.
+    /// - `outcome`: Decode outcome produced by the decode engine.
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Some(progress))` when conversion must stop and `Ok(None)`
-    /// when it can continue.
+    /// Returns stop progress for missing input, otherwise `None`.
     #[inline]
-    pub(crate) fn apply_decode_step<Value, Error, F>(
+    #[must_use]
+    pub(crate) fn apply_decode_outcome(
         &mut self,
-        step: DecodeStep<Value>,
-        mut encode: F,
-    ) -> Result<Option<TranscodeProgress>, Error>
-    where
-        F: FnMut(
-            PendingValue<Value>,
-            &mut ConvertState<'_, Input, Output>,
-        ) -> Result<Option<TranscodeProgress>, Error>,
-    {
-        match step {
-            DecodeStep::Decoded {
-                value,
-                consumed,
-                input_index,
-            } => {
-                self.advance_input(consumed.get());
-                encode(PendingValue::new(value, input_index), self)
+        outcome: DecodeOutcome,
+    ) -> Option<TranscodeProgress> {
+        match outcome {
+            DecodeOutcome::Emitted { read, emitted } => {
+                assert_eq!(
+                    emitted,
+                    NonZeroUsize::MIN,
+                    "converter decode outcome can carry only one pending value",
+                );
+                self.advance_input(read.get());
+                None
             }
-            DecodeStep::Skipped { consumed } => {
-                self.advance_input(consumed.get());
-                Ok(None)
+            DecodeOutcome::Skipped { read } => {
+                self.advance_input(read.get());
+                None
             }
-            DecodeStep::NeedInput {
-                required,
-                available,
-            } => Ok(Some(self.need_input_progress(required, available))),
+            DecodeOutcome::NeedInput { required } => {
+                Some(self.need_input_progress(required, self.available_input()))
+            }
         }
     }
 

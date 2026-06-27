@@ -30,6 +30,7 @@ pub use capacity_error::CapacityError;
 pub use engine::{
     DecodeContext,
     DecodeInvalidAction,
+    DecodeOutcome,
     EncodeContext,
     EncodeOutcome,
     EncodeUnencodableAction,

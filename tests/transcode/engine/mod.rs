@@ -8,6 +8,7 @@
 
 mod decode_context_tests;
 mod decode_invalid_action_tests;
+mod decode_outcome_tests;
 mod encode_context_tests;
 mod encode_outcome_tests;
 mod transcode_convert_engine_error_tests;

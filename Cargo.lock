@@ -21,9 +21,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "944af82492780315b88e52e7bba28abe0e714bed11e1f8872f74916bc08c5569"
+checksum = "12405ba65a060a4b9dba92d530f034fa23452a3d2438cc8592f37db5b12a3ce5"
 
 [[package]]
 name = "quote"

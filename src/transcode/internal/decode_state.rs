@@ -10,10 +10,12 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::DecodeContext,
+    engine::{
+        DecodeContext,
+        DecodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
-use super::decode_step::DecodeStep;
 use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered decode call.
@@ -53,14 +55,24 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         }
     }
 
-    /// Returns the complete input slice.
+    /// Returns the complete output slice mutably.
     ///
     /// # Returns
     ///
-    /// Returns the full input slice visible to this decode call.
+    /// Returns the full mutable output slice visible to this decode call.
     #[inline(always)]
-    pub(in crate::transcode) fn input(&self) -> &[Unit] {
-        self.state.input()
+    pub(in crate::transcode) fn output_mut(&mut self) -> &mut [Value] {
+        self.state.output_mut()
+    }
+
+    /// Returns the current output cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns the absolute output cursor for the next decoded value.
+    #[inline(always)]
+    pub(in crate::transcode) fn output_cursor(&self) -> usize {
+        self.state.output_cursor()
     }
 
     /// Returns whether there is still input to decode.
@@ -105,7 +117,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         )
     }
 
-    /// Advances the input cursor without emitting output.
+    /// Advances the input cursor without emitted output.
     ///
     /// # Parameters
     ///
@@ -115,50 +127,42 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns unit `()`.
     #[inline(always)]
-    pub(in crate::transcode) fn skip(&mut self, consumed: NonZeroUsize) {
-        let consumed = consumed.get();
+    pub(in crate::transcode) fn skip(&mut self, read: NonZeroUsize) {
+        let read = read.get();
         assert!(
-            consumed <= self.available(),
-            "decode step consumed beyond available input",
+            read <= self.available(),
+            "DecodeOutcome::Skipped read beyond available input",
         );
-        self.state.advance_input(consumed);
+        self.state.advance_input(read);
     }
 
-    /// Emits a decoded value and advances both cursors.
+    /// Accepts emitted output and advances both cursors.
     ///
     /// # Parameters
     ///
-    /// - `value`: Decoded value to write to output.
-    /// - `consumed`: Input units consumed by this decode step.
+    /// - `read`: Input units consumed by this decode outcome.
+    /// - `emitted`: Logical output values emitted by this decode outcome.
     ///
     /// # Returns
     ///
     /// Returns unit `()`.
     #[inline(always)]
-    pub(in crate::transcode) fn emit(
+    pub(in crate::transcode) fn accept_emitted(
         &mut self,
-        value: Value,
-        consumed: NonZeroUsize,
+        read: NonZeroUsize,
+        emitted: NonZeroUsize,
     ) {
-        let consumed = consumed.get();
+        let read = read.get();
+        let emitted = emitted.get();
         assert!(
-            consumed <= self.available(),
-            "decode step consumed beyond available input",
+            read <= self.available(),
+            "DecodeOutcome::Emitted read beyond available input",
         );
         assert!(
-            !self.needs_output(),
-            "decode step emitted without output capacity",
+            emitted <= self.state.available_output(),
+            "DecodeOutcome::Emitted exceeded available output",
         );
-        // SAFETY: `needs_output()` returned false, so the output cursor points
-        // at a writable slot.
-        let output_cursor = self.state.output_cursor();
-        unsafe {
-            *qubit_io::UncheckedSlice::get_mut(
-                self.state.output_mut(),
-                output_cursor,
-            ) = value;
-        }
-        self.state.advance(consumed, 1);
+        self.state.advance(read, emitted);
     }
 
     /// Returns completed progress for the current cursors.
@@ -203,11 +207,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         self.state.need_input_progress(required, available)
     }
 
-    /// Applies one normalized decode step to this decode state.
+    /// Applies one decode outcome to this decode state.
     ///
     /// # Parameters
     ///
-    /// - `step`: Decoded step produced by the decode engine.
+    /// - `outcome`: Decode outcome produced by the decode engine.
     ///
     /// # Returns
     ///
@@ -215,25 +219,22 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// call.
     #[inline]
     #[must_use]
-    pub(in crate::transcode) fn apply_decode_step(
+    pub(in crate::transcode) fn apply_decode_outcome(
         &mut self,
-        step: DecodeStep<Value>,
+        outcome: DecodeOutcome,
     ) -> Option<TranscodeProgress> {
-        match step {
-            DecodeStep::Decoded {
-                value, consumed, ..
-            } => {
-                self.emit(value, consumed);
+        match outcome {
+            DecodeOutcome::Emitted { read, emitted } => {
+                self.accept_emitted(read, emitted);
                 None
             }
-            DecodeStep::Skipped { consumed } => {
-                self.skip(consumed);
+            DecodeOutcome::Skipped { read } => {
+                self.skip(read);
                 None
             }
-            DecodeStep::NeedInput {
-                required,
-                available,
-            } => Some(self.need_input_progress_with(required, available)),
+            DecodeOutcome::NeedInput { required } => {
+                Some(self.need_input_progress_with(required, self.available()))
+            }
         }
     }
 }

@@ -118,6 +118,7 @@ pub use transcode::{
     CodecTranscodeEncoder,
     DecodeContext,
     DecodeInvalidAction,
+    DecodeOutcome,
     EncodeContext,
     EncodeOutcome,
     EncodeUnencodableAction,

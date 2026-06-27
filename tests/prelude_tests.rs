@@ -20,6 +20,7 @@ use qubit_codec::{
     CodecValueDecoder,
     CodecValueEncoder,
     CodecValueExt,
+    DecodeOutcome,
     EncodeContext,
     EncodeOutcome,
     TranscodeConverter,
@@ -191,6 +192,13 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(0, context.input_index());
     assert_eq!(1, context.available_output());
 
+    assert_eq!(
+        DecodeOutcome::emitted(qubit_io::nz!(3), qubit_io::nz!(1)),
+        DecodeOutcome::Emitted {
+            read: qubit_io::nz!(3),
+            emitted: qubit_io::nz!(1),
+        },
+    );
     assert_eq!(
         EncodeOutcome::consumed(3),
         EncodeOutcome::Consumed { written: 3 }
