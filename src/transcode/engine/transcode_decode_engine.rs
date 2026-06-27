@@ -7,8 +7,6 @@
 // =============================================================================
 //! Reusable buffered decoder engine.
 
-use core::num::NonZeroUsize;
-
 use super::super::internal::{
     decode_state::DecodeState,
     decode_step::DecodeStep,
@@ -544,7 +542,7 @@ where
     /// Returns framework errors for insufficient output, capacity overflow, or
     /// an incomplete EOF tail, and domain errors from reset, decode, or
     /// finish.
-    #[inline]
+    #[inline(always)]
     pub fn transcode_all_into(
         &mut self,
         input: &[C::Unit],
@@ -571,7 +569,6 @@ where
     /// # Errors
     ///
     /// Returns hook errors when the decode policy rejects the input.
-    #[inline(always)]
     pub(super) fn decode_step(
         &mut self,
         input: &[C::Unit],
@@ -586,31 +583,6 @@ where
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
         // units available from `context.input_index()`.
         let result = unsafe { self.codec.decode(input, context.input_index()) };
-        self.handle_decode_result(context, result)
-    }
-
-    /// Handles one low-level decode result and returns a normalized decode
-    /// step.
-    ///
-    /// # Parameters
-    ///
-    /// - `context`: Decode context used by policy hooks.
-    /// - `result`: Low-level codec decode result.
-    ///
-    /// # Returns
-    ///
-    /// Returns the normalized decode step selected by codec success or policy
-    /// hooks.
-    ///
-    /// # Errors
-    ///
-    /// Returns hook errors when the policy rejects the input.
-    fn handle_decode_result(
-        &mut self,
-        context: DecodeContext,
-        result: Result<(C::Value, NonZeroUsize), DecodeFailure<C::DecodeError>>,
-    ) -> Result<DecodeStep<C::Value>, TranscodeError<DecodeEngineErrorOf<C, H>>>
-    {
         match result {
             Ok((value, consumed)) => {
                 assert!(

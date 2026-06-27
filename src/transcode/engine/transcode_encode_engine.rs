@@ -9,11 +9,11 @@
 
 use core::num::NonZeroUsize;
 
-use super::encode_context::EncodeContext;
 use super::super::internal::{
     encode_state::EncodeState,
     lifecycle::LifecycleGuard,
 };
+use super::encode_context::EncodeContext;
 use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
