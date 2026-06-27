@@ -21,6 +21,7 @@ use super::capacity_error::CapacityError;
 ///
 /// - `E`: Domain error reported by the concrete transcoder.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum TranscodeError<E> {
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {len}")]

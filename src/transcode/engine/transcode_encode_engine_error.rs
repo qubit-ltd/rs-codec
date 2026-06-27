@@ -22,6 +22,7 @@ use crate::CodecEncodeError;
 /// - `C`: Codec encode error type.
 /// - `H`: Encode hook error type.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum TranscodeEncodeEngineError<C, H> {
     /// The wrapped codec failed during encode lifecycle work.
     #[error("{0}")]

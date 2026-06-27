@@ -9,7 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::internal::decode_step::DecodeStep;
+use super::super::internal::decode_step::DecodeStep;
 
 /// Action selected after a codec reports invalid encoded input.
 ///

@@ -9,7 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{
+use super::{
     decode_context::DecodeContext,
     decode_invalid_action::DecodeInvalidAction,
 };

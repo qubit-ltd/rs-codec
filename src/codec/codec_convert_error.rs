@@ -21,6 +21,7 @@ use super::{
 /// explicit while framework buffer failures remain in
 /// [`crate::TranscodeError`].
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum CodecConvertError<D, E> {
     /// Source-unit decoding failed.
     #[error("codec conversion decode error: {0}")]

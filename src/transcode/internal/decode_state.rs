@@ -10,7 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    decode_context::DecodeContext,
+    engine::DecodeContext,
     transcode_progress::TranscodeProgress,
 };
 use super::decode_step::DecodeStep;

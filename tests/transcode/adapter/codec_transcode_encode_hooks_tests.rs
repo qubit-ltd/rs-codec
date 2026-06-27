@@ -111,6 +111,43 @@ impl Codec for RejectOddCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct OverreportingEncodeCodec;
+
+impl Codec for OverreportingEncodeCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(qubit_io::nz!(2))
+    }
+}
+
 #[test]
 fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
     let mut encoder = CodecTranscodeEncoder::new(RejectOddCodec);
@@ -126,6 +163,18 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
         }),
         error,
     );
+}
+
+#[test]
+#[should_panic(
+    expected = "Codec::encode wrote a different length than Codec::encode_len"
+)]
+fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width()
+ {
+    let mut encoder = CodecTranscodeEncoder::new(OverreportingEncodeCodec);
+    let mut output = [0_u8; 1];
+
+    let _ = encoder.transcode(&[7], 0, &mut output, 0);
 }
 
 #[test]

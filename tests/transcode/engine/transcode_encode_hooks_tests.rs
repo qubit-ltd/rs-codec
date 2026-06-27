@@ -7,8 +7,7 @@
 // =============================================================================
 
 use qubit_codec::{
-    EncodeContext,
-    EncodeOutcome,
+    EncodeUnencodableAction,
     TranscodeEncodeHooks,
 };
 
@@ -69,19 +68,13 @@ struct DefaultOnlyHooks;
 impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
     type Error = UnitEncodeError;
 
-    fn encode_value(
+    fn handle_unencodable_encode(
         &mut self,
         _codec: &mut UnitCodec,
-        context: EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeOutcome, Self::Error> {
-        if context.available_output() < 1 {
-            return Ok(EncodeOutcome::NeedOutput {
-                required: core::num::NonZeroUsize::MIN,
-            });
-        }
-        let (value, _, output, output_index) = context.into_parts();
-        output[output_index] = *value;
-        Ok(EncodeOutcome::Consumed { written: 1 })
+        _value: &u8,
+        _input_index: usize,
+    ) -> Result<EncodeUnencodableAction<u8>, Self::Error> {
+        Err(UnitEncodeError)
     }
 }
 

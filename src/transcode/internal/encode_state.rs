@@ -11,11 +11,11 @@ use core::num::NonZeroUsize;
 
 use qubit_io::UncheckedSlice;
 
-use super::super::{
-    encode_context::EncodeContext,
-    encode_outcome::EncodeOutcome,
-    transcode_progress::TranscodeProgress,
+use super::super::engine::{
+    EncodeContext,
+    EncodeOutcome,
 };
+use super::super::transcode_progress::TranscodeProgress;
 use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered encode call.
@@ -149,7 +149,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// # Parameters
     ///
-    /// - `outcome`: Encode outcome produced by the encode hooks.
+    /// - `outcome`: Encode outcome produced by the encode engine.
     ///
     /// # Returns
     ///

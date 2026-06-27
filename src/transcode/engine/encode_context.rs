@@ -9,9 +9,9 @@
 
 /// Context for one encode attempt inside a buffered encoder engine.
 ///
-/// The context carries the current input value and output cursor. The hook
-/// decides whether the value can be consumed with the visible output capacity
-/// and reports that decision through [`crate::EncodeOutcome`].
+/// The context carries the current input value and output cursor used by the
+/// encode engine while producing one [`crate::EncodeOutcome`]. It is public so
+/// lower-level engine helpers can share the same cursor representation.
 ///
 /// # Type Parameters
 ///

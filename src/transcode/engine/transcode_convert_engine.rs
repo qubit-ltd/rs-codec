@@ -78,8 +78,7 @@ use crate::{
 ///     Codec,
 ///     DecodeContext,
 ///     DecodeFailure,
-///     EncodeContext,
-///     EncodeOutcome,
+///     EncodeUnencodableAction,
 ///     TranscodeConvertEngine,
 ///     TranscodeDecodeHooks,
 ///     TranscodeEncodeHooks,
@@ -169,20 +168,13 @@ use crate::{
 /// impl TranscodeEncodeHooks<TargetCodec> for StrictEncodeHooks {
 ///     type Error = Infallible;
 ///
-///     fn encode_value(
+///     fn handle_unencodable_encode(
 ///         &mut self,
-///         codec: &mut TargetCodec,
-///         context: EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeOutcome, Self::Error> {
-///         let required = TargetCodec::MAX_UNITS_PER_VALUE;
-///         if context.available_output() < required.get() {
-///             return Ok(EncodeOutcome::need_output(required));
-///         }
-///         let (value, _, output, output_index) = context.into_parts();
-///         let written = unsafe { codec.encode(value, output, output_index) }
-///             .map(NonZeroUsize::get)
-///             .unwrap();
-///         Ok(EncodeOutcome::consumed(written))
+///         _codec: &mut TargetCodec,
+///         _value: &u8,
+///         _input_index: usize,
+///     ) -> Result<EncodeUnencodableAction<u8>, Self::Error> {
+///         unreachable!("TargetCodec accepts every u8")
 ///     }
 /// }
 ///
@@ -938,7 +930,7 @@ where
         let outcome =
             self.encode_engine.encode_one(context).map_err(|error| {
                 TranscodeError::domain(TranscodeConvertEngineError::encode(
-                    TranscodeEncodeEngineError::hook(error),
+                    error,
                 ))
             })?;
         let progress = state.apply_encode_outcome(outcome);

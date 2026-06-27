@@ -17,6 +17,7 @@ use thiserror::Error;
 /// domain. Buffer index and capacity failures are represented by
 /// [`crate::TranscodeError`].
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum CodecEncodeError<E> {
     /// The wrapped codec reported an encode error.
     #[error("codec encode error at input index {input_index}: {source}")]

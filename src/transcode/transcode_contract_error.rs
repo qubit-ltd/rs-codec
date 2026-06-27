@@ -14,6 +14,7 @@ use thiserror::Error;
 /// [`crate::TranscodeProgress::validate`] before trusting progress counters for
 /// unchecked buffer cursor movement.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum TranscodeContractError {
     /// The transcoder consumed more input units than the caller supplied.
     #[error(

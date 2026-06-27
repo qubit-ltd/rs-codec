@@ -17,6 +17,7 @@ use thiserror::Error;
 /// trailing units in exact-value decodes. Buffer index and capacity failures
 /// are represented by [`crate::TranscodeError`].
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum CodecDecodeError<E> {
     /// The wrapped codec reported a decode error.
     #[error("codec decode error at input index {input_index}: {source}")]

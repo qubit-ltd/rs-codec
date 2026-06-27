@@ -7,7 +7,9 @@
 // =============================================================================
 //! Reusable buffered encoder engine.
 
-use super::super::encode_context::EncodeContext;
+use core::num::NonZeroUsize;
+
+use super::encode_context::EncodeContext;
 use super::super::internal::{
     encode_state::EncodeState,
     lifecycle::LifecycleGuard,
@@ -18,6 +20,7 @@ use crate::{
     Codec,
     CodecEncodeError,
     EncodeOutcome,
+    EncodeUnencodableAction,
     TranscodeEncodeEngineError,
     TranscodeEncodeHooks,
     TranscodeError,
@@ -38,11 +41,14 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 /// reporting.
 ///
 /// Use this type to build a streaming encoder over a one-value [`Codec`]. The
-/// engine does not allocate output. It repeatedly asks hooks to process one
-/// input value at the current output cursor. If the hook reports insufficient
-/// output, the engine returns [`crate::TranscodeStatus::NeedOutput`] without
-/// consuming that value; the caller can provide a larger or fresh output buffer
-/// and resume with the returned input index.
+/// engine does not allocate output. It encodes values accepted by
+/// [`Codec::can_encode_value`] directly through the codec. When a value is
+/// outside the codec's encodable domain, the engine asks hooks whether to
+/// reject, skip, or replace it. If the current output buffer is too small for
+/// the selected value, the engine returns
+/// [`crate::TranscodeStatus::NeedOutput`] without consuming that input; the
+/// caller can provide a larger or fresh output buffer and resume with the
+/// returned input index.
 ///
 /// For the common strict policy that simply wraps codec errors, use
 /// [`crate::CodecTranscodeEncoder`]. Use `TranscodeEncodeEngine` directly when
@@ -62,8 +68,7 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 ///     Codec,
 ///     DecodeFailure,
 ///     CodecEncodeError,
-///     EncodeContext,
-///     EncodeOutcome,
+///     EncodeUnencodableAction,
 ///     TranscodeStatus,
 /// };
 ///
@@ -103,20 +108,13 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 /// impl TranscodeEncodeHooks<ByteCodec> for StrictHooks {
 ///     type Error = CodecEncodeError<Infallible>;
 ///
-///     fn encode_value(
+///     fn handle_unencodable_encode(
 ///         &mut self,
-///         codec: &mut ByteCodec,
-///         context: EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeOutcome, Self::Error> {
-///         let required = ByteCodec::MAX_UNITS_PER_VALUE;
-///         if context.available_output() < required.get() {
-///             return Ok(EncodeOutcome::need_output(required));
-///         }
-///         let (value, input_index, output, output_index) = context.into_parts();
-///         let written = unsafe { codec.encode(value, output, output_index) }
-///             .map(NonZeroUsize::get)
-///             .map_err(|error| CodecEncodeError::encode(error, input_index))?;
-///         Ok(EncodeOutcome::consumed(written))
+///         _codec: &mut ByteCodec,
+///         _value: &u8,
+///         _input_index: usize,
+///     ) -> Result<EncodeUnencodableAction<u8>, Self::Error> {
+///         unreachable!("ByteCodec accepts every u8")
 ///     }
 /// }
 ///
@@ -242,7 +240,7 @@ where
         (codec, hooks)
     }
 
-    /// Encodes one value through the hook and codec.
+    /// Encodes one value through the codec and unencodable-value hooks.
     ///
     /// This is the single entry point for `TranscodeConvertEngine` to drive
     /// the encode side without accessing `codec` and `hooks` directly.
@@ -257,13 +255,159 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `H::Error` when the hook rejects or cannot encode the value.
+    /// Returns an engine-domain error when the codec fails or when the hook
+    /// rejects an unencodable value.
     #[inline(always)]
     pub(crate) fn encode_one(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, H::Error> {
-        self.hooks.encode_value(&mut self.codec, context)
+    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
+        if self.codec.can_encode_value(context.input_value()) {
+            return self.encode_encodable_value(context);
+        }
+        let input_index = context.input_index();
+        let action = self
+            .hooks
+            .handle_unencodable_encode(
+                &mut self.codec,
+                context.input_value(),
+                input_index,
+            )
+            .map_err(TranscodeEncodeEngineError::hook)?;
+        self.apply_unencodable_action(action, context)
+    }
+
+    /// Encodes an encodable input value.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Encode context for the current value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the current value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when encoding fails.
+    fn encode_encodable_value(
+        &mut self,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
+        let required =
+            Self::encoded_value_len(&self.codec, context.input_value());
+        if context.available_output() < required.get() {
+            return Ok(EncodeOutcome::need_output(required));
+        }
+        let (value, input_index, output, output_index) = context.into_parts();
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the exact value width.
+            self.codec.encode(value, output, output_index)
+        }
+        .map_err(|error| {
+            TranscodeEncodeEngineError::codec(CodecEncodeError::encode(
+                error,
+                input_index,
+            ))
+        })?;
+        assert!(
+            written == required,
+            "Codec::encode wrote a different length than Codec::encode_len",
+        );
+        Ok(EncodeOutcome::consumed(written.get()))
+    }
+
+    /// Applies the hook-selected unencodable-value action.
+    ///
+    /// # Parameters
+    ///
+    /// - `action`: Policy action selected by the encode hooks.
+    /// - `context`: Encode context for the rejected input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the current input value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when replacement encoding fails.
+    fn apply_unencodable_action(
+        &mut self,
+        action: EncodeUnencodableAction<C::Value>,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
+        match action {
+            EncodeUnencodableAction::Skip => Ok(EncodeOutcome::consumed(0)),
+            EncodeUnencodableAction::Replace { value } => {
+                self.encode_replacement_value(value, context)
+            }
+        }
+    }
+
+    /// Encodes a hook-provided replacement value.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Replacement value selected by hooks.
+    /// - `context`: Encode context for the original unencodable input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the replacement.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when replacement encoding fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when hooks return a replacement value that the codec cannot
+    /// encode.
+    fn encode_replacement_value(
+        &mut self,
+        value: C::Value,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
+        assert!(
+            self.codec.can_encode_value(&value),
+            "EncodeUnencodableAction::Replace returned an unencodable replacement value",
+        );
+        let required = Self::encoded_value_len(&self.codec, &value);
+        if context.available_output() < required.get() {
+            return Ok(EncodeOutcome::need_output(required));
+        }
+        let (_, input_index, output, output_index) = context.into_parts();
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the exact replacement
+            // value width, and the hook contract requires encodability.
+            self.codec.encode(&value, output, output_index)
+        }
+        .map_err(|error| {
+            TranscodeEncodeEngineError::codec(CodecEncodeError::encode(
+                error,
+                input_index,
+            ))
+        })?;
+        assert!(
+            written == required,
+            "Codec::encode wrote a different length than Codec::encode_len",
+        );
+        Ok(EncodeOutcome::consumed(written.get()))
+    }
+
+    /// Returns the encoded length for `value`.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec used for variable-width length queries.
+    /// - `value`: Encodable value whose output width is requested.
+    ///
+    /// # Returns
+    ///
+    /// Returns the exact encoded width for `value`.
+    #[inline(always)]
+    fn encoded_value_len(codec: &C, value: &C::Value) -> NonZeroUsize {
+        codec.encode_len(value)
     }
 
     /// Gets a conservative upper bound for output units needed for
@@ -443,14 +587,8 @@ where
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
             let context = unsafe { state.context_unchecked() };
-            let outcome = self
-                .hooks
-                .encode_value(&mut self.codec, context)
-                .map_err(|error| {
-                    TranscodeError::domain(TranscodeEncodeEngineError::hook(
-                        error,
-                    ))
-                })?;
+            let outcome =
+                self.encode_one(context).map_err(TranscodeError::domain)?;
             if let Some(progress) = state.apply_encode_outcome(outcome) {
                 return Ok(progress);
             }

@@ -22,9 +22,9 @@ This crate provides:
   `CodecTranscodeEncoder`,
   `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
-- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, `EncodeOutcome`, and
-  `EncodeContext` for reusing the common buffered encoding loop in policy-aware
-  downstream encoders.
+- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, and
+  `EncodeUnencodableAction` for reusing the common buffered encoding loop in
+  policy-aware downstream encoders.
 - `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
@@ -92,12 +92,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`TranscodeEncodeEngine<C, H>`**: reusable engine that owns a
   codec plus policy hooks and runs the common buffered encoding loop.
 - **`TranscodeEncodeHooks<C>`**: policy hook trait used by
-  codec-backed encoders that need custom transcode/finalization behavior while
-  sharing the common loop.
-- **`EncodeOutcome`**: outcome returned by encode hooks for one value:
-  consumed with a written count, or not consumed because more output is needed.
-- **`EncodeContext<'a, Value, Unit>`**: input value, input index, output slice,
-  and cursor passed to encode hooks.
+  codec-backed encoders that need unencodable-value, reset, or finalization
+  policy while sharing the common loop.
+- **`EncodeUnencodableAction<Value>`**: action returned by encode hooks for
+  unencodable values: skip the value or encode a replacement.
+- **`EncodeOutcome` / `EncodeContext<'a, Value, Unit>`**: low-level engine
+  plumbing for one buffered encode attempt.
 - **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a
   strict `TranscodeDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
   tails in the caller's input buffer and wraps codec-reported decode errors.
@@ -292,10 +292,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeEncodeHooks<C>` | Hook contract for encoding one value, preparing for reset, and finalizing encoded output |
+| `TranscodeEncodeHooks<C>` | Hook contract for unencodable-value policy, preparing for reset, and finalizing encoded output |
 | `TranscodeEncodeEngineError<C, H>` | Separates codec lifecycle failures from encode-hook policy failures |
-| `EncodeOutcome` | Per-value hook outcome: consumed with written output, or needs more output without consuming |
-| `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor passed to encode hooks |
+| `EncodeUnencodableAction<Value>` | Policy action returned for values outside the codec's encodable domain |
+| `EncodeOutcome` | Per-value engine outcome: consumed with written output, or needs more output without consuming |
+| `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor used by encode engine helpers |
 
 ### Decoder Hooks And Engines
 

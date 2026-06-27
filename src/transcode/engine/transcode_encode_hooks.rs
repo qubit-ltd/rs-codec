@@ -7,36 +7,34 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::super::encode_context::EncodeContext;
+use super::encode_unencodable_action::EncodeUnencodableAction;
 use crate::{
     CapacityError,
     Codec,
-    EncodeOutcome,
 };
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
 /// Hooks own policy state, such as replacement or ignore behavior, but not the
-/// codec or engine cursor state. The engine passes the codec into hook methods
-/// when policy code needs codec metadata or one-value encode operations.
+/// codec or engine cursor state. The engine owns the normal one-value encode
+/// operation and calls hooks only when policy decisions are needed.
 ///
 /// Implement this trait when a buffered encoder needs policy decisions around
 /// individual values while reusing the common engine loop. Examples include
-/// rejecting unsupported values with adapter-level context, consuming values
-/// without writing output, writing replacement units, resetting hook-owned
-/// state in [`reset_hooks`](Self::reset_hooks), or emitting final state in
-/// [`finish_hooks`](Self::finish_hooks).
+/// rejecting unsupported values with adapter-level context, skipping
+/// unsupported values, replacing them with encodable values, resetting
+/// hook-owned state in [`reset_hooks`](Self::reset_hooks), or emitting final
+/// state in [`finish_hooks`](Self::finish_hooks).
 ///
-/// The engine calls [`encode_value`](Self::encode_value) for the current input
-/// value. The hook either consumes that value and reports written output units,
-/// or returns [`EncodeOutcome::NeedOutput`] without consuming it. This lets
-/// the engine stop with [`crate::TranscodeStatus::NeedOutput`] and resume later
-/// at the same input value.
+/// The engine calls
+/// [`handle_unencodable_encode`](Self::handle_unencodable_encode) only after
+/// [`Codec::can_encode_value`] returns `false` for the current input
+/// value. Encodable values are encoded directly by the engine with
+/// [`Codec::encode_len`] and [`Codec::encode`].
 ///
 /// # Example
 ///
-/// This hook writes each value with the wrapped codec and reports
-/// `NeedOutput` when the current output slice cannot fit the value.
+/// This hook reports unsupported values as adapter-level errors.
 ///
 /// ```rust
 /// use core::{
@@ -48,8 +46,7 @@ use crate::{
 ///     Codec,
 ///     DecodeFailure,
 ///     CodecEncodeError,
-///     EncodeContext,
-///     EncodeOutcome,
+///     EncodeUnencodableAction,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -91,20 +88,13 @@ use crate::{
 /// {
 ///     type Error = CodecEncodeError<C::EncodeError>;
 ///
-///     fn encode_value(
+///     fn handle_unencodable_encode(
 ///         &mut self,
-///         codec: &mut C,
-///         context: EncodeContext<'_, C::Value, C::Unit>,
-///     ) -> Result<EncodeOutcome, Self::Error> {
-///         let required = C::MAX_UNITS_PER_VALUE;
-///         if context.available_output() < required.get() {
-///             return Ok(EncodeOutcome::need_output(required));
-///         }
-///         let (value, input_index, output, output_index) = context.into_parts();
-///         let written = unsafe { codec.encode(value, output, output_index) }
-///             .map(NonZeroUsize::get)
-///             .map_err(|error| CodecEncodeError::encode(error, input_index))?;
-///         Ok(EncodeOutcome::consumed(written))
+///         _codec: &mut C,
+///         _value: &C::Value,
+///         input_index: usize,
+///     ) -> Result<EncodeUnencodableAction<C::Value>, Self::Error> {
+///         Err(CodecEncodeError::unencodable_value(input_index))
 ///     }
 /// }
 /// ```
@@ -126,15 +116,14 @@ where
 
     /// Returns the maximum output units needed for `input_len` values.
     ///
-    /// This bound covers only the streaming encode phase implemented by
-    /// [`encode_value`](Self::encode_value). It must not include codec reset
-    /// output, codec flush output, or hook finish output.
+    /// This bound covers only the streaming encode phase driven by
+    /// [`crate::TranscodeEncodeEngine::transcode`]. It must not include codec
+    /// reset output, codec flush output, or hook finish output.
     ///
     /// The default implementation multiplies `input_len` by
-    /// [`Codec::MAX_UNITS_PER_VALUE`]. Override it when hook policy can emit a
-    /// different number of units than direct codec encoding, for example when
-    /// invalid values are ignored, expanded to replacements, escaped, or when
-    /// hook-owned pending output can be drained during `transcode`.
+    /// [`Codec::MAX_UNITS_PER_VALUE`]. This bound is valid for direct encoding,
+    /// skipped unencodable values, and single-value replacements. Override it
+    /// only when hook-owned pending output can be drained during `transcode`.
     ///
     /// # Parameters
     ///
@@ -181,28 +170,31 @@ where
         0
     }
 
-    /// Processes one input value at the current output cursor.
+    /// Handles one unencodable input value.
     ///
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `context`: Encode context containing the input value, input index,
-    ///   output slice, and output cursor.
+    /// - `value`: Input value that [`Codec::can_encode_value`] rejected.
+    /// - `input_index`: Absolute input index of `value`.
     ///
     /// # Returns
     ///
-    /// Returns whether the current input value was consumed or needs more
-    /// output capacity.
+    /// Returns the action selected by this hook policy.
+    ///
+    /// Replacement actions must contain a value that the same codec can encode.
+    /// The engine treats unencodable replacements as hook contract violations
+    /// and panics.
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when the policy rejects the value or the wrapped
-    /// codec fails while writing it.
-    fn encode_value(
+    /// Returns `Self::Error` when the policy rejects the value.
+    fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, Self::Error>;
+        value: &C::Value,
+        input_index: usize,
+    ) -> Result<EncodeUnencodableAction<C::Value>, Self::Error>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///

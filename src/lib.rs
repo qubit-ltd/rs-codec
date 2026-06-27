@@ -7,14 +7,88 @@
 // =============================================================================
 //! # qubit-codec
 //!
-//! Core codec traits and buffer conversion primitives for Rust applications.
+//! Domain-neutral codec traits and buffer conversion primitives.
 //!
-//! This crate contains only domain-neutral building blocks such as value
-//! codecs, owned value encoder/decoder helpers, byte-order markers, and
-//! progress-oriented buffer transcoders. The only I/O-facing types are the
-//! low-level `qubit_io::Input`/`qubit_io::Output` bridges used by downstream
-//! stream crates. Concrete binary, text, misc, and `std::io` adapters live in
-//! sibling crates.
+//! `qubit-codec` is the foundation shared by the Qubit binary, text, misc, and
+//! I/O codec crates. It defines the small contracts that concrete format crates
+//! build on, without shipping concrete binary or text formats itself.
+//!
+//! # Overview
+//!
+//! The crate provides:
+//!
+//! - [`Codec`] for low-level single-value codecs over caller-managed buffers.
+//! - [`CodecValueEncoder`], [`CodecValueDecoder`], and [`CodecValueExt`] for
+//!   owned one-value convenience APIs.
+//! - [`CodecTranscodeEncoder`], [`CodecTranscodeDecoder`], and
+//!   [`CodecTranscodeConverter`] for strict streaming adapters around a
+//!   [`Codec`].
+//! - [`TranscodeEncodeEngine`], [`TranscodeDecodeEngine`], and
+//!   [`TranscodeConvertEngine`] for policy-aware buffered loops.
+//! - [`TranscodeEncodeHooks`] and [`TranscodeDecodeHooks`] for replacement,
+//!   skip, report, finish, and reset policy decisions.
+//! - [`Transcoder`], [`TranscodeProgress`], and [`TranscodeStatus`] for
+//!   caller-managed streaming conversion.
+//! - [`ValueEncoder`] and [`ValueDecoder`] for whole-value convenience APIs.
+//! - [`ByteOrder`], [`ByteOrderSpec`], [`BigEndian`], and [`LittleEndian`] for
+//!   shared byte-order metadata.
+//!
+//! Concrete codecs live in sibling crates such as `qubit-codec-binary`,
+//! `qubit-codec-text`, and `qubit-codec-misc`.
+//!
+//! # Choosing an Abstraction
+//!
+//! Pick the smallest layer that matches the shape of the problem:
+//!
+//! ```text
+//! What are you writing?
+//!
+//! +-- A codec for one logical value
+//! |   (UTF-8 char, LEB128 integer, fixed-width scalar, ...)
+//! |       -> implement Codec
+//! |
+//! +-- A whole-value codec where a single-value quantum is not useful
+//! |   (Base64 text, percent encoding, escaped strings, ...)
+//! |       -> implement ValueEncoder<Input> / ValueDecoder<Input>
+//! |
+//! +-- A strict streaming wrapper around an existing Codec
+//! |       -> use CodecTranscodeDecoder<C> / CodecTranscodeEncoder<C>
+//! |          / CodecTranscodeConverter<D, E>
+//! |
+//! +-- An owned-output wrapper around an existing Codec
+//! |       -> use CodecValueEncoder<C> / CodecValueDecoder<C>
+//! |
+//! +-- A streaming codec with policy decisions
+//!     (skip, replace, count, report, finish output, ...)
+//!         -> implement TranscodeDecodeHooks<C> / TranscodeEncodeHooks<C>
+//!            and use TranscodeDecodeEngine<C, H>
+//!            / TranscodeEncodeEngine<C, H>
+//! ```
+//!
+//! Unit-to-unit conversions, such as UTF-8 bytes to UTF-16 units, compose a
+//! decode side and an encode side. Use [`CodecTranscodeConverter`] for a strict
+//! pipeline and [`TranscodeConvertEngine`] when either side needs policy hooks.
+//!
+//! # Layer Overview
+//!
+//! ```text
+//! concrete I/O crates
+//!   |
+//! TranscodeDecodeInput / TranscodeEncodeOutput
+//!   |
+//! Transcode*Engine + Transcode*Hooks
+//! CodecTranscodeDecoder / Encoder / Converter
+//!   |
+//! Transcoder + TranscodeProgress + TranscodeStatus
+//! ValueEncoder / ValueDecoder
+//!   |
+//! Codec
+//! ```
+//!
+//! Implementing further up the stack does not require rewriting the lower
+//! layers. The adapter types turn any suitable [`Codec`] into owned-value or
+//! streaming APIs. Drop down to the engine and hook layer only when the codec
+//! needs policy decisions or retained finish output.
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -46,6 +120,7 @@ pub use transcode::{
     DecodeInvalidAction,
     EncodeContext,
     EncodeOutcome,
+    EncodeUnencodableAction,
     TranscodeContractError,
     TranscodeConvertEngine,
     TranscodeConvertEngineError,

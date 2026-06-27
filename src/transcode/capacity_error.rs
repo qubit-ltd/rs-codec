@@ -13,6 +13,7 @@ use thiserror::Error;
 /// requested upper bound cannot be represented as a `usize`; callers should
 /// reject the one-shot allocation request or switch to chunked streaming.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum CapacityError {
     /// The computed output length overflowed `usize`.
     #[error("output length overflow")]

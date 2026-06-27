@@ -9,7 +9,7 @@
 
 use core::num::NonZeroUsize;
 
-/// Outcome returned by encode-side per-value hooks.
+/// Outcome produced by an encode-side engine for one input value.
 ///
 /// This is deliberately smaller than [`crate::TranscodeProgress`]. It only
 /// describes what happened to the current input value; the encode engine owns

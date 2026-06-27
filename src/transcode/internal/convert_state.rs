@@ -10,8 +10,10 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    decode_context::DecodeContext,
-    encode_outcome::EncodeOutcome,
+    engine::{
+        DecodeContext,
+        EncodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;

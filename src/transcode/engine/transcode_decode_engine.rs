@@ -71,7 +71,9 @@ type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
 ///     DecodeContext,
 ///     TranscodeStatus,
 ///     TranscodeDecodeEngine,
+///     TranscodeDecodeEngineError,
 ///     TranscodeDecodeHooks,
+///     TranscodeError,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -155,7 +157,7 @@ type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
 ///         // Drain `output[..output_index]`, then resume with more output room.
 ///     }
 /// }
-/// # Ok::<(), qubit_codec::TranscodeError<qubit_codec::TranscodeDecodeEngineError<ByteDecodeError, CodecDecodeError<ByteDecodeError>>>>(())
+/// # Ok::<(), TranscodeError<TranscodeDecodeEngineError<ByteDecodeError, CodecDecodeError<ByteDecodeError>>>>(())
 /// ```
 ///
 /// # Type Parameters
