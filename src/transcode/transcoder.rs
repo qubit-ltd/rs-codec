@@ -493,7 +493,7 @@ pub trait Transcoder<Input, Output> {
     /// the streaming and finish output, so stale pending output from a
     /// previous logical stream does not affect one-shot capacity checks.
     /// Returns domain errors from reset, transcode, or finish.
-    fn transcode_all_into(
+    fn transcode_complete_into(
         &mut self,
         input: &[Input],
         output: &mut [Output],

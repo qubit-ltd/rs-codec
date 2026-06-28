@@ -10,7 +10,6 @@
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecEncodeError,
     EncodeUnencodableAction,
     TranscodeEncodeEngine,
     TranscodeEncodeEngineError,
@@ -476,7 +475,7 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
     type EngineErrorType =
         TranscodeEncodeEngineError<core::convert::Infallible, EngineError>;
-    type TranscodeAllIntoFn =
+    type TranscodeCompleteIntoFn =
         fn(
             &mut Engine,
             &[u8],
@@ -489,7 +488,8 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
         &Engine,
         usize,
     ) -> Result<usize, CapacityError> = Engine::max_total_output_len;
-    let transcode_all_into: TranscodeAllIntoFn = Engine::transcode_all_into;
+    let transcode_complete_into: TranscodeCompleteIntoFn =
+        Engine::transcode_complete_into;
 
     assert_eq!(Ok(8), encoder.max_transcode_output_len(2));
     assert_eq!(Ok(8), max_total_output_len(&encoder, 2));
@@ -504,7 +504,7 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
         encoder.max_transcode_output_len(usize::MAX),
     );
     let mut output = [0_u8; 8];
-    let written = transcode_all_into(&mut encoder, &[1, 2], &mut output)
+    let written = transcode_complete_into(&mut encoder, &[1, 2], &mut output)
         .expect("complete encode should fit the planned output");
     assert_eq!(2, written);
     assert_eq!(&[11, 12], &output[..written]);
@@ -637,11 +637,9 @@ fn test_buffered_encode_engine_finish_converts_codec_flush_errors() {
         .expect_err("finish should convert codec flush errors");
 
     assert_eq!(
-        TranscodeError::Domain(TranscodeEncodeEngineError::Codec(
-            CodecEncodeError::EncodeFlush {
-                source: EngineError::Rejected { input_index: 0 },
-            },
-        )),
+        TranscodeError::Domain(TranscodeEncodeEngineError::CodecFlush {
+            source: EngineError::Rejected { input_index: 0 },
+        }),
         error,
     );
 }
@@ -855,12 +853,10 @@ fn test_buffered_encode_engine_maps_replacement_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(TranscodeEncodeEngineError::Codec(
-            CodecEncodeError::Encode {
-                source: EngineError::Rejected { input_index: 0 },
-                input_index: 0,
-            },
-        )),
+        TranscodeError::Domain(TranscodeEncodeEngineError::CodecEncode {
+            source: EngineError::Rejected { input_index: 0 },
+            input_index: 0,
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1127,11 +1123,9 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
         .expect_err("reset should convert codec reset errors");
 
     assert_eq!(
-        TranscodeError::Domain(TranscodeEncodeEngineError::Codec(
-            CodecEncodeError::EncodeReset {
-                source: ResetFailError,
-            },
-        )),
+        TranscodeError::Domain(TranscodeEncodeEngineError::CodecReset {
+            source: ResetFailError,
+        }),
         error,
     );
 }

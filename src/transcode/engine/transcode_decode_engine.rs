@@ -17,7 +17,6 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecDecodeError,
     DecodeContext,
     DecodeFailure,
     DecodeInvalidAction,
@@ -391,8 +390,8 @@ where
             self.codec.decode_reset(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(TranscodeDecodeEngineError::codec(
-                CodecDecodeError::decode_reset(error),
+            TranscodeError::domain(TranscodeDecodeEngineError::codec_reset(
+                error,
             ))
         })?;
         assert!(
@@ -454,13 +453,11 @@ where
             let (outcome, _) = self
                 .decode_one(input, context, |value, _input_index| {
                     // SAFETY: `needs_output()` returned false, so the output
-                    // cursor points at a writable slot.
+                    // cursor points at a writable slot. `ptr::write` moves
+                    // the decoded value into that slot without requiring
+                    // `C::Value: Copy`.
                     unsafe {
-                        qubit_io::UncheckedSlice::write(
-                            output,
-                            output_index,
-                            value,
-                        );
+                        output.as_mut_ptr().add(output_index).write(value);
                     }
                 })
                 .map_err(TranscodeError::domain)?;
@@ -515,8 +512,8 @@ where
         )?;
         let flushed = unsafe { self.codec.decode_flush(output, output_index) }
             .map_err(|error| {
-                TranscodeError::domain(TranscodeDecodeEngineError::codec(
-                    CodecDecodeError::decode_flush(error),
+                TranscodeError::domain(TranscodeDecodeEngineError::codec_flush(
+                    error,
                 ))
             })?;
         assert!(
@@ -560,12 +557,12 @@ where
     /// an incomplete EOF tail, and domain errors from reset, decode, or
     /// finish.
     #[inline(always)]
-    pub fn transcode_all_into(
+    pub fn transcode_complete_into(
         &mut self,
         input: &[C::Unit],
         output: &mut [C::Value],
     ) -> Result<usize, TranscodeError<DecodeEngineErrorOf<C, H>>> {
-        <Self as Transcoder<C::Unit, C::Value>>::transcode_all_into(
+        <Self as Transcoder<C::Unit, C::Value>>::transcode_complete_into(
             self, input, output,
         )
     }

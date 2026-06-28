@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CodecEncodeError,
-    TranscodeEncodeEngineError,
-};
+use qubit_codec::TranscodeEncodeEngineError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("codec encode failure")]
@@ -21,14 +18,15 @@ struct HookFailure;
 
 #[test]
 fn test_transcode_encode_engine_error_wraps_codec_error() {
-    let error = TranscodeEncodeEngineError::<CodecFailure, HookFailure>::codec(
-        CodecEncodeError::encode_reset(CodecFailure),
-    );
+    let error =
+        TranscodeEncodeEngineError::<CodecFailure, HookFailure>::codec_reset(
+            CodecFailure,
+        );
 
     assert_eq!(
-        TranscodeEncodeEngineError::Codec(CodecEncodeError::EncodeReset {
+        TranscodeEncodeEngineError::CodecReset {
             source: CodecFailure,
-        }),
+        },
         error,
     );
     assert!(error.to_string().contains("codec encode reset error"));

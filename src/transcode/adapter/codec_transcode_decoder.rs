@@ -187,7 +187,16 @@ fn flatten_decode_engine_error<E>(
     error: TranscodeDecodeEngineError<E, CodecDecodeError<E>>,
 ) -> CodecDecodeError<E> {
     match error {
-        TranscodeDecodeEngineError::Codec(error)
-        | TranscodeDecodeEngineError::Hook(error) => error,
+        TranscodeDecodeEngineError::CodecDecode {
+            source,
+            input_index,
+        } => CodecDecodeError::decode(source, input_index),
+        TranscodeDecodeEngineError::CodecReset { source } => {
+            CodecDecodeError::decode_reset(source)
+        }
+        TranscodeDecodeEngineError::CodecFlush { source } => {
+            CodecDecodeError::decode_flush(source)
+        }
+        TranscodeDecodeEngineError::Hook(error) => error,
     }
 }

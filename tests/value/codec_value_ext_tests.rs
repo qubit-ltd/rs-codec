@@ -493,7 +493,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_unencodable_value() {
 
     assert_eq!(
         TranscodeError::Domain(CodecEncodeError::UnencodableValue {
-            input_index: 0,
+            input_index: 0
         }),
         error,
     );

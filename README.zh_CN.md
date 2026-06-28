@@ -305,7 +305,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `max_finish_output_len()` | 在可确定时返回 finish 收尾输出长度上界 |
 | `reset()` | 保留配置并重置逻辑流状态 |
 | `transcode(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
-| `transcode_all_into(input, output)` | 从传入 slice 起点运行一次完整转换流程 |
+| `transcode_complete_into(input, output)` | 从传入 slice 起点运行一次完整 `reset -> transcode -> finish` 流程 |
 | `finish(output, output_index)` | 完成内部收尾输出，例如 reset bytes、digest 或 trailer |
 
 ### `TranscodeStatus` 取值

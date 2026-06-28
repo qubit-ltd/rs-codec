@@ -110,8 +110,8 @@ where
     ///
     /// Engine methods wrap this type in
     /// [`crate::TranscodeEncodeEngineError::Hook`]. Codec lifecycle failures
-    /// are reported separately through
-    /// [`crate::TranscodeEncodeEngineError::Codec`].
+    /// are reported separately through the `CodecEncode`, `CodecReset`, and
+    /// `CodecFlush` variants.
     type Error;
 
     /// Returns the maximum output units needed for `input_len` values.

@@ -20,7 +20,6 @@ use thiserror::Error;
 /// - `D`: Decode-side engine error type.
 /// - `E`: Encode-side engine error type.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
-#[non_exhaustive]
 pub enum TranscodeConvertEngineError<D, E> {
     /// Source decoding failed.
     #[error("decode side failed: {0}")]

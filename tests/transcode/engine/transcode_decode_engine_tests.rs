@@ -14,7 +14,6 @@ use core::{
 
 use qubit_codec::{
     Codec,
-    CodecDecodeError,
     DecodeContext,
     DecodeInvalidAction,
     TranscodeDecodeEngine,
@@ -617,7 +616,7 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
     type Decoder = TranscodeDecodeEngine<PrefixCodec, ReplacingHooks>;
     type DecoderErrorType =
         TranscodeDecodeEngineError<PrefixDecodeError, EngineError>;
-    type TranscodeAllIntoFn =
+    type TranscodeCompleteIntoFn =
         fn(
             &mut Decoder,
             &[u8],
@@ -632,7 +631,8 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
     )
         -> Result<usize, qubit_codec::CapacityError> =
         Decoder::max_total_output_len;
-    let transcode_all_into: TranscodeAllIntoFn = Decoder::transcode_all_into;
+    let transcode_complete_into: TranscodeCompleteIntoFn =
+        Decoder::transcode_complete_into;
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(3), decoder.max_transcode_output_len(3));
@@ -640,8 +640,9 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
     assert_eq!(Ok(0), decoder.max_finish_output_len());
 
     let mut all_output = [0_u8; 3];
-    let written = transcode_all_into(&mut decoder, &[1, 2, 3], &mut all_output)
-        .expect("complete decode should fit the planned output");
+    let written =
+        transcode_complete_into(&mut decoder, &[1, 2, 3], &mut all_output)
+            .expect("complete decode should fit the planned output");
     assert_eq!(3, written);
     assert_eq!(&[1, 2, 3], &all_output[..written]);
 
@@ -1242,11 +1243,9 @@ fn test_transcode_decode_engine_finish_converts_decode_flush_errors() {
     );
 
     assert_eq!(
-        TranscodeError::Domain(TranscodeDecodeEngineError::Codec(
-            CodecDecodeError::DecodeFlush {
-                source: FlushFailError,
-            },
-        )),
+        TranscodeError::Domain(TranscodeDecodeEngineError::CodecFlush {
+            source: FlushFailError,
+        }),
         error,
     );
 }
@@ -1264,11 +1263,9 @@ fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
     );
 
     assert_eq!(
-        TranscodeError::Domain(TranscodeDecodeEngineError::Codec(
-            CodecDecodeError::DecodeReset {
-                source: PrefixDecodeError::Invalid { consumed: 1 },
-            },
-        )),
+        TranscodeError::Domain(TranscodeDecodeEngineError::CodecReset {
+            source: PrefixDecodeError::Invalid { consumed: 1 },
+        }),
         error,
     );
 }

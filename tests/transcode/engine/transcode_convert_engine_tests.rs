@@ -16,8 +16,6 @@ use std::rc::Rc;
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecDecodeError,
-    CodecEncodeError,
     DecodeContext,
     DecodeInvalidAction,
     EncodeUnencodableAction,
@@ -1315,7 +1313,7 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
         TranscodeDecodeEngineError<core::convert::Infallible, EngineError>,
         TranscodeEncodeEngineError<EngineError, EngineError>,
     >;
-    type TranscodeAllIntoFn =
+    type TranscodeCompleteIntoFn =
         fn(
             &mut CopyConvertEngine,
             &[u8],
@@ -1327,8 +1325,8 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
         &CopyConvertEngine,
         usize,
     ) -> Result<usize, CapacityError> = CopyConvertEngine::max_total_output_len;
-    let transcode_all_into: TranscodeAllIntoFn =
-        CopyConvertEngine::transcode_all_into;
+    let transcode_complete_into: TranscodeCompleteIntoFn =
+        CopyConvertEngine::transcode_complete_into;
 
     assert_eq!(Ok(3), engine.max_transcode_output_len(3));
     assert_eq!(Ok(3), max_total_output_len(&engine, 3));
@@ -1336,7 +1334,7 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
     assert_eq!(Ok(0), engine.max_reset_output_len());
 
     let mut output = [0_u8; 3];
-    let written = transcode_all_into(&mut engine, &[1, 2, 3], &mut output)
+    let written = transcode_complete_into(&mut engine, &[1, 2, 3], &mut output)
         .expect("complete conversion should fit the planned output");
     assert_eq!(3, written);
     assert_eq!(&[2, 3, 4], &output[..written]);
@@ -1571,10 +1569,10 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Encode(
-            TranscodeEncodeEngineError::Codec(CodecEncodeError::Encode {
+            TranscodeEncodeEngineError::CodecEncode {
                 source: EngineError::Encode,
                 ..
-            }),
+            },
         )),
     ));
     assert_eq!([0], output);
@@ -1854,10 +1852,10 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Encode(
-            TranscodeEncodeEngineError::Codec(CodecEncodeError::Encode {
+            TranscodeEncodeEngineError::CodecEncode {
                 source: EngineError::Encode,
                 ..
-            }),
+            },
         )),
     ));
     assert_eq!([0], output);
@@ -1875,10 +1873,10 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Encode(
-            TranscodeEncodeEngineError::Codec(CodecEncodeError::Encode {
+            TranscodeEncodeEngineError::CodecEncode {
                 source: EngineError::Encode,
                 ..
-            }),
+            },
         )),
     ));
     assert_eq!([0], output);
@@ -2509,9 +2507,9 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Encode(
-            TranscodeEncodeEngineError::Codec(CodecEncodeError::EncodeReset {
+            TranscodeEncodeEngineError::CodecReset {
                 source: TargetResetFailError,
-            },),
+            },
         )),
     ));
 }
@@ -2577,9 +2575,9 @@ fn test_buffered_convert_engine_reset_maps_stateless_decoder_reset_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Decode(
-            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeReset {
+            TranscodeDecodeEngineError::CodecReset {
                 source: EngineError::Decode,
-            },),
+            },
         )),
     ));
 }
@@ -3109,10 +3107,10 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Encode(
-            TranscodeEncodeEngineError::Codec(CodecEncodeError::Encode {
+            TranscodeEncodeEngineError::CodecEncode {
                 source: EngineError::Encode,
                 ..
-            }),
+            },
         )),
     ));
 }
@@ -3134,9 +3132,9 @@ fn test_buffered_convert_engine_reset_maps_decoder_reset_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Decode(
-            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeReset {
+            TranscodeDecodeEngineError::CodecReset {
                 source: EngineError::Decode,
-            },),
+            },
         )),
     ));
 }
@@ -3158,9 +3156,9 @@ fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
     assert!(matches!(
         error,
         TranscodeError::Domain(TranscodeConvertEngineError::Decode(
-            TranscodeDecodeEngineError::Codec(CodecDecodeError::DecodeFlush {
+            TranscodeDecodeEngineError::CodecFlush {
                 source: EngineError::Decode,
-            },),
+            },
         )),
     ));
 }

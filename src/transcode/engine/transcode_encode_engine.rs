@@ -18,7 +18,6 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecEncodeError,
     EncodeOutcome,
     EncodeUnencodableAction,
     TranscodeEncodeEngineError,
@@ -304,10 +303,7 @@ where
             self.codec.encode(value, output, output_index)
         }
         .map_err(|error| {
-            TranscodeEncodeEngineError::codec(CodecEncodeError::encode(
-                error,
-                input_index,
-            ))
+            TranscodeEncodeEngineError::codec_encode(error, input_index)
         })?;
         assert!(
             written == required,
@@ -383,10 +379,7 @@ where
             self.codec.encode(&value, output, output_index)
         }
         .map_err(|error| {
-            TranscodeEncodeEngineError::codec(CodecEncodeError::encode(
-                error,
-                input_index,
-            ))
+            TranscodeEncodeEngineError::codec_encode(error, input_index)
         })?;
         assert!(
             written == required,
@@ -532,8 +525,8 @@ where
             self.codec.encode_reset(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(TranscodeEncodeEngineError::codec(
-                CodecEncodeError::encode_reset(error),
+            TranscodeError::domain(TranscodeEncodeEngineError::codec_reset(
+                error,
             ))
         })?;
         assert!(
@@ -644,8 +637,8 @@ where
             self.codec.encode_flush(output, output_index)
         }
         .map_err(|error| {
-            TranscodeError::domain(TranscodeEncodeEngineError::codec(
-                CodecEncodeError::encode_flush(error),
+            TranscodeError::domain(TranscodeEncodeEngineError::codec_flush(
+                error,
             ))
         })?;
         assert!(
@@ -688,12 +681,12 @@ where
     /// Returns framework errors for insufficient output or capacity overflow,
     /// and domain errors from reset, encode, or finish.
     #[inline]
-    pub fn transcode_all_into(
+    pub fn transcode_complete_into(
         &mut self,
         input: &[C::Value],
         output: &mut [C::Unit],
     ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
-        <Self as Transcoder<C::Value, C::Unit>>::transcode_all_into(
+        <Self as Transcoder<C::Value, C::Unit>>::transcode_complete_into(
             self, input, output,
         )
     }

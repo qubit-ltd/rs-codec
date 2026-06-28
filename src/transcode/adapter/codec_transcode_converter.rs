@@ -423,14 +423,46 @@ where
 {
     match error {
         TranscodeConvertEngineError::Decode(error) => match error {
-            TranscodeDecodeEngineError::Codec(error)
-            | TranscodeDecodeEngineError::Hook(error) => {
+            TranscodeDecodeEngineError::CodecDecode {
+                source,
+                input_index,
+            } => CodecConvertError::decode(CodecDecodeError::decode(
+                source,
+                input_index,
+            )),
+            TranscodeDecodeEngineError::CodecReset { source } => {
+                CodecConvertError::decode(CodecDecodeError::decode_reset(
+                    source,
+                ))
+            }
+            TranscodeDecodeEngineError::CodecFlush { source } => {
+                CodecConvertError::decode(CodecDecodeError::decode_flush(
+                    source,
+                ))
+            }
+            TranscodeDecodeEngineError::Hook(error) => {
                 CodecConvertError::decode(error)
             }
         },
         TranscodeConvertEngineError::Encode(error) => match error {
-            TranscodeEncodeEngineError::Codec(error)
-            | TranscodeEncodeEngineError::Hook(error) => {
+            TranscodeEncodeEngineError::CodecEncode {
+                source,
+                input_index,
+            } => CodecConvertError::encode(CodecEncodeError::encode(
+                source,
+                input_index,
+            )),
+            TranscodeEncodeEngineError::CodecReset { source } => {
+                CodecConvertError::encode(CodecEncodeError::encode_reset(
+                    source,
+                ))
+            }
+            TranscodeEncodeEngineError::CodecFlush { source } => {
+                CodecConvertError::encode(CodecEncodeError::encode_flush(
+                    source,
+                ))
+            }
+            TranscodeEncodeEngineError::Hook(error) => {
                 CodecConvertError::encode(error)
             }
         },

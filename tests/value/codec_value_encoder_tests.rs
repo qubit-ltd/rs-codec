@@ -507,7 +507,7 @@ fn test_codec_value_encoder_propagates_encode_error() {
 
     assert_eq!(
         TranscodeError::Domain(CodecEncodeError::UnencodableValue {
-            input_index: 0,
+            input_index: 0
         }),
         error,
     );

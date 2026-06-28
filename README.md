@@ -325,7 +325,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `max_finish_output_len()` | Return a finite final-output upper bound when known |
 | `reset()` | Reset retained stream state while keeping configuration |
 | `transcode(input, input_index, output, output_index)` | Convert input units into output units |
-| `transcode_all_into(input, output)` | Run one complete stream from the start of the supplied slices |
+| `transcode_complete_into(input, output)` | Run one complete `reset -> transcode -> finish` stream from the start of the supplied slices |
 | `finish(output, output_index)` | Finish internally retained output such as reset bytes, digests, or trailers |
 
 ### `TranscodeStatus` Values

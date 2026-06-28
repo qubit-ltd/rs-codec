@@ -79,14 +79,14 @@ fn test_codec_decode_error_into_source_extracts_codec_errors() {
     assert_eq!(
         Some(TestDecodeError::Invalid { consumed: 4 }),
         CodecDecodeError::decode_reset(TestDecodeError::Invalid {
-            consumed: 4,
+            consumed: 4
         })
         .into_source(),
     );
     assert_eq!(
         Some(TestDecodeError::Invalid { consumed: 1 }),
         CodecDecodeError::decode_flush(TestDecodeError::Invalid {
-            consumed: 1,
+            consumed: 1
         })
         .into_source(),
     );

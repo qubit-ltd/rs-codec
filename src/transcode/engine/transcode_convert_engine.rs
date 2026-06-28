@@ -687,7 +687,7 @@ where
     /// an incomplete EOF tail, and domain errors from reset, conversion, or
     /// finish.
     #[inline]
-    pub fn transcode_all_into(
+    pub fn transcode_complete_into(
         &mut self,
         input: &[D::Unit],
         output: &mut [E::Unit],
@@ -695,7 +695,7 @@ where
     where
         D::Value: Default,
     {
-        <Self as Transcoder<D::Unit, E::Unit>>::transcode_all_into(
+        <Self as Transcoder<D::Unit, E::Unit>>::transcode_complete_into(
             self, input, output,
         )
     }

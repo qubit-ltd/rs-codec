@@ -203,7 +203,16 @@ fn flatten_encode_engine_error<E>(
     error: TranscodeEncodeEngineError<E, CodecEncodeError<E>>,
 ) -> CodecEncodeError<E> {
     match error {
-        TranscodeEncodeEngineError::Codec(error)
-        | TranscodeEncodeEngineError::Hook(error) => error,
+        TranscodeEncodeEngineError::CodecEncode {
+            source,
+            input_index,
+        } => CodecEncodeError::encode(source, input_index),
+        TranscodeEncodeEngineError::CodecReset { source } => {
+            CodecEncodeError::encode_reset(source)
+        }
+        TranscodeEncodeEngineError::CodecFlush { source } => {
+            CodecEncodeError::encode_flush(source)
+        }
+        TranscodeEncodeEngineError::Hook(error) => error,
     }
 }

@@ -132,8 +132,8 @@ where
     ///
     /// Engine methods wrap this type in
     /// [`crate::TranscodeDecodeEngineError::Hook`]. Codec lifecycle failures
-    /// are reported separately through
-    /// [`crate::TranscodeDecodeEngineError::Codec`].
+    /// are reported separately through the `CodecDecode`, `CodecReset`, and
+    /// `CodecFlush` variants.
     type Error;
 
     /// Returns an upper bound for decoded values produced from `input_len`

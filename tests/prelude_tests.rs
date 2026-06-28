@@ -183,7 +183,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert!(matches!(
         convert_error,
         CodecConvertError::Encode(CodecEncodeError::UnencodableValue {
-            input_index: 2,
+            input_index: 2
         }),
     ));
 

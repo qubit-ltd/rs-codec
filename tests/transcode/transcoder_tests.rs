@@ -474,12 +474,12 @@ fn test_transcoder_total_output_len_reports_component_errors() {
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_runs_reset_transcode_and_finish() {
+fn test_transcoder_transcode_complete_into_runs_reset_transcode_and_finish() {
     let mut transcoder = FinishingTranscoder::default();
     let mut output = [0_u8; 5];
 
     let written = transcoder
-        .transcode_all_into(b"abc", &mut output)
+        .transcode_complete_into(b"abc", &mut output)
         .expect("complete transcode should fit");
 
     assert_eq!(5, written);
@@ -488,7 +488,7 @@ fn test_transcoder_transcode_all_into_runs_reset_transcode_and_finish() {
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_reports_stage_errors() {
+fn test_transcoder_transcode_complete_into_reports_stage_errors() {
     for (failure, expected) in [
         (FailurePoint::Reset, TranscodeError::Domain("reset")),
         (
@@ -506,7 +506,7 @@ fn test_transcoder_transcode_all_into_reports_stage_errors() {
         let mut output = [0_u8; 1];
 
         let error = transcoder
-            .transcode_all_into(b"", &mut output)
+            .transcode_complete_into(b"", &mut output)
             .expect_err("configured stage should fail");
 
         assert_eq!(expected, error);
@@ -514,12 +514,12 @@ fn test_transcoder_transcode_all_into_reports_stage_errors() {
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_reports_insufficient_output() {
+fn test_transcoder_transcode_complete_into_reports_insufficient_output() {
     let mut transcoder = FinishingTranscoder::default();
     let mut output = [0_u8; 4];
 
     let error = transcoder
-        .transcode_all_into(b"abc", &mut output)
+        .transcode_complete_into(b"abc", &mut output)
         .expect_err("complete transcode requires five output units");
 
     assert_eq!(
@@ -533,12 +533,12 @@ fn test_transcoder_transcode_all_into_reports_insufficient_output() {
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_maps_runtime_need_output() {
+fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
     let mut transcoder = UnderestimatingTranscoder;
     let mut output = [];
 
     let error = transcoder
-        .transcode_all_into(b"a", &mut output)
+        .transcode_complete_into(b"a", &mut output)
         .expect_err("runtime need-output status should be an output error");
 
     assert_eq!(
@@ -552,24 +552,24 @@ fn test_transcoder_transcode_all_into_maps_runtime_need_output() {
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_reports_remaining_bound_overflow() {
+fn test_transcoder_transcode_complete_into_reports_remaining_bound_overflow() {
     let mut transcoder = OverflowBoundTranscoder;
     let mut output = [];
 
     let error = transcoder
-        .transcode_all_into(b"", &mut output)
+        .transcode_complete_into(b"", &mut output)
         .expect_err("transcode plus finish bound overflows");
 
     assert_eq!(TranscodeError::OutputLengthOverflow, error);
 }
 
 #[test]
-fn test_transcoder_transcode_all_into_reports_incomplete_input() {
+fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
     let mut transcoder = PairTranscoder;
     let mut output = [0_u8; 1];
 
     let error = transcoder
-        .transcode_all_into(b"abc", &mut output)
+        .transcode_complete_into(b"abc", &mut output)
         .expect_err("odd-length complete input is incomplete");
 
     assert_eq!(
