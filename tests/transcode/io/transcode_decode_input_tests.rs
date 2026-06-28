@@ -18,6 +18,8 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
+    Codec,
+    DecodeFailure,
     TranscodeDecodeInput,
     TranscodeError,
     TranscodeProgress,
@@ -43,6 +45,47 @@ enum PairDecodeError {
     },
     #[error("capacity overflow")]
     CapacityOverflow,
+}
+
+#[derive(Debug, Default)]
+struct FixedPairCodec;
+
+impl Codec for FixedPairCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        let available = input.len().saturating_sub(input_index);
+        if available < 2 {
+            return Err(DecodeFailure::incomplete(crate::nz(2)));
+        }
+        let high = input[input_index] as u32;
+        let low = input[input_index + 1] as u32;
+        Ok(((high << 16) | low, crate::nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = (value >> 16) as u16;
+        output[output_index + 1] = *value as u16;
+        Ok(crate::nz(2))
+    }
 }
 
 macro_rules! noop_reset {
@@ -480,9 +523,11 @@ impl Transcoder<u16, u32> for OverwritingProgressDecoder {
     noop_finish!(u32);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct OverflowingNeedInputDecoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     type Error = PairDecodeError;
 
@@ -517,9 +562,11 @@ impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     noop_finish!(u32);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct MisindexedNeedInputDecoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     type Error = PairDecodeError;
 
@@ -554,9 +601,11 @@ impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     noop_finish!(u32);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct MisindexedNeedOutputDecoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
     type Error = PairDecodeError;
 
@@ -697,6 +746,10 @@ fn map_error(error: TranscodeError<PairDecodeError>) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
+fn map_codec_error(error: PairDecodeError) -> Error {
+    Error::new(ErrorKind::InvalidData, error)
+}
+
 fn decode_with<I, D>(
     input: &mut TranscodeDecodeInput<I>,
     decoder: &mut D,
@@ -782,6 +835,25 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
         .expect("seek should discard buffered bytes");
     assert_eq!(1, read);
     assert_eq!([1], after_seek);
+}
+
+#[test]
+fn test_buffered_decode_input_reads_one_codec_value() {
+    let input = ChunkedInput::new(vec![vec![0x1234], vec![0x5678, 0x9abc]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 2);
+    let mut codec = FixedPairCodec;
+
+    let value = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("one codec value should decode across refills");
+
+    assert_eq!(0x1234_5678, value);
+    assert!(input.unread().is_empty());
+    assert!(
+        input.fill_until(1).expect("tail refill should succeed"),
+        "tail unit should remain readable after one value"
+    );
+    assert_eq!(&[0x9abc], input.unread());
 }
 
 #[test]
@@ -925,6 +997,7 @@ fn test_buffered_decode_input_rejects_overreported_write_progress() {
     assert!(error.to_string().contains("output slots"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_decode_input_rejects_overflowing_need_input() {
     let input = ChunkedInput::new(vec![vec![0x0001]]);
@@ -938,6 +1011,7 @@ fn test_buffered_decode_input_rejects_overflowing_need_input() {
     assert!(error.to_string().contains("reported required"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_decode_input_rejects_misindexed_need_input() {
     let input = ChunkedInput::new(vec![vec![0x0001]]);
@@ -951,6 +1025,7 @@ fn test_buffered_decode_input_rejects_misindexed_need_input() {
     assert!(error.to_string().contains("reported status index"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_decode_input_rejects_misindexed_need_output() {
     let input = ChunkedInput::new(vec![vec![0x0001]]);

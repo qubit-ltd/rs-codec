@@ -17,6 +17,8 @@ use std::io::{
 
 use qubit_codec::{
     CapacityError,
+    Codec,
+    DecodeFailure,
     TranscodeEncodeOutput,
     TranscodeError,
     TranscodeProgress,
@@ -42,6 +44,47 @@ enum PairEncodeError {
     },
     #[error("capacity overflow")]
     CapacityOverflow,
+}
+
+#[derive(Debug, Default)]
+struct FixedPairCodec;
+
+impl Codec for FixedPairCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairEncodeError;
+    type EncodeError = PairEncodeError;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        let available = input.len().saturating_sub(input_index);
+        if available < 2 {
+            return Err(DecodeFailure::incomplete(crate::nz(2)));
+        }
+        let high = input[input_index] as u32;
+        let low = input[input_index + 1] as u32;
+        Ok(((high << 16) | low, crate::nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+        output[output_index] = (value >> 16) as u16;
+        output[output_index + 1] = *value as u16;
+        Ok(crate::nz(2))
+    }
 }
 
 macro_rules! noop_reset {
@@ -469,9 +512,11 @@ impl Transcoder<u32, u16> for NeedInputEncoder {
     noop_finish!(u16);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct NeedOutputAfterReadEncoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
     type Error = PairEncodeError;
 
@@ -607,9 +652,11 @@ impl Transcoder<u32, u16> for OverwritingProgressEncoder {
     noop_finish!(u16);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct OverflowingNeedOutputEncoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
     type Error = PairEncodeError;
 
@@ -644,9 +691,11 @@ impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
     noop_finish!(u16);
 }
 
+#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct MisindexedNeedOutputEncoder;
 
+#[cfg(debug_assertions)]
 impl Transcoder<u32, u16> for MisindexedNeedOutputEncoder {
     type Error = PairEncodeError;
 
@@ -727,6 +776,10 @@ fn map_error(error: TranscodeError<PairEncodeError>) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
+fn map_codec_error(error: PairEncodeError) -> Error {
+    Error::new(ErrorKind::InvalidData, error)
+}
+
 fn encode_with<E>(
     output: &mut TranscodeEncodeOutput<UnitOutput>,
     encoder: &mut E,
@@ -796,6 +849,20 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
         .expect("write after seek should update the wrapped cursor");
     output.flush().expect("flush should drain after seek");
     assert_eq!(&[1, 8, 3, 4, 5, 6, 7], output.inner().get_ref().as_slice(),);
+}
+
+#[test]
+fn test_buffered_encode_output_writes_one_codec_value() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 2);
+    let mut codec = FixedPairCodec;
+
+    output
+        .write_encoded_with(&mut codec, &0x1234_5678, map_codec_error)
+        .expect("one codec value should encode into the output buffer");
+    output.flush().expect("encoded units should flush");
+
+    assert_eq!(&[0x1234, 0x5678], output.inner().units.as_slice());
 }
 
 #[test]
@@ -916,6 +983,7 @@ fn test_buffered_encode_output_reports_no_progress_need_output_capacity() {
     assert!(error.to_string().contains("spare capacity"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_returns_after_need_output_consumes_input() {
     let output = UnitOutput::default();
@@ -982,6 +1050,7 @@ fn test_buffered_encode_output_rejects_overreported_write_progress() {
     assert!(error.to_string().contains("output slots"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_rejects_overflowing_need_output() {
     let output = UnitOutput::default();
@@ -994,6 +1063,7 @@ fn test_buffered_encode_output_rejects_overflowing_need_output() {
     assert!(error.to_string().contains("reported required"));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_rejects_misindexed_need_output() {
     let output = UnitOutput::default();

@@ -26,9 +26,17 @@ use qubit_io::{
 };
 
 use crate::{
+    Codec,
+    CodecEncodeError,
+    CodecValueExt,
     TranscodeError,
     TranscodeStatus,
     Transcoder,
+};
+#[cfg(not(debug_assertions))]
+use crate::{
+    TranscodeContractError,
+    TranscodeProgress,
 };
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
@@ -184,6 +192,77 @@ where
         self.output.flush()
     }
 
+    /// Encodes one codec value into this buffered unit output.
+    ///
+    /// The method writes into the internal spare buffer when the encoded value
+    /// fits there. If one complete value can exceed the buffer capacity, it
+    /// flushes pending units and encodes through a temporary scratch buffer
+    /// before writing the scratch contents to the wrapped output.
+    ///
+    /// # Parameters
+    ///
+    /// * `codec` - Codec used for this single-value encode.
+    /// * `value` - Value to encode.
+    /// * `map_error` - Mapper for codec-domain encode errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O errors from the wrapped output, `InvalidInput` when the
+    /// codec output bound overflows or the value is outside the codec domain,
+    /// `InvalidData` for framework-level codec adapter failures, or the error
+    /// returned by `map_error` for codec encode, reset, and flush failures.
+    #[inline]
+    pub fn write_encoded_with<C, M>(
+        &mut self,
+        codec: &mut C,
+        value: &C::Value,
+        mut map_error: M,
+    ) -> Result<()>
+    where
+        C: Codec<Unit = O::Item>,
+        M: FnMut(C::EncodeError) -> Error,
+    {
+        let max_units = codec.max_encode_value_units().map_err(|_| {
+            Error::new(ErrorKind::InvalidInput, "codec output bound overflow")
+        })?;
+        if let Err(error) = self.output.ensure_spare_capacity(max_units) {
+            if error.kind() != ErrorKind::InvalidInput {
+                return Err(error);
+            }
+            self.output.flush()?;
+            let mut scratch = vec![O::Item::default(); max_units];
+            let written = codec
+                .encode_value_with_reset(value, &mut scratch, 0)
+                .map_err(|error| {
+                    map_encode_value_error(error, &mut map_error)
+                })?;
+            // SAFETY: `scratch` has exactly `max_units` elements, and
+            // `CodecValueExt::encode_value_with_reset` validated that
+            // `written <= max_units`.
+            unsafe {
+                self.output
+                    .inner_mut()
+                    .write_fully_unchecked(&scratch, 0, written)?;
+            }
+            return Ok(());
+        }
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
+        debug_assert!(
+            available >= max_units,
+            "reserved spare buffer is smaller than codec upper bound",
+        );
+        let written = codec
+            .encode_value_with_reset(value, units, output_index)
+            .map_err(|error| map_encode_value_error(error, &mut map_error))?;
+        // SAFETY: The spare buffer has at least `max_units` slots, and the
+        // codec value helper writes no more than that checked bound.
+        unsafe {
+            self.output.advance(written);
+        }
+        Ok(())
+    }
+
     /// Encodes values from an indexed input range using a streaming
     /// [`Transcoder`].
     ///
@@ -238,6 +317,7 @@ where
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
+            #[cfg(debug_assertions)]
             progress
                 .validate(
                     input_index + read_total,
@@ -246,9 +326,15 @@ where
                     available_output,
                 )
                 .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
+            #[cfg(not(debug_assertions))]
+            validate_progress_bounds(
+                progress,
+                remaining_input,
+                available_output,
+            )?;
             let read = progress.read();
             let written = progress.written();
-            // SAFETY: TranscodeProgress::validate proved that the encoder
+            // SAFETY: The progress bounds check above proved that the encoder
             // initialized no more than the available spare output window.
             unsafe {
                 self.output.advance(written);
@@ -395,4 +481,85 @@ where
             .field("output", &self.output)
             .finish()
     }
+}
+
+/// Maps one-value codec encode errors into the I/O surface used by this
+/// adapter.
+fn map_encode_value_error<E, M>(
+    error: TranscodeError<CodecEncodeError<E>>,
+    map_error: &mut M,
+) -> Error
+where
+    M: FnMut(E) -> Error,
+{
+    match error {
+        TranscodeError::Domain(CodecEncodeError::Encode { source, .. })
+        | TranscodeError::Domain(CodecEncodeError::EncodeReset { source })
+        | TranscodeError::Domain(CodecEncodeError::EncodeFlush { source }) => {
+            map_error(source)
+        }
+        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
+            ..
+        }) => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
+        TranscodeError::InvalidInputIndex { index, len } => Error::new(
+            ErrorKind::InvalidData,
+            format!("invalid input index {index} for input length {len}"),
+        ),
+        TranscodeError::InvalidOutputIndex { index, len } => Error::new(
+            ErrorKind::InvalidData,
+            format!("invalid output index {index} for output length {len}"),
+        ),
+        TranscodeError::InsufficientOutput {
+            output_index,
+            required,
+            available,
+        } => Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "insufficient output at index {output_index}: required {required} units, available {available}"
+            ),
+        ),
+        TranscodeError::OutputLengthOverflow => Error::new(
+            ErrorKind::InvalidData,
+            "output length arithmetic overflow",
+        ),
+        TranscodeError::IncompleteInput {
+            input_index,
+            required,
+            available,
+        } => Error::new(
+            ErrorKind::InvalidData,
+            format!(
+                "incomplete input at index {input_index}: required {required} units, available {available}"
+            ),
+        ),
+    }
+}
+
+/// Validates progress counters needed for unchecked buffered cursor movement.
+#[cfg(not(debug_assertions))]
+fn validate_progress_bounds(
+    progress: TranscodeProgress,
+    available_input: usize,
+    available_output: usize,
+) -> Result<()> {
+    if progress.read() > available_input {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            TranscodeContractError::OverRead {
+                read: progress.read(),
+                available: available_input,
+            },
+        ));
+    }
+    if progress.written() > available_output {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            TranscodeContractError::OverWritten {
+                written: progress.written(),
+                available: available_output,
+            },
+        ));
+    }
+    Ok(())
 }

@@ -26,9 +26,16 @@ use qubit_io::{
 };
 
 use crate::{
+    Codec,
+    DecodeFailure,
     TranscodeError,
     TranscodeStatus,
     Transcoder,
+};
+#[cfg(not(debug_assertions))]
+use crate::{
+    TranscodeContractError,
+    TranscodeProgress,
 };
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
@@ -266,6 +273,120 @@ where
         unsafe { self.input.read_unchecked(output, output_index, count) }
     }
 
+    /// Decodes one codec value from the buffered unit input.
+    ///
+    /// The method refills the internal input buffer until the supplied codec
+    /// can decode one complete value or until the wrapped input reaches
+    /// EOF.
+    ///
+    /// # Parameters
+    ///
+    /// * `codec` - Codec used for this single-value decode.
+    /// * `map_error` - Mapper for codec-domain invalid-input errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns one decoded codec value.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O errors from the wrapped input, `UnexpectedEof` when EOF
+    /// occurs before a complete value is available, `InvalidData` when the
+    /// codec reports an impossible incomplete state, or the error returned
+    /// by `map_error` for invalid codec input.
+    pub fn read_decoded_with<C, M>(
+        &mut self,
+        codec: &mut C,
+        mut map_error: M,
+    ) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        let min_units_per_value = C::MIN_UNITS_PER_VALUE.get();
+        let max_units_per_value =
+            C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
+        if min_units_per_value > self.capacity() {
+            return read_decoded_via_scratch(
+                self,
+                codec,
+                min_units_per_value,
+                &mut map_error,
+            );
+        }
+
+        loop {
+            let available = self.unread_len();
+            if available < min_units_per_value
+                && !self.fill_until(min_units_per_value)?
+            {
+                let available = self.unread_len();
+                self.consume(available);
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "failed to decode complete value",
+                ));
+            }
+
+            if self.unread_len() < max_units_per_value
+                && max_units_per_value <= self.capacity()
+            {
+                let _ = self.fill_until(max_units_per_value)?;
+            }
+
+            let available = self.unread_len();
+            let unit_count = available.min(max_units_per_value);
+            let units = &self.unread()[..unit_count];
+            debug_assert!(units.len() >= min_units_per_value);
+            let decode_result = unsafe {
+                // SAFETY: `min_units_per_value <= units.len()` guarantees
+                // `decode` preconditions for this slice.
+                codec.decode(units, 0)
+            };
+            match decode_result {
+                Ok((value, consumed)) => {
+                    if consumed.get() > units.len() {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "codec consumed units exceed unread window",
+                        ));
+                    }
+                    self.consume(consumed.get());
+                    return Ok(value);
+                }
+                Err(DecodeFailure::Incomplete { required_total }) => {
+                    let required_total = required_total.get();
+                    if units.len() >= required_total {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "codec reported incomplete input within available window",
+                        ));
+                    }
+                    if !self.fill_until(required_total)? {
+                        let available = self.unread_len();
+                        self.consume(available);
+                        return Err(Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "failed to decode complete value",
+                        ));
+                    }
+                }
+                Err(DecodeFailure::Invalid { source, consumed }) => {
+                    if let Some(consumed) = consumed {
+                        if consumed.get() > units.len() {
+                            return Err(Error::new(
+                                ErrorKind::InvalidData,
+                                "decode error consumed units exceed unread window",
+                            ));
+                        }
+                        self.consume(consumed.get());
+                    }
+                    return Err(map_error(source));
+                }
+            }
+        }
+    }
+
     /// Decodes values into an indexed output range using a streaming
     /// [`Transcoder`].
     ///
@@ -321,6 +442,7 @@ where
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
+            #[cfg(debug_assertions)]
             progress
                 .validate(
                     0,
@@ -329,9 +451,15 @@ where
                     remaining_output,
                 )
                 .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
+            #[cfg(not(debug_assertions))]
+            validate_progress_bounds(
+                progress,
+                available_input,
+                remaining_output,
+            )?;
             let consumed = progress.read();
             let written = progress.written();
-            // SAFETY: TranscodeProgress::validate proved that the decoder
+            // SAFETY: The progress bounds check above proved that the decoder
             // consumed no more than the currently unread input window.
             unsafe {
                 self.input.consume(consumed);
@@ -479,4 +607,90 @@ where
 /// Converts a capacity planning failure into an I/O error.
 fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
+}
+
+/// Decodes one value through caller-owned scratch storage.
+fn read_decoded_via_scratch<I, C, M>(
+    input: &mut TranscodeDecodeInput<I>,
+    codec: &mut C,
+    mut required_total: usize,
+    map_error: &mut M,
+) -> Result<C::Value>
+where
+    I: Input,
+    I::Item: Copy + Default,
+    C: Codec<Unit = I::Item>,
+    M: FnMut(C::DecodeError) -> Error,
+{
+    let mut units = vec![I::Item::default(); required_total];
+    let mut loaded = 0;
+    loop {
+        while loaded < required_total {
+            let remaining = required_total - loaded;
+            let read = unsafe {
+                // SAFETY: `units` was resized to at least `required_total`, so
+                // `loaded..loaded + remaining` is a valid destination range.
+                input.read_unchecked(&mut units, loaded, remaining)
+            }?;
+            if read == 0 {
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "failed to decode complete value",
+                ));
+            }
+            loaded += read;
+        }
+        let decode_result = unsafe {
+            // SAFETY: `loaded >= required_total >= min_units_per_value`, so the
+            // scratch buffer contains the required prefix for decoding.
+            codec.decode(&units, 0)
+        };
+        match decode_result {
+            Ok((value, _)) => return Ok(value),
+            Err(DecodeFailure::Incomplete {
+                required_total: next_required_total,
+            }) => {
+                let next_required_total = next_required_total.get();
+                if next_required_total <= loaded {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "codec reported incomplete input within loaded scratch window",
+                    ));
+                }
+                units.resize(next_required_total, I::Item::default());
+                required_total = next_required_total;
+            }
+            Err(DecodeFailure::Invalid { source, .. }) => {
+                return Err(map_error(source));
+            }
+        }
+    }
+}
+
+/// Validates progress counters needed for unchecked buffered cursor movement.
+#[cfg(not(debug_assertions))]
+fn validate_progress_bounds(
+    progress: TranscodeProgress,
+    available_input: usize,
+    available_output: usize,
+) -> Result<()> {
+    if progress.read() > available_input {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            TranscodeContractError::OverRead {
+                read: progress.read(),
+                available: available_input,
+            },
+        ));
+    }
+    if progress.written() > available_output {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            TranscodeContractError::OverWritten {
+                written: progress.written(),
+                available: available_output,
+            },
+        ));
+    }
+    Ok(())
 }
