@@ -7,7 +7,11 @@
 // =============================================================================
 
 use std::error::Error;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{
+    DefaultHasher,
+    Hash,
+    Hasher,
+};
 
 use qubit_codec::TranscodeContractError;
 

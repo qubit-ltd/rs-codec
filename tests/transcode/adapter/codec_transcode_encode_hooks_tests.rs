@@ -6,7 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecPhase, CodecTranscodeEncoder, TranscodeError, Transcoder};
+use qubit_codec::{
+    Codec,
+    CodecPhase,
+    CodecTranscodeEncoder,
+    TranscodeError,
+    Transcoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -21,9 +27,11 @@ impl Codec for ResetFailCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = ResetFailError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -35,7 +43,10 @@ impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -67,9 +78,11 @@ impl Codec for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -79,7 +92,10 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -104,15 +120,20 @@ impl Codec for OverreportingEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -140,8 +161,11 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode wrote a different length than Codec::encode_len")]
-fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width() {
+#[should_panic(
+    expected = "Codec::encode wrote a different length than Codec::encode_len"
+)]
+fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width()
+ {
     let mut encoder = CodecTranscodeEncoder::new(OverreportingEncodeCodec);
     let mut output = [0_u8; 1];
 

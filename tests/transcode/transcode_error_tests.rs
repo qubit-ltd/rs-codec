@@ -9,7 +9,12 @@
 use core::error::Error;
 use std::io::ErrorKind;
 
-use qubit_codec::{CapacityError, CodecPhase, DecodeFailure, TranscodeError};
+use qubit_codec::{
+    CapacityError,
+    CodecPhase,
+    DecodeFailure,
+    TranscodeError,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain failure")]
@@ -31,7 +36,8 @@ fn test_transcode_error_domain_helpers() {
     );
     assert_eq!(
         None,
-        TranscodeError::<&'static str>::insufficient_output(0, 1, 0).domain_ref(),
+        TranscodeError::<&'static str>::insufficient_output(0, 1, 0)
+            .domain_ref(),
     );
     assert_eq!(
         None,
@@ -45,7 +51,8 @@ fn test_transcode_error_domain_helpers() {
 
 #[test]
 fn test_transcode_error_converts_capacity_error() {
-    let error: TranscodeError<DomainError> = CapacityError::OutputLengthOverflow.into();
+    let error: TranscodeError<DomainError> =
+        CapacityError::OutputLengthOverflow.into();
 
     assert_eq!(TranscodeError::OutputLengthOverflow, error);
 }
@@ -92,8 +99,12 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
         mapped,
     );
 
-    let mapped = TranscodeError::<String>::domain("inner".to_string(), CodecPhase::Flush, None)
-        .map_domain(|error| format!("mapped {error}"));
+    let mapped = TranscodeError::<String>::domain(
+        "inner".to_string(),
+        CodecPhase::Flush,
+        None,
+    )
+    .map_domain(|error| format!("mapped {error}"));
     assert_eq!(
         TranscodeError::Domain {
             source: "mapped inner".to_string(),
@@ -146,14 +157,15 @@ fn test_transcode_error_display_formats_all_variants() {
     );
     assert_eq!(
         "codec Main error at input index Some(5): domain failure",
-        TranscodeError::domain(DomainError, CodecPhase::Main, Some(5)).to_string(),
+        TranscodeError::domain(DomainError, CodecPhase::Main, Some(5))
+            .to_string(),
     );
 }
 
 #[test]
 fn test_transcode_error_into_encode_io_error_maps_framework_variants() {
     let mut map_domain =
-        |error: DomainError| std::io::Error::new(ErrorKind::Other, error.to_string());
+        |error: DomainError| std::io::Error::other(error.to_string());
 
     assert_eq!(
         ErrorKind::InvalidData,
@@ -224,57 +236,62 @@ fn test_transcode_error_source_returns_domain_error() {
 
 #[test]
 fn test_transcode_error_ensure_input_index_accepts_valid_index() {
-    TranscodeError::<&'static str>::ensure_input_index(4, 2).expect("valid index");
+    TranscodeError::<&'static str>::ensure_input_index(4, 2)
+        .expect("valid index");
 }
 
 #[test]
 fn test_transcode_error_ensure_input_index_rejects_out_of_range() {
-    let error =
-        TranscodeError::<&'static str>::ensure_input_index(2, 5).expect_err("out-of-range index");
+    let error = TranscodeError::<&'static str>::ensure_input_index(2, 5)
+        .expect_err("out-of-range index");
 
     assert_eq!(TranscodeError::invalid_input_index(5, 2), error,);
 }
 
 #[test]
 fn test_transcode_error_ensure_min_input_accepts_sufficient_input() {
-    TranscodeError::<&'static str>::ensure_min_input(4, 1, 2).expect("sufficient input");
+    TranscodeError::<&'static str>::ensure_min_input(4, 1, 2)
+        .expect("sufficient input");
 }
 
 #[test]
 fn test_transcode_error_ensure_min_input_delegates_to_input_index() {
-    let error =
-        TranscodeError::<&'static str>::ensure_min_input(2, 5, 0).expect_err("invalid input index");
+    let error = TranscodeError::<&'static str>::ensure_min_input(2, 5, 0)
+        .expect_err("invalid input index");
 
     assert_eq!(TranscodeError::invalid_input_index(5, 2), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_min_input_rejects_insufficient_input() {
-    let error =
-        TranscodeError::<&'static str>::ensure_min_input(4, 2, 3).expect_err("insufficient input");
+    let error = TranscodeError::<&'static str>::ensure_min_input(4, 2, 3)
+        .expect_err("insufficient input");
 
     assert_eq!(TranscodeError::incomplete_input(2, 3, 2), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_min_input_accepts_exact_minimum() {
-    TranscodeError::<&'static str>::ensure_min_input(4, 1, 3).expect("exact minimum input");
+    TranscodeError::<&'static str>::ensure_min_input(4, 1, 3)
+        .expect("exact minimum input");
 }
 
 #[test]
 fn test_transcode_error_ensure_min_input_accepts_zero_minimum_at_end_index() {
-    TranscodeError::<&'static str>::ensure_min_input(4, 4, 0).expect("zero minimum at end index");
+    TranscodeError::<&'static str>::ensure_min_input(4, 4, 0)
+        .expect("zero minimum at end index");
 }
 
 #[test]
 fn test_transcode_error_ensure_no_trailing_input_accepts_exact_consumption() {
-    TranscodeError::<&'static str>::ensure_no_trailing_input(3, 3).expect("exact consumption");
+    TranscodeError::<&'static str>::ensure_no_trailing_input(3, 3)
+        .expect("exact consumption");
 }
 
 #[test]
 fn test_transcode_error_ensure_no_trailing_input_rejects_trailing_input() {
-    let error =
-        TranscodeError::<&'static str>::ensure_no_trailing_input(2, 5).expect_err("trailing input");
+    let error = TranscodeError::<&'static str>::ensure_no_trailing_input(2, 5)
+        .expect_err("trailing input");
 
     assert_eq!(TranscodeError::trailing_input(2, 3), error);
 }
@@ -290,7 +307,8 @@ fn test_transcode_error_ensure_no_trailing_input_rejects_unconsumed_prefix() {
 #[test]
 fn test_transcode_error_from_decode_failure_maps_incomplete() {
     let failure = DecodeFailure::incomplete(qubit_io::nz!(4));
-    let error = TranscodeError::<DomainError>::from_decode_failure(failure, 2, 1);
+    let error =
+        TranscodeError::<DomainError>::from_decode_failure(failure, 2, 1);
 
     assert_eq!(TranscodeError::incomplete_input(2, 4, 1), error);
     assert!(!error.is_domain());
@@ -300,7 +318,8 @@ fn test_transcode_error_from_decode_failure_maps_incomplete() {
 #[test]
 fn test_transcode_error_from_decode_failure_maps_invalid_with_consumed() {
     let failure = DecodeFailure::invalid(DomainError, qubit_io::nz!(1));
-    let error = TranscodeError::<DomainError>::from_decode_failure(failure, 5, 3);
+    let error =
+        TranscodeError::<DomainError>::from_decode_failure(failure, 5, 3);
 
     assert_eq!(
         TranscodeError::domain(DomainError, CodecPhase::Main, Some(5)),
@@ -313,7 +332,8 @@ fn test_transcode_error_from_decode_failure_maps_invalid_with_consumed() {
 #[test]
 fn test_transcode_error_from_decode_failure_maps_invalid_without_consumed() {
     let failure = DecodeFailure::invalid_without_consumed(DomainError);
-    let error = TranscodeError::<DomainError>::from_decode_failure(failure, 0, 8);
+    let error =
+        TranscodeError::<DomainError>::from_decode_failure(failure, 0, 8);
 
     assert_eq!(
         TranscodeError::domain(DomainError, CodecPhase::Main, Some(0)),
@@ -322,10 +342,12 @@ fn test_transcode_error_from_decode_failure_maps_invalid_without_consumed() {
 }
 
 #[test]
-fn test_transcode_error_from_decode_failure_preserves_framework_error_through_map_domain() {
+fn test_transcode_error_from_decode_failure_preserves_framework_error_through_map_domain()
+ {
     let failure = DecodeFailure::incomplete(qubit_io::nz!(3));
-    let mapped = TranscodeError::<DomainError>::from_decode_failure(failure, 1, 2)
-        .map_domain(|error| format!("mapped {error:?}"));
+    let mapped =
+        TranscodeError::<DomainError>::from_decode_failure(failure, 1, 2)
+            .map_domain(|error| format!("mapped {error:?}"));
 
     assert_eq!(
         TranscodeError::IncompleteInput {
@@ -339,33 +361,38 @@ fn test_transcode_error_from_decode_failure_preserves_framework_error_through_ma
 
 #[test]
 fn test_transcode_error_ensure_output_index_accepts_valid_index() {
-    TranscodeError::<&'static str>::ensure_output_index(4, 4).expect("valid index");
+    TranscodeError::<&'static str>::ensure_output_index(4, 4)
+        .expect("valid index");
 }
 
 #[test]
 fn test_transcode_error_ensure_output_index_rejects_out_of_range() {
-    let error =
-        TranscodeError::<&'static str>::ensure_output_index(1, 2).expect_err("out-of-range index");
+    let error = TranscodeError::<&'static str>::ensure_output_index(1, 2)
+        .expect_err("out-of-range index");
 
     assert_eq!(TranscodeError::invalid_output_index(2, 1), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_transcode_indices_accepts_valid_indices() {
-    TranscodeError::<&'static str>::ensure_transcode_indices(3, 1, 5, 2).expect("valid indices");
+    TranscodeError::<&'static str>::ensure_transcode_indices(3, 1, 5, 2)
+        .expect("valid indices");
 }
 
 #[test]
-fn test_transcode_error_ensure_transcode_indices_rejects_invalid_output_index() {
-    let error = TranscodeError::<&'static str>::ensure_transcode_indices(3, 0, 1, 2)
-        .expect_err("invalid output index");
+fn test_transcode_error_ensure_transcode_indices_rejects_invalid_output_index()
+{
+    let error =
+        TranscodeError::<&'static str>::ensure_transcode_indices(3, 0, 1, 2)
+            .expect_err("invalid output index");
 
     assert_eq!(TranscodeError::invalid_output_index(2, 1), error);
 }
 
 #[test]
 fn test_transcode_error_ensure_output_capacity_accepts_sufficient_capacity() {
-    TranscodeError::<&'static str>::ensure_output_capacity(4, 1, 2).expect("sufficient capacity");
+    TranscodeError::<&'static str>::ensure_output_capacity(4, 1, 2)
+        .expect("sufficient capacity");
 }
 
 #[test]
@@ -386,7 +413,8 @@ fn test_transcode_error_ensure_output_capacity_rejects_insufficient_capacity() {
 
 #[test]
 fn test_transcode_error_ensure_output_range_accepts_valid_range() {
-    TranscodeError::<&'static str>::ensure_output_range(4, 1, 2, 2).expect("valid range");
+    TranscodeError::<&'static str>::ensure_output_range(4, 1, 2, 2)
+        .expect("valid range");
 }
 
 #[test]
@@ -415,8 +443,13 @@ fn test_transcode_error_ensure_output_range_rejects_invalid_output_index() {
 
 #[test]
 fn test_transcode_error_ensure_output_range_rejects_range_length_overflow() {
-    let error = TranscodeError::<&'static str>::ensure_output_range(usize::MAX, usize::MAX, 1, 0)
-        .expect_err("range length overflow");
+    let error = TranscodeError::<&'static str>::ensure_output_range(
+        usize::MAX,
+        usize::MAX,
+        1,
+        0,
+    )
+    .expect_err("range length overflow");
 
     assert_eq!(
         TranscodeError::invalid_output_index(usize::MAX, usize::MAX),

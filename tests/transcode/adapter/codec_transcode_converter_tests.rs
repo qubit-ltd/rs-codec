@@ -8,8 +8,15 @@
 //! Tests for the codec-backed buffered converter adapter.
 
 use qubit_codec::{
-    CapacityError, Codec, CodecPhase, CodecTranscodeConverter, ConvertError, TranscodeConverter,
-    TranscodeError, TranscodeStatus, Transcoder,
+    CapacityError,
+    Codec,
+    CodecPhase,
+    CodecTranscodeConverter,
+    ConvertError,
+    TranscodeConverter,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -21,7 +28,8 @@ impl Codec for VariableByteDecoder {
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -29,7 +37,10 @@ impl Codec for VariableByteDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -37,7 +48,9 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(2)))
+                    Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(
+                        2
+                    )))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
@@ -74,7 +87,8 @@ impl Codec for PairByteEncoder {
     type DecodeError = core::convert::Infallible;
     type EncodeError = TestEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -82,7 +96,10 @@ impl Codec for PairByteEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
@@ -114,15 +131,20 @@ impl Codec for FlushFailDecoder {
     type DecodeError = &'static str;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -154,9 +176,11 @@ impl Codec for ResetFailEncoder {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -164,7 +188,10 @@ impl Codec for ResetFailEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -204,7 +231,10 @@ impl Codec for MinTwoDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((
@@ -243,9 +273,11 @@ impl Codec for FlushValueDecoder {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_DECODE_FLUSH_VALUES: usize = 1;
 
@@ -253,7 +285,10 @@ impl Codec for FlushValueDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
@@ -295,9 +330,11 @@ impl Codec for NonDefaultDecoder {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
@@ -337,9 +374,11 @@ impl Codec for NonDefaultEncoder {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
@@ -372,20 +411,26 @@ impl Codec for NonDefaultEncoder {
 
 #[test]
 fn test_codec_transcode_converter_supports_debug_and_default() {
-    let converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::default();
+    let converter = CodecTranscodeConverter::<
+        VariableByteDecoder,
+        PairByteEncoder,
+    >::default();
 
     assert!(format!("{converter:?}").contains("CodecTranscodeConverter"));
 }
 
 #[test]
-fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_api() {
-    type Converter = CodecTranscodeConverter<NonDefaultDecoder, NonDefaultEncoder>;
+fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_api()
+ {
+    type Converter =
+        CodecTranscodeConverter<NonDefaultDecoder, NonDefaultEncoder>;
 
     fn assert_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
 
     assert_transcode_converter::<Converter>();
 
-    let mut converter = CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
+    let mut converter =
+        CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(2), converter.max_transcode_output_len(2));
@@ -406,46 +451,62 @@ fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_ap
 
 #[test]
 fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
-    type Converter = CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>;
+    type Converter =
+        CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>;
 
     let mut converter = Converter::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(
         Ok(2),
-        <Converter as Transcoder<u8, u8>>::max_transcode_output_len(&converter, 1)
+        <Converter as Transcoder<u8, u8>>::max_transcode_output_len(
+            &converter, 1
+        )
     );
     assert_eq!(
         Ok(0),
         <Converter as Transcoder<u8, u8>>::max_finish_output_len(&converter),
     );
 
-    let progress =
-        <Converter as Transcoder<u8, u8>>::transcode(&mut converter, &[7], 0, &mut output, 0)
-            .expect("trait transcoder dispatch should convert through the adapter");
+    let progress = <Converter as Transcoder<u8, u8>>::transcode(
+        &mut converter,
+        &[7],
+        0,
+        &mut output,
+        0,
+    )
+    .expect("trait transcoder dispatch should convert through the adapter");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(1, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([7, 8], output);
 
-    <Converter as Transcoder<u8, u8>>::reset(&mut converter, &mut output, 0).expect("reset");
+    <Converter as Transcoder<u8, u8>>::reset(&mut converter, &mut output, 0)
+        .expect("reset");
     assert_eq!(
         Ok(0),
-        <Converter as Transcoder<u8, u8>>::finish(&mut converter, &mut output, 0),
+        <Converter as Transcoder<u8, u8>>::finish(
+            &mut converter,
+            &mut output,
+            0
+        ),
     );
 }
 
 #[test]
-fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() {
+fn test_codec_transcode_converter_converts_values_until_output_needs_capacity()
+{
     fn assert_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
 
-    assert_transcode_converter::<CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>>();
+    assert_transcode_converter::<
+        CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>,
+    >();
 
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 4];
 
     let progress = converter
@@ -468,10 +529,10 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() 
 
 #[test]
 fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(6), converter.max_transcode_output_len(3));
@@ -490,10 +551,10 @@ fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
 
 #[test]
 fn test_codec_transcode_converter_finish_encodes_decode_flush_values() {
-    let mut converter = CodecTranscodeConverter::<FlushValueDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         FlushValueDecoder,
         PairByteEncoder,
-    );
+    >::new(FlushValueDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(2), converter.max_finish_output_len());
@@ -508,10 +569,10 @@ fn test_codec_transcode_converter_finish_encodes_decode_flush_values() {
 
 #[test]
 fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -538,11 +599,13 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
 }
 
 #[test]
-fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_tail() {
-    let mut converter = CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
-        MinTwoDecoder,
-        PairByteEncoder,
-    );
+fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_tail()
+ {
+    let mut converter =
+        CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
+            MinTwoDecoder,
+            PairByteEncoder,
+        );
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -562,11 +625,12 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
 }
 
 #[test]
-fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_short() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_short()
+ {
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 1];
 
     let progress = converter
@@ -599,10 +663,10 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
 
 #[test]
 fn test_codec_transcode_converter_finish_drains_pending_decoded_value() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut short_output = [0_u8; 1];
 
     let progress = converter
@@ -626,10 +690,10 @@ fn test_codec_transcode_converter_finish_drains_pending_decoded_value() {
 
 #[test]
 fn test_codec_transcode_converter_reports_invalid_indices() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -651,10 +715,10 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
 
 #[test]
 fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -684,10 +748,10 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
 
 #[test]
 fn test_codec_transcode_converter_wraps_decode_flush_error() {
-    let mut converter = CodecTranscodeConverter::<FlushFailDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         FlushFailDecoder,
         PairByteEncoder,
-    );
+    >::new(FlushFailDecoder, PairByteEncoder);
     let mut output = [];
 
     let error = converter
@@ -706,10 +770,10 @@ fn test_codec_transcode_converter_wraps_decode_flush_error() {
 
 #[test]
 fn test_codec_transcode_converter_wraps_encode_reset_error() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, ResetFailEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         ResetFailEncoder,
-    );
+    >::new(VariableByteDecoder, ResetFailEncoder);
     let mut output = [0_u8; 1];
 
     let error = converter
@@ -728,10 +792,11 @@ fn test_codec_transcode_converter_wraps_encode_reset_error() {
 
 #[test]
 fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
-    let mut converter = CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
-        MinTwoDecoder,
-        PairByteEncoder,
-    );
+    let mut converter =
+        CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
+            MinTwoDecoder,
+            PairByteEncoder,
+        );
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -755,10 +820,10 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
 
 #[test]
 fn test_codec_transcode_converter_reports_max_reset_output_len() {
-    let converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
 
     assert_eq!(Ok(0), converter.max_reset_output_len());
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&converter));
@@ -766,10 +831,10 @@ fn test_codec_transcode_converter_reports_max_reset_output_len() {
 
 #[test]
 fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
-    let mut converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let mut converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 4];
 
     converter
@@ -792,10 +857,10 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
 
 #[test]
 fn test_codec_transcode_converter_forwards_map_error() {
-    let converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(
+    let converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
-    );
+    >::new(VariableByteDecoder, PairByteEncoder);
     let error = TranscodeError::domain(
         ConvertError::decode(TestDecodeError::Invalid { consumed: 1 }),
         CodecPhase::Main,

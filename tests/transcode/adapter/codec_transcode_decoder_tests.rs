@@ -8,8 +8,14 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    Codec, CodecPhase, CodecTranscodeDecoder, DecodeFailure, TranscodeDecoder, TranscodeError,
-    TranscodeStatus, Transcoder,
+    Codec,
+    CodecPhase,
+    CodecTranscodeDecoder,
+    DecodeFailure,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -21,7 +27,8 @@ impl Codec for VariableByteCodec {
     type DecodeError = TestDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
 
@@ -29,7 +36,8 @@ impl Codec for VariableByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -87,7 +95,8 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((
@@ -118,15 +127,18 @@ impl Codec for FlushFailCodec {
     type DecodeError = &'static str;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -158,15 +170,18 @@ impl Codec for ResetFailCodec {
     type DecodeError = &'static str;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -359,7 +374,11 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         .expect_err("invalid input should fail");
 
     assert_eq!(
-        TranscodeError::domain(TestDecodeError::Invalid, CodecPhase::Main, Some(0)),
+        TranscodeError::domain(
+            TestDecodeError::Invalid,
+            CodecPhase::Main,
+            Some(0)
+        ),
         error,
     );
 }
@@ -402,7 +421,12 @@ fn test_codec_transcode_decoder_reports_max_reset_output_len() {
 
 #[test]
 fn test_codec_transcode_decoder_forwards_map_error() {
-    let decoder = CodecTranscodeDecoder::<VariableByteCodec>::new(VariableByteCodec);
-    let error = TranscodeError::domain(TestDecodeError::Invalid, CodecPhase::Main, None);
+    let decoder =
+        CodecTranscodeDecoder::<VariableByteCodec>::new(VariableByteCodec);
+    let error = TranscodeError::domain(
+        TestDecodeError::Invalid,
+        CodecPhase::Main,
+        None,
+    );
     assert_eq!(error, Transcoder::map_error(&decoder, error));
 }
