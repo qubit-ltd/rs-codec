@@ -9,7 +9,12 @@
 
 use core::num::NonZeroUsize;
 
-use crate::{CapacityError, Codec, CodecPhase, TranscodeError};
+use crate::{
+    CapacityError,
+    Codec,
+    CodecPhase,
+    TranscodeError,
+};
 
 /// Extension trait for checked one-value codec operations.
 ///
@@ -85,14 +90,20 @@ pub trait CodecValueExt: Codec {
             .checked_add(value_units)
             .and_then(|units| units.checked_add(Self::MAX_ENCODE_FLUSH_UNITS))
             .ok_or_else(TranscodeError::output_length_overflow)?;
-        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
 
         let reset_written = unsafe {
             // SAFETY: The capacity check above reserves the combined
             // reset, value, and flush output bound at `output_index`.
             self.encode_reset(output, output_index)
         }
-        .map_err(|error| TranscodeError::domain(error, CodecPhase::Reset, None))?;
+        .map_err(|error| {
+            TranscodeError::domain(error, CodecPhase::Reset, None)
+        })?;
         assert!(
             reset_written <= reset_units,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -103,7 +114,9 @@ pub trait CodecValueExt: Codec {
             // capacity check leave the exact value width writable.
             self.encode(value, output, output_index + reset_written)
         }
-        .map_err(|error| TranscodeError::domain(error, CodecPhase::Main, Some(0)))?
+        .map_err(|error| {
+            TranscodeError::domain(error, CodecPhase::Main, Some(0))
+        })?
         .get();
         assert!(
             value_written == value_units,
@@ -116,7 +129,9 @@ pub trait CodecValueExt: Codec {
             // flush bound after the reset and exact value output.
             self.encode_flush(output, flush_index)
         }
-        .map_err(|error| TranscodeError::domain(error, CodecPhase::Flush, None))?;
+        .map_err(|error| {
+            TranscodeError::domain(error, CodecPhase::Flush, None)
+        })?;
         assert!(
             flush_written <= Self::MAX_ENCODE_FLUSH_UNITS,
             "Codec::encode_flush wrote beyond its flush bound",
@@ -157,7 +172,10 @@ pub trait CodecValueExt: Codec {
         input_index: usize,
         flush_output: &mut [Self::Value],
         flush_output_index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize, usize), TranscodeError<Self::DecodeError>> {
+    ) -> Result<
+        (Self::Value, NonZeroUsize, usize),
+        TranscodeError<Self::DecodeError>,
+    > {
         TranscodeError::ensure_min_input(
             input.len(),
             input_index,
@@ -165,7 +183,11 @@ pub trait CodecValueExt: Codec {
         )?;
 
         let flush_cap = Self::MAX_DECODE_FLUSH_VALUES;
-        TranscodeError::ensure_output_capacity(flush_output.len(), flush_output_index, flush_cap)?;
+        TranscodeError::ensure_output_capacity(
+            flush_output.len(),
+            flush_output_index,
+            flush_cap,
+        )?;
 
         let (value, consumed) = unsafe {
             // SAFETY: The input checks above guarantee the minimum readable
@@ -173,7 +195,11 @@ pub trait CodecValueExt: Codec {
             self.decode(input, input_index)
         }
         .map_err(|failure| {
-            TranscodeError::from_decode_failure(failure, input_index, input.len() - input_index)
+            TranscodeError::from_decode_failure(
+                failure,
+                input_index,
+                input.len() - input_index,
+            )
         })?;
         let available = input.len() - input_index;
         assert!(
@@ -186,7 +212,9 @@ pub trait CodecValueExt: Codec {
             // output bound at `flush_output_index`.
             self.decode_flush(flush_output, flush_output_index)
         }
-        .map_err(|error| TranscodeError::domain(error, CodecPhase::Flush, None))?;
+        .map_err(|error| {
+            TranscodeError::domain(error, CodecPhase::Flush, None)
+        })?;
         assert!(
             flushed <= flush_cap,
             "Codec::decode_flush wrote beyond its flush bound",
@@ -228,17 +256,27 @@ pub trait CodecValueExt: Codec {
         flush_output: &mut [Self::Value],
         flush_output_index: usize,
     ) -> Result<(Self::Value, usize), TranscodeError<Self::DecodeError>> {
-        TranscodeError::ensure_min_input(input.len(), 0, Self::MIN_UNITS_PER_VALUE.get())?;
+        TranscodeError::ensure_min_input(
+            input.len(),
+            0,
+            Self::MIN_UNITS_PER_VALUE.get(),
+        )?;
 
         let flush_cap = Self::MAX_DECODE_FLUSH_VALUES;
-        TranscodeError::ensure_output_capacity(flush_output.len(), flush_output_index, flush_cap)?;
+        TranscodeError::ensure_output_capacity(
+            flush_output.len(),
+            flush_output_index,
+            flush_cap,
+        )?;
 
         let (value, consumed) = unsafe {
             // SAFETY: The input check above guarantees the minimum readable
             // units required by `Codec::decode` at index 0.
             self.decode(input, 0)
         }
-        .map_err(|failure| TranscodeError::from_decode_failure(failure, 0, input.len()))?;
+        .map_err(|failure| {
+            TranscodeError::from_decode_failure(failure, 0, input.len())
+        })?;
         assert!(
             consumed.get() <= input.len(),
             "Codec::decode consumed beyond available input",
@@ -250,7 +288,9 @@ pub trait CodecValueExt: Codec {
             // output bound at `flush_output_index`.
             self.decode_flush(flush_output, flush_output_index)
         }
-        .map_err(|error| TranscodeError::domain(error, CodecPhase::Flush, None))?;
+        .map_err(|error| {
+            TranscodeError::domain(error, CodecPhase::Flush, None)
+        })?;
         assert!(
             flushed <= flush_cap,
             "Codec::decode_flush wrote beyond its flush bound",

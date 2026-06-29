@@ -9,10 +9,20 @@
 
 use core::fmt;
 
-use super::{CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks};
+use super::{
+    CodecTranscodeDecodeHooks,
+    CodecTranscodeEncodeHooks,
+};
 use crate::{
-    CapacityError, Codec, ConvertError, TranscodeConvertEngine, TranscodeConvertError,
-    TranscodeConverter, TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    ConvertError,
+    TranscodeConvertEngine,
+    TranscodeConvertError,
+    TranscodeConverter,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Converts source units to target units through a decoded value by using
@@ -41,14 +51,24 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>,
+    engine: TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >,
 }
 
 impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: fmt::Debug,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///
@@ -108,7 +128,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -227,7 +250,10 @@ where
 
     /// Returns the default converter adapter error unchanged.
     #[inline(always)]
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+    fn map_error(
+        &self,
+        error: TranscodeError<Self::DomainError>,
+    ) -> Self::Error {
         error
     }
 
@@ -241,7 +267,10 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
@@ -264,7 +293,11 @@ where
     /// Clears retained pending output, resets component state, and emits
     /// stream-start encode output.
     #[inline(always)]
-    fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [E::Unit],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -294,7 +327,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -321,7 +360,8 @@ where
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter<D::Unit, E::Unit>
+    for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
@@ -334,7 +374,12 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: Default,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///

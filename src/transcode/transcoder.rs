@@ -6,8 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError, transcode_error::TranscodeError,
-    transcode_progress::TranscodeProgress, transcode_status::TranscodeStatus,
+    capacity_error::CapacityError,
+    transcode_error::TranscodeError,
+    transcode_progress::TranscodeProgress,
+    transcode_status::TranscodeStatus,
 };
 
 /// Converts one logical stream of input units into one logical stream of output
@@ -204,7 +206,10 @@ pub trait Transcoder<Input, Output> {
     /// # Returns
     ///
     /// Returns the final error exposed by this transcoder.
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error;
+    fn map_error(
+        &self,
+        error: TranscodeError<Self::DomainError>,
+    ) -> Self::Error;
 
     /// Returns an upper bound for output units emitted when resetting stream
     /// state.
@@ -247,7 +252,10 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -269,7 +277,10 @@ pub trait Transcoder<Input, Output> {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -320,7 +331,11 @@ pub trait Transcoder<Input, Output> {
     ///
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when reset itself fails.
-    fn reset(&mut self, output: &mut [Output], output_index: usize) -> Result<usize, Self::Error>;
+    fn reset(
+        &mut self,
+        output: &mut [Output],
+        output_index: usize,
+    ) -> Result<usize, Self::Error>;
 
     /// Converts available input units into output units.
     ///
@@ -476,7 +491,11 @@ pub trait Transcoder<Input, Output> {
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when finish itself
     /// fails.
-    fn finish(&mut self, output: &mut [Output], output_index: usize) -> Result<usize, Self::Error>;
+    fn finish(
+        &mut self,
+        output: &mut [Output],
+        output_index: usize,
+    ) -> Result<usize, Self::Error>;
 
     /// Runs a complete one-shot `reset -> transcode -> finish` stream.
     ///
@@ -509,17 +528,23 @@ pub trait Transcoder<Input, Output> {
         output: &mut [Output],
     ) -> Result<usize, Self::Error> {
         let mut output_cursor = self.reset(output, 0)?;
-        let transcode_required = self
-            .max_transcode_output_len(input.len())
-            .map_err(|_| self.map_error(TranscodeError::OutputLengthOverflow))?;
-        let finish_required = self
-            .max_finish_output_len()
-            .map_err(|_| self.map_error(TranscodeError::OutputLengthOverflow))?;
-        let remaining_required = transcode_required
-            .checked_add(finish_required)
-            .ok_or_else(|| self.map_error(TranscodeError::OutputLengthOverflow))?;
-        TranscodeError::ensure_output_capacity(output.len(), output_cursor, remaining_required)
-            .map_err(|error| self.map_error(error))?;
+        let transcode_required =
+            self.max_transcode_output_len(input.len()).map_err(|_| {
+                self.map_error(TranscodeError::OutputLengthOverflow)
+            })?;
+        let finish_required = self.max_finish_output_len().map_err(|_| {
+            self.map_error(TranscodeError::OutputLengthOverflow)
+        })?;
+        let remaining_required =
+            transcode_required.checked_add(finish_required).ok_or_else(
+                || self.map_error(TranscodeError::OutputLengthOverflow),
+            )?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_cursor,
+            remaining_required,
+        )
+        .map_err(|error| self.map_error(error))?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
         debug_assert!(
@@ -541,8 +566,11 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error =
-                    TranscodeError::insufficient_output(output_index, required.get(), available);
+                let error = TranscodeError::insufficient_output(
+                    output_index,
+                    required.get(),
+                    available,
+                );
                 return Err(self.map_error(error));
             }
             TranscodeStatus::NeedInput {
@@ -550,8 +578,11 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error =
-                    TranscodeError::incomplete_input(input_index, required.get(), available);
+                let error = TranscodeError::incomplete_input(
+                    input_index,
+                    required.get(),
+                    available,
+                );
                 return Err(self.map_error(error));
             }
         }

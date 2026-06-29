@@ -11,7 +11,10 @@ use core::num::NonZeroUsize;
 
 use qubit_io::UncheckedSlice;
 
-use super::super::engine::{EncodeContext, EncodeOutcome};
+use super::super::engine::{
+    EncodeContext,
+    EncodeOutcome,
+};
 use super::super::transcode_progress::TranscodeProgress;
 use super::transcode_state::TranscodeState;
 
@@ -43,7 +46,12 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -94,7 +102,10 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
+    pub(in crate::transcode) fn accept_written_value(
+        &mut self,
+        written: usize,
+    ) {
         assert!(
             written <= self.available_output(),
             "EncodeOutcome::Consumed wrote beyond available output",

@@ -9,8 +9,14 @@
 
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeError, TranscodeEncoder,
-    TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    TranscodeEncodeEngine,
+    TranscodeEncodeError,
+    TranscodeEncoder,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -48,7 +54,10 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
+            engine: TranscodeEncodeEngine::new(
+                codec,
+                CodecTranscodeEncodeHooks,
+            ),
         }
     }
 }
@@ -62,7 +71,10 @@ where
 
     /// Returns the default streaming adapter error unchanged.
     #[inline(always)]
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+    fn map_error(
+        &self,
+        error: TranscodeError<Self::DomainError>,
+    ) -> Self::Error {
         error
     }
 
@@ -77,7 +89,10 @@ where
     ///
     /// a conservative upper bound for output units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine
             .max_transcode_output_len(input_len)
             .map_err(|_| CapacityError::OutputLengthOverflow)
@@ -107,7 +122,11 @@ where
 
     /// Runs before-reset cleanup and emits stream-start output.
     #[inline(always)]
-    fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        output: &mut [C::Unit],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
         self.engine.reset(output, output_index)
     }
 

@@ -8,11 +8,29 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{Buffer, BufferedInput, Input, Seekable, UncheckedSlice};
+use qubit_io::{
+    Buffer,
+    BufferedInput,
+    Input,
+    Seekable,
+    UncheckedSlice,
+};
 
-use crate::{Codec, DecodeFailure, TranscodeStatus, Transcoder};
+use crate::{
+    Codec,
+    DecodeFailure,
+    TranscodeStatus,
+    Transcoder,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -186,7 +204,13 @@ where
             "unchecked copy destination range exceeds output buffer",
         );
         unsafe {
-            UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
+            UncheckedSlice::copy_nonoverlapping(
+                unread,
+                0,
+                output,
+                output_index,
+                count,
+            );
         }
     }
 
@@ -252,20 +276,32 @@ where
     /// occurs before a complete value is available, `InvalidData` when the
     /// codec reports an impossible incomplete state, or the error returned
     /// by `map_error` for invalid codec input.
-    pub fn read_decoded_with<C, M>(&mut self, codec: &mut C, mut map_error: M) -> Result<C::Value>
+    pub fn read_decoded_with<C, M>(
+        &mut self,
+        codec: &mut C,
+        mut map_error: M,
+    ) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         let min_units_per_value = C::MIN_UNITS_PER_VALUE.get();
-        let max_units_per_value = C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
+        let max_units_per_value =
+            C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
         if min_units_per_value > self.capacity() {
-            return read_decoded_via_scratch(self, codec, min_units_per_value, &mut map_error);
+            return read_decoded_via_scratch(
+                self,
+                codec,
+                min_units_per_value,
+                &mut map_error,
+            );
         }
 
         loop {
             let available = self.unread_len();
-            if available < min_units_per_value && !self.fill_until(min_units_per_value)? {
+            if available < min_units_per_value
+                && !self.fill_until(min_units_per_value)?
+            {
                 let available = self.unread_len();
                 self.consume(available);
                 return Err(Error::new(
@@ -274,7 +310,9 @@ where
                 ));
             }
 
-            if self.unread_len() < max_units_per_value && max_units_per_value <= self.capacity() {
+            if self.unread_len() < max_units_per_value
+                && max_units_per_value <= self.capacity()
+            {
                 let _ = self.fill_until(max_units_per_value)?;
             }
 

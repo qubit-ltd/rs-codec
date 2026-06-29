@@ -9,8 +9,14 @@
 
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError, Codec, TranscodeDecodeEngine, TranscodeDecodeError, TranscodeDecoder,
-    TranscodeError, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    TranscodeDecodeEngine,
+    TranscodeDecodeError,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -53,7 +59,10 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
+            engine: TranscodeDecodeEngine::new(
+                codec,
+                CodecTranscodeDecodeHooks,
+            ),
         }
     }
 }
@@ -67,7 +76,10 @@ where
 
     /// Returns the default streaming adapter error unchanged.
     #[inline(always)]
-    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+    fn map_error(
+        &self,
+        error: TranscodeError<Self::DomainError>,
+    ) -> Self::Error {
         error
     }
 
@@ -82,7 +94,10 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine
             .max_transcode_output_len(input_len)
             .map_err(|_| CapacityError::OutputLengthOverflow)
@@ -170,4 +185,7 @@ where
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
+    C: Codec
+{
+}

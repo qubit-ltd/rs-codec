@@ -10,7 +10,10 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{DecodeContext, DecodeOutcome},
+    engine::{
+        DecodeContext,
+        DecodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -43,7 +46,12 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -173,7 +181,9 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
-    pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(
+        &self,
+    ) -> TranscodeProgress {
         self.state.need_output_progress(NonZeroUsize::MIN, 0)
     }
 

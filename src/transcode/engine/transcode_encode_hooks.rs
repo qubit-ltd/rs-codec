@@ -8,7 +8,11 @@
 //! Policy hooks used by buffered encoder engines.
 
 use super::encode_unencodable_action::EncodeUnencodableAction;
-use crate::{Codec, TranscodeEncodeError, TranscodeError};
+use crate::{
+    Codec,
+    TranscodeEncodeError,
+    TranscodeError,
+};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
