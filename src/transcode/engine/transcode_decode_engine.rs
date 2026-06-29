@@ -9,29 +9,13 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    decode_state::DecodeState,
-    lifecycle::LifecycleGuard,
-};
+use super::super::internal::{decode_state::DecodeState, lifecycle::LifecycleGuard};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError,
-    Codec,
-    DecodeContext,
-    DecodeFailure,
-    DecodeInvalidAction,
-    DecodeOutcome,
-    TranscodeDecodeEngineError,
-    TranscodeDecodeHooks,
-    TranscodeError,
-    TranscodeProgress,
+    CapacityError, Codec, CodecPhase, DecodeContext, DecodeFailure, DecodeInvalidAction,
+    DecodeOutcome, TranscodeDecodeError, TranscodeDecodeHooks, TranscodeError, TranscodeProgress,
     Transcoder,
 };
-
-type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
-    <C as Codec>::DecodeError,
-    <H as TranscodeDecodeHooks<C>>::Error,
->;
 
 /// Reusable buffered decoding engine for codec-backed decoders.
 ///
@@ -66,12 +50,10 @@ type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
 /// use qubit_codec::{
 ///     Codec,
 ///     DecodeFailure,
-///     CodecDecodeError,
 ///     DecodeInvalidAction,
 ///     DecodeContext,
 ///     TranscodeStatus,
 ///     TranscodeDecodeEngine,
-///     TranscodeDecodeEngineError,
 ///     TranscodeDecodeHooks,
 ///     TranscodeError,
 /// };
@@ -123,15 +105,13 @@ type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
 /// struct ReplacementHooks;
 ///
 /// impl TranscodeDecodeHooks<ByteCodec> for ReplacementHooks {
-///     type Error = CodecDecodeError<ByteDecodeError>;
-///
 ///     fn handle_invalid_decode(
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
-///         error: ByteDecodeError,
+///         error: &ByteDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
+///     ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<ByteCodec>> {
 ///         match error {
 ///             ByteDecodeError::Malformed { .. } => {
 ///                 Ok(DecodeInvalidAction::Emit {
@@ -157,7 +137,7 @@ type DecodeEngineErrorOf<C, H> = TranscodeDecodeEngineError<
 ///         // Drain `output[..output_index]`, then resume with more output room.
 ///     }
 /// }
-/// # Ok::<(), TranscodeError<TranscodeDecodeEngineError<ByteDecodeError, CodecDecodeError<ByteDecodeError>>>>(())
+/// # Ok::<(), TranscodeError<ByteDecodeError>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -287,7 +267,7 @@ where
     pub fn max_transcode_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
@@ -303,10 +283,10 @@ where
     /// [`TranscodeDecodeHooks::max_finish_output_len`].
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+    pub fn max_finish_output_len(&self) -> Result<usize, TranscodeDecodeError<C>> {
         C::MAX_DECODE_FLUSH_VALUES
             .checked_add(self.hooks.max_finish_output_len(&self.codec))
-            .ok_or(CapacityError::OutputLengthOverflow)
+            .ok_or_else(TranscodeError::output_length_overflow)
     }
 
     /// Returns the maximum values emitted when resetting stream state.
@@ -335,19 +315,15 @@ where
     ///
     /// Returns the complete-stream output bound, or a capacity error on
     /// arithmetic overflow.
-    #[inline]
+    #[inline(never)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        let reset = self.max_reset_output_len()?;
-        let transcode = self.max_transcode_output_len(input_len)?;
-        let finish = self.max_finish_output_len()?;
-        reset
-            .checked_add(transcode)
-            .and_then(|len| len.checked_add(finish))
-            .ok_or(CapacityError::OutputLengthOverflow)
+    pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, TranscodeDecodeError<C>> {
+        checked_stream_total(
+            self.max_reset_output_len()?,
+            self.max_transcode_output_len(input_len)?,
+            self.max_finish_output_len()?,
+        )
+        .ok_or_else(TranscodeError::output_length_overflow)
     }
 
     /// Resets codec decode state, runs reset hooks, and emits stream-start
@@ -375,25 +351,17 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<DecodeEngineErrorOf<C, H>>> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // reset-output bound at `output_index`.
             self.codec.decode_reset(output, output_index)
         }
-        .map_err(|error| {
-            TranscodeError::domain(TranscodeDecodeEngineError::codec_reset(
-                error,
-            ))
-        })?;
+        .map_err(|error| TranscodeError::domain(error, CodecPhase::Reset, None))?;
         assert!(
             written <= required,
             "Codec::decode_reset wrote beyond its reset bound",
@@ -426,8 +394,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<DecodeEngineErrorOf<C, H>>>
-    {
+    ) -> Result<TranscodeProgress, TranscodeDecodeError<C>> {
         self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
@@ -437,8 +404,7 @@ where
         )?;
 
         let min_units = C::MIN_UNITS_PER_VALUE;
-        let mut state =
-            DecodeState::new(input, input_index, output, output_index);
+        let mut state = DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
             let available = context.available();
@@ -450,17 +416,15 @@ where
             }
             let output_index = state.output_cursor();
             let output = state.output_mut();
-            let (outcome, _) = self
-                .decode_one(input, context, |value, _input_index| {
-                    // SAFETY: `needs_output()` returned false, so the output
-                    // cursor points at a writable slot. `ptr::write` moves
-                    // the decoded value into that slot without requiring
-                    // `C::Value: Copy`.
-                    unsafe {
-                        output.as_mut_ptr().add(output_index).write(value);
-                    }
-                })
-                .map_err(TranscodeError::domain)?;
+            let (outcome, _) = self.decode_one(input, context, |value, _input_index| {
+                // SAFETY: `needs_output()` returned false, so the output
+                // cursor points at a writable slot. `ptr::write` moves
+                // the decoded value into that slot without requiring
+                // `C::Value: Copy`.
+                unsafe {
+                    output.as_mut_ptr().add(output_index).write(value);
+                }
+            })?;
             if let Some(progress) = state.apply_decode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -502,30 +466,19 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<DecodeEngineErrorOf<C, H>>> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         let flushed = unsafe { self.codec.decode_flush(output, output_index) }
-            .map_err(|error| {
-                TranscodeError::domain(TranscodeDecodeEngineError::codec_flush(
-                    error,
-                ))
-            })?;
+            .map_err(|error| TranscodeError::domain(error, CodecPhase::Flush, None))?;
         assert!(
             flushed <= C::MAX_DECODE_FLUSH_VALUES,
             "Codec::decode_flush wrote beyond its flush bound",
         );
         let written = self
             .hooks
-            .finish_hooks(&mut self.codec, output, output_index + flushed)
-            .map_err(|error| {
-                TranscodeError::domain(TranscodeDecodeEngineError::hook(error))
-            })?;
+            .finish_hooks(&mut self.codec, output, output_index + flushed)?;
         assert!(
             flushed + written <= required,
             "TranscodeDecodeEngine hook wrote beyond its finish bound",
@@ -561,10 +514,8 @@ where
         &mut self,
         input: &[C::Unit],
         output: &mut [C::Value],
-    ) -> Result<usize, TranscodeError<DecodeEngineErrorOf<C, H>>> {
-        <Self as Transcoder<C::Unit, C::Value>>::transcode_complete_into(
-            self, input, output,
-        )
+    ) -> Result<usize, TranscodeDecodeError<C>> {
+        <Self as Transcoder<C::Unit, C::Value>>::transcode_complete_into(self, input, output)
     }
 
     /// Decodes one source value attempt and delivers emitted values.
@@ -595,7 +546,7 @@ where
         input: &[C::Unit],
         context: DecodeContext,
         consume: F,
-    ) -> Result<(DecodeOutcome, Option<R>), DecodeEngineErrorOf<C, H>>
+    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeError<C>>
     where
         F: FnOnce(C::Value, usize) -> R,
     {
@@ -627,36 +578,25 @@ where
                 Ok((DecodeOutcome::need_input(required_total), None))
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {
-                let action = self
-                    .hooks
-                    .handle_invalid_decode(
-                        &mut self.codec,
+                let action = self.hooks.handle_invalid_decode(
+                    &mut self.codec,
+                    &source,
+                    consumed,
+                    context,
+                )?;
+                if matches!(action, DecodeInvalidAction::Reject) {
+                    return Err(TranscodeError::domain(
                         source,
-                        consumed,
-                        context,
-                    )
-                    .map_err(TranscodeDecodeEngineError::hook)?;
+                        CodecPhase::Main,
+                        Some(context.input_index()),
+                    ));
+                }
                 Ok(Self::apply_invalid_decode_action(action, context, consume))
             }
         }
     }
 
     /// Applies a hook-selected invalid-decode action.
-    ///
-    /// # Parameters
-    ///
-    /// - `action`: Policy action selected by the decode hooks.
-    /// - `context`: Decode context for the failed input.
-    /// - `consume`: Callback invoked when the action emits a replacement value.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `R`: Value returned by the consumer when a replacement is emitted.
-    /// - `F`: Consumer callback type.
-    ///
-    /// # Returns
-    ///
-    /// Returns the normalized decode outcome and optional consumer result.
     fn apply_invalid_decode_action<R, F>(
         action: DecodeInvalidAction<C::Value>,
         context: DecodeContext,
@@ -684,6 +624,13 @@ where
                     Some(consumed_value),
                 )
             }
+            DecodeInvalidAction::Reject => {
+                debug_assert!(
+                    false,
+                    "DecodeInvalidAction::Reject is handled before action application",
+                );
+                (DecodeOutcome::skipped(NonZeroUsize::MIN), None)
+            }
         }
     }
 }
@@ -693,23 +640,28 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
-    type Error = DecodeEngineErrorOf<C, H>;
+    type Error = TranscodeDecodeError<C>;
+    type DomainError = C::DecodeError;
+
+    /// Returns the engine error unchanged.
+    #[inline(always)]
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_transcode_output_len(self, input_len)
+            .map_err(transcode_capacity_error)
     }
 
     /// Returns an upper bound for values produced by finishing codec and hook
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        TranscodeDecodeEngine::max_finish_output_len(self)
+        TranscodeDecodeEngine::max_finish_output_len(self).map_err(transcode_capacity_error)
     }
 
     /// Returns an upper bound for values emitted when resetting stream state.
@@ -724,7 +676,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
@@ -736,15 +688,8 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> core::result::Result<TranscodeProgress, TranscodeError<Self::Error>>
-    {
-        TranscodeDecodeEngine::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+    ) -> core::result::Result<TranscodeProgress, Self::Error> {
+        TranscodeDecodeEngine::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -753,7 +698,21 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
+}
+
+/// Adds reset, transcode, and finish bounds for one complete stream.
+#[inline(never)]
+fn checked_stream_total(reset: usize, transcode: usize, finish: usize) -> Option<usize> {
+    reset
+        .checked_add(transcode)
+        .and_then(|len| len.checked_add(finish))
+}
+
+/// Converts planning failures from hook-shaped errors into capacity errors.
+#[inline(always)]
+fn transcode_capacity_error<E>(_error: TranscodeError<E>) -> CapacityError {
+    CapacityError::OutputLengthOverflow
 }

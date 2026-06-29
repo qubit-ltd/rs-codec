@@ -7,30 +7,13 @@
 // =============================================================================
 //! Reusable buffered encoder engine.
 
-use core::num::NonZeroUsize;
-
-use super::super::internal::{
-    encode_state::EncodeState,
-    lifecycle::LifecycleGuard,
-};
+use super::super::internal::{encode_state::EncodeState, lifecycle::LifecycleGuard};
 use super::encode_context::EncodeContext;
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError,
-    Codec,
-    EncodeOutcome,
-    EncodeUnencodableAction,
-    TranscodeEncodeEngineError,
-    TranscodeEncodeHooks,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, CodecPhase, EncodeOutcome, EncodeUnencodableAction, TranscodeEncodeError,
+    TranscodeEncodeHooks, TranscodeError, TranscodeProgress, Transcoder,
 };
-
-type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
-    <C as Codec>::EncodeError,
-    <H as TranscodeEncodeHooks<C>>::Error,
->;
 
 /// Reusable buffered encoding engine for codec-backed encoders.
 ///
@@ -63,10 +46,10 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 /// };
 /// use qubit_codec::{
 ///     TranscodeEncodeEngine,
+///     TranscodeEncodeError,
 ///     TranscodeEncodeHooks,
 ///     Codec,
 ///     DecodeFailure,
-///     CodecEncodeError,
 ///     EncodeUnencodableAction,
 ///     TranscodeStatus,
 /// };
@@ -105,14 +88,12 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 /// struct StrictHooks;
 ///
 /// impl TranscodeEncodeHooks<ByteCodec> for StrictHooks {
-///     type Error = CodecEncodeError<Infallible>;
-///
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
 ///         _value: &u8,
 ///         _input_index: usize,
-///     ) -> Result<EncodeUnencodableAction<u8>, Self::Error> {
+///     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeError<ByteCodec>> {
 ///         unreachable!("ByteCodec accepts every u8")
 ///     }
 /// }
@@ -132,7 +113,7 @@ type EncodeEngineErrorOf<C, H> = TranscodeEncodeEngineError<
 ///     }
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),
 /// }
-/// # Ok::<(), qubit_codec::TranscodeError<qubit_codec::TranscodeEncodeEngineError<Infallible, CodecEncodeError<Infallible>>>>(())
+/// # Ok::<(), TranscodeEncodeError<ByteCodec>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -239,170 +220,6 @@ where
         (codec, hooks)
     }
 
-    /// Encodes one value through the codec and unencodable-value hooks.
-    ///
-    /// This is the single entry point for `TranscodeConvertEngine` to drive
-    /// the encode side without accessing `codec` and `hooks` directly.
-    ///
-    /// # Parameters
-    ///
-    /// - `context`: Encode context for the current value.
-    ///
-    /// # Returns
-    ///
-    /// Returns whether the value was consumed or needs more output capacity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an engine-domain error when the codec fails or when the hook
-    /// rejects an unencodable value.
-    pub(crate) fn encode_one(
-        &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
-        if self.codec.can_encode_value(context.input_value()) {
-            return self.encode_encodable_value(context);
-        }
-        let input_index = context.input_index();
-        let action = self
-            .hooks
-            .handle_unencodable_encode(
-                &mut self.codec,
-                context.input_value(),
-                input_index,
-            )
-            .map_err(TranscodeEncodeEngineError::hook)?;
-        self.apply_unencodable_action(action, context)
-    }
-
-    /// Encodes an encodable input value.
-    ///
-    /// # Parameters
-    ///
-    /// - `context`: Encode context for the current value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the encode outcome for the current value.
-    ///
-    /// # Errors
-    ///
-    /// Returns a codec error when encoding fails.
-    fn encode_encodable_value(
-        &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
-        let required =
-            Self::encoded_value_len(&self.codec, context.input_value());
-        if context.available_output() < required.get() {
-            return Ok(EncodeOutcome::need_output(required));
-        }
-        let (value, input_index, output, output_index) = context.into_parts();
-        let written = unsafe {
-            // SAFETY: The capacity check above reserves the exact value width.
-            self.codec.encode(value, output, output_index)
-        }
-        .map_err(|error| {
-            TranscodeEncodeEngineError::codec_encode(error, input_index)
-        })?;
-        assert!(
-            written == required,
-            "Codec::encode wrote a different length than Codec::encode_len",
-        );
-        Ok(EncodeOutcome::consumed(written.get()))
-    }
-
-    /// Applies the hook-selected unencodable-value action.
-    ///
-    /// # Parameters
-    ///
-    /// - `action`: Policy action selected by the encode hooks.
-    /// - `context`: Encode context for the rejected input value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the encode outcome for the current input value.
-    ///
-    /// # Errors
-    ///
-    /// Returns a codec error when replacement encoding fails.
-    #[inline(always)]
-    fn apply_unencodable_action(
-        &mut self,
-        action: EncodeUnencodableAction<C::Value>,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
-        match action {
-            EncodeUnencodableAction::Skip => Ok(EncodeOutcome::consumed(0)),
-            EncodeUnencodableAction::Replace { value } => {
-                self.encode_replacement_value(value, context)
-            }
-        }
-    }
-
-    /// Encodes a hook-provided replacement value.
-    ///
-    /// # Parameters
-    ///
-    /// - `value`: Replacement value selected by hooks.
-    /// - `context`: Encode context for the original unencodable input value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the encode outcome for the replacement.
-    ///
-    /// # Errors
-    ///
-    /// Returns a codec error when replacement encoding fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics when hooks return a replacement value that the codec cannot
-    /// encode.
-    fn encode_replacement_value(
-        &mut self,
-        value: C::Value,
-        context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, EncodeEngineErrorOf<C, H>> {
-        assert!(
-            self.codec.can_encode_value(&value),
-            "EncodeUnencodableAction::Replace returned an unencodable replacement value",
-        );
-        let required = Self::encoded_value_len(&self.codec, &value);
-        if context.available_output() < required.get() {
-            return Ok(EncodeOutcome::need_output(required));
-        }
-        let (_, input_index, output, output_index) = context.into_parts();
-        let written = unsafe {
-            // SAFETY: The capacity check above reserves the exact replacement
-            // value width, and the hook contract requires encodability.
-            self.codec.encode(&value, output, output_index)
-        }
-        .map_err(|error| {
-            TranscodeEncodeEngineError::codec_encode(error, input_index)
-        })?;
-        assert!(
-            written == required,
-            "Codec::encode wrote a different length than Codec::encode_len",
-        );
-        Ok(EncodeOutcome::consumed(written.get()))
-    }
-
-    /// Returns the encoded length for `value`.
-    ///
-    /// # Parameters
-    ///
-    /// - `codec`: Codec used for variable-width length queries.
-    /// - `value`: Encodable value whose output width is requested.
-    ///
-    /// # Returns
-    ///
-    /// Returns the exact encoded width for `value`.
-    #[inline(always)]
-    fn encoded_value_len(codec: &C, value: &C::Value) -> NonZeroUsize {
-        codec.encode_len(value)
-    }
-
     /// Gets a conservative upper bound for output units needed for
     /// `input_len` values.
     ///
@@ -424,7 +241,7 @@ where
     pub fn max_transcode_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    ) -> Result<usize, TranscodeEncodeError<C>> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
@@ -452,10 +269,10 @@ where
     /// the combined codec-flush and hook-finish output bound.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+    pub fn max_finish_output_len(&self) -> Result<usize, TranscodeEncodeError<C>> {
         C::MAX_ENCODE_FLUSH_UNITS
             .checked_add(self.hooks.max_finish_output_len(&self.codec))
-            .ok_or(CapacityError::OutputLengthOverflow)
+            .ok_or_else(TranscodeError::output_length_overflow)
     }
 
     /// Gets the maximum output units needed by a complete one-shot encode
@@ -475,19 +292,15 @@ where
     ///
     /// Returns the complete-stream output bound, or a capacity error on
     /// arithmetic overflow.
-    #[inline]
+    #[inline(never)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        let reset = self.max_reset_output_len()?;
-        let transcode = self.max_transcode_output_len(input_len)?;
-        let finish = self.max_finish_output_len()?;
-        reset
-            .checked_add(transcode)
-            .and_then(|len| len.checked_add(finish))
-            .ok_or(CapacityError::OutputLengthOverflow)
+    pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, TranscodeEncodeError<C>> {
+        checked_stream_total(
+            self.max_reset_output_len()?,
+            self.max_transcode_output_len(input_len)?,
+            self.max_finish_output_len()?,
+        )
+        .ok_or_else(TranscodeError::output_length_overflow)
     }
 
     /// Resets codec encode state, hook-owned state, and stream-start output.
@@ -510,25 +323,17 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
+    ) -> Result<usize, TranscodeEncodeError<C>> {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // reset-output bound at `output_index`.
             self.codec.encode_reset(output, output_index)
         }
-        .map_err(|error| {
-            TranscodeError::domain(TranscodeEncodeEngineError::codec_reset(
-                error,
-            ))
-        })?;
+        .map_err(|error| TranscodeError::domain(error, CodecPhase::Reset, None))?;
         assert!(
             written <= required,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -564,8 +369,7 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<EncodeEngineErrorOf<C, H>>>
-    {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<C>> {
         self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
@@ -573,15 +377,13 @@ where
             output.len(),
             output_index,
         )?;
-        let mut state =
-            EncodeState::new(input, input_index, output, output_index);
+        let mut state = EncodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
             let context = unsafe { state.context_unchecked() };
-            let outcome =
-                self.encode_one(context).map_err(TranscodeError::domain)?;
+            let outcome = self.encode_one(context)?;
             if let Some(progress) = state.apply_encode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -623,34 +425,23 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
+    ) -> Result<usize, TranscodeEncodeError<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_index, required)?;
         let flushed = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // flush-output bound at `output_index`.
             self.codec.encode_flush(output, output_index)
         }
-        .map_err(|error| {
-            TranscodeError::domain(TranscodeEncodeEngineError::codec_flush(
-                error,
-            ))
-        })?;
+        .map_err(|error| TranscodeError::domain(error, CodecPhase::Flush, None))?;
         assert!(
             flushed <= C::MAX_ENCODE_FLUSH_UNITS,
             "Codec::encode_flush wrote beyond its flush bound",
         );
         let written = self
             .hooks
-            .finish_hooks(&mut self.codec, output, output_index + flushed)
-            .map_err(|error| {
-                TranscodeError::domain(TranscodeEncodeEngineError::hook(error))
-            })?;
+            .finish_hooks(&mut self.codec, output, output_index + flushed)?;
         assert!(
             flushed + written <= required,
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
@@ -685,10 +476,152 @@ where
         &mut self,
         input: &[C::Value],
         output: &mut [C::Unit],
-    ) -> Result<usize, TranscodeError<EncodeEngineErrorOf<C, H>>> {
-        <Self as Transcoder<C::Value, C::Unit>>::transcode_complete_into(
-            self, input, output,
-        )
+    ) -> Result<usize, TranscodeEncodeError<C>> {
+        <Self as Transcoder<C::Value, C::Unit>>::transcode_complete_into(self, input, output)
+    }
+
+    /// Encodes one value through the codec and unencodable-value hooks.
+    ///
+    /// This is the single entry point for `TranscodeConvertEngine` to drive
+    /// the encode side without accessing `codec` and `hooks` directly.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Encode context for the current value.
+    ///
+    /// # Returns
+    ///
+    /// Returns whether the value was consumed or needs more output capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an engine-domain error when the codec fails or when the hook
+    /// rejects an unencodable value.
+    pub(crate) fn encode_one(
+        &mut self,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+        if self.codec.can_encode_value(context.input_value()) {
+            return self.encode_encodable_value(context);
+        }
+        let input_index = context.input_index();
+        let action = self.hooks.handle_unencodable_encode(
+            &mut self.codec,
+            context.input_value(),
+            input_index,
+        )?;
+        self.apply_unencodable_action(action, context)
+    }
+
+    /// Encodes an encodable input value.
+    ///
+    /// # Parameters
+    ///
+    /// - `context`: Encode context for the current value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the current value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when encoding fails.
+    fn encode_encodable_value(
+        &mut self,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+        let required = self.codec.encode_len(context.input_value());
+        if context.available_output() < required.get() {
+            return Ok(EncodeOutcome::need_output(required));
+        }
+        let (value, input_index, output, output_index) = context.into_parts();
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the exact value width.
+            self.codec.encode(value, output, output_index)
+        }
+        .map_err(|error| TranscodeError::domain(error, CodecPhase::Main, Some(input_index)))?;
+        assert!(
+            written == required,
+            "Codec::encode wrote a different length than Codec::encode_len",
+        );
+        Ok(EncodeOutcome::consumed(written.get()))
+    }
+
+    /// Applies the hook-selected unencodable-value action.
+    ///
+    /// # Parameters
+    ///
+    /// - `action`: Policy action selected by the encode hooks.
+    /// - `context`: Encode context for the rejected input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the current input value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when replacement encoding fails.
+    #[inline(always)]
+    fn apply_unencodable_action(
+        &mut self,
+        action: EncodeUnencodableAction<C::Value>,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+        match action {
+            EncodeUnencodableAction::Reject => {
+                Err(TranscodeError::unencodable_value(context.input_index()))
+            }
+            EncodeUnencodableAction::Skip => Ok(EncodeOutcome::consumed(0)),
+            EncodeUnencodableAction::Replace { value } => {
+                self.encode_replacement_value(value, context)
+            }
+        }
+    }
+
+    /// Encodes a hook-provided replacement value.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Replacement value selected by hooks.
+    /// - `context`: Encode context for the original unencodable input value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the encode outcome for the replacement.
+    ///
+    /// # Errors
+    ///
+    /// Returns a codec error when replacement encoding fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when hooks return a replacement value that the codec cannot
+    /// encode.
+    fn encode_replacement_value(
+        &mut self,
+        value: C::Value,
+        context: EncodeContext<'_, C::Value, C::Unit>,
+    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+        assert!(
+            self.codec.can_encode_value(&value),
+            "EncodeUnencodableAction::Replace returned an unencodable replacement value",
+        );
+        let required = self.codec.encode_len(&value);
+        if context.available_output() < required.get() {
+            return Ok(EncodeOutcome::need_output(required));
+        }
+        let (_, input_index, output, output_index) = context.into_parts();
+        let written = unsafe {
+            // SAFETY: The capacity check above reserves the exact replacement
+            // value width, and the hook contract requires encodability.
+            self.codec.encode(&value, output, output_index)
+        }
+        .map_err(|error| TranscodeError::domain(error, CodecPhase::Main, Some(input_index)))?;
+        assert!(
+            written == required,
+            "Codec::encode wrote a different length than Codec::encode_len",
+        );
+        Ok(EncodeOutcome::consumed(written.get()))
     }
 }
 
@@ -713,15 +646,20 @@ where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
 {
-    type Error = EncodeEngineErrorOf<C, H>;
+    type Error = TranscodeEncodeError<C>;
+    type DomainError = C::EncodeError;
+
+    /// Returns the engine error unchanged.
+    #[inline(always)]
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
 
     /// Returns an upper bound for units produced from `input_len` values.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeEncodeEngine::max_transcode_output_len(self, input_len)
+            .map_err(transcode_capacity_error)
     }
 
     /// Returns the maximum units emitted when resetting stream state.
@@ -733,16 +671,12 @@ where
     /// Returns the maximum units emitted by finishing internal state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        TranscodeEncodeEngine::max_finish_output_len(self)
+        TranscodeEncodeEngine::max_finish_output_len(self).map_err(transcode_capacity_error)
     }
 
     /// Resets codec encode state, hook-owned state, and stream-start output.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, Self::Error> {
         TranscodeEncodeEngine::reset(self, output, output_index)
     }
 
@@ -754,14 +688,8 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
-        TranscodeEncodeEngine::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeEncodeEngine::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes hook-owned encoder state.
@@ -770,7 +698,21 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         TranscodeEncodeEngine::finish(self, output, output_index)
     }
+}
+
+/// Adds reset, transcode, and finish bounds for one complete stream.
+#[inline(never)]
+fn checked_stream_total(reset: usize, transcode: usize, finish: usize) -> Option<usize> {
+    reset
+        .checked_add(transcode)
+        .and_then(|len| len.checked_add(finish))
+}
+
+/// Converts planning failures from hook-shaped errors into capacity errors.
+#[inline(always)]
+fn transcode_capacity_error<E>(_error: TranscodeError<E>) -> CapacityError {
+    CapacityError::OutputLengthOverflow
 }

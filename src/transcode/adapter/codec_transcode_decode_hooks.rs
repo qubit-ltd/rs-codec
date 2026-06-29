@@ -7,17 +7,10 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered decoder.
 
-use super::super::engine::{
-    DecodeContext,
-    DecodeInvalidAction,
-    TranscodeDecodeHooks,
-};
+use super::super::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeHooks};
 use core::num::NonZeroUsize;
 
-use crate::{
-    Codec,
-    CodecDecodeError,
-};
+use crate::{Codec, TranscodeDecodeError};
 
 /// Policy hooks for [`crate::CodecTranscodeDecoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -27,8 +20,6 @@ impl<C> TranscodeDecodeHooks<C> for CodecTranscodeDecodeHooks
 where
     C: Codec,
 {
-    type Error = CodecDecodeError<C::DecodeError>;
-
     /// Converts codec decode failures into strict buffered decode errors.
     ///
     /// # Parameters
@@ -40,15 +31,15 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a convert status action wrapped as `CodecDecodeError`.
+    /// Returns the strict invalid-decode policy action.
     #[inline(always)]
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut C,
-        error: C::DecodeError,
+        _error: &C::DecodeError,
         _consumed: Option<NonZeroUsize>,
-        context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, Self::Error> {
-        Err(CodecDecodeError::decode(error, context.input_index()))
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeError<C>> {
+        Ok(DecodeInvalidAction::Reject)
     }
 }

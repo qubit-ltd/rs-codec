@@ -8,13 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{
-    Codec,
-    CodecEncodeError,
-    CodecValueExt,
-    TranscodeError,
-    codec::assert_unit_bounds,
-};
+use crate::{Codec, CodecPhase, CodecValueExt, TranscodeError, codec::assert_unit_bounds};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -94,14 +88,12 @@ where
         &mut self,
         input: &C::Value,
         output: &mut Vec<C::Unit>,
-    ) -> Result<usize, TranscodeError<CodecEncodeError<C::EncodeError>>>
+    ) -> Result<usize, TranscodeError<C::EncodeError>>
     where
         C::Unit: Default,
     {
         if !self.codec.can_encode_value(input) {
-            return Err(TranscodeError::domain(
-                CodecEncodeError::unencodable_value(0),
-            ));
+            return Err(TranscodeError::unencodable_value(0));
         }
         let units = C::MAX_ENCODE_RESET_UNITS
             .checked_add(self.codec.encode_len(input).get())
@@ -110,7 +102,7 @@ where
         let original_len = output.len();
         let target_len = original_len
             .checked_add(units)
-            .ok_or_else(TranscodeError::output_length_overflow)?;
+            .ok_or(TranscodeError::output_length_overflow())?;
         output.resize_with(target_len, C::Unit::default);
 
         match self
@@ -135,7 +127,14 @@ where
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
-    type Error = TranscodeError<CodecEncodeError<C::EncodeError>>;
+    type Error = TranscodeError<C::EncodeError>;
+    type DomainError = C::EncodeError;
+
+    /// Maps a codec-domain error from the main encode phase.
+    #[inline(always)]
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        TranscodeError::domain(error, CodecPhase::Main, Some(0))
+    }
 
     /// Encodes one borrowed value into owned units.
     ///
@@ -158,11 +157,11 @@ where
     /// Panics when the wrapped codec reports more reset or flush output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
-    fn encode(
-        &mut self,
-        input: &C::Value,
-    ) -> Result<Self::Output, Self::Error> {
-        let units = self.codec.max_encode_value_units()?;
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
+        let units = self
+            .codec
+            .max_encode_value_units()
+            .map_err(|_| TranscodeError::output_length_overflow())?;
         let mut output = Vec::with_capacity(units);
         self.encode_into(input, &mut output)?;
         Ok(output)

@@ -8,10 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::{
-    Codec,
-    DecodeFailure,
-};
+use qubit_codec::{Codec, DecodeFailure};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct DomainDecodeError;
@@ -35,10 +32,7 @@ impl Codec for PlainCodec {
         input_index: usize,
     ) -> Result<(Vec<u8>, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
-            return Err(DecodeFailure::invalid(
-                DomainDecodeError,
-                NonZeroUsize::MIN,
-            ));
+            return Err(DecodeFailure::invalid(DomainDecodeError, NonZeroUsize::MIN));
         }
         Ok((vec![input[input_index]], NonZeroUsize::MIN))
     }
@@ -57,8 +51,7 @@ impl Codec for PlainCodec {
 #[test]
 fn test_decode_failure_reports_incomplete_control_flow() {
     let required_total = qubit_io::nz!(3);
-    let failure =
-        DecodeFailure::<DomainDecodeError>::incomplete(required_total);
+    let failure = DecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
     assert_eq!(DecodeFailure::Incomplete { required_total }, failure);
     assert_eq!(Some(required_total), failure.required_total());
@@ -88,8 +81,7 @@ fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let mut codec = PlainCodec;
     let mut output = [0_u8; 1];
 
-    let decoded = unsafe { codec.decode(&[0x41], 0) }
-        .expect("plain codec should decode a value");
+    let decoded = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
     assert_eq!(vec![0x41], decoded.0);
 
     let written = unsafe { codec.encode(&vec![0x42], &mut output, 0) }

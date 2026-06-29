@@ -10,13 +10,7 @@
 use core::fmt;
 
 use super::ValueDecoder;
-use crate::{
-    Codec,
-    CodecDecodeError,
-    CodecValueExt,
-    TranscodeError,
-    codec::assert_unit_bounds,
-};
+use crate::{Codec, CodecPhase, CodecValueExt, TranscodeError, codec::assert_unit_bounds};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -102,7 +96,14 @@ where
     C::Value: Default,
 {
     type Output = C::Value;
-    type Error = TranscodeError<CodecDecodeError<C::DecodeError>>;
+    type Error = TranscodeError<C::DecodeError>;
+    type DomainError = C::DecodeError;
+
+    /// Maps a codec-domain error from the main decode phase.
+    #[inline(always)]
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        TranscodeError::domain(error, CodecPhase::Main, Some(0))
+    }
 
     /// Decodes exactly one encoded value from `input`.
     ///
@@ -116,21 +117,18 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`CodecDecodeError::Incomplete`] when fewer than
+    /// Returns [`TranscodeError::IncompleteInput`] when fewer than
     /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. Returns
-    /// [`CodecDecodeError::Decode`] when the wrapped codec rejects the input.
-    /// Returns [`CodecDecodeError::TrailingInput`] when a value is decoded but
-    /// extra input remains.
+    /// [`TranscodeError::Domain`] when the wrapped codec rejects or cannot
+    /// flush the input. Returns [`TranscodeError::TrailingInput`] when
+    /// a value is decoded but extra input remains.
     ///
     /// # Panics
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when flush output exceeds
     /// [`Codec::MAX_DECODE_FLUSH_VALUES`].
-    fn decode(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<Self::Output, Self::Error> {
+    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         let flush_cap = C::MAX_DECODE_FLUSH_VALUES;
         let (value, _) = if flush_cap == 0 {
             self.codec
@@ -139,11 +137,8 @@ where
             if self.flush_scratch.len() < flush_cap {
                 self.flush_scratch.resize_with(flush_cap, C::Value::default);
             }
-            self.codec.decode_exact_value_with_flush(
-                input,
-                &mut self.flush_scratch,
-                0,
-            )?
+            self.codec
+                .decode_exact_value_with_flush(input, &mut self.flush_scratch, 0)?
         };
 
         Ok(value)

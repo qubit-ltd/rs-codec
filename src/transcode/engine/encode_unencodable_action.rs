@@ -17,7 +17,14 @@
 ///
 /// - `Value`: Logical input value type accepted by the codec.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum EncodeUnencodableAction<Value> {
+    /// Reject the current input value.
+    ///
+    /// The encode engine reports
+    /// [`crate::TranscodeError::UnencodableValue`] at the current input index.
+    Reject,
+
     /// Consume the current input value without producing output.
     Skip,
 
@@ -33,6 +40,17 @@ pub enum EncodeUnencodableAction<Value> {
 }
 
 impl<Value> EncodeUnencodableAction<Value> {
+    /// Creates a reject action.
+    ///
+    /// # Returns
+    ///
+    /// Returns [`Self::Reject`].
+    #[inline(always)]
+    #[must_use]
+    pub const fn reject() -> Self {
+        Self::Reject
+    }
+
     /// Creates a replacement action.
     ///
     /// # Parameters

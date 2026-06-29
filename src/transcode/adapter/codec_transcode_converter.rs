@@ -9,40 +9,11 @@
 
 use core::fmt;
 
-use super::{
-    CodecTranscodeDecodeHooks,
-    CodecTranscodeEncodeHooks,
-};
+use super::{CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks};
 use crate::{
-    CapacityError,
-    Codec,
-    CodecConvertError,
-    CodecDecodeError,
-    CodecEncodeError,
-    TranscodeConvertEngine,
-    TranscodeConvertEngineError,
-    TranscodeConverter,
-    TranscodeDecodeEngineError,
-    TranscodeEncodeEngineError,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, ConvertError, TranscodeConvertEngine, TranscodeConvertError,
+    TranscodeConverter, TranscodeError, TranscodeProgress, Transcoder,
 };
-
-/// Strict codec-backed converter error type.
-type CodecTranscodeConvertError<D, E> =
-    CodecConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError>;
-
-type CodecTranscodeConvertEngineError<D, E> = TranscodeConvertEngineError<
-    TranscodeDecodeEngineError<
-        <D as Codec>::DecodeError,
-        CodecDecodeError<<D as Codec>::DecodeError>,
-    >,
-    TranscodeEncodeEngineError<
-        <E as Codec>::EncodeError,
-        CodecEncodeError<<E as Codec>::EncodeError>,
-    >,
->;
 
 /// Converts source units to target units through a decoded value by using
 /// codecs.
@@ -70,24 +41,14 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >,
+    engine: TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>,
 }
 
 impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >: fmt::Debug,
+    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///
@@ -147,10 +108,7 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -187,13 +145,11 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>>
+    ) -> Result<usize, TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
-        self.engine.reset(output, output_index).map_err(|error| {
-            error.map_domain(flatten_convert_engine_error::<D, E>)
-        })
+        self.engine.reset(output, output_index)
     }
 
     /// Converts source units into target units.
@@ -224,15 +180,9 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<
-        TranscodeProgress,
-        TranscodeError<CodecTranscodeConvertError<D, E>>,
-    > {
+    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
         self.engine
             .transcode(input, input_index, output, output_index)
-            .map_err(|error| {
-                error.map_domain(flatten_convert_engine_error::<D, E>)
-            })
     }
 
     /// Finishes internally retained output after EOF.
@@ -258,13 +208,11 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<CodecTranscodeConvertError<D, E>>>
+    ) -> Result<usize, TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
-        self.engine.finish(output, output_index).map_err(|error| {
-            error.map_domain(flatten_convert_engine_error::<D, E>)
-        })
+        self.engine.finish(output, output_index)
     }
 }
 
@@ -274,7 +222,14 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Default,
 {
-    type Error = CodecConvertError<D::DecodeError, E::EncodeError>;
+    type Error = TranscodeConvertError<D, E>;
+    type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
+
+    /// Returns the default converter adapter error unchanged.
+    #[inline(always)]
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
 
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
@@ -286,10 +241,7 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
@@ -312,11 +264,7 @@ where
     /// Clears retained pending output, resets component state, and emits
     /// stream-start encode output.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, Self::Error> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -345,14 +293,8 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
-        CodecTranscodeConverter::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+    ) -> Result<TranscodeProgress, Self::Error> {
+        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -374,13 +316,12 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
+    ) -> Result<usize, Self::Error> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit>
-    for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
@@ -393,12 +334,7 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >: Default,
+    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///
@@ -410,61 +346,5 @@ where
         Self {
             engine: TranscodeConvertEngine::default(),
         }
-    }
-}
-
-#[inline(always)]
-fn flatten_convert_engine_error<D, E>(
-    error: CodecTranscodeConvertEngineError<D, E>,
-) -> CodecTranscodeConvertError<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-{
-    match error {
-        TranscodeConvertEngineError::Decode(error) => match error {
-            TranscodeDecodeEngineError::CodecDecode {
-                source,
-                input_index,
-            } => CodecConvertError::decode(CodecDecodeError::decode(
-                source,
-                input_index,
-            )),
-            TranscodeDecodeEngineError::CodecReset { source } => {
-                CodecConvertError::decode(CodecDecodeError::decode_reset(
-                    source,
-                ))
-            }
-            TranscodeDecodeEngineError::CodecFlush { source } => {
-                CodecConvertError::decode(CodecDecodeError::decode_flush(
-                    source,
-                ))
-            }
-            TranscodeDecodeEngineError::Hook(error) => {
-                CodecConvertError::decode(error)
-            }
-        },
-        TranscodeConvertEngineError::Encode(error) => match error {
-            TranscodeEncodeEngineError::CodecEncode {
-                source,
-                input_index,
-            } => CodecConvertError::encode(CodecEncodeError::encode(
-                source,
-                input_index,
-            )),
-            TranscodeEncodeEngineError::CodecReset { source } => {
-                CodecConvertError::encode(CodecEncodeError::encode_reset(
-                    source,
-                ))
-            }
-            TranscodeEncodeEngineError::CodecFlush { source } => {
-                CodecConvertError::encode(CodecEncodeError::encode_flush(
-                    source,
-                ))
-            }
-            TranscodeEncodeEngineError::Hook(error) => {
-                CodecConvertError::encode(error)
-            }
-        },
     }
 }

@@ -15,6 +15,11 @@ struct StringEncoder;
 impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
+    type DomainError = core::convert::Infallible;
+
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        match error {}
+    }
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -35,6 +40,11 @@ struct UppercaseCodec;
 impl ValueEncoder<str> for UppercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
+    type DomainError = core::convert::Infallible;
+
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        match error {}
+    }
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_ascii_uppercase())

@@ -9,15 +9,8 @@
 
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecEncodeError,
-    TranscodeEncodeEngine,
-    TranscodeEncodeEngineError,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeError, TranscodeEncoder,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -55,10 +48,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(
-                codec,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
 }
@@ -67,7 +57,14 @@ impl<C> Transcoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
 where
     C: Codec,
 {
-    type Error = CodecEncodeError<C::EncodeError>;
+    type Error = TranscodeEncodeError<C>;
+    type DomainError = C::EncodeError;
+
+    /// Returns the default streaming adapter error unchanged.
+    #[inline(always)]
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
 
     /// Gets the maximum number of output units needed for `input_len`
     /// values.
@@ -80,11 +77,10 @@ where
     ///
     /// a conservative upper bound for output units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        self.engine.max_transcode_output_len(input_len)
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        self.engine
+            .max_transcode_output_len(input_len)
+            .map_err(|_| CapacityError::OutputLengthOverflow)
     }
 
     /// Gets the maximum units emitted when resetting internal state.
@@ -104,19 +100,15 @@ where
     /// the number of units that may be emitted by finishing state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        self.engine.max_finish_output_len()
+        self.engine
+            .max_finish_output_len()
+            .map_err(|_| CapacityError::OutputLengthOverflow)
     }
 
     /// Runs before-reset cleanup and emits stream-start output.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine
-            .reset(output, output_index)
-            .map_err(|error| error.map_domain(flatten_encode_engine_error))
+    fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, Self::Error> {
+        self.engine.reset(output, output_index)
     }
 
     /// Encodes values into the supplied output buffer.
@@ -144,10 +136,9 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         self.engine
             .transcode(input, input_index, output, output_index)
-            .map_err(|error| error.map_domain(flatten_encode_engine_error))
     }
 
     /// Finishes internally retained output after EOF.
@@ -169,10 +160,8 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine
-            .finish(output, output_index)
-            .map_err(|error| error.map_domain(flatten_encode_engine_error))
+    ) -> Result<usize, Self::Error> {
+        self.engine.finish(output, output_index)
     }
 }
 
@@ -195,24 +184,5 @@ where
     #[inline(always)]
     fn default() -> Self {
         Self::new(C::default())
-    }
-}
-
-#[inline(always)]
-fn flatten_encode_engine_error<E>(
-    error: TranscodeEncodeEngineError<E, CodecEncodeError<E>>,
-) -> CodecEncodeError<E> {
-    match error {
-        TranscodeEncodeEngineError::CodecEncode {
-            source,
-            input_index,
-        } => CodecEncodeError::encode(source, input_index),
-        TranscodeEncodeEngineError::CodecReset { source } => {
-            CodecEncodeError::encode_reset(source)
-        }
-        TranscodeEncodeEngineError::CodecFlush { source } => {
-            CodecEncodeError::encode_flush(source)
-        }
-        TranscodeEncodeEngineError::Hook(error) => error,
     }
 }

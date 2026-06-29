@@ -19,7 +19,14 @@ use core::num::NonZeroUsize;
 ///
 /// - `Value`: Decoded output value type.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum DecodeInvalidAction<Value> {
+    /// Reject the current invalid input.
+    ///
+    /// The decode engine reports the original codec decode error as
+    /// [`crate::TranscodeError::Domain`] at the current input index.
+    Reject,
+
     /// Consume invalid input without producing output.
     ///
     /// `consumed` must not exceed the hook context's available input count.
@@ -59,10 +66,7 @@ impl<Value> DecodeInvalidAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[inline(always)]
     #[must_use]
-    pub(super) fn bound_consumed(
-        consumed: NonZeroUsize,
-        available: usize,
-    ) -> NonZeroUsize {
+    pub(super) fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
         assert!(
             available > 0,
             "DecodeInvalidAction cannot consume empty input",

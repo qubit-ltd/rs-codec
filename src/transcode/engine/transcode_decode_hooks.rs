@@ -9,14 +9,8 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    decode_context::DecodeContext,
-    decode_invalid_action::DecodeInvalidAction,
-};
-use crate::{
-    CapacityError,
-    Codec,
-};
+use super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
+use crate::{Codec, TranscodeDecodeError};
 
 /// Policy hooks for [`crate::TranscodeDecodeEngine`].
 ///
@@ -46,9 +40,9 @@ use crate::{
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     TranscodeDecodeHooks,
+///     TranscodeDecodeError,
 ///     Codec,
 ///     DecodeFailure,
-///     CodecDecodeError,
 ///     DecodeInvalidAction,
 ///     DecodeContext,
 /// };
@@ -100,15 +94,13 @@ use crate::{
 /// struct ReplacementHooks;
 ///
 /// impl TranscodeDecodeHooks<MyCodec> for ReplacementHooks {
-///     type Error = CodecDecodeError<MyDecodeError>;
-///
 ///     fn handle_invalid_decode(
 ///         &mut self,
 ///         _codec: &mut MyCodec,
-///         error: MyDecodeError,
+///         error: &MyDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeInvalidAction<u8>, Self::Error> {
+///     ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeError<MyCodec>> {
 ///         match error {
 ///             MyDecodeError::Malformed { .. } => {
 ///                 Ok(DecodeInvalidAction::Emit {
@@ -128,14 +120,6 @@ pub trait TranscodeDecodeHooks<C>
 where
     C: Codec,
 {
-    /// Domain error type returned by the buffered decoder policy.
-    ///
-    /// Engine methods wrap this type in
-    /// [`crate::TranscodeDecodeEngineError::Hook`]. Codec lifecycle failures
-    /// are reported separately through the `CodecDecode`, `CodecReset`, and
-    /// `CodecFlush` variants.
-    type Error;
-
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     ///
@@ -162,7 +146,7 @@ where
         &self,
         _codec: &C,
         input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         Ok(input_len / C::MIN_UNITS_PER_VALUE.get())
     }
 
@@ -212,14 +196,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when the policy rejects the input.
+    /// Returns [`TranscodeDecodeError`] when the policy rejects the input with
+    /// a codec-domain error.
     fn handle_invalid_decode(
         &mut self,
         codec: &mut C,
-        error: C::DecodeError,
+        error: &C::DecodeError,
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, Self::Error>;
+    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeError<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -257,14 +242,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when hook-owned state cannot be finalized.
+    /// Returns [`crate::TranscodeError`] when hook-owned state cannot be
+    /// finalized.
     #[inline]
     fn finish_hooks(
         &mut self,
         _codec: &mut C,
         _output: &mut [C::Value],
         _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         Ok(0)
     }
 }

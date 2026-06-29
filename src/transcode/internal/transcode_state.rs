@@ -96,9 +96,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns the immutable input slice and mutable output slice. This helper
     /// lets callers borrow the two disjoint fields at the same time.
     #[inline(always)]
-    pub(in crate::transcode) fn input_output_mut(
-        &mut self,
-    ) -> (&[Input], &mut [Output]) {
+    pub(in crate::transcode) fn input_output_mut(&mut self) -> (&[Input], &mut [Output]) {
         (self.input, self.output)
     }
 
@@ -239,11 +237,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// - `read`: Number of input units consumed by the last operation.
     /// - `written`: Number of output units written by the last operation.
     #[inline(always)]
-    pub(in crate::transcode) fn advance(
-        &mut self,
-        read: usize,
-        written: usize,
-    ) {
+    pub(in crate::transcode) fn advance(&mut self, read: usize, written: usize) {
         self.advance_input(read);
         self.advance_output(written);
     }

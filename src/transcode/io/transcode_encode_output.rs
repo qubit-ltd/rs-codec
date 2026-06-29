@@ -8,36 +8,11 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{
-    Buffer,
-    BufferedOutput,
-    Output,
-    Seekable,
-    UncheckedSlice,
-};
+use qubit_io::{Buffer, BufferedOutput, Output, Seekable, UncheckedSlice};
 
-use crate::{
-    Codec,
-    CodecEncodeError,
-    CodecValueExt,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
-#[cfg(not(debug_assertions))]
-use crate::{
-    TranscodeContractError,
-    TranscodeProgress,
-};
+use crate::{Codec, CodecValueExt, TranscodeError, TranscodeStatus, Transcoder};
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///
@@ -74,7 +49,6 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[inline]
     #[must_use]
     pub fn new(inner: O) -> Self {
         Self {
@@ -92,7 +66,6 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[inline]
     #[must_use]
     pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
@@ -105,7 +78,6 @@ where
     /// # Returns
     ///
     /// A shared reference to the wrapped unit output.
-    #[inline(always)]
     #[must_use]
     pub const fn inner(&self) -> &O {
         self.output.inner()
@@ -116,7 +88,6 @@ where
     /// # Returns
     ///
     /// A mutable reference to the wrapped unit output.
-    #[inline(always)]
     pub fn inner_mut(&mut self) -> &mut O {
         self.output.inner_mut()
     }
@@ -126,7 +97,6 @@ where
     /// # Returns
     ///
     /// The number of output units that can still be appended without flushing.
-    #[inline(always)]
     #[must_use]
     pub fn spare_capacity(&self) -> usize {
         self.output.spare_capacity()
@@ -138,7 +108,6 @@ where
     ///
     /// The full backing storage, the spare start index, and the spare unit
     /// count.
-    #[inline(always)]
     #[must_use]
     pub fn spare_raw_parts_mut(&mut self) -> (&mut [O::Item], usize, usize) {
         self.output.spare_raw_parts_mut()
@@ -151,7 +120,6 @@ where
     /// The caller must guarantee that `count <= Self::spare_capacity()` and
     /// that the corresponding units in the returned spare slice have been
     /// initialized.
-    #[inline(always)]
     pub unsafe fn advance(&mut self, count: usize) {
         // SAFETY: The caller guarantees `count` and initialization invariants.
         unsafe { self.output.advance(count) }
@@ -166,7 +134,6 @@ where
     /// # Errors
     ///
     /// Returns I/O errors from the wrapped output while flushing pending units.
-    #[inline(always)]
     pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
         self.output.ensure_spare_capacity(count)
     }
@@ -176,7 +143,6 @@ where
     /// # Returns
     ///
     /// The wrapped output and the buffer holding pending units.
-    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
@@ -187,7 +153,6 @@ where
     /// # Errors
     ///
     /// Returns errors from the wrapped output while flushing pending units.
-    #[inline]
     pub fn flush(&mut self) -> Result<()> {
         self.output.flush()
     }
@@ -211,7 +176,6 @@ where
     /// codec output bound overflows or the value is outside the codec domain,
     /// `InvalidData` for framework-level codec adapter failures, or the error
     /// returned by `map_error` for codec encode, reset, and flush failures.
-    #[inline]
     pub fn write_encoded_with<C, M>(
         &mut self,
         codec: &mut C,
@@ -222,9 +186,9 @@ where
         C: Codec<Unit = O::Item>,
         M: FnMut(C::EncodeError) -> Error,
     {
-        let max_units = codec.max_encode_value_units().map_err(|_| {
-            Error::new(ErrorKind::InvalidInput, "codec output bound overflow")
-        })?;
+        let max_units = codec
+            .max_encode_value_units()
+            .map_err(|_| Error::new(ErrorKind::InvalidInput, "codec output bound overflow"))?;
         if let Err(error) = self.output.ensure_spare_capacity(max_units) {
             if error.kind() != ErrorKind::InvalidInput {
                 return Err(error);
@@ -233,9 +197,7 @@ where
             let mut scratch = vec![O::Item::default(); max_units];
             let written = codec
                 .encode_value_with_reset(value, &mut scratch, 0)
-                .map_err(|error| {
-                    map_encode_value_error(error, &mut map_error)
-                })?;
+                .map_err(|error| map_encode_value_error(error, &mut map_error))?;
             // SAFETY: `scratch` has exactly `max_units` elements, and
             // `CodecValueExt::encode_value_with_reset` validated that
             // `written <= max_units`.
@@ -246,8 +208,7 @@ where
             }
             return Ok(());
         }
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= max_units,
             "reserved spare buffer is smaller than codec upper bound",
@@ -281,7 +242,6 @@ where
     /// # Errors
     ///
     /// Returns invalid input ranges, capacity, encoder, or output errors.
-    #[inline]
     pub fn transcode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -292,7 +252,7 @@ where
     ) -> Result<usize>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(TranscodeError<E::Error>) -> Error,
+        M: FnMut(E::Error) -> Error,
     {
         let input_end = UncheckedSlice::checked_range_end(
             input.len(),
@@ -311,13 +271,11 @@ where
             // `transcode` cannot make progress. Reserving one spare slot drains
             // pending units to the wrapped output only when needed.
             self.output.ensure_spare_capacity(1)?;
-            let (units, output_index, available_output) =
-                self.output.spare_raw_parts_mut();
+            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
             let remaining_input = count - read_total;
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
-            #[cfg(debug_assertions)]
             progress
                 .validate(
                     input_index + read_total,
@@ -326,12 +284,6 @@ where
                     available_output,
                 )
                 .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
-            #[cfg(not(debug_assertions))]
-            validate_progress_bounds(
-                progress,
-                remaining_input,
-                available_output,
-            )?;
             let read = progress.read();
             let written = progress.written();
             // SAFETY: The progress bounds check above proved that the encoder
@@ -366,22 +318,16 @@ where
     /// # Errors
     ///
     /// Returns capacity, encoder finalization, or wrapped output flush errors.
-    #[inline]
-    pub fn finish<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
+    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(TranscodeError<E::Error>) -> Error,
+        M: FnMut(E::Error) -> Error,
     {
         let required = encoder
             .max_finish_output_len()
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
         self.output.ensure_spare_capacity(required)?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",
@@ -416,7 +362,6 @@ where
     /// # Errors
     ///
     /// Returns flush or seek errors from the wrapped output.
-    #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.output.seek_to(position)
     }
@@ -427,13 +372,11 @@ where
     O: Output<Item = u8>,
 {
     /// Writes raw bytes through the internal buffer.
-    #[inline]
     fn write(&mut self, input: &[u8]) -> Result<usize> {
         Output::write(&mut self.output, input)
     }
 
     /// Writes all raw bytes through the internal buffer.
-    #[inline]
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
         let mut written = 0;
         while written < input.len() {
@@ -451,7 +394,6 @@ where
     }
 
     /// Flushes buffered bytes to the wrapped output.
-    #[inline]
     fn flush(&mut self) -> Result<()> {
         TranscodeEncodeOutput::flush(self)
     }
@@ -462,7 +404,6 @@ where
     O: Output<Item = u8> + Seekable<Item = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
-    #[inline]
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }
@@ -485,81 +426,10 @@ where
 
 /// Maps one-value codec encode errors into the I/O surface used by this
 /// adapter.
-fn map_encode_value_error<E, M>(
-    error: TranscodeError<CodecEncodeError<E>>,
-    map_error: &mut M,
-) -> Error
+#[inline(never)]
+fn map_encode_value_error<E, M>(error: TranscodeError<E>, map_error: &mut M) -> Error
 where
     M: FnMut(E) -> Error,
 {
-    match error {
-        TranscodeError::Domain(CodecEncodeError::Encode { source, .. })
-        | TranscodeError::Domain(CodecEncodeError::EncodeReset { source })
-        | TranscodeError::Domain(CodecEncodeError::EncodeFlush { source }) => {
-            map_error(source)
-        }
-        TranscodeError::Domain(CodecEncodeError::UnencodableValue {
-            ..
-        }) => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
-        TranscodeError::InvalidInputIndex { index, len } => Error::new(
-            ErrorKind::InvalidData,
-            format!("invalid input index {index} for input length {len}"),
-        ),
-        TranscodeError::InvalidOutputIndex { index, len } => Error::new(
-            ErrorKind::InvalidData,
-            format!("invalid output index {index} for output length {len}"),
-        ),
-        TranscodeError::InsufficientOutput {
-            output_index,
-            required,
-            available,
-        } => Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "insufficient output at index {output_index}: required {required} units, available {available}"
-            ),
-        ),
-        TranscodeError::OutputLengthOverflow => Error::new(
-            ErrorKind::InvalidData,
-            "output length arithmetic overflow",
-        ),
-        TranscodeError::IncompleteInput {
-            input_index,
-            required,
-            available,
-        } => Error::new(
-            ErrorKind::InvalidData,
-            format!(
-                "incomplete input at index {input_index}: required {required} units, available {available}"
-            ),
-        ),
-    }
-}
-
-/// Validates progress counters needed for unchecked buffered cursor movement.
-#[cfg(not(debug_assertions))]
-fn validate_progress_bounds(
-    progress: TranscodeProgress,
-    available_input: usize,
-    available_output: usize,
-) -> Result<()> {
-    if progress.read() > available_input {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            TranscodeContractError::OverRead {
-                read: progress.read(),
-                available: available_input,
-            },
-        ));
-    }
-    if progress.written() > available_output {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            TranscodeContractError::OverWritten {
-                written: progress.written(),
-                available: available_output,
-            },
-        ));
-    }
-    Ok(())
+    error.into_encode_io_error(map_error)
 }

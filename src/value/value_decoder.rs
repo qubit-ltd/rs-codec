@@ -17,6 +17,17 @@ pub trait ValueDecoder<Input: ?Sized> {
     type Output;
     /// Decoding error type.
     type Error;
+    /// Domain error type accepted by this value facade.
+    type DomainError;
+
+    /// Maps a domain error into the public decoding error.
+    ///
+    /// # Parameters
+    /// - `error`: Domain error produced by the underlying codec or policy.
+    ///
+    /// # Returns
+    /// Decoded facade error.
+    fn map_error(&self, error: Self::DomainError) -> Self::Error;
 
     /// Decodes `input`.
     ///

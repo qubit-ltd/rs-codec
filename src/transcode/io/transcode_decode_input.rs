@@ -8,35 +8,11 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Result,
-    Seek,
-    SeekFrom,
-};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{
-    Buffer,
-    BufferedInput,
-    Input,
-    Seekable,
-    UncheckedSlice,
-};
+use qubit_io::{Buffer, BufferedInput, Input, Seekable, UncheckedSlice};
 
-use crate::{
-    Codec,
-    DecodeFailure,
-    TranscodeError,
-    TranscodeStatus,
-    Transcoder,
-};
-#[cfg(not(debug_assertions))]
-use crate::{
-    TranscodeContractError,
-    TranscodeProgress,
-};
+use crate::{Codec, DecodeFailure, TranscodeStatus, Transcoder};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -70,7 +46,6 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
-    #[inline]
     #[must_use]
     pub fn new(inner: I) -> Self {
         Self {
@@ -88,7 +63,6 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
-    #[inline]
     #[must_use]
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
@@ -101,7 +75,6 @@ where
     /// # Returns
     ///
     /// A shared reference to the wrapped unit input.
-    #[inline(always)]
     #[must_use]
     pub const fn inner(&self) -> &I {
         self.input.inner()
@@ -112,7 +85,6 @@ where
     /// # Returns
     ///
     /// A mutable reference to the wrapped unit input.
-    #[inline(always)]
     pub fn inner_mut(&mut self) -> &mut I {
         self.input.inner_mut()
     }
@@ -122,7 +94,6 @@ where
     /// # Returns
     ///
     /// The number of unread units in the internal buffer.
-    #[inline(always)]
     #[must_use]
     pub fn unread_len(&self) -> usize {
         self.input.unread_len()
@@ -134,7 +105,6 @@ where
     ///
     /// Returns a shared slice over the unread portion of the internal unit
     /// buffer. The slice is valid until this adapter is mutated.
-    #[inline(always)]
     #[must_use]
     pub fn unread(&self) -> &[I::Item] {
         self.input.unread()
@@ -145,7 +115,6 @@ where
     /// # Returns
     ///
     /// The maximum number of units retained in the internal buffer.
-    #[inline(always)]
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.input.capacity()
@@ -161,7 +130,6 @@ where
     /// # Errors
     ///
     /// Returns I/O errors from the wrapped input while refilling.
-    #[inline(always)]
     pub fn fill_until(&mut self, count: usize) -> std::io::Result<bool> {
         self.input.fill_until(count)
     }
@@ -175,7 +143,6 @@ where
     /// # Panics
     ///
     /// In debug builds, panics when `count` exceeds [`Self::unread_len`].
-    #[inline(always)]
     pub fn consume(&mut self, count: usize) {
         debug_assert!(
             count <= self.unread_len(),
@@ -201,7 +168,6 @@ where
     /// a valid range inside `output`, that the addition does not overflow, that
     /// `count <= self.unread_len()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
-    #[inline(always)]
     pub unsafe fn copy_unread_to(
         &mut self,
         output: &mut [I::Item],
@@ -220,13 +186,7 @@ where
             "unchecked copy destination range exceeds output buffer",
         );
         unsafe {
-            UncheckedSlice::copy_nonoverlapping(
-                unread,
-                0,
-                output,
-                output_index,
-                count,
-            );
+            UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
         }
     }
 
@@ -235,7 +195,6 @@ where
     /// # Returns
     ///
     /// The wrapped input and the buffer holding unread units.
-    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
@@ -262,7 +221,6 @@ where
     ///
     /// The caller must guarantee that `output_index..output_index + count` is
     /// a valid range inside `output` and that the addition does not overflow.
-    #[inline(always)]
     pub unsafe fn read_unchecked(
         &mut self,
         output: &mut [I::Item],
@@ -294,32 +252,20 @@ where
     /// occurs before a complete value is available, `InvalidData` when the
     /// codec reports an impossible incomplete state, or the error returned
     /// by `map_error` for invalid codec input.
-    pub fn read_decoded_with<C, M>(
-        &mut self,
-        codec: &mut C,
-        mut map_error: M,
-    ) -> Result<C::Value>
+    pub fn read_decoded_with<C, M>(&mut self, codec: &mut C, mut map_error: M) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         let min_units_per_value = C::MIN_UNITS_PER_VALUE.get();
-        let max_units_per_value =
-            C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
+        let max_units_per_value = C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
         if min_units_per_value > self.capacity() {
-            return read_decoded_via_scratch(
-                self,
-                codec,
-                min_units_per_value,
-                &mut map_error,
-            );
+            return read_decoded_via_scratch(self, codec, min_units_per_value, &mut map_error);
         }
 
         loop {
             let available = self.unread_len();
-            if available < min_units_per_value
-                && !self.fill_until(min_units_per_value)?
-            {
+            if available < min_units_per_value && !self.fill_until(min_units_per_value)? {
                 let available = self.unread_len();
                 self.consume(available);
                 return Err(Error::new(
@@ -328,9 +274,7 @@ where
                 ));
             }
 
-            if self.unread_len() < max_units_per_value
-                && max_units_per_value <= self.capacity()
-            {
+            if self.unread_len() < max_units_per_value && max_units_per_value <= self.capacity() {
                 let _ = self.fill_until(max_units_per_value)?;
             }
 
@@ -408,7 +352,6 @@ where
     ///
     /// Returns input errors, invalid output ranges, capacity errors from the
     /// internal buffer, or decoder errors mapped by `map_error`.
-    #[inline]
     pub fn transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -419,7 +362,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(TranscodeError<D::Error>) -> Error,
+        M: FnMut(D::Error) -> Error,
     {
         let output_end = UncheckedSlice::checked_range_end(
             output.len(),
@@ -442,7 +385,6 @@ where
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
-            #[cfg(debug_assertions)]
             progress
                 .validate(
                     0,
@@ -451,12 +393,6 @@ where
                     remaining_output,
                 )
                 .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
-            #[cfg(not(debug_assertions))]
-            validate_progress_bounds(
-                progress,
-                available_input,
-                remaining_output,
-            )?;
             let consumed = progress.read();
             let written = progress.written();
             // SAFETY: The progress bounds check above proved that the decoder
@@ -502,7 +438,6 @@ where
     ///
     /// Returns invalid output ranges, capacity errors, or decoder finalization
     /// errors mapped to I/O errors.
-    #[inline]
     pub fn finish_transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -513,7 +448,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(TranscodeError<D::Error>) -> Error,
+        M: FnMut(D::Error) -> Error,
     {
         let required = decoder
             .max_finish_output_len()
@@ -560,7 +495,6 @@ where
     /// # Errors
     ///
     /// Returns seek errors from the wrapped input.
-    #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.input.seek_to(position)
     }
@@ -571,7 +505,6 @@ where
     I: Input<Item = u8>,
 {
     /// Reads raw bytes through the internal buffer.
-    #[inline]
     fn read(&mut self, output: &mut [u8]) -> Result<usize> {
         // SAFETY: The full output slice is a valid destination range.
         unsafe { self.input.read_unchecked(output, 0, output.len()) }
@@ -583,7 +516,6 @@ where
     I: Input<Item = u8> + Seekable<Item = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
-    #[inline]
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }
@@ -665,32 +597,4 @@ where
             }
         }
     }
-}
-
-/// Validates progress counters needed for unchecked buffered cursor movement.
-#[cfg(not(debug_assertions))]
-fn validate_progress_bounds(
-    progress: TranscodeProgress,
-    available_input: usize,
-    available_output: usize,
-) -> Result<()> {
-    if progress.read() > available_input {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            TranscodeContractError::OverRead {
-                read: progress.read(),
-                available: available_input,
-            },
-        ));
-    }
-    if progress.written() > available_output {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            TranscodeContractError::OverWritten {
-                written: progress.written(),
-                available: available_output,
-            },
-        ));
-    }
-    Ok(())
 }

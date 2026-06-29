@@ -28,8 +28,9 @@ This crate provides:
 - `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
-- `TranscodeConvertEngine` and `TranscodeConvertEngineError` for policy-aware
-  unit-to-unit conversion pipelines built from a decode side and an encode side.
+- `TranscodeConvertEngine`, `TranscodeConvertError`, and `ConvertError` for
+  policy-aware unit-to-unit conversion pipelines built from a decode side and an
+  encode side.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for
   caller-managed logical-stream conversion.
@@ -62,10 +63,10 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   against a caller-managed unit buffer.
 - **`DecodeFailure`**: separates incomplete-prefix flow control from
   codec-domain invalid input returned by `Codec::decode`.
-- **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**: add
-  adapter-level encode, decode, and conversion errors without hiding
-  codec-specific failures. Buffer index and capacity failures are represented by
-  `TranscodeError`.
+- **`TranscodeError<E>`**: carries framework failures such as invalid indices,
+  insufficient output, overflow, incomplete input, and codec-domain failures.
+- **`CodecValueEncodeError<E>` / `CodecValueDecodeError<E>`**: final errors for
+  codec-backed whole-value adapters.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -227,6 +228,11 @@ struct StringEncoder;
 impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
+    type DomainError = core::convert::Infallible;
+
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        match error {}
+    }
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -259,10 +265,10 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `DecodeFailure<E>` | Low-level decode result for incomplete visible prefixes or invalid codec-domain input |
-| `CodecEncodeError<E>` | Adapter-level encode error that wraps codec reset/encode/flush errors or unencodable values |
-| `CodecDecodeError<E>` | Adapter-level decode error that wraps codec reset/decode/flush errors, incomplete input, or trailing input |
-| `CodecConvertError<D, E>` | Adapter-level converter error that separates decode failures from full encode-side `CodecEncodeError<E>` failures |
 | `TranscodeError<E>` | Streaming framework error for invalid indices, insufficient output, output-length overflow, or a domain error |
+| `ConvertError<D, E>` | Converter domain error that preserves whether a failure came from decode side or encode side |
+| `CodecValueEncodeError<E>` | Final whole-value encode error wrapping `TranscodeError<E>` |
+| `CodecValueDecodeError<E>` | Final whole-value decode error wrapping `TranscodeError<E>` or exact-decode trailing input |
 | `CapacityError` | Capacity-planning error returned before allocating or writing output |
 | `TranscodeContractError` | Error reported when a custom `Transcoder` returns inconsistent progress |
 
@@ -293,7 +299,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeEncodeHooks<C>` | Hook contract for unencodable-value policy, preparing for reset, and finalizing encoded output |
-| `TranscodeEncodeEngineError<C, H>` | Separates codec lifecycle failures from encode-hook policy failures |
+| `TranscodeEncodeError<C>` | Directional alias for `TranscodeError<C::EncodeError>` |
 | `EncodeUnencodableAction<Value>` | Policy action returned for values outside the codec's encodable domain |
 | `EncodeOutcome` | Per-value engine outcome: consumed with written output, or needs more output without consuming |
 | `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor used by encode engine helpers |
@@ -304,7 +310,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeDecodeHooks<C>` | Hook contract for invalid-input decode policy |
-| `TranscodeDecodeEngineError<C, H>` | Separates codec lifecycle failures from decode-hook policy failures |
+| `TranscodeDecodeError<C>` | Directional alias for `TranscodeError<C::DecodeError>` |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeInvalidAction<Value>` | Invalid-input policy action: skip input or emit a replacement value |
 
@@ -313,7 +319,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeConvertEngine<D, E, DH, EH>` | Reusable unit-to-unit converter that decodes with `D`, encodes with `E`, and applies decode/encode hooks |
-| `TranscodeConvertEngineError<D, E>` | Separates decode-side and encode-side converter failures |
+| `TranscodeConvertError<D, E>` | Alias for `TranscodeError<ConvertError<D::DecodeError, E::EncodeError>>` |
 
 ### `Transcoder` Operations
 
@@ -352,9 +358,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `CodecValueExt::decode_exact_value_with_flush()` when the input must contain
   exactly one encoded value. These helpers keep reset/flush capacity checks and
   overflow handling in the value adapter layer.
-- `CodecDecodeError` / `CodecEncodeError` are adapter-level wrappers.
-  `TranscodeError` is the streaming framework wrapper. Concrete codec,
-  charset, or policy failures remain the associated domain error.
+- `TranscodeError<E>` is the shared intermediate error for engine and adapter
+  internals. Default streaming adapters expose it directly, while value and
+  downstream facade adapters map it into their own final error types.
 - `NeedInput` means the reported tail was not consumed and must remain available
   when the caller retries with more input. It is a streaming boundary signal,
   not an EOF error; `finish` does not receive that source tail. Callers must

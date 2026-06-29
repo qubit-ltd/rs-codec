@@ -8,12 +8,7 @@
 //! Slot that owns the converter's retained decoded value.
 
 use super::pending_value::PendingValue;
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
-};
+use crate::{CapacityError, Codec, TranscodeEncodeEngine, TranscodeEncodeHooks};
 
 /// Slot that owns the converter's retained decoded value.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -55,7 +50,9 @@ impl<Value> PendingValueSlot<Value> {
         H: TranscodeEncodeHooks<E>,
     {
         if self.value.is_some() {
-            engine.max_transcode_output_len(1)
+            engine
+                .max_transcode_output_len(1)
+                .map_err(|_| CapacityError::OutputLengthOverflow)
         } else {
             Ok(0)
         }

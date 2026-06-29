@@ -28,7 +28,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeInvalidAction` 和
   `DecodeContext`。
 - 用于组合 decode side 与 encode side 的带策略 unit-to-unit 转换管线的
-  `TranscodeConvertEngine` 和 `TranscodeConvertEngineError`。
+  `TranscodeConvertEngine`、`TranscodeConvertError` 和 `ConvertError`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress`
   和 `TranscodeStatus`。
@@ -55,9 +55,10 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`Codec`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
 - **`DecodeFailure`**：区分 `Codec::decode` 返回的 incomplete-prefix 流程控制
   与 codec-domain invalid input。
-- **`CodecEncodeError` / `CodecDecodeError` / `CodecConvertError`**：表达
-  adapter 自己产生的 encode / decode / convert 错误，同时保留
-  codec-specific failure。缓冲区下标和容量错误由 `TranscodeError` 表达。
+- **`TranscodeError<E>`**：表达非法下标、输出不足、长度溢出、不完整输入
+  以及 codec-domain failure 等中间错误。
+- **`CodecValueEncodeError<E>` / `CodecValueDecodeError<E>`**：codec-backed
+  whole-value adapter 对外暴露的最终错误类型。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -208,6 +209,11 @@ struct StringEncoder;
 impl ValueEncoder<str> for StringEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
+    type DomainError = core::convert::Infallible;
+
+    fn map_error(&self, error: Self::DomainError) -> Self::Error {
+        match error {}
+    }
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -240,10 +246,10 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `DecodeFailure<E>` | 底层 decode 结果，表示可见输入是 incomplete prefix，或 codec-domain invalid input |
-| `CodecEncodeError<E>` | adapter 层 encode error，包装 codec reset/encode/flush error 或不可编码值 |
-| `CodecDecodeError<E>` | adapter 层 decode error，包装 codec reset/decode/flush error、不完整输入或尾随输入 |
-| `CodecConvertError<D, E>` | adapter 层 converter error，区分 decode 失败和完整的 encode-side `CodecEncodeError<E>` 失败 |
 | `TranscodeError<E>` | streaming framework error，表示非法下标、输出不足、输出长度溢出或 domain error |
+| `ConvertError<D, E>` | converter domain error，保留失败来自 decode side 还是 encode side |
+| `CodecValueEncodeError<E>` | whole-value encode 最终错误，包装 `TranscodeError<E>` |
+| `CodecValueDecodeError<E>` | whole-value decode 最终错误，包装 `TranscodeError<E>` 或 exact-decode trailing input |
 | `CapacityError` | 在分配或写入输出前返回的容量规划错误 |
 | `TranscodeContractError` | 自定义 `Transcoder` 返回不一致进度时报告的错误 |
 
@@ -274,7 +280,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
 | `TranscodeEncodeHooks<C>` | 编码单个 value、reset 前清理并完成 encoded output 收尾的 hook 契约 |
-| `TranscodeEncodeEngineError<C, H>` | 区分 codec 生命周期失败和 encode-hook 策略失败 |
+| `TranscodeEncodeError<C>` | `TranscodeError<C::EncodeError>` 的方向性别名 |
 | `EncodeOutcome` | 单值 hook 结果：已消费并写出 output，或需要更多 output 且不消费 |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
@@ -284,7 +290,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
 | `TranscodeDecodeHooks<C>` | invalid-input decode 策略 hook 契约 |
-| `TranscodeDecodeEngineError<C, H>` | 区分 codec 生命周期失败和 decode-hook 策略失败 |
+| `TranscodeDecodeError<C>` | `TranscodeError<C::DecodeError>` 的方向性别名 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeInvalidAction<Value>` | 非法输入策略动作：跳过输入或输出替换值 |
 
@@ -293,7 +299,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeConvertEngine<D, E, DH, EH>` | 可复用 unit-to-unit converter，用 `D` 解码、用 `E` 编码，并应用 decode/encode hooks |
-| `TranscodeConvertEngineError<D, E>` | 区分 converter decode-side 与 encode-side 失败 |
+| `TranscodeConvertError<D, E>` | `TranscodeError<ConvertError<D::DecodeError, E::EncodeError>>` 的别名 |
 
 ### `Transcoder` 操作
 
@@ -330,9 +336,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `CodecValueExt::encode_value_with_reset()`；输入必须恰好是一个编码值时，
   应使用 `CodecValueExt::decode_exact_value_with_flush()`。这些 helper 把
   reset/flush 容量检查和 overflow 处理统一放在 value adapter 层。
-- `CodecDecodeError` / `CodecEncodeError` 是 adapter 层 wrapper；
-  `TranscodeError` 是 streaming framework 层 wrapper。具体 codec、charset
-  或策略失败仍由关联的 domain error 表达。
+- `TranscodeError<E>` 是 engine 与 adapter 内部共享的中间错误。默认 streaming
+  adapter 直接暴露它，value adapter 和下游 facade adapter 则把它映射成自己的最终错误类型。
 - `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。
   它是 streaming 边界信号，不是 EOF 错误；`finish` 不会接收这段 source tail。
   调用方必须在 finalization 前自己应用 EOF 策略。

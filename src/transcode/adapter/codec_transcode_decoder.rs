@@ -9,15 +9,8 @@
 
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    CodecDecodeError,
-    TranscodeDecodeEngine,
-    TranscodeDecodeEngineError,
-    TranscodeDecoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, TranscodeDecodeEngine, TranscodeDecodeError, TranscodeDecoder,
+    TranscodeError, TranscodeProgress, Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -60,10 +53,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(
-                codec,
-                CodecTranscodeDecodeHooks,
-            ),
+            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
         }
     }
 }
@@ -72,7 +62,14 @@ impl<C> Transcoder<C::Unit, C::Value> for CodecTranscodeDecoder<C>
 where
     C: Codec,
 {
-    type Error = CodecDecodeError<C::DecodeError>;
+    type Error = TranscodeDecodeError<C>;
+    type DomainError = C::DecodeError;
+
+    /// Returns the default streaming adapter error unchanged.
+    #[inline(always)]
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -85,11 +82,10 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
-        self.engine.max_transcode_output_len(input_len)
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        self.engine
+            .max_transcode_output_len(input_len)
+            .map_err(|_| CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
@@ -100,7 +96,9 @@ where
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        self.engine.max_finish_output_len()
+        self.engine
+            .max_finish_output_len()
+            .map_err(|_| CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum values emitted when resetting internal state.
@@ -115,10 +113,8 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine
-            .reset(output, output_index)
-            .map_err(|error| error.map_domain(flatten_decode_engine_error))
+    ) -> Result<usize, Self::Error> {
+        self.engine.reset(output, output_index)
     }
 
     /// Decodes source units into logical values.
@@ -145,10 +141,9 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         self.engine
             .transcode(input, input_index, output, output_index)
-            .map_err(|error| error.map_domain(flatten_decode_engine_error))
     }
 
     /// Finishes internally retained output after EOF.
@@ -170,33 +165,9 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        self.engine
-            .finish(output, output_index)
-            .map_err(|error| error.map_domain(flatten_decode_engine_error))
+    ) -> Result<usize, Self::Error> {
+        self.engine.finish(output, output_index)
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
-    C: Codec
-{
-}
-
-#[inline(always)]
-fn flatten_decode_engine_error<E>(
-    error: TranscodeDecodeEngineError<E, CodecDecodeError<E>>,
-) -> CodecDecodeError<E> {
-    match error {
-        TranscodeDecodeEngineError::CodecDecode {
-            source,
-            input_index,
-        } => CodecDecodeError::decode(source, input_index),
-        TranscodeDecodeEngineError::CodecReset { source } => {
-            CodecDecodeError::decode_reset(source)
-        }
-        TranscodeDecodeEngineError::CodecFlush { source } => {
-            CodecDecodeError::decode_flush(source)
-        }
-        TranscodeDecodeEngineError::Hook(error) => error,
-    }
-}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}

@@ -7,15 +7,7 @@
 // =============================================================================
 //! Converter error type alias selected by decode and encode hooks.
 
-use crate::{
-    Codec,
-    TranscodeConvertEngineError,
-    TranscodeDecodeEngineError,
-    TranscodeDecodeHooks,
-    TranscodeEncodeEngineError,
-    TranscodeEncodeHooks,
-    TranscodeError,
-};
+use crate::TranscodeConvertError;
 
 /// Converter error type selected by hooks for one target output unit type.
 ///
@@ -25,15 +17,4 @@ use crate::{
 /// - `E`: Target codec type.
 /// - `DH`: Decode hook type.
 /// - `EH`: Encode hook type.
-pub(in crate::transcode) type ConvertErrorOf<D, E, DH, EH> = TranscodeError<
-    TranscodeConvertEngineError<
-        TranscodeDecodeEngineError<
-            <D as Codec>::DecodeError,
-            <DH as TranscodeDecodeHooks<D>>::Error,
-        >,
-        TranscodeEncodeEngineError<
-            <E as Codec>::EncodeError,
-            <EH as TranscodeEncodeHooks<E>>::Error,
-        >,
-    >,
->;
+pub(in crate::transcode) type ConvertErrorOf<D, E> = TranscodeConvertError<D, E>;

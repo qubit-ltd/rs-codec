@@ -8,10 +8,7 @@
 //! Policy hooks used by buffered encoder engines.
 
 use super::encode_unencodable_action::EncodeUnencodableAction;
-use crate::{
-    CapacityError,
-    Codec,
-};
+use crate::{Codec, TranscodeEncodeError, TranscodeError};
 
 /// Policy hooks for [`crate::TranscodeEncodeEngine`].
 ///
@@ -43,9 +40,9 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     TranscodeEncodeHooks,
+///     TranscodeEncodeError,
 ///     Codec,
 ///     DecodeFailure,
-///     CodecEncodeError,
 ///     EncodeUnencodableAction,
 /// };
 ///
@@ -86,15 +83,13 @@ use crate::{
 /// where
 ///     C: Codec,
 /// {
-///     type Error = CodecEncodeError<C::EncodeError>;
-///
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut C,
 ///         _value: &C::Value,
 ///         input_index: usize,
-///     ) -> Result<EncodeUnencodableAction<C::Value>, Self::Error> {
-///         Err(CodecEncodeError::unencodable_value(input_index))
+///     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>> {
+///         Ok(EncodeUnencodableAction::Reject)
 ///     }
 /// }
 /// ```
@@ -106,14 +101,6 @@ pub trait TranscodeEncodeHooks<C>
 where
     C: Codec,
 {
-    /// Domain error type returned by the buffered encoder policy.
-    ///
-    /// Engine methods wrap this type in
-    /// [`crate::TranscodeEncodeEngineError::Hook`]. Codec lifecycle failures
-    /// are reported separately through the `CodecEncode`, `CodecReset`, and
-    /// `CodecFlush` variants.
-    type Error;
-
     /// Returns the maximum output units needed for `input_len` values.
     ///
     /// This bound covers only the streaming encode phase driven by
@@ -139,10 +126,10 @@ where
         &self,
         _codec: &C,
         input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    ) -> Result<usize, TranscodeEncodeError<C>> {
         input_len
             .checked_mul(C::MAX_UNITS_PER_VALUE.get())
-            .ok_or(CapacityError::OutputLengthOverflow)
+            .ok_or_else(TranscodeError::output_length_overflow)
     }
 
     /// Returns an upper bound for units emitted by finishing hook-owned state.
@@ -188,13 +175,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when the policy rejects the value.
+    /// Returns [`TranscodeError`] when the policy rejects the value with a
+    /// codec-domain error.
     fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
         value: &C::Value,
         input_index: usize,
-    ) -> Result<EncodeUnencodableAction<C::Value>, Self::Error>;
+    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -232,14 +220,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` when hook-owned state cannot be finalized.
+    /// Returns [`TranscodeError`] when hook-owned state cannot be finalized.
     #[inline(always)]
     fn finish_hooks(
         &mut self,
         _codec: &mut C,
         _output: &mut [C::Unit],
         _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeEncodeError<C>> {
         Ok(0)
     }
 }

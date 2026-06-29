@@ -7,38 +7,25 @@
 // =============================================================================
 //! Tests for the semantic transcode encoder marker trait.
 
-use qubit_codec::{
-    CapacityError,
-    CodecConvertError,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec::{CapacityError, TranscodeEncoder, TranscodeError, TranscodeProgress, Transcoder};
 
 #[derive(Default)]
 struct CharToByte;
 
 impl Transcoder<char, u8> for CharToByte {
-    type Error =
-        CodecConvertError<core::convert::Infallible, core::convert::Infallible>;
+    type Error = TranscodeError<core::convert::Infallible>;
+    type DomainError = core::convert::Infallible;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
+        error
+    }
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -48,7 +35,7 @@ impl Transcoder<char, u8> for CharToByte {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::Error>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -58,15 +45,8 @@ impl Transcoder<char, u8> for CharToByte {
         Ok(TranscodeProgress::complete(count, count))
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::Error>> {
-        TranscodeError::<Self::Error>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
