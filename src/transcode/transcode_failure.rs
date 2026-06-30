@@ -16,7 +16,6 @@ use thiserror::Error;
 /// unhandled value-domain boundaries that the transcode layer can detect
 /// without interpreting a concrete codec error.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
-#[non_exhaustive]
 pub enum TranscodeFailure {
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {input_len}")]
@@ -82,5 +81,7 @@ pub enum TranscodeFailure {
     UnencodableValue {
         /// Absolute input index of the value being encoded.
         input_index: usize,
+        /// Raw scalar value being encoded, when the transcoder can expose one.
+        value: Option<u32>,
     },
 }

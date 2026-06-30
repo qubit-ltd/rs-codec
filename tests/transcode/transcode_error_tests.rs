@@ -143,6 +143,11 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
     let mapped = TranscodeError::<&'static str>::unencodable_value(4)
         .map_domain(|error| format!("mapped {error}"));
     assert_eq!(TranscodeError::unencodable_value(4), mapped,);
+
+    let mapped =
+        TranscodeError::<&'static str>::unencodable_raw_value(4, 0x4E2D)
+            .map_domain(|error| format!("mapped {error}"));
+    assert_eq!(TranscodeError::unencodable_raw_value(4, 0x4E2D), mapped,);
 }
 
 #[test]

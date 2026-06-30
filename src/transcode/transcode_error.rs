@@ -38,7 +38,6 @@ pub type TranscodeDecodeError<C> = TranscodeError<<C as Codec>::DecodeError>;
 ///
 /// - `E`: Domain error reported by the concrete transcoder.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
-#[non_exhaustive]
 pub enum TranscodeError<E> {
     /// Framework-level transcode failure.
     #[error(transparent)]
@@ -146,7 +145,29 @@ impl<E> TranscodeError<E> {
     #[inline(always)]
     #[must_use]
     pub const fn unencodable_value(input_index: usize) -> Self {
-        Self::Failure(TranscodeFailure::UnencodableValue { input_index })
+        Self::Failure(TranscodeFailure::UnencodableValue {
+            input_index,
+            value: None,
+        })
+    }
+
+    /// Creates an unencodable-value error with a raw scalar value.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_index`: Absolute input index of the rejected value.
+    /// - `value`: Raw scalar value that could not be encoded.
+    ///
+    /// # Returns
+    ///
+    /// Returns a framework failure carrying both the index and raw value.
+    #[inline(always)]
+    #[must_use]
+    pub const fn unencodable_raw_value(input_index: usize, value: u32) -> Self {
+        Self::Failure(TranscodeFailure::UnencodableValue {
+            input_index,
+            value: Some(value),
+        })
     }
 
     /// Converts a low-level decode failure into a transcode error.

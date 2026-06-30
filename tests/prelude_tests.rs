@@ -183,7 +183,8 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert!(matches!(
         encode_error,
         TranscodeError::Failure(TranscodeFailure::UnencodableValue {
-            input_index: 2
+            input_index: 2,
+            value: None,
         })
     ));
     let convert_error =
