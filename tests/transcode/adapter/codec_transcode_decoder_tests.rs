@@ -304,10 +304,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -319,10 +316,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("out-of-range input index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error);
 }
 
 #[test]
@@ -334,10 +328,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -420,7 +411,7 @@ fn test_codec_transcode_decoder_reports_max_reset_output_len() {
 }
 
 #[test]
-fn test_codec_transcode_decoder_forwards_map_error() {
+fn test_codec_transcode_decoder_forwards_map_transcode_error() {
     let decoder =
         CodecTranscodeDecoder::<VariableByteCodec>::new(VariableByteCodec);
     let error = TranscodeError::domain(
@@ -428,5 +419,12 @@ fn test_codec_transcode_decoder_forwards_map_error() {
         CodecPhase::Main,
         None,
     );
-    assert_eq!(error, Transcoder::map_error(&decoder, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&decoder, error));
+    assert_eq!(
+        TranscodeError::<TestDecodeError>::output_length_overflow(),
+        Transcoder::map_failure(
+            &decoder,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
+    );
 }

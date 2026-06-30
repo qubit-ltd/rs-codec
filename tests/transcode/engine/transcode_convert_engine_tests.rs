@@ -1624,11 +1624,11 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Main,
-            input_index: Some(_),
-        },
+            input_index: Some(_)
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1641,18 +1641,12 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
     let error = engine
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error,);
 
     let error = engine
         .transcode(&[1], 0, &mut output, 2)
         .expect_err("invalid output index should fail");
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(2, 1), error,);
 }
 
 #[test]
@@ -1821,11 +1815,11 @@ fn test_buffered_convert_engine_maps_encode_value_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Main,
-            input_index: Some(_),
-        },
+            input_index: Some(_)
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1839,10 +1833,7 @@ fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -1860,11 +1851,11 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Decode(EngineError::Decode),
             phase: CodecPhase::Flush,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1884,11 +1875,11 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Flush,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1912,11 +1903,11 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Main,
-            input_index: Some(_),
-        },
+            input_index: Some(_)
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1932,11 +1923,11 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Main,
-            input_index: Some(_),
-        },
+            input_index: Some(_)
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -1984,14 +1975,7 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
     let error = engine
         .finish(&mut empty_output, 0)
         .expect_err("finish should reject insufficient output before draining pending value");
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
@@ -2011,14 +1995,7 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
     let error = engine.finish(&mut empty_output, 0).expect_err(
         "finish should reject insufficient output before decoder finish",
     );
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
@@ -2063,14 +2040,7 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     let error = engine
         .finish(&mut output, 0)
         .expect_err("finish should reject partial one-shot output");
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 2,
-            available: 1
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 2, 1), error,);
     assert_eq!([0], output);
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
@@ -2091,14 +2061,7 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     let error = engine.finish(&mut empty_output, 0).expect_err(
         "target finish hook should require one-shot output capacity",
     );
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
 
     let mut output = [0_u8; 1];
     let written = engine
@@ -2575,11 +2538,11 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(TargetResetFailError),
             phase: CodecPhase::Reset,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
 }
 
@@ -2597,10 +2560,7 @@ fn test_buffered_convert_engine_reset_rejects_invalid_output_index() {
         .reset(&mut output, 2)
         .expect_err("invalid reset output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(2, 1), error,);
 }
 
 #[test]
@@ -2643,11 +2603,11 @@ fn test_buffered_convert_engine_reset_maps_stateless_decoder_reset_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Decode(EngineError::Decode),
             phase: CodecPhase::Reset,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
 }
 
@@ -2705,10 +2665,7 @@ fn test_buffered_convert_engine_invalid_reset_preserves_pending_value() {
         .reset(&mut output, 2)
         .expect_err("invalid reset output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(2, 1), error,);
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let written = engine
@@ -3179,11 +3136,11 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Encode(EngineError::Encode),
             phase: CodecPhase::Main,
-            input_index: Some(_),
-        },
+            input_index: Some(_)
+        }),
     ));
 }
 
@@ -3203,11 +3160,11 @@ fn test_buffered_convert_engine_reset_maps_decoder_reset_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Decode(EngineError::Decode),
             phase: CodecPhase::Reset,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
 }
 
@@ -3227,11 +3184,11 @@ fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: ConvertError::Decode(EngineError::Decode),
             phase: CodecPhase::Flush,
-            input_index: None,
-        },
+            input_index: None
+        }),
     ));
 }
 
@@ -3288,12 +3245,19 @@ fn test_buffered_convert_engine_lifecycle_allows_reuse_after_reset() {
 }
 
 #[test]
-fn test_buffered_convert_engine_forwards_map_error() {
+fn test_buffered_convert_engine_forwards_map_transcode_error() {
     let engine = new_copy_engine();
     let error = TranscodeError::domain(
         ConvertError::decode(EngineError::Decode),
         CodecPhase::Main,
         None,
     );
-    assert_eq!(error, Transcoder::map_error(&engine, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&engine, error));
+    assert_eq!(
+        TranscodeError::<ConvertError<EngineError, EngineError>>::output_length_overflow(),
+        Transcoder::map_failure(
+            &engine,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
+    );
 }

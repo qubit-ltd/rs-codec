@@ -505,7 +505,7 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("odd value should be rejected");
 
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 0 }, error,);
+    assert_eq!(TranscodeError::unencodable_value(0), error,);
 }
 
 #[test]
@@ -520,11 +520,11 @@ fn test_codec_value_encoder_truncates_output_after_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: "encode failed",
             phase: CodecPhase::Main,
-            input_index: Some(0),
-        }
+            input_index: Some(0)
+        })
     ),);
     assert_eq!(vec![0xaa], output);
 }
@@ -538,7 +538,7 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
 }
 
 #[test]
@@ -552,7 +552,7 @@ fn test_codec_value_encoder_encode_into_rejects_bound_overflow() {
         .encode_into(&7, &mut output)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
     assert_eq!(vec![0xaa], output);
 }
 
@@ -566,7 +566,7 @@ fn test_codec_value_encoder_encode_into_rejects_target_len_overflow() {
         .encode_into(&7, &mut output)
         .expect_err("appending encoded units should report length overflow");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
     assert_eq!(vec![0xaa], output);
 }
 

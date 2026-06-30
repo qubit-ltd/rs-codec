@@ -25,6 +25,7 @@ use qubit_codec::{
     TranscodeDecoder,
     TranscodeEncoder,
     TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
     ValueDecoder,
@@ -163,11 +164,11 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         TranscodeError::<core::convert::Infallible>::incomplete_input(0, 2, 1);
     assert!(matches!(
         decode_error,
-        TranscodeError::IncompleteInput {
+        TranscodeError::Failure(TranscodeFailure::IncompleteInput {
             input_index: 0,
             required: 2,
             available: 1,
-        }
+        })
     ));
 
     let convert_error =
@@ -181,7 +182,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         TranscodeError::<core::convert::Infallible>::unencodable_value(2);
     assert!(matches!(
         encode_error,
-        TranscodeError::UnencodableValue { input_index: 2 }
+        TranscodeError::Failure(TranscodeFailure::UnencodableValue {
+            input_index: 2
+        })
     ));
     let convert_error =
         ConvertError::<&'static str, &'static str>::encode("encode failed");

@@ -17,8 +17,10 @@ mod io;
 mod transcode_contract_error;
 mod transcode_converter;
 mod transcode_decoder;
+mod transcode_domain_error;
 mod transcode_encoder;
 mod transcode_error;
+mod transcode_failure;
 mod transcode_progress;
 mod transcode_status;
 mod transcoder;
@@ -54,12 +56,14 @@ pub use io::{
 pub use transcode_contract_error::TranscodeContractError;
 pub use transcode_converter::TranscodeConverter;
 pub use transcode_decoder::TranscodeDecoder;
+pub use transcode_domain_error::TranscodeDomainError;
 pub use transcode_encoder::TranscodeEncoder;
 pub use transcode_error::{
     TranscodeDecodeError,
     TranscodeEncodeError,
     TranscodeError,
 };
+pub use transcode_failure::TranscodeFailure;
 pub use transcode_progress::TranscodeProgress;
 pub use transcode_status::TranscodeStatus;
 pub use transcoder::Transcoder;

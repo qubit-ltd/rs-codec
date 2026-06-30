@@ -589,18 +589,18 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let mut output = [0_u8; 1];
 
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         decoder.max_finish_output_len(),
     );
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         decoder.max_total_output_len(0),
     );
 
     let error = decoder
         .finish(&mut output, 0)
         .expect_err("finish should report capacity overflow before writing");
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
 }
 
 #[test]
@@ -655,14 +655,7 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
     let error = decoder.finish(&mut [], 0).expect_err(
         "finish should reject insufficient output before calling hooks",
     );
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
     assert_eq!(Ok(1), decoder.max_finish_output_len());
 
     let written = decoder
@@ -711,10 +704,7 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -728,10 +718,7 @@ fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffe
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -948,10 +935,7 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -974,10 +958,7 @@ fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error,);
 }
 
 #[test]
@@ -1216,10 +1197,7 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
         .reset(&mut [], 1)
         .expect_err("reset should reject invalid output index");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -1455,7 +1433,8 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverflowPlanningDecodeHooks {
 }
 
 #[test]
-fn test_transcode_decode_engine_forwards_map_error_and_capacity_failures() {
+fn test_transcode_decode_engine_forwards_map_transcode_error_and_capacity_failures()
+ {
     type Decoder = TranscodeDecodeEngine<PrefixCodec, ReplacingHooks>;
     let decoder = Decoder::new(PrefixCodec, ReplacingHooks);
     let error = TranscodeError::domain(
@@ -1463,7 +1442,7 @@ fn test_transcode_decode_engine_forwards_map_error_and_capacity_failures() {
         CodecPhase::Main,
         Some(2),
     );
-    assert_eq!(error, Transcoder::map_error(&decoder, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&decoder, error));
     assert_eq!(
         Ok(3),
         TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::max_total_output_len(&decoder, 3,),
@@ -1478,8 +1457,15 @@ fn test_transcode_decode_engine_forwards_map_error_and_capacity_failures() {
         Transcoder::max_transcode_output_len(&overflow_decoder, 1),
     );
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         overflow_decoder.max_total_output_len(1),
+    );
+    assert_eq!(
+        TranscodeError::<PrefixDecodeError>::output_length_overflow(),
+        Transcoder::map_failure(
+            &decoder,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
     );
 }
 
@@ -1601,7 +1587,7 @@ fn test_transcode_decode_engine_max_total_output_len_reports_sum_overflow() {
     );
 
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         decoder.max_total_output_len(usize::MAX),
     );
 }

@@ -24,7 +24,9 @@ use crate::{
     DecodeOutcome,
     TranscodeDecodeError,
     TranscodeDecodeHooks,
+    TranscodeDomainError,
     TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -688,13 +690,19 @@ where
     type Error = TranscodeDecodeError<C>;
     type DomainError = C::DecodeError;
 
-    /// Returns the engine error unchanged.
+    /// Maps a framework failure through the engine error.
     #[inline(always)]
-    fn map_error(
+    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
+        failure.into()
+    }
+
+    /// Maps a codec decode error through the engine error.
+    #[inline(always)]
+    fn map_domain_error(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        error: TranscodeDomainError<Self::DomainError>,
     ) -> Self::Error {
-        error
+        error.into()
     }
 
     /// Returns an upper bound for decoded values produced from `input_len`

@@ -19,9 +19,11 @@ use crate::{
     CodecPhase,
     EncodeOutcome,
     EncodeUnencodableAction,
+    TranscodeDomainError,
     TranscodeEncodeError,
     TranscodeEncodeHooks,
     TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -686,13 +688,19 @@ where
     type Error = TranscodeEncodeError<C>;
     type DomainError = C::EncodeError;
 
-    /// Returns the engine error unchanged.
+    /// Maps a framework failure through the engine error.
     #[inline(always)]
-    fn map_error(
+    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
+        failure.into()
+    }
+
+    /// Maps a codec encode error through the engine error.
+    #[inline(always)]
+    fn map_domain_error(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        error: TranscodeDomainError<Self::DomainError>,
     ) -> Self::Error {
-        error
+        error.into()
     }
 
     /// Returns an upper bound for units produced from `input_len` values.

@@ -12,6 +12,8 @@ use thiserror::Error;
 use super::{
     capacity_error::CapacityError,
     codec_phase::CodecPhase,
+    transcode_domain_error::TranscodeDomainError,
+    transcode_failure::TranscodeFailure,
 };
 use crate::{
     Codec,
@@ -26,9 +28,11 @@ pub type TranscodeDecodeError<C> = TranscodeError<<C as Codec>::DecodeError>;
 
 /// Error reported by a transcode operation.
 ///
-/// Buffer contract failures are framework errors owned by the transcode layer
-/// and are represented directly by this enum. Codec-, charset-, or
-/// policy-specific failures are carried as domain errors.
+/// Transcode errors separate framework failures from codec-, charset-, or
+/// policy-specific domain errors. Implementation contract violations are not
+/// represented here; callers that need to validate progress should use
+/// [`crate::TranscodeProgress::validate`] and handle
+/// [`crate::TranscodeContractError`] separately.
 ///
 /// # Type Parameters
 ///
@@ -36,84 +40,13 @@ pub type TranscodeDecodeError<C> = TranscodeError<<C as Codec>::DecodeError>;
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum TranscodeError<E> {
-    /// The caller supplied an input index outside the input slice.
-    #[error("invalid input index {index} for input length {len}")]
-    InvalidInputIndex {
-        /// Invalid input index supplied by the caller.
-        index: usize,
-        /// Length of the input slice.
-        len: usize,
-    },
-
-    /// The caller supplied an output index outside the output slice.
-    #[error("invalid output index {index} for output length {len}")]
-    InvalidOutputIndex {
-        /// Invalid output index supplied by the caller.
-        index: usize,
-        /// Length of the output slice.
-        len: usize,
-    },
-
-    /// The output slice cannot hold all required output.
-    #[error(
-        "insufficient output at index {output_index}: required {required} units, available {available}"
-    )]
-    InsufficientOutput {
-        /// Absolute output index where writing would start.
-        output_index: usize,
-        /// Output units required from `output_index`.
-        required: usize,
-        /// Output units available from `output_index`.
-        available: usize,
-    },
-
-    /// Output length arithmetic overflowed.
-    #[error("output length arithmetic overflow")]
-    OutputLengthOverflow,
-
-    /// The complete input ended with an incomplete value.
-    #[error(
-        "incomplete input at index {input_index}: required {required} units, available {available}"
-    )]
-    IncompleteInput {
-        /// Absolute input index where the incomplete value starts.
-        input_index: usize,
-        /// Input units required to complete the value.
-        required: usize,
-        /// Input units available from `input_index`.
-        available: usize,
-    },
-
-    /// The input contains exactly one decoded value plus trailing units.
-    #[error(
-        "trailing input after value: consumed {consumed} units, remaining {remaining}"
-    )]
-    TrailingInput {
-        /// Units consumed by the decoded value.
-        consumed: usize,
-        /// Extra units left after the decoded value.
-        remaining: usize,
-    },
-
-    /// The codec could not encode a value and no hook policy handled it.
-    #[error("unencodable value at input index {input_index}")]
-    UnencodableValue {
-        /// Absolute input index of the value being encoded.
-        input_index: usize,
-    },
+    /// Framework-level transcode failure.
+    #[error(transparent)]
+    Failure(#[from] TranscodeFailure),
 
     /// Domain-specific codec, charset, or policy error.
-    #[error("codec {phase:?} error at input index {input_index:?}: {source}")]
-    Domain {
-        /// Domain error returned by the codec or policy facade.
-        #[source]
-        source: E,
-        /// Codec lifecycle phase where the error occurred.
-        phase: CodecPhase,
-        /// Absolute input index when the phase is associated with an input
-        /// value.
-        input_index: Option<usize>,
-    },
+    #[error(transparent)]
+    Domain(#[from] TranscodeDomainError<E>),
 }
 
 impl<E> TranscodeError<E> {
@@ -135,25 +68,31 @@ impl<E> TranscodeError<E> {
         phase: CodecPhase,
         input_index: Option<usize>,
     ) -> Self {
-        Self::Domain {
+        Self::Domain(TranscodeDomainError {
             source,
             phase,
             input_index,
-        }
+        })
     }
 
     /// Creates an invalid-input-index error.
     #[inline(always)]
     #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
-        Self::InvalidInputIndex { index, len }
+        Self::Failure(TranscodeFailure::InvalidInputIndex {
+            index,
+            input_len: len,
+        })
     }
 
     /// Creates an invalid-output-index error.
     #[inline(always)]
     #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
-        Self::InvalidOutputIndex { index, len }
+        Self::Failure(TranscodeFailure::InvalidOutputIndex {
+            index,
+            output_len: len,
+        })
     }
 
     /// Creates an insufficient-output error.
@@ -164,18 +103,18 @@ impl<E> TranscodeError<E> {
         required: usize,
         available: usize,
     ) -> Self {
-        Self::InsufficientOutput {
+        Self::Failure(TranscodeFailure::InsufficientOutput {
             output_index,
             required,
             available,
-        }
+        })
     }
 
     /// Creates an output-length-overflow error.
     #[inline(always)]
     #[must_use]
     pub const fn output_length_overflow() -> Self {
-        Self::OutputLengthOverflow
+        Self::Failure(TranscodeFailure::OutputLengthOverflow)
     }
 
     /// Creates an incomplete-input error.
@@ -186,28 +125,28 @@ impl<E> TranscodeError<E> {
         required: usize,
         available: usize,
     ) -> Self {
-        Self::IncompleteInput {
+        Self::Failure(TranscodeFailure::IncompleteInput {
             input_index,
             required,
             available,
-        }
+        })
     }
 
     /// Creates a trailing-input error.
     #[inline(always)]
     #[must_use]
     pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
-        Self::TrailingInput {
+        Self::Failure(TranscodeFailure::TrailingInput {
             consumed,
             remaining,
-        }
+        })
     }
 
     /// Creates an unencodable-value error.
     #[inline(always)]
     #[must_use]
     pub const fn unencodable_value(input_index: usize) -> Self {
-        Self::UnencodableValue { input_index }
+        Self::Failure(TranscodeFailure::UnencodableValue { input_index })
     }
 
     /// Converts a low-level decode failure into a transcode error.
@@ -224,7 +163,7 @@ impl<E> TranscodeError<E> {
     ///
     /// # Returns
     ///
-    /// Returns [`TranscodeError::IncompleteInput`] for
+    /// Returns [`TranscodeFailure::IncompleteInput`] for
     /// [`DecodeFailure::Incomplete`] and [`TranscodeError::Domain`] for
     /// [`DecodeFailure::Invalid`].
     #[inline]
@@ -256,7 +195,37 @@ impl<E> TranscodeError<E> {
     #[inline(always)]
     #[must_use]
     pub const fn is_domain(&self) -> bool {
-        matches!(self, Self::Domain { .. })
+        matches!(self, Self::Domain(_))
+    }
+
+    /// Returns the framework failure carried by this error.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(failure)` for [`TranscodeError::Failure`] and `None` for
+    /// domain errors.
+    #[inline(always)]
+    #[must_use]
+    pub const fn failure(&self) -> Option<TranscodeFailure> {
+        match self {
+            Self::Failure(failure) => Some(*failure),
+            Self::Domain(_) => None,
+        }
+    }
+
+    /// Borrows the wrapped domain error and transcode context.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(error)` for [`TranscodeError::Domain`] and `None` for
+    /// framework failures.
+    #[inline(always)]
+    #[must_use]
+    pub const fn domain_error_ref(&self) -> Option<&TranscodeDomainError<E>> {
+        match self {
+            Self::Domain(error) => Some(error),
+            Self::Failure(_) => None,
+        }
     }
 
     /// Borrows the wrapped domain error.
@@ -268,14 +237,8 @@ impl<E> TranscodeError<E> {
     #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
-            Self::Domain { source, .. } => Some(source),
-            Self::InvalidInputIndex { .. }
-            | Self::InvalidOutputIndex { .. }
-            | Self::InsufficientOutput { .. }
-            | Self::IncompleteInput { .. }
-            | Self::TrailingInput { .. }
-            | Self::UnencodableValue { .. }
-            | Self::OutputLengthOverflow => None,
+            Self::Domain(error) => Some(&error.source),
+            Self::Failure(_) => None,
         }
     }
 
@@ -299,50 +262,14 @@ impl<E> TranscodeError<E> {
         F: FnOnce(E) -> T,
     {
         match self {
-            Self::InvalidInputIndex { index, len } => {
-                TranscodeError::InvalidInputIndex { index, len }
+            Self::Failure(failure) => TranscodeError::Failure(failure),
+            Self::Domain(error) => {
+                TranscodeError::Domain(TranscodeDomainError {
+                    source: f(error.source),
+                    phase: error.phase,
+                    input_index: error.input_index,
+                })
             }
-            Self::InvalidOutputIndex { index, len } => {
-                TranscodeError::InvalidOutputIndex { index, len }
-            }
-            Self::InsufficientOutput {
-                output_index,
-                required,
-                available,
-            } => TranscodeError::InsufficientOutput {
-                output_index,
-                required,
-                available,
-            },
-            Self::OutputLengthOverflow => TranscodeError::OutputLengthOverflow,
-            Self::IncompleteInput {
-                input_index,
-                required,
-                available,
-            } => TranscodeError::IncompleteInput {
-                input_index,
-                required,
-                available,
-            },
-            Self::TrailingInput {
-                consumed,
-                remaining,
-            } => TranscodeError::TrailingInput {
-                consumed,
-                remaining,
-            },
-            Self::UnencodableValue { input_index } => {
-                TranscodeError::UnencodableValue { input_index }
-            }
-            Self::Domain {
-                source,
-                phase,
-                input_index,
-            } => TranscodeError::Domain {
-                source: f(source),
-                phase,
-                input_index,
-            },
         }
     }
 
@@ -368,9 +295,9 @@ impl<E> TranscodeError<E> {
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError::InvalidInputIndex`] when `input_index` is out
-    /// of range. Returns [`TranscodeError::IncompleteInput`] when fewer than
-    /// `min_required` units are available.
+    /// Returns [`TranscodeFailure::InvalidInputIndex`] when `input_index` is
+    /// out of range. Returns [`TranscodeFailure::IncompleteInput`] when fewer
+    /// than `min_required` units are available.
     #[inline]
     pub fn ensure_min_input(
         input_len: usize,
@@ -398,7 +325,7 @@ impl<E> TranscodeError<E> {
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError::TrailingInput`] when `consumed < total`.
+    /// Returns [`TranscodeFailure::TrailingInput`] when `consumed < total`.
     #[inline]
     pub fn ensure_no_trailing_input(
         consumed: usize,
@@ -483,9 +410,9 @@ impl<E> TranscodeError<E> {
     /// Maps this error into the I/O surface used by one-value encode adapters.
     ///
     /// Domain errors are forwarded through `map_domain`. Framework errors
-    /// become `InvalidData`, except [`Self::UnencodableValue`] which maps
-    /// to `InvalidInput` with the stable message expected by encode I/O
-    /// helpers.
+    /// become `InvalidData`, except
+    /// [`TranscodeFailure::UnencodableValue`] which maps to `InvalidInput`
+    /// with the stable message expected by encode I/O helpers.
     pub fn into_encode_io_error<M>(self, map_domain: &mut M) -> std::io::Error
     where
         M: FnMut(E) -> std::io::Error,
@@ -496,46 +423,58 @@ impl<E> TranscodeError<E> {
         };
 
         match self {
-            Self::Domain { source, .. } => map_domain(source),
-            Self::InvalidInputIndex { index, len } => Error::new(
+            Self::Domain(error) => map_domain(error.source),
+            Self::Failure(TranscodeFailure::InvalidInputIndex {
+                index,
+                input_len,
+            }) => Error::new(
                 ErrorKind::InvalidData,
-                format!("invalid input index {index} for input length {len}"),
+                format!(
+                    "invalid input index {index} for input length {input_len}"
+                ),
             ),
-            Self::InvalidOutputIndex { index, len } => Error::new(
+            Self::Failure(TranscodeFailure::InvalidOutputIndex {
+                index,
+                output_len,
+            }) => Error::new(
                 ErrorKind::InvalidData,
-                format!("invalid output index {index} for output length {len}"),
+                format!(
+                    "invalid output index {index} for output length {output_len}"
+                ),
             ),
-            Self::InsufficientOutput {
+            Self::Failure(TranscodeFailure::InsufficientOutput {
                 output_index,
                 required,
                 available,
-            } => Error::new(
+            }) => Error::new(
                 ErrorKind::InvalidData,
                 format!(
                     "insufficient output at index {output_index}: required {required} units, available {available}"
                 ),
             ),
-            Self::OutputLengthOverflow => Error::new(
-                ErrorKind::InvalidData,
-                "output length arithmetic overflow",
-            ),
-            Self::UnencodableValue { .. } => {
+            Self::Failure(TranscodeFailure::OutputLengthOverflow) => {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "output length arithmetic overflow",
+                )
+            }
+            Self::Failure(TranscodeFailure::UnencodableValue { .. }) => {
                 Error::new(ErrorKind::InvalidInput, "codec cannot encode value")
             }
-            Self::IncompleteInput {
+            Self::Failure(TranscodeFailure::IncompleteInput {
                 input_index,
                 required,
                 available,
-            } => Error::new(
+            }) => Error::new(
                 ErrorKind::InvalidData,
                 format!(
                     "incomplete input at index {input_index}: required {required} units, available {available}"
                 ),
             ),
-            Self::TrailingInput {
+            Self::Failure(TranscodeFailure::TrailingInput {
                 consumed,
                 remaining,
-            } => Error::new(
+            }) => Error::new(
                 ErrorKind::InvalidData,
                 format!(
                     "trailing input: consumed {consumed} units, remaining {remaining}"
@@ -550,7 +489,9 @@ impl<E> From<CapacityError> for TranscodeError<E> {
     #[inline(always)]
     fn from(error: CapacityError) -> Self {
         match error {
-            CapacityError::OutputLengthOverflow => Self::OutputLengthOverflow,
+            CapacityError::OutputLengthOverflow => {
+                Self::output_length_overflow()
+            }
         }
     }
 }

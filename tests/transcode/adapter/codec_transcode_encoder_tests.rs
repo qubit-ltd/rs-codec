@@ -267,10 +267,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .transcode(&[3], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -282,10 +279,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -297,10 +291,7 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .transcode(&[3], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error);
 }
 
 #[test]
@@ -312,7 +303,7 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
         .transcode(&[2, 3], 0, &mut output, 0)
         .expect_err("odd value should be rejected before unsafe encode");
 
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 1 }, error,);
+    assert_eq!(TranscodeError::unencodable_value(1), error,);
     assert_eq!([2, 0], output);
 }
 
@@ -324,11 +315,18 @@ fn test_codec_transcode_encoder_reports_max_reset_output_len() {
 }
 
 #[test]
-fn test_codec_transcode_encoder_forwards_map_error() {
+fn test_codec_transcode_encoder_forwards_map_transcode_error() {
     let encoder = CodecTranscodeEncoder::<RejectOddCodec>::new(RejectOddCodec);
     let error =
         TranscodeError::domain("encode failure", CodecPhase::Main, None);
-    assert_eq!(error, Transcoder::map_error(&encoder, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&encoder, error));
+    assert_eq!(
+        TranscodeError::<&'static str>::output_length_overflow(),
+        Transcoder::map_failure(
+            &encoder,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
+    );
 }
 
 #[test]

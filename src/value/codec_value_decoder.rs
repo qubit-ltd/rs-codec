@@ -123,10 +123,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError::IncompleteInput`] when fewer than
+    /// Returns [`crate::TranscodeFailure::IncompleteInput`] when fewer than
     /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. Returns
     /// [`TranscodeError::Domain`] when the wrapped codec rejects or cannot
-    /// flush the input. Returns [`TranscodeError::TrailingInput`] when
+    /// flush the input. Returns [`crate::TranscodeFailure::TrailingInput`] when
     /// a value is decoded but extra input remains.
     ///
     /// # Panics

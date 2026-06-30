@@ -28,11 +28,18 @@ macro_rules! infallible_transcoder_error {
         type Error = TranscodeError<core::convert::Infallible>;
         type DomainError = core::convert::Infallible;
 
-        fn map_error(
+        fn map_failure(
             &self,
-            error: TranscodeError<Self::DomainError>,
+            failure: qubit_codec::TranscodeFailure,
         ) -> Self::Error {
-            error
+            failure.into()
+        }
+
+        fn map_domain_error(
+            &self,
+            error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+        ) -> Self::Error {
+            error.into()
         }
     };
 }
@@ -51,9 +58,16 @@ impl Transcoder<u8, u8> for MappingTranscoder {
     type Error = FacadeError;
     type DomainError = DomainFailure;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        _error: TranscodeError<Self::DomainError>,
+        _failure: qubit_codec::TranscodeFailure,
+    ) -> Self::Error {
+        FacadeError
+    }
+
+    fn map_domain_error(
+        &self,
+        _error: qubit_codec::TranscodeDomainError<Self::DomainError>,
     ) -> Self::Error {
         FacadeError
     }
@@ -80,11 +94,11 @@ impl Transcoder<u8, u8> for MappingTranscoder {
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Err(self.map_error(TranscodeError::domain(
-            DomainFailure,
-            CodecPhase::Main,
-            Some(0),
-        )))
+        Err(self.map_domain_error(qubit_codec::TranscodeDomainError {
+            source: DomainFailure,
+            phase: CodecPhase::Main,
+            input_index: Some(0),
+        }))
     }
 
     fn finish(
@@ -469,11 +483,18 @@ impl Transcoder<u8, u8> for FailingTranscoder {
     type Error = TranscodeError<&'static str>;
     type DomainError = &'static str;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
@@ -640,11 +661,11 @@ fn test_transcoder_transcode_complete_into_reports_stage_errors() {
         ),
         (
             FailurePoint::TranscodeBound,
-            TranscodeError::OutputLengthOverflow,
+            TranscodeError::output_length_overflow(),
         ),
         (
             FailurePoint::FinishBound,
-            TranscodeError::OutputLengthOverflow,
+            TranscodeError::output_length_overflow(),
         ),
         (
             FailurePoint::Transcode,
@@ -675,14 +696,7 @@ fn test_transcoder_transcode_complete_into_reports_insufficient_output() {
         .transcode_complete_into(b"abc", &mut output)
         .expect_err("complete transcode requires five output units");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 5,
-            available: 4,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 5, 4), error,);
 }
 
 #[test]
@@ -694,14 +708,7 @@ fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
         .transcode_complete_into(b"a", &mut output)
         .expect_err("runtime need-output status should be an output error");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
 }
 
 #[cfg(debug_assertions)]
@@ -723,7 +730,7 @@ fn test_transcoder_transcode_complete_into_reports_remaining_bound_overflow() {
         .transcode_complete_into(b"", &mut output)
         .expect_err("transcode plus finish bound overflows");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
 }
 
 #[test]
@@ -735,14 +742,7 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .transcode_complete_into(b"abc", &mut output)
         .expect_err("odd-length complete input is incomplete");
 
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 2,
-            required: 2,
-            available: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::incomplete_input(2, 2, 1), error,);
 }
 
 #[test]
@@ -754,10 +754,7 @@ fn test_transcoder_explicit_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -771,14 +768,7 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
         .finish(&mut output, 0)
         .expect_err("finish should reject partial output capacity");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 2,
-            available: 1
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 2, 1), error,);
     assert_eq!([0], output);
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 

@@ -29,8 +29,10 @@ use crate::{
     EncodeContext,
     TranscodeConvertError,
     TranscodeDecodeHooks,
+    TranscodeDomainError,
     TranscodeEncodeHooks,
     TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -977,13 +979,19 @@ where
     type Error = TranscodeConvertError<D, E>;
     type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
 
-    /// Returns the converter error unchanged.
+    /// Maps a framework failure through the converter error.
     #[inline(always)]
-    fn map_error(
+    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
+        failure.into()
+    }
+
+    /// Maps a codec convert error through the converter error.
+    #[inline(always)]
+    fn map_domain_error(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        error: TranscodeDomainError<Self::DomainError>,
     ) -> Self::Error {
-        error
+        error.into()
     }
 
     /// Returns an upper bound for target units produced from `input_len`

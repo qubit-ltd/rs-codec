@@ -699,18 +699,12 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
     let error = converter
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error);
 
     let error = converter
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 3, len: 2 },
-        error
-    );
+    assert_eq!(TranscodeError::invalid_output_index(3, 2), error);
 }
 
 #[test]
@@ -845,18 +839,11 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .finish(&mut output, 4)
         .expect_err("finish should reject insufficient output");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 4,
-            required: 2,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(4, 2, 0), error,);
 }
 
 #[test]
-fn test_codec_transcode_converter_forwards_map_error() {
+fn test_codec_transcode_converter_forwards_map_transcode_error() {
     let converter = CodecTranscodeConverter::<
         VariableByteDecoder,
         PairByteEncoder,
@@ -866,5 +853,14 @@ fn test_codec_transcode_converter_forwards_map_error() {
         CodecPhase::Main,
         None,
     );
-    assert_eq!(error, Transcoder::map_error(&converter, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&converter, error));
+    assert_eq!(
+        TranscodeError::<
+            ConvertError<TestDecodeError, TestEncodeError>,
+        >::output_length_overflow(),
+        Transcoder::map_failure(
+            &converter,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
+    );
 }

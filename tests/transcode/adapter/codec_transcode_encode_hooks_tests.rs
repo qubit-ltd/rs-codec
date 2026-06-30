@@ -157,7 +157,7 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
         .transcode(&[7], 0, &mut output, 0)
         .expect_err("strict encode hooks should reject unencodable values");
 
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 0 }, error,);
+    assert_eq!(TranscodeError::unencodable_value(0), error,);
 }
 
 #[test]

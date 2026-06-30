@@ -13,12 +13,54 @@ use qubit_codec::{
     CapacityError,
     CodecPhase,
     DecodeFailure,
+    TranscodeDomainError,
     TranscodeError,
+    TranscodeFailure,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain failure")]
 struct DomainError;
+
+#[test]
+fn test_transcode_error_separates_failure_and_domain_errors() {
+    let failure = TranscodeError::<DomainError>::invalid_input_index(3, 1);
+    assert_eq!(
+        TranscodeError::Failure(TranscodeFailure::InvalidInputIndex {
+            index: 3,
+            input_len: 1,
+        }),
+        failure,
+    );
+    assert_eq!(
+        Some(TranscodeFailure::InvalidInputIndex {
+            index: 3,
+            input_len: 1,
+        }),
+        failure.failure(),
+    );
+    assert_eq!(None, failure.domain_ref());
+
+    let domain = TranscodeError::domain(DomainError, CodecPhase::Flush, None);
+    assert_eq!(
+        TranscodeError::Domain(TranscodeDomainError {
+            source: DomainError,
+            phase: CodecPhase::Flush,
+            input_index: None,
+        }),
+        domain,
+    );
+    assert_eq!(None, domain.failure());
+    assert_eq!(Some(&DomainError), domain.domain_ref());
+    assert_eq!(
+        Some(&TranscodeDomainError {
+            source: DomainError,
+            phase: CodecPhase::Flush,
+            input_index: None,
+        }),
+        domain.domain_error_ref(),
+    );
+}
 
 #[test]
 fn test_transcode_error_domain_helpers() {
@@ -54,50 +96,30 @@ fn test_transcode_error_converts_capacity_error() {
     let error: TranscodeError<DomainError> =
         CapacityError::OutputLengthOverflow.into();
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
 }
 
 #[test]
 fn test_transcode_error_map_domain_preserves_framework_errors() {
     let mapped = TranscodeError::invalid_input_index(3, 1)
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 3, len: 1 },
-        mapped
-    );
+    assert_eq!(TranscodeError::invalid_input_index(3, 1), mapped);
 
     let mapped = TranscodeError::invalid_output_index(4, 2)
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 4, len: 2 },
-        mapped
-    );
+    assert_eq!(TranscodeError::invalid_output_index(4, 2), mapped);
 
     let mapped = TranscodeError::insufficient_output(1, 3, 2)
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 1,
-            required: 3,
-            available: 2
-        },
-        mapped,
-    );
+    assert_eq!(TranscodeError::insufficient_output(1, 3, 2), mapped,);
 
     let mapped = TranscodeError::<&'static str>::output_length_overflow()
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(TranscodeError::OutputLengthOverflow, mapped);
+    assert_eq!(TranscodeError::output_length_overflow(), mapped);
 
     let mapped = TranscodeError::<&'static str>::incomplete_input(2, 4, 1)
         .map_domain(|error: &'static str| format!("mapped {error}"));
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 2,
-            required: 4,
-            available: 1,
-        },
-        mapped,
-    );
+    assert_eq!(TranscodeError::incomplete_input(2, 4, 1), mapped,);
 
     let mapped = TranscodeError::<String>::domain(
         "inner".to_string(),
@@ -106,27 +128,21 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
     )
     .map_domain(|error| format!("mapped {error}"));
     assert_eq!(
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: "mapped inner".to_string(),
             phase: CodecPhase::Flush,
-            input_index: None,
-        },
+            input_index: None
+        }),
         mapped,
     );
 
     let mapped = TranscodeError::<&'static str>::trailing_input(2, 1)
         .map_domain(|error| format!("mapped {error}"));
-    assert_eq!(
-        TranscodeError::TrailingInput {
-            consumed: 2,
-            remaining: 1,
-        },
-        mapped,
-    );
+    assert_eq!(TranscodeError::trailing_input(2, 1), mapped,);
 
     let mapped = TranscodeError::<&'static str>::unencodable_value(4)
         .map_domain(|error| format!("mapped {error}"));
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 4 }, mapped,);
+    assert_eq!(TranscodeError::unencodable_value(4), mapped,);
 }
 
 #[test]
@@ -349,14 +365,7 @@ fn test_transcode_error_from_decode_failure_preserves_framework_error_through_ma
         TranscodeError::<DomainError>::from_decode_failure(failure, 1, 2)
             .map_domain(|error| format!("mapped {error:?}"));
 
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 1,
-            required: 3,
-            available: 2,
-        },
-        mapped,
-    );
+    assert_eq!(TranscodeError::incomplete_input(1, 3, 2), mapped,);
 }
 
 #[test]

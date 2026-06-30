@@ -515,11 +515,11 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
     assert_eq!(Ok(0), encoder.max_finish_output_len());
     assert_eq!(Ok(0), encoder.max_reset_output_len());
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         max_total_output_len(&encoder, usize::MAX),
     );
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         encoder.max_transcode_output_len(usize::MAX),
     );
     let mut output = [0_u8; 8];
@@ -540,14 +540,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     let error = encoder.finish(&mut [], 0).expect_err(
         "finish should reject insufficient output before calling hooks",
     );
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
     assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let written = encoder
@@ -700,10 +693,7 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -717,10 +707,7 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -785,10 +772,7 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -873,11 +857,11 @@ fn test_buffered_encode_engine_maps_replacement_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
             source: EngineError::Rejected { input_index: 0 },
             phase: CodecPhase::Main,
-            input_index: Some(0),
-        },
+            input_index: Some(0)
+        }),
     ));
     assert_eq!([0], output);
 }
@@ -892,7 +876,7 @@ fn test_buffered_encode_engine_propagates_unencodable_hook_error_without_consumi
         .transcode(&[0], 0, &mut output, 0)
         .expect_err("encode hook error should be propagated");
 
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 0 }, error);
+    assert_eq!(TranscodeError::unencodable_value(0), error);
     assert_eq!([0, 0, 0, 0], output);
 }
 
@@ -905,10 +889,7 @@ fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should be rejected");
 
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error,);
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -1091,14 +1072,7 @@ fn test_buffered_encode_engine_reset_rejects_insufficient_output() {
         .reset(&mut output, 0)
         .expect_err("reset should reject insufficient output capacity");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
 }
 
 #[test]
@@ -1113,10 +1087,7 @@ fn test_buffered_encode_engine_reset_reports_output_index_beyond_buffer() {
         .reset(&mut output, 2)
         .expect_err("reset should reject an out-of-range output index");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(2, 1), error,);
 }
 
 #[test]
@@ -1127,7 +1098,7 @@ fn test_buffered_encode_engine_max_total_output_len_reports_sum_overflow() {
     );
 
     assert_eq!(
-        Err(TranscodeError::OutputLengthOverflow),
+        Err(TranscodeError::output_length_overflow()),
         encoder.max_total_output_len(usize::MAX),
     );
 }
@@ -1226,17 +1197,18 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
     > {
-        Err(TranscodeError::UnencodableValue { input_index })
+        Err(TranscodeError::unencodable_value(input_index))
     }
 }
 
 #[test]
-fn test_buffered_encode_engine_forwards_map_error_and_capacity_failures() {
+fn test_buffered_encode_engine_forwards_map_transcode_error_and_capacity_failures()
+ {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
     let encoder = Engine::new(WideCodec, ExactWidthHooks);
     let error =
         TranscodeError::<core::convert::Infallible>::invalid_input_index(1, 0);
-    assert_eq!(error, Transcoder::map_error(&encoder, error));
+    assert_eq!(error, Transcoder::map_transcode_error(&encoder, error));
     assert_eq!(Ok(8), Engine::max_total_output_len(&encoder, 2));
 
     let overflow_encoder = TranscodeEncodeEngine::<
@@ -1246,5 +1218,26 @@ fn test_buffered_encode_engine_forwards_map_error_and_capacity_failures() {
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         Transcoder::max_transcode_output_len(&overflow_encoder, 1),
+    );
+    assert_eq!(
+        TranscodeError::<core::convert::Infallible>::output_length_overflow(),
+        Transcoder::map_failure(
+            &encoder,
+            qubit_codec::TranscodeFailure::OutputLengthOverflow,
+        ),
+    );
+
+    let domain_encoder = TranscodeEncodeEngine::<
+        ReplacementEncodeFailCodec,
+        ExactWidthHooks,
+    >::new(ReplacementEncodeFailCodec, ExactWidthHooks);
+    let domain_error = qubit_codec::TranscodeDomainError {
+        source: EngineError::Rejected { input_index: 9 },
+        phase: CodecPhase::Main,
+        input_index: Some(9),
+    };
+    assert_eq!(
+        TranscodeError::Domain(domain_error),
+        Transcoder::map_domain_error(&domain_encoder, domain_error),
     );
 }

@@ -145,11 +145,18 @@ impl Transcoder<u16, u32> for PairDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -224,11 +231,18 @@ impl Transcoder<u16, u32> for FinishDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -288,11 +302,18 @@ impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -374,11 +395,18 @@ impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -430,11 +458,18 @@ impl Transcoder<u16, u32> for CapacityBoundDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -473,11 +508,18 @@ impl Transcoder<u16, u32> for FailingTranscodeDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -512,11 +554,18 @@ impl Transcoder<u16, u32> for OverreadingProgressDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -551,11 +600,18 @@ impl Transcoder<u16, u32> for OverwritingProgressDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -592,11 +648,18 @@ impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -639,11 +702,18 @@ impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -686,11 +756,18 @@ impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(
@@ -739,11 +816,18 @@ impl Transcoder<u16, u32> for FailingFinishDecoder {
     type Error = TranscodeError<PairDecodeError>;
     type DomainError = PairDecodeError;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(

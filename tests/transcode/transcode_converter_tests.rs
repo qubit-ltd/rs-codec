@@ -22,11 +22,18 @@ impl Transcoder<u8, u16> for ByteToWord {
     type Error = TranscodeError<core::convert::Infallible>;
     type DomainError = core::convert::Infallible;
 
-    fn map_error(
+    fn map_failure(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        failure: qubit_codec::TranscodeFailure,
     ) -> Self::Error {
-        error
+        failure.into()
+    }
+
+    fn map_domain_error(
+        &self,
+        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error {
+        error.into()
     }
 
     fn max_transcode_output_len(

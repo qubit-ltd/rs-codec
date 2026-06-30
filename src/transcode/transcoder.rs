@@ -7,7 +7,9 @@
 // =============================================================================
 use super::{
     capacity_error::CapacityError,
+    transcode_domain_error::TranscodeDomainError,
     transcode_error::TranscodeError,
+    transcode_failure::TranscodeFailure,
     transcode_progress::TranscodeProgress,
     transcode_status::TranscodeStatus,
 };
@@ -71,8 +73,15 @@ use super::{
 ///     type DomainError = core::convert::Infallible;
 ///     type Error = TranscodeError<Self::DomainError>;
 ///
-///     fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
-///         error
+///     fn map_failure(&self, failure: qubit_codec::TranscodeFailure) -> Self::Error {
+///         failure.into()
+///     }
+///
+///     fn map_domain_error(
+///         &self,
+///         error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+///     ) -> Self::Error {
+///         error.into()
 ///     }
 ///
 ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
@@ -171,11 +180,15 @@ use super::{
 ///
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 2, &mut output, 0),
-///     Err(TranscodeError::InvalidInputIndex { .. }),
+///     Err(TranscodeError::Failure(
+///         qubit_codec::TranscodeFailure::InvalidInputIndex { .. }
+///     )),
 /// ));
 /// assert!(matches!(
 ///     transcoder.transcode(&[0x12], 0, &mut output, 3),
-///     Err(TranscodeError::InvalidOutputIndex { .. }),
+///     Err(TranscodeError::Failure(
+///         qubit_codec::TranscodeFailure::InvalidOutputIndex { .. }
+///     )),
 /// ));
 /// ```
 ///
@@ -196,7 +209,32 @@ pub trait Transcoder<Input, Output> {
     /// Domain error type accepted from engine and hook internals.
     type DomainError;
 
-    /// Maps an intermediate transcode error into the public final error.
+    /// Maps a framework-level transcode failure into the public final error.
+    ///
+    /// # Parameters
+    ///
+    /// - `failure`: Framework failure produced by safe transcode API checks.
+    ///
+    /// # Returns
+    ///
+    /// Returns the final error exposed by this transcoder.
+    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error;
+
+    /// Maps a domain-specific transcode error into the public final error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Domain error produced by codec, hook, or facade internals.
+    ///
+    /// # Returns
+    ///
+    /// Returns the final error exposed by this transcoder.
+    fn map_domain_error(
+        &self,
+        error: TranscodeDomainError<Self::DomainError>,
+    ) -> Self::Error;
+
+    /// Maps any intermediate transcode error into the public final error.
     ///
     /// # Parameters
     ///
@@ -206,10 +244,16 @@ pub trait Transcoder<Input, Output> {
     /// # Returns
     ///
     /// Returns the final error exposed by this transcoder.
-    fn map_error(
+    #[inline(always)]
+    fn map_transcode_error(
         &self,
         error: TranscodeError<Self::DomainError>,
-    ) -> Self::Error;
+    ) -> Self::Error {
+        match error {
+            TranscodeError::Failure(failure) => self.map_failure(failure),
+            TranscodeError::Domain(error) => self.map_domain_error(error),
+        }
+    }
 
     /// Returns an upper bound for output units emitted when resetting stream
     /// state.
@@ -406,8 +450,15 @@ pub trait Transcoder<Input, Output> {
     ///     type DomainError = core::convert::Infallible;
     ///     type Error = TranscodeError<Self::DomainError>;
     ///
-    ///     fn map_error(&self, error: TranscodeError<Self::DomainError>) -> Self::Error {
-    ///         error
+    ///     fn map_failure(&self, failure: qubit_codec::TranscodeFailure) -> Self::Error {
+    ///         failure.into()
+    ///     }
+    ///
+    ///     fn map_domain_error(
+    ///         &self,
+    ///         error: qubit_codec::TranscodeDomainError<Self::DomainError>,
+    ///     ) -> Self::Error {
+    ///         error.into()
     ///     }
     ///
     ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
@@ -530,21 +581,26 @@ pub trait Transcoder<Input, Output> {
         let mut output_cursor = self.reset(output, 0)?;
         let transcode_required =
             self.max_transcode_output_len(input.len()).map_err(|_| {
-                self.map_error(TranscodeError::OutputLengthOverflow)
+                self.map_transcode_error(
+                    TranscodeError::output_length_overflow(),
+                )
             })?;
         let finish_required = self.max_finish_output_len().map_err(|_| {
-            self.map_error(TranscodeError::OutputLengthOverflow)
+            self.map_transcode_error(TranscodeError::output_length_overflow())
         })?;
-        let remaining_required =
-            transcode_required.checked_add(finish_required).ok_or_else(
-                || self.map_error(TranscodeError::OutputLengthOverflow),
-            )?;
+        let remaining_required = transcode_required
+            .checked_add(finish_required)
+            .ok_or_else(|| {
+                self.map_transcode_error(
+                    TranscodeError::output_length_overflow(),
+                )
+            })?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_cursor,
             remaining_required,
         )
-        .map_err(|error| self.map_error(error))?;
+        .map_err(|error| self.map_transcode_error(error))?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
         debug_assert!(
@@ -571,7 +627,7 @@ pub trait Transcoder<Input, Output> {
                     required.get(),
                     available,
                 );
-                return Err(self.map_error(error));
+                return Err(self.map_transcode_error(error));
             }
             TranscodeStatus::NeedInput {
                 input_index,
@@ -583,7 +639,7 @@ pub trait Transcoder<Input, Output> {
                     required.get(),
                     available,
                 );
-                return Err(self.map_error(error));
+                return Err(self.map_transcode_error(error));
             }
         }
         output_cursor += self.finish(output, output_cursor)?;

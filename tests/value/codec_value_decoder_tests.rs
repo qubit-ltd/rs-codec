@@ -432,14 +432,7 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("one byte is incomplete");
 
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 0,
-            required: 2,
-            available: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::incomplete_input(0, 2, 1), error,);
 }
 
 #[test]
@@ -450,13 +443,7 @@ fn test_codec_value_decoder_rejects_trailing_input() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
         .expect_err("trailing input should fail");
 
-    assert_eq!(
-        TranscodeError::TrailingInput {
-            consumed: 1,
-            remaining: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::trailing_input(1, 1), error,);
 }
 
 #[test]

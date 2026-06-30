@@ -11,10 +11,11 @@ use super::CodecTranscodeEncodeHooks;
 use crate::{
     CapacityError,
     Codec,
+    TranscodeDomainError,
     TranscodeEncodeEngine,
     TranscodeEncodeError,
     TranscodeEncoder,
-    TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -69,13 +70,19 @@ where
     type Error = TranscodeEncodeError<C>;
     type DomainError = C::EncodeError;
 
-    /// Returns the default streaming adapter error unchanged.
+    /// Maps a framework failure through the default adapter error.
     #[inline(always)]
-    fn map_error(
+    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
+        failure.into()
+    }
+
+    /// Maps a codec encode error through the default adapter error.
+    #[inline(always)]
+    fn map_domain_error(
         &self,
-        error: TranscodeError<Self::DomainError>,
+        error: TranscodeDomainError<Self::DomainError>,
     ) -> Self::Error {
-        error
+        error.into()
     }
 
     /// Gets the maximum number of output units needed for `input_len`

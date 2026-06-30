@@ -456,10 +456,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_invalid_output_index() {
         .encode_value_with_reset(&41, &mut output, 1)
         .expect_err("output index beyond the slice should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidOutputIndex { index: 1, len: 0 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -471,14 +468,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_insufficient_output() {
         .encode_value_with_reset(&41, &mut output, 0)
         .expect_err("output must hold reset bytes and encoded value");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 3,
-            available: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 3, 1), error,);
 }
 
 #[test]
@@ -490,7 +480,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_unencodable_value() {
         .encode_value_with_reset(&41, &mut output, 0)
         .expect_err("unencodable values should be rejected before encoding");
 
-    assert_eq!(TranscodeError::UnencodableValue { input_index: 0 }, error,);
+    assert_eq!(TranscodeError::unencodable_value(0), error,);
 }
 
 #[test]
@@ -503,7 +493,7 @@ fn test_codec_value_ext_encode_value_with_reset_rejects_output_length_overflow()
         .encode_value_with_reset(&41, &mut output, 0)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(TranscodeError::OutputLengthOverflow, error);
+    assert_eq!(TranscodeError::output_length_overflow(), error);
 }
 
 #[test]
@@ -563,14 +553,7 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_incomplete_input() {
             "closed input shorter than the codec minimum is incomplete",
         );
 
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 0,
-            required: 1,
-            available: 0,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::incomplete_input(0, 1, 0), error,);
 }
 
 #[test]
@@ -630,14 +613,7 @@ fn test_codec_value_ext_decode_value_with_flush_maps_incomplete_failure() {
         .decode_value_with_flush(&[0xaa], 0, &mut flushed, 0)
         .expect_err("codec-level incomplete failure should be mapped");
 
-    assert_eq!(
-        TranscodeError::IncompleteInput {
-            input_index: 0,
-            required: 2,
-            available: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::incomplete_input(0, 2, 1), error,);
 }
 
 #[test]
@@ -725,14 +701,7 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_insufficient_flush
         .decode_exact_value_with_flush(&[42], &mut flushed, 0)
         .expect_err("flush output must reserve the codec flush bound");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
 }
 
 #[test]
@@ -745,13 +714,7 @@ fn test_codec_value_ext_decode_exact_value_with_flush_rejects_trailing_before_fl
         .decode_exact_value_with_flush(&[42, 43], &mut flushed, 0)
         .expect_err("exact decode should reject trailing input");
 
-    assert_eq!(
-        TranscodeError::TrailingInput {
-            consumed: 1,
-            remaining: 1,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::trailing_input(1, 1), error,);
     assert_eq!(1, codec.decode_state);
     assert_eq!([0], flushed);
 }
@@ -765,10 +728,7 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_invalid_input_index() {
         .decode_value_with_flush(&[42], 2, &mut flushed, 0)
         .expect_err("input index beyond the slice should fail");
 
-    assert_eq!(
-        TranscodeError::InvalidInputIndex { index: 2, len: 1 },
-        error,
-    );
+    assert_eq!(TranscodeError::invalid_input_index(2, 1), error,);
 }
 
 #[test]
@@ -781,12 +741,5 @@ fn test_codec_value_ext_decode_value_with_flush_rejects_insufficient_flush_outpu
         .decode_value_with_flush(&[42], 0, &mut flushed, 0)
         .expect_err("flush output must reserve the codec flush bound");
 
-    assert_eq!(
-        TranscodeError::InsufficientOutput {
-            output_index: 0,
-            required: 1,
-            available: 0,
-        },
-        error,
-    );
+    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
 }
