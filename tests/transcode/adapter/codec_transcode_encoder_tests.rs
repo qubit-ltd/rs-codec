@@ -10,7 +10,6 @@
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecPhase,
     CodecTranscodeEncoder,
     TranscodeEncoder,
     TranscodeError,
@@ -312,21 +311,6 @@ fn test_codec_transcode_encoder_reports_max_reset_output_len() {
     let encoder = CodecTranscodeEncoder::<PairByteCodec>::new(PairByteCodec);
 
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&encoder));
-}
-
-#[test]
-fn test_codec_transcode_encoder_forwards_map_transcode_error() {
-    let encoder = CodecTranscodeEncoder::<RejectOddCodec>::new(RejectOddCodec);
-    let error =
-        TranscodeError::domain("encode failure", CodecPhase::Main, None);
-    assert_eq!(error, Transcoder::map_transcode_error(&encoder, error));
-    assert_eq!(
-        TranscodeError::<&'static str>::output_length_overflow(),
-        Transcoder::map_failure(
-            &encoder,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
-    );
 }
 
 #[test]

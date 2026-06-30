@@ -841,26 +841,3 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
 
     assert_eq!(TranscodeError::insufficient_output(4, 2, 0), error,);
 }
-
-#[test]
-fn test_codec_transcode_converter_forwards_map_transcode_error() {
-    let converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
-    let error = TranscodeError::domain(
-        ConvertError::decode(TestDecodeError::Invalid { consumed: 1 }),
-        CodecPhase::Main,
-        None,
-    );
-    assert_eq!(error, Transcoder::map_transcode_error(&converter, error));
-    assert_eq!(
-        TranscodeError::<
-            ConvertError<TestDecodeError, TestEncodeError>,
-        >::output_length_overflow(),
-        Transcoder::map_failure(
-            &converter,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
-    );
-}

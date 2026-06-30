@@ -556,10 +556,7 @@ impl TranscodeEncodeHooks<MismatchCapacityTargetCodec>
         &self,
         _codec: &MismatchCapacityTargetCodec,
         input_len: usize,
-    ) -> Result<
-        usize,
-        qubit_codec::TranscodeEncodeError<MismatchCapacityTargetCodec>,
-    > {
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -1021,9 +1018,9 @@ impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
         &self,
         _codec: &SourceCodec,
         input_len: usize,
-    ) -> Result<usize, qubit_codec::TranscodeDecodeError<SourceCodec>> {
+    ) -> Result<usize, CapacityError> {
         if self.max_output_error {
-            Err(TranscodeError::output_length_overflow())
+            Err(CapacityError::OutputLengthOverflow)
         } else {
             Ok(input_len / <SourceCodec as Codec>::MIN_UNITS_PER_VALUE.get())
         }
@@ -1094,13 +1091,13 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         &self,
         _codec: &TargetCodec,
         input_len: usize,
-    ) -> Result<usize, qubit_codec::TranscodeEncodeError<TargetCodec>> {
+    ) -> Result<usize, CapacityError> {
         if self.max_output_error {
-            Err(TranscodeError::output_length_overflow())
+            Err(CapacityError::OutputLengthOverflow)
         } else {
             input_len
                 .checked_mul(<TargetCodec as Codec>::MAX_UNITS_PER_VALUE.get())
-                .ok_or_else(TranscodeError::output_length_overflow)
+                .ok_or(CapacityError::OutputLengthOverflow)
         }
     }
 
@@ -1182,7 +1179,7 @@ impl TranscodeDecodeHooks<SourceCodec> for FactoryDecodeHooks {
         &self,
         _codec: &SourceCodec,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::TranscodeDecodeError<SourceCodec>> {
+    ) -> Result<usize, CapacityError> {
         Ok(self.marker as usize)
     }
 
@@ -3245,19 +3242,8 @@ fn test_buffered_convert_engine_lifecycle_allows_reuse_after_reset() {
 }
 
 #[test]
-fn test_buffered_convert_engine_forwards_map_transcode_error() {
+fn test_buffered_convert_engine_reports_complete_stream_bound() {
     let engine = new_copy_engine();
-    let error = TranscodeError::domain(
-        ConvertError::decode(EngineError::Decode),
-        CodecPhase::Main,
-        None,
-    );
-    assert_eq!(error, Transcoder::map_transcode_error(&engine, error));
-    assert_eq!(
-        TranscodeError::<ConvertError<EngineError, EngineError>>::output_length_overflow(),
-        Transcoder::map_failure(
-            &engine,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
-    );
+
+    assert_eq!(Ok(2), engine.max_total_output_len(2));
 }

@@ -409,22 +409,3 @@ fn test_codec_transcode_decoder_reports_max_reset_output_len() {
 
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&decoder));
 }
-
-#[test]
-fn test_codec_transcode_decoder_forwards_map_transcode_error() {
-    let decoder =
-        CodecTranscodeDecoder::<VariableByteCodec>::new(VariableByteCodec);
-    let error = TranscodeError::domain(
-        TestDecodeError::Invalid,
-        CodecPhase::Main,
-        None,
-    );
-    assert_eq!(error, Transcoder::map_transcode_error(&decoder, error));
-    assert_eq!(
-        TranscodeError::<TestDecodeError>::output_length_overflow(),
-        Transcoder::map_failure(
-            &decoder,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
-    );
-}

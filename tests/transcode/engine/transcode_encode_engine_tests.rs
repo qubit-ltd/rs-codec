@@ -503,10 +503,7 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
     let max_total_output_len: fn(
         &Engine,
         usize,
-    ) -> Result<
-        usize,
-        TranscodeError<core::convert::Infallible>,
-    > = Engine::max_total_output_len;
+    ) -> Result<usize, CapacityError> = Engine::max_total_output_len;
     let transcode_complete_into: TranscodeCompleteIntoFn =
         Engine::transcode_complete_into;
 
@@ -515,11 +512,11 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
     assert_eq!(Ok(0), encoder.max_finish_output_len());
     assert_eq!(Ok(0), encoder.max_reset_output_len());
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         max_total_output_len(&encoder, usize::MAX),
     );
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         encoder.max_transcode_output_len(usize::MAX),
     );
     let mut output = [0_u8; 8];
@@ -1098,7 +1095,7 @@ fn test_buffered_encode_engine_max_total_output_len_reports_sum_overflow() {
     );
 
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         encoder.max_total_output_len(usize::MAX),
     );
 }
@@ -1184,8 +1181,8 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
         &self,
         _codec: &WideCodec,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::TranscodeEncodeError<WideCodec>> {
-        Err(TranscodeError::output_length_overflow())
+    ) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
     }
 
     fn handle_unencodable_encode(
@@ -1202,13 +1199,9 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
 }
 
 #[test]
-fn test_buffered_encode_engine_forwards_map_transcode_error_and_capacity_failures()
- {
+fn test_buffered_encode_engine_reports_capacity_failures() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
     let encoder = Engine::new(WideCodec, ExactWidthHooks);
-    let error =
-        TranscodeError::<core::convert::Infallible>::invalid_input_index(1, 0);
-    assert_eq!(error, Transcoder::map_transcode_error(&encoder, error));
     assert_eq!(Ok(8), Engine::max_total_output_len(&encoder, 2));
 
     let overflow_encoder = TranscodeEncodeEngine::<
@@ -1218,26 +1211,5 @@ fn test_buffered_encode_engine_forwards_map_transcode_error_and_capacity_failure
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         Transcoder::max_transcode_output_len(&overflow_encoder, 1),
-    );
-    assert_eq!(
-        TranscodeError::<core::convert::Infallible>::output_length_overflow(),
-        Transcoder::map_failure(
-            &encoder,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
-    );
-
-    let domain_encoder = TranscodeEncodeEngine::<
-        ReplacementEncodeFailCodec,
-        ExactWidthHooks,
-    >::new(ReplacementEncodeFailCodec, ExactWidthHooks);
-    let domain_error = qubit_codec::TranscodeDomainError {
-        source: EngineError::Rejected { input_index: 9 },
-        phase: CodecPhase::Main,
-        input_index: Some(9),
-    };
-    assert_eq!(
-        TranscodeError::Domain(domain_error),
-        Transcoder::map_domain_error(&domain_encoder, domain_error),
     );
 }

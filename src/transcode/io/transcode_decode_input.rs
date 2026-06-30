@@ -28,6 +28,7 @@ use qubit_io::{
 use crate::{
     Codec,
     DecodeFailure,
+    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -375,7 +376,7 @@ where
     /// # Parameters
     ///
     /// * `decoder` - Streaming decoder used for this operation.
-    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `map_error` - Function mapping transcode errors into I/O errors.
     /// * `output` - Destination value storage.
     /// * `output_index` - Start index inside `output`.
     /// * `count` - Maximum number of values to write.
@@ -389,7 +390,7 @@ where
     /// # Errors
     ///
     /// Returns input errors, invalid output ranges, capacity errors from the
-    /// internal buffer, or decoder errors mapped by `map_error`.
+    /// internal buffer, or transcode errors mapped by `map_error`.
     pub fn transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -400,7 +401,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(D::Error) -> Error,
+        M: FnMut(TranscodeError<D::DomainError>) -> Error,
     {
         let output_end = UncheckedSlice::checked_range_end(
             output.len(),
@@ -463,7 +464,7 @@ where
     /// # Parameters
     ///
     /// * `decoder` - Streaming decoder whose final output is being collected.
-    /// * `map_error` - Function mapping decoder errors into I/O errors.
+    /// * `map_error` - Function mapping transcode errors into I/O errors.
     /// * `output` - Destination value storage.
     /// * `output_index` - Start index inside `output`.
     /// * `count` - Maximum number of finish values to write.
@@ -474,8 +475,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns invalid output ranges, capacity errors, or decoder finalization
-    /// errors mapped to I/O errors.
+    /// Returns invalid output ranges, capacity errors, or transcode
+    /// finalization errors mapped to I/O errors.
     pub fn finish_transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -486,7 +487,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<I::Item, Value>,
-        M: FnMut(D::Error) -> Error,
+        M: FnMut(TranscodeError<D::DomainError>) -> Error,
     {
         let required = decoder
             .max_finish_output_len()

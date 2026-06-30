@@ -7,9 +7,7 @@
 // =============================================================================
 use super::{
     capacity_error::CapacityError,
-    transcode_domain_error::TranscodeDomainError,
     transcode_error::TranscodeError,
-    transcode_failure::TranscodeFailure,
     transcode_progress::TranscodeProgress,
     transcode_status::TranscodeStatus,
 };
@@ -71,19 +69,6 @@ use super::{
 ///
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
 ///     type DomainError = core::convert::Infallible;
-///     type Error = TranscodeError<Self::DomainError>;
-///
-///     fn map_failure(&self, failure: qubit_codec::TranscodeFailure) -> Self::Error {
-///         failure.into()
-///     }
-///
-///     fn map_domain_error(
-///         &self,
-///         error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-///     ) -> Self::Error {
-///         error.into()
-///     }
-///
 ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
 ///     }
@@ -92,7 +77,7 @@ use super::{
 ///         &mut self,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<usize, Self::Error> {
+///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
 ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
@@ -103,7 +88,7 @@ use super::{
 ///         input_index: usize,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<TranscodeProgress, Self::Error> {
+///     ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
 ///         TranscodeError::<Self::DomainError>::ensure_transcode_indices(
 ///             input.len(),
 ///             input_index,
@@ -145,7 +130,7 @@ use super::{
 ///         &mut self,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<usize, Self::Error> {
+///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
 ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
@@ -203,57 +188,8 @@ use super::{
 /// - `Input`: Input unit type accepted by this transcoder.
 /// - `Output`: Output unit type produced by this transcoder.
 pub trait Transcoder<Input, Output> {
-    /// Final error type exposed by this transcoder.
-    type Error;
-
-    /// Domain error type accepted from engine and hook internals.
+    /// Domain error type produced by codec, hook, or policy internals.
     type DomainError;
-
-    /// Maps a framework-level transcode failure into the public final error.
-    ///
-    /// # Parameters
-    ///
-    /// - `failure`: Framework failure produced by safe transcode API checks.
-    ///
-    /// # Returns
-    ///
-    /// Returns the final error exposed by this transcoder.
-    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error;
-
-    /// Maps a domain-specific transcode error into the public final error.
-    ///
-    /// # Parameters
-    ///
-    /// - `error`: Domain error produced by codec, hook, or facade internals.
-    ///
-    /// # Returns
-    ///
-    /// Returns the final error exposed by this transcoder.
-    fn map_domain_error(
-        &self,
-        error: TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error;
-
-    /// Maps any intermediate transcode error into the public final error.
-    ///
-    /// # Parameters
-    ///
-    /// - `error`: Intermediate transcode error produced by engine, hook, or
-    ///   adapter internals.
-    ///
-    /// # Returns
-    ///
-    /// Returns the final error exposed by this transcoder.
-    #[inline(always)]
-    fn map_transcode_error(
-        &self,
-        error: TranscodeError<Self::DomainError>,
-    ) -> Self::Error {
-        match error {
-            TranscodeError::Failure(failure) => self.map_failure(failure),
-            TranscodeError::Domain(error) => self.map_domain_error(error),
-        }
-    }
 
     /// Returns an upper bound for output units emitted when resetting stream
     /// state.
@@ -379,7 +315,7 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, Self::Error>;
+    ) -> Result<usize, TranscodeError<Self::DomainError>>;
 
     /// Converts available input units into output units.
     ///
@@ -407,17 +343,17 @@ pub trait Transcoder<Input, Output> {
     ///
     /// # Errors
     ///
-    /// Returns `Self::Error` for semantic conversion failures that the
-    /// transcoder's policy does not absorb, including caller-supplied
-    /// `input_index` or `output_index` values outside their corresponding
-    /// slices.
+    /// Returns framework failures for invalid indices, insufficient output,
+    /// incomplete input, and capacity overflow. Returns domain errors for
+    /// semantic conversion failures that the transcoder's policy does not
+    /// absorb.
     fn transcode(
         &mut self,
         input: &[Input],
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error>;
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>>;
 
     /// Finishes internally retained output after all input has been supplied.
     ///
@@ -448,18 +384,6 @@ pub trait Transcoder<Input, Output> {
     ///
     /// impl Transcoder<u8, u8> for ByteCopy {
     ///     type DomainError = core::convert::Infallible;
-    ///     type Error = TranscodeError<Self::DomainError>;
-    ///
-    ///     fn map_failure(&self, failure: qubit_codec::TranscodeFailure) -> Self::Error {
-    ///         failure.into()
-    ///     }
-    ///
-    ///     fn map_domain_error(
-    ///         &self,
-    ///         error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ///     ) -> Self::Error {
-    ///         error.into()
-    ///     }
     ///
     ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
     ///         Ok(input_len)
@@ -469,7 +393,7 @@ pub trait Transcoder<Input, Output> {
     ///         &mut self,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<usize, Self::Error> {
+    ///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
     ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
@@ -480,7 +404,7 @@ pub trait Transcoder<Input, Output> {
     ///         input_index: usize,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<qubit_codec::TranscodeProgress, Self::Error> {
+    ///     ) -> Result<qubit_codec::TranscodeProgress, TranscodeError<Self::DomainError>> {
     ///         let mut read = 0;
     ///         let mut written = 0;
     ///         while input_index + read < input.len() && output_index + written < output.len() {
@@ -508,7 +432,7 @@ pub trait Transcoder<Input, Output> {
     ///         &mut self,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<usize, Self::Error> {
+    ///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
     ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
@@ -546,7 +470,7 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, Self::Error>;
+    ) -> Result<usize, TranscodeError<Self::DomainError>>;
 
     /// Runs a complete one-shot `reset -> transcode -> finish` stream.
     ///
@@ -577,30 +501,18 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         input: &[Input],
         output: &mut [Output],
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
         let mut output_cursor = self.reset(output, 0)?;
-        let transcode_required =
-            self.max_transcode_output_len(input.len()).map_err(|_| {
-                self.map_transcode_error(
-                    TranscodeError::output_length_overflow(),
-                )
-            })?;
-        let finish_required = self.max_finish_output_len().map_err(|_| {
-            self.map_transcode_error(TranscodeError::output_length_overflow())
-        })?;
+        let transcode_required = self.max_transcode_output_len(input.len())?;
+        let finish_required = self.max_finish_output_len()?;
         let remaining_required = transcode_required
             .checked_add(finish_required)
-            .ok_or_else(|| {
-                self.map_transcode_error(
-                    TranscodeError::output_length_overflow(),
-                )
-            })?;
+            .ok_or(CapacityError::OutputLengthOverflow)?;
         TranscodeError::ensure_output_capacity(
             output.len(),
             output_cursor,
             remaining_required,
-        )
-        .map_err(|error| self.map_transcode_error(error))?;
+        )?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
         debug_assert!(
@@ -627,7 +539,7 @@ pub trait Transcoder<Input, Output> {
                     required.get(),
                     available,
                 );
-                return Err(self.map_transcode_error(error));
+                return Err(error);
             }
             TranscodeStatus::NeedInput {
                 input_index,
@@ -639,7 +551,7 @@ pub trait Transcoder<Input, Output> {
                     required.get(),
                     available,
                 );
-                return Err(self.map_transcode_error(error));
+                return Err(error);
             }
         }
         output_cursor += self.finish(output, output_cursor)?;

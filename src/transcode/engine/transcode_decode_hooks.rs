@@ -14,6 +14,7 @@ use super::{
     decode_invalid_action::DecodeInvalidAction,
 };
 use crate::{
+    CapacityError,
     Codec,
     TranscodeDecodeError,
 };
@@ -146,13 +147,18 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for streaming output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
+    /// be represented as `usize`.
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(
         &self,
         _codec: &C,
         input_len: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / C::MIN_UNITS_PER_VALUE.get())
     }
 

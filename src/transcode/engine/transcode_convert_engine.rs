@@ -29,10 +29,8 @@ use crate::{
     EncodeContext,
     TranscodeConvertError,
     TranscodeDecodeHooks,
-    TranscodeDomainError,
     TranscodeEncodeHooks,
     TranscodeError,
-    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -362,12 +360,10 @@ where
         let pending_units = self.pending_output_len()?;
         let decoded_values = self
             .decode_engine
-            .max_transcode_output_len(input_len)
-            .map_err(transcode_capacity_error)?;
+            .max_transcode_output_len(input_len)?;
         let converted_units = self
             .encode_engine
-            .max_transcode_output_len(decoded_values)
-            .map_err(transcode_capacity_error)?;
+            .max_transcode_output_len(decoded_values)?;
         converted_units
             .checked_add(pending_units)
             .ok_or(CapacityError::OutputLengthOverflow)
@@ -388,8 +384,7 @@ where
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         let decode_reset_units = self
             .encode_engine
-            .max_transcode_output_len(D::MAX_DECODE_RESET_VALUES)
-            .map_err(transcode_capacity_error)?;
+            .max_transcode_output_len(D::MAX_DECODE_RESET_VALUES)?;
         let encode_reset_units = E::MAX_ENCODE_RESET_UNITS;
         decode_reset_units
             .checked_add(encode_reset_units)
@@ -410,16 +405,13 @@ where
         let pending_units = self.pending_output_len()?;
         let decoder_finish_values = self
             .decode_engine
-            .max_finish_output_len()
-            .map_err(transcode_capacity_error)?;
+            .max_finish_output_len()?;
         let decoder_finish_units = self
             .encode_engine
-            .max_transcode_output_len(decoder_finish_values)
-            .map_err(transcode_capacity_error)?;
+            .max_transcode_output_len(decoder_finish_values)?;
         let encoder_finish_units = self
             .encode_engine
-            .max_finish_output_len()
-            .map_err(transcode_capacity_error)?;
+            .max_finish_output_len()?;
         let pending_and_decoder = pending_units
             .checked_add(decoder_finish_units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
@@ -870,8 +862,7 @@ where
     {
         let value_count = self
             .decode_engine
-            .max_finish_output_len()
-            .map_err(|error| error.map_domain(ConvertError::decode))?;
+            .max_finish_output_len()?;
         if value_count == 0 {
             // Skip the Vec allocation when the decoder declares no finish
             // output. We still call finish() so that
@@ -976,23 +967,7 @@ where
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
 {
-    type Error = TranscodeConvertError<D, E>;
     type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
-
-    /// Maps a framework failure through the converter error.
-    #[inline(always)]
-    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
-        failure.into()
-    }
-
-    /// Maps a codec convert error through the converter error.
-    #[inline(always)]
-    fn map_domain_error(
-        &self,
-        error: TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        error.into()
-    }
 
     /// Returns an upper bound for target units produced from `input_len`
     /// units.
@@ -1024,7 +999,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeConvertError<D, E>> {
         TranscodeConvertEngine::reset(self, output, output_index)
     }
 
@@ -1036,7 +1011,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
         TranscodeConvertEngine::transcode(
             self,
             input,
@@ -1052,13 +1027,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeConvertError<D, E>> {
         TranscodeConvertEngine::finish(self, output, output_index)
     }
-}
-
-/// Converts planning failures from hook-shaped errors into capacity errors.
-#[inline(always)]
-fn transcode_capacity_error<E>(_error: TranscodeError<E>) -> CapacityError {
-    CapacityError::OutputLengthOverflow
 }

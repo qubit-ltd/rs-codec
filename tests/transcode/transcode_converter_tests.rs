@@ -19,22 +19,7 @@ use qubit_codec::{
 struct ByteToWord;
 
 impl Transcoder<u8, u16> for ByteToWord {
-    type Error = TranscodeError<core::convert::Infallible>;
     type DomainError = core::convert::Infallible;
-
-    fn map_failure(
-        &self,
-        failure: qubit_codec::TranscodeFailure,
-    ) -> Self::Error {
-        failure.into()
-    }
-
-    fn map_domain_error(
-        &self,
-        error: qubit_codec::TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        error.into()
-    }
 
     fn max_transcode_output_len(
         &self,
@@ -47,7 +32,7 @@ impl Transcoder<u8, u16> for ByteToWord {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
         TranscodeError::<Self::DomainError>::ensure_output_index(
             output.len(),
             output_index,
@@ -61,7 +46,7 @@ impl Transcoder<u8, u16> for ByteToWord {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -75,7 +60,7 @@ impl Transcoder<u8, u16> for ByteToWord {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
         TranscodeError::<Self::DomainError>::ensure_output_index(
             output.len(),
             output_index,

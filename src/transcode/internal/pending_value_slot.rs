@@ -55,9 +55,7 @@ impl<Value> PendingValueSlot<Value> {
         H: TranscodeEncodeHooks<E>,
     {
         if self.value.is_some() {
-            engine
-                .max_transcode_output_len(1)
-                .map_err(|_| CapacityError::OutputLengthOverflow)
+            engine.max_transcode_output_len(1)
         } else {
             Ok(0)
         }

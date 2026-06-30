@@ -589,11 +589,11 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let mut output = [0_u8; 1];
 
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         decoder.max_finish_output_len(),
     );
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         decoder.max_total_output_len(0),
     );
 
@@ -618,10 +618,7 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
     let max_total_output_len: fn(
         &Decoder,
         usize,
-    ) -> Result<
-        usize,
-        TranscodeError<PrefixDecodeError>,
-    > = Decoder::max_total_output_len;
+    ) -> Result<usize, CapacityError> = Decoder::max_total_output_len;
     let transcode_complete_into: TranscodeCompleteIntoFn =
         Decoder::transcode_complete_into;
     let mut output = [0_u8; 1];
@@ -1410,8 +1407,8 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverflowPlanningDecodeHooks {
         &self,
         _codec: &PrefixCodec,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::TranscodeDecodeError<PrefixCodec>> {
-        Err(TranscodeError::output_length_overflow())
+    ) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
     }
 
     fn handle_invalid_decode(
@@ -1433,16 +1430,9 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverflowPlanningDecodeHooks {
 }
 
 #[test]
-fn test_transcode_decode_engine_forwards_map_transcode_error_and_capacity_failures()
- {
+fn test_transcode_decode_engine_reports_capacity_failures() {
     type Decoder = TranscodeDecodeEngine<PrefixCodec, ReplacingHooks>;
     let decoder = Decoder::new(PrefixCodec, ReplacingHooks);
-    let error = TranscodeError::domain(
-        PrefixDecodeError::Invalid { consumed: 1 },
-        CodecPhase::Main,
-        Some(2),
-    );
-    assert_eq!(error, Transcoder::map_transcode_error(&decoder, error));
     assert_eq!(
         Ok(3),
         TranscodeDecodeEngine::<PrefixCodec, ReplacingHooks>::max_total_output_len(&decoder, 3,),
@@ -1457,15 +1447,8 @@ fn test_transcode_decode_engine_forwards_map_transcode_error_and_capacity_failur
         Transcoder::max_transcode_output_len(&overflow_decoder, 1),
     );
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         overflow_decoder.max_total_output_len(1),
-    );
-    assert_eq!(
-        TranscodeError::<PrefixDecodeError>::output_length_overflow(),
-        Transcoder::map_failure(
-            &decoder,
-            qubit_codec::TranscodeFailure::OutputLengthOverflow,
-        ),
     );
 }
 
@@ -1587,7 +1570,7 @@ fn test_transcode_decode_engine_max_total_output_len_reports_sum_overflow() {
     );
 
     assert_eq!(
-        Err(TranscodeError::output_length_overflow()),
+        Err(CapacityError::OutputLengthOverflow),
         decoder.max_total_output_len(usize::MAX),
     );
 }

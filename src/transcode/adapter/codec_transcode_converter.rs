@@ -20,8 +20,6 @@ use crate::{
     TranscodeConvertEngine,
     TranscodeConvertError,
     TranscodeConverter,
-    TranscodeDomainError,
-    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -246,23 +244,7 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Default,
 {
-    type Error = TranscodeConvertError<D, E>;
     type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
-
-    /// Maps a framework failure through the default converter error.
-    #[inline(always)]
-    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
-        failure.into()
-    }
-
-    /// Maps a codec convert error through the default converter error.
-    #[inline(always)]
-    fn map_domain_error(
-        &self,
-        error: TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        error.into()
-    }
 
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
@@ -304,7 +286,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeConvertError<D, E>> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -333,7 +315,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
         CodecTranscodeConverter::transcode(
             self,
             input,
@@ -362,7 +344,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeConvertError<D, E>> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }

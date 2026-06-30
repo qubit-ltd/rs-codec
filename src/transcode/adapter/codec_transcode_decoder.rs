@@ -14,8 +14,6 @@ use crate::{
     TranscodeDecodeEngine,
     TranscodeDecodeError,
     TranscodeDecoder,
-    TranscodeDomainError,
-    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -72,23 +70,7 @@ impl<C> Transcoder<C::Unit, C::Value> for CodecTranscodeDecoder<C>
 where
     C: Codec,
 {
-    type Error = TranscodeDecodeError<C>;
     type DomainError = C::DecodeError;
-
-    /// Maps a framework failure through the default adapter error.
-    #[inline(always)]
-    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
-        failure.into()
-    }
-
-    /// Maps a codec decode error through the default adapter error.
-    #[inline(always)]
-    fn map_domain_error(
-        &self,
-        error: TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        error.into()
-    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -105,9 +87,7 @@ where
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        self.engine
-            .max_transcode_output_len(input_len)
-            .map_err(|_| CapacityError::OutputLengthOverflow)
+        self.engine.max_transcode_output_len(input_len)
     }
 
     /// Returns the maximum values emitted by finishing internal state.
@@ -118,9 +98,7 @@ where
     /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        self.engine
-            .max_finish_output_len()
-            .map_err(|_| CapacityError::OutputLengthOverflow)
+        self.engine.max_finish_output_len()
     }
 
     /// Returns the maximum values emitted when resetting internal state.
@@ -135,7 +113,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         self.engine.reset(output, output_index)
     }
 
@@ -163,7 +141,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeDecodeError<C>> {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
@@ -187,7 +165,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         self.engine.finish(output, output_index)
     }
 }

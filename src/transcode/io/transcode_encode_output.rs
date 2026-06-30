@@ -252,7 +252,7 @@ where
     /// # Parameters
     ///
     /// * `encoder` - Streaming encoder used for this operation.
-    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    /// * `map_error` - Function mapping transcode errors into I/O errors.
     /// * `input` - Source values.
     /// * `input_index` - Start index inside `input`.
     /// * `count` - Maximum number of values to encode.
@@ -263,7 +263,7 @@ where
     ///
     /// # Errors
     ///
-    /// Returns invalid input ranges, capacity, encoder, or output errors.
+    /// Returns invalid input ranges, capacity, transcode, or output errors.
     pub fn transcode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -274,7 +274,7 @@ where
     ) -> Result<usize>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
+        M: FnMut(TranscodeError<E::DomainError>) -> Error,
     {
         let input_end = UncheckedSlice::checked_range_end(
             input.len(),
@@ -336,11 +336,12 @@ where
     /// # Parameters
     ///
     /// * `encoder` - Encoder whose final units are being collected.
-    /// * `map_error` - Function mapping encoder errors into I/O errors.
+    /// * `map_error` - Function mapping transcode errors into I/O errors.
     ///
     /// # Errors
     ///
-    /// Returns capacity, encoder finalization, or wrapped output flush errors.
+    /// Returns capacity, transcode finalization, or wrapped output flush
+    /// errors.
     pub fn finish<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -348,7 +349,7 @@ where
     ) -> Result<()>
     where
         E: Transcoder<Value, O::Item>,
-        M: FnMut(E::Error) -> Error,
+        M: FnMut(TranscodeError<E::DomainError>) -> Error,
     {
         let required = encoder
             .max_finish_output_len()

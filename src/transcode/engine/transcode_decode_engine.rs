@@ -24,9 +24,7 @@ use crate::{
     DecodeOutcome,
     TranscodeDecodeError,
     TranscodeDecodeHooks,
-    TranscodeDomainError,
     TranscodeError,
-    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -263,7 +261,7 @@ where
     /// # Returns
     ///
     /// Returns the wrapped codec followed by the decode hooks.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (C, H) {
         let Self { codec, hooks, .. } = self;
@@ -286,12 +284,12 @@ where
     ///
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
+    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_transcode_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
@@ -305,14 +303,14 @@ where
     /// written by [`Codec::decode_flush`]; hook implementations must not
     /// include that portion in
     /// [`TranscodeDecodeHooks::max_finish_output_len`].
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
+    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(
         &self,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CapacityError> {
         C::MAX_DECODE_FLUSH_VALUES
             .checked_add(self.hooks.max_finish_output_len(&self.codec))
-            .ok_or_else(TranscodeError::output_length_overflow)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Returns the maximum values emitted when resetting stream state.
@@ -341,18 +339,18 @@ where
     ///
     /// Returns the complete-stream output bound, or a capacity error on
     /// arithmetic overflow.
-    #[inline(never)]
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_total_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
-        checked_stream_total(
-            C::MAX_DECODE_RESET_VALUES,
-            self.max_transcode_output_len(input_len)?,
-            self.max_finish_output_len()?,
-        )
-        .ok_or_else(TranscodeError::output_length_overflow)
+    ) -> Result<usize, CapacityError> {
+        let transcode = self.max_transcode_output_len(input_len)?;
+        let finish = self.max_finish_output_len()?;
+        C::MAX_DECODE_RESET_VALUES
+            .checked_add(transcode)
+            .and_then(|len| len.checked_add(finish))
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     /// Resets codec decode state, runs reset hooks, and emits stream-start
@@ -687,23 +685,7 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
-    type Error = TranscodeDecodeError<C>;
     type DomainError = C::DecodeError;
-
-    /// Maps a framework failure through the engine error.
-    #[inline(always)]
-    fn map_failure(&self, failure: TranscodeFailure) -> Self::Error {
-        failure.into()
-    }
-
-    /// Maps a codec decode error through the engine error.
-    #[inline(always)]
-    fn map_domain_error(
-        &self,
-        error: TranscodeDomainError<Self::DomainError>,
-    ) -> Self::Error {
-        error.into()
-    }
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -713,7 +695,6 @@ where
         input_len: usize,
     ) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_transcode_output_len(self, input_len)
-            .map_err(transcode_capacity_error)
     }
 
     /// Returns an upper bound for values produced by finishing codec and hook
@@ -721,7 +702,6 @@ where
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_finish_output_len(self)
-            .map_err(transcode_capacity_error)
     }
 
     /// Returns an upper bound for values emitted when resetting stream state.
@@ -736,7 +716,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
@@ -748,7 +728,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> core::result::Result<TranscodeProgress, Self::Error> {
+    ) -> Result<TranscodeProgress, TranscodeDecodeError<C>> {
         TranscodeDecodeEngine::transcode(
             self,
             input,
@@ -764,25 +744,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    ) -> Result<usize, TranscodeDecodeError<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
-}
-
-/// Adds reset, transcode, and finish bounds for one complete stream.
-#[inline(never)]
-fn checked_stream_total(
-    reset: usize,
-    transcode: usize,
-    finish: usize,
-) -> Option<usize> {
-    reset
-        .checked_add(transcode)
-        .and_then(|len| len.checked_add(finish))
-}
-
-/// Converts planning failures from hook-shaped errors into capacity errors.
-#[inline(always)]
-fn transcode_capacity_error<E>(_error: TranscodeError<E>) -> CapacityError {
-    CapacityError::OutputLengthOverflow
 }
