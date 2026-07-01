@@ -15,7 +15,9 @@ use core::num::NonZeroUsize;
 /// [`Incomplete`](Self::Incomplete) tells buffered adapters to preserve the
 /// current input tail and request more units. [`Invalid`](Self::Invalid)
 /// carries the codec-specific malformed, non-canonical, or otherwise invalid
-/// input error.
+/// input error with a known non-zero consumption length.
+/// [`InvalidUnknown`](Self::InvalidUnknown) carries the same domain error when
+/// the codec cannot state how many source units belong to the invalid form.
 ///
 /// # Type Parameters
 ///
@@ -33,7 +35,13 @@ pub enum DecodeFailure<E> {
         /// Codec-specific invalid-input error.
         source: E,
         /// Invalid units that may be consumed by a non-strict policy.
-        consumed: Option<NonZeroUsize>,
+        consumed: NonZeroUsize,
+    },
+
+    /// The input is invalid for the codec, but the invalid span is unknown.
+    InvalidUnknown {
+        /// Codec-specific invalid-input error.
+        source: E,
     },
 }
 
@@ -67,13 +75,10 @@ impl<E> DecodeFailure<E> {
     #[inline(always)]
     #[must_use]
     pub const fn invalid(source: E, consumed: NonZeroUsize) -> Self {
-        Self::Invalid {
-            source,
-            consumed: Some(consumed),
-        }
+        Self::Invalid { source, consumed }
     }
 
-    /// Creates an invalid-input decode failure without a consumption hint.
+    /// Creates an invalid-input decode failure with unknown consumption.
     ///
     /// # Parameters
     ///
@@ -84,11 +89,8 @@ impl<E> DecodeFailure<E> {
     /// Returns an invalid decode failure.
     #[inline(always)]
     #[must_use]
-    pub const fn invalid_without_consumed(source: E) -> Self {
-        Self::Invalid {
-            source,
-            consumed: None,
-        }
+    pub const fn invalid_unknown(source: E) -> Self {
+        Self::InvalidUnknown { source }
     }
 
     /// Returns the total input units required for an incomplete prefix.
@@ -102,7 +104,7 @@ impl<E> DecodeFailure<E> {
     pub const fn required_total(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Incomplete { required_total } => Some(*required_total),
-            Self::Invalid { .. } => None,
+            Self::Invalid { .. } | Self::InvalidUnknown { .. } => None,
         }
     }
 
@@ -116,7 +118,7 @@ impl<E> DecodeFailure<E> {
     #[must_use]
     pub const fn invalid_source(&self) -> Option<&E> {
         match self {
-            Self::Invalid { source, .. } => Some(source),
+            Self::Invalid { source, .. } | Self::InvalidUnknown { source } => Some(source),
             Self::Incomplete { .. } => None,
         }
     }
@@ -125,14 +127,14 @@ impl<E> DecodeFailure<E> {
     ///
     /// # Returns
     ///
-    /// Returns `Some(consumed)` when the invalid failure carries a consumption
-    /// hint, or `None` otherwise.
+    /// Returns `Some(consumed)` for [`Invalid`](Self::Invalid), or `None` when
+    /// the failure is incomplete or invalid with unknown consumption.
     #[inline(always)]
     #[must_use]
     pub const fn consumed_units(&self) -> Option<NonZeroUsize> {
         match self {
-            Self::Invalid { consumed, .. } => *consumed,
-            Self::Incomplete { .. } => None,
+            Self::Invalid { consumed, .. } => Some(*consumed),
+            Self::Incomplete { .. } | Self::InvalidUnknown { .. } => None,
         }
     }
 }

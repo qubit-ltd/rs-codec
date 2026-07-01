@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::EncodeUnencodableAction;
+use qubit_codec::engine::EncodeUnencodableAction;
 
 #[test]
 fn test_encode_unencodable_action_constructors() {

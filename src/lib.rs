@@ -23,10 +23,10 @@
 //! - [`CodecTranscodeEncoder`], [`CodecTranscodeDecoder`], and
 //!   [`CodecTranscodeConverter`] for strict streaming adapters around a
 //!   [`Codec`].
-//! - [`TranscodeEncodeEngine`], [`TranscodeDecodeEngine`], and
-//!   [`TranscodeConvertEngine`] for policy-aware buffered loops.
-//! - [`TranscodeEncodeHooks`] and [`TranscodeDecodeHooks`] for replacement,
-//!   skip, report, finish, and reset policy decisions.
+//! - [`engine::TranscodeEncodeEngine`], [`engine::TranscodeDecodeEngine`],
+//!   and [`engine::TranscodeConvertEngine`] for policy-aware buffered loops.
+//! - [`engine::TranscodeEncodeHooks`] and [`engine::TranscodeDecodeHooks`] for
+//!   replacement, skip, report, finish, and reset policy decisions.
 //! - [`Transcoder`], [`TranscodeProgress`], and [`TranscodeStatus`] for
 //!   caller-managed streaming conversion.
 //! - [`ValueEncoder`] and [`ValueDecoder`] for whole-value convenience APIs.
@@ -60,14 +60,16 @@
 //! |
 //! +-- A streaming codec with policy decisions
 //!     (skip, replace, count, report, finish output, ...)
-//!         -> implement TranscodeDecodeHooks<C> / TranscodeEncodeHooks<C>
-//!            and use TranscodeDecodeEngine<C, H>
-//!            / TranscodeEncodeEngine<C, H>
+//!         -> implement engine::TranscodeDecodeHooks<C>
+//!            / engine::TranscodeEncodeHooks<C>
+//!            and use engine::TranscodeDecodeEngine<C, H>
+//!            / engine::TranscodeEncodeEngine<C, H>
 //! ```
 //!
 //! Unit-to-unit conversions, such as UTF-8 bytes to UTF-16 units, compose a
 //! decode side and an encode side. Use [`CodecTranscodeConverter`] for a strict
-//! pipeline and [`TranscodeConvertEngine`] when either side needs policy hooks.
+//! pipeline and [`engine::TranscodeConvertEngine`] when either side needs
+//! policy hooks.
 //!
 //! # Layer Overview
 //!
@@ -98,54 +100,22 @@ mod codec;
 mod transcode;
 mod value;
 
-pub use byte_order::{
-    BigEndian,
-    ByteOrder,
-    ByteOrderSpec,
-    LittleEndian,
-};
-pub use codec::{
-    Codec,
-    DecodeFailure,
-};
+/// Policy-aware transcode engines, hooks, contexts, and per-step outcomes.
+pub mod engine {
+    pub use crate::transcode::{
+        DecodeContext, DecodeInvalidAction, DecodeOutcome, EncodeContext, EncodeOutcome,
+        EncodeUnencodableAction, TranscodeConvertEngine, TranscodeDecodeEngine,
+        TranscodeDecodeHooks, TranscodeEncodeEngine, TranscodeEncodeHooks,
+    };
+}
+
+pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
+pub use codec::{Codec, DecodeFailure};
 pub use transcode::{
-    CapacityError,
-    CodecPhase,
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-    ConvertError,
-    DecodeContext,
-    DecodeInvalidAction,
-    DecodeOutcome,
-    EncodeContext,
-    EncodeOutcome,
-    EncodeUnencodableAction,
-    TranscodeContractError,
-    TranscodeConvertEngine,
-    TranscodeConvertError,
-    TranscodeConverter,
-    TranscodeDecodeEngine,
-    TranscodeDecodeError,
-    TranscodeDecodeHooks,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    TranscodeDomainError,
-    TranscodeEncodeEngine,
-    TranscodeEncodeError,
-    TranscodeEncodeHooks,
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-    TranscodeError,
-    TranscodeFailure,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
+    CapacityError, CodecPhase, CodecTranscodeConverter, CodecTranscodeDecoder,
+    CodecTranscodeEncoder, ConvertError, TranscodeContractError, TranscodeConvertError,
+    TranscodeConverter, TranscodeDecodeError, TranscodeDecodeInput, TranscodeDecoder,
+    TranscodeDomainError, TranscodeEncodeError, TranscodeEncodeOutput, TranscodeEncoder,
+    TranscodeError, TranscodeFailure, TranscodeProgress, TranscodeStatus, Transcoder,
 };
-pub use value::{
-    CodecValueDecoder,
-    CodecValueEncoder,
-    CodecValueExt,
-    ValueDecoder,
-    ValueEncoder,
-};
+pub use value::{CodecValueDecoder, CodecValueEncoder, CodecValueExt, ValueDecoder, ValueEncoder};

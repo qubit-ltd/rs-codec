@@ -6,13 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    Codec,
-    CodecPhase,
-    CodecTranscodeDecoder,
-    TranscodeError,
-    Transcoder,
-};
+use qubit_codec::{Codec, CodecPhase, CodecTranscodeDecoder, TranscodeError, Transcoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
@@ -27,11 +21,9 @@ impl Codec for FlushFailCodec {
     type DecodeError = FlushFailError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
     const MAX_DECODE_FLUSH_VALUES: usize = 1;
 
@@ -39,10 +31,7 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -51,9 +40,9 @@ impl Codec for FlushFailCodec {
         value: &u8,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+    ) -> Result<usize, Self::EncodeError> {
         output[output_index] = *value;
-        Ok(qubit_io::nz!(1))
+        Ok(1)
     }
 
     unsafe fn decode_flush(
@@ -78,20 +67,15 @@ impl Codec for InvalidByteCodec {
     type DecodeError = InvalidByteError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
             Err(qubit_codec::DecodeFailure::invalid(
                 InvalidByteError,
@@ -107,9 +91,9 @@ impl Codec for InvalidByteCodec {
         value: &u8,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<core::num::NonZeroUsize, Self::EncodeError> {
+    ) -> Result<usize, Self::EncodeError> {
         output[output_index] = *value;
-        Ok(qubit_io::nz!(1))
+        Ok(1)
     }
 }
 
@@ -123,7 +107,12 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeError::domain(InvalidByteError, CodecPhase::Main, Some(0)),
+        TranscodeError::domain_with_consumed(
+            InvalidByteError,
+            CodecPhase::Main,
+            Some(0),
+            Some(qubit_io::nz!(1)),
+        ),
         error,
     );
 }

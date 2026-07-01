@@ -8,13 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use super::ValueEncoder;
-use crate::{
-    Codec,
-    CodecPhase,
-    CodecValueExt,
-    TranscodeError,
-    codec::assert_unit_bounds,
-};
+use crate::{Codec, CodecPhase, CodecValueExt, TranscodeError, codec::assert_unit_bounds};
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
 ///
@@ -94,15 +88,16 @@ where
         &mut self,
         input: &C::Value,
         output: &mut Vec<C::Unit>,
-    ) -> Result<usize, TranscodeError<C::EncodeError>>
+    ) -> Result<usize, TranscodeError<C::EncodeError, C::Value>>
     where
+        C::Value: Clone,
         C::Unit: Default,
     {
         if !self.codec.can_encode_value(input) {
-            return Err(TranscodeError::unencodable_value(0));
+            return Err(TranscodeError::unencodable_value(0, input.clone()));
         }
         let units = C::MAX_ENCODE_RESET_UNITS
-            .checked_add(self.codec.encode_len(input).get())
+            .checked_add(self.codec.encode_len(input))
             .and_then(|units| units.checked_add(C::MAX_ENCODE_FLUSH_UNITS))
             .ok_or_else(TranscodeError::output_length_overflow)?;
         let original_len = output.len();
@@ -130,10 +125,11 @@ where
 impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
 where
     C: Codec,
+    C::Value: Clone,
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
-    type Error = TranscodeError<C::EncodeError>;
+    type Error = TranscodeError<C::EncodeError, C::Value>;
     type DomainError = C::EncodeError;
 
     /// Maps a codec-domain error from the main encode phase.
@@ -163,10 +159,7 @@ where
     /// Panics when the wrapped codec reports more reset or flush output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
-    fn encode(
-        &mut self,
-        input: &C::Value,
-    ) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         let units = self
             .codec
             .max_encode_value_units()

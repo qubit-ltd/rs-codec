@@ -15,8 +15,14 @@ use thiserror::Error;
 /// caller-supplied buffer ranges, capacity planning, complete-input shape, or
 /// unhandled value-domain boundaries that the transcode layer can detect
 /// without interpreting a concrete codec error.
-#[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
-pub enum TranscodeFailure {
+///
+/// # Type Parameters
+///
+/// - `Value`: Encoded-domain value type carried by
+///   [`UnencodableValue`](Self::UnencodableValue) when the caller can retain
+///   value context.
+#[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
+pub enum TranscodeFailure<Value = ()> {
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {input_len}")]
     InvalidInputIndex {
@@ -66,9 +72,7 @@ pub enum TranscodeFailure {
     },
 
     /// The input contains exactly one decoded value plus trailing units.
-    #[error(
-        "trailing input after value: consumed {consumed} units, remaining {remaining}"
-    )]
+    #[error("trailing input after value: consumed {consumed} units, remaining {remaining}")]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -81,7 +85,58 @@ pub enum TranscodeFailure {
     UnencodableValue {
         /// Absolute input index of the value being encoded.
         input_index: usize,
-        /// Raw scalar value being encoded, when the transcoder can expose one.
-        value: Option<u32>,
+        /// Value being encoded, when the transcoder can expose it.
+        value: Option<Value>,
     },
+}
+
+impl<Value> TranscodeFailure<Value> {
+    /// Maps value context carried by [`UnencodableValue`](Self::UnencodableValue).
+    ///
+    /// Framework failures that do not carry value context are preserved
+    /// unchanged.
+    #[inline]
+    pub fn map_value<T, F>(self, f: F) -> TranscodeFailure<T>
+    where
+        F: FnOnce(Value) -> T,
+    {
+        match self {
+            Self::InvalidInputIndex { index, input_len } => {
+                TranscodeFailure::InvalidInputIndex { index, input_len }
+            }
+            Self::InvalidOutputIndex { index, output_len } => {
+                TranscodeFailure::InvalidOutputIndex { index, output_len }
+            }
+            Self::InsufficientOutput {
+                output_index,
+                required,
+                available,
+            } => TranscodeFailure::InsufficientOutput {
+                output_index,
+                required,
+                available,
+            },
+            Self::OutputLengthOverflow => TranscodeFailure::OutputLengthOverflow,
+            Self::IncompleteInput {
+                input_index,
+                required,
+                available,
+            } => TranscodeFailure::IncompleteInput {
+                input_index,
+                required,
+                available,
+            },
+            Self::TrailingInput {
+                consumed,
+                remaining,
+            } => TranscodeFailure::TrailingInput {
+                consumed,
+                remaining,
+            },
+            Self::UnencodableValue { input_index, value } => TranscodeFailure::UnencodableValue {
+                input_index,
+                value: value.map(f),
+            },
+        }
+    }
 }

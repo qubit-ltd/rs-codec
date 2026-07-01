@@ -7,10 +7,7 @@
 // =============================================================================
 use core::num::NonZeroUsize;
 
-use super::{
-    TranscodeContractError,
-    TranscodeStatus,
-};
+use super::{TranscodeContractError, TranscodeStatus};
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
@@ -39,11 +36,7 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[inline(always)]
     #[must_use]
-    pub const fn new(
-        status: TranscodeStatus,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self {
             status,
             read,
@@ -258,12 +251,12 @@ impl TranscodeProgress {
                 advanced: self.read,
             },
         )?;
-        let expected_output_index = output_index
-            .checked_add(self.written)
-            .ok_or(TranscodeContractError::ProgressIndexOverflow {
+        let expected_output_index = output_index.checked_add(self.written).ok_or(
+            TranscodeContractError::ProgressIndexOverflow {
                 index: output_index,
                 advanced: self.written,
-            })?;
+            },
+        )?;
         let expected_input_available = available_input - self.read;
         let expected_output_available = available_output - self.written;
 
@@ -281,12 +274,10 @@ impl TranscodeProgress {
                     });
                 }
                 if available != expected_input_available {
-                    return Err(
-                        TranscodeContractError::StatusAvailableMismatch {
-                            reported: available,
-                            expected: expected_input_available,
-                        },
-                    );
+                    return Err(TranscodeContractError::StatusAvailableMismatch {
+                        reported: available,
+                        expected: expected_input_available,
+                    });
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {
@@ -308,12 +299,10 @@ impl TranscodeProgress {
                     });
                 }
                 if available != expected_output_available {
-                    return Err(
-                        TranscodeContractError::StatusAvailableMismatch {
-                            reported: available,
-                            expected: expected_output_available,
-                        },
-                    );
+                    return Err(TranscodeContractError::StatusAvailableMismatch {
+                        reported: available,
+                        expected: expected_output_available,
+                    });
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {

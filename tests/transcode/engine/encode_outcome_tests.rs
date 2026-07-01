@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::EncodeOutcome;
+use qubit_codec::engine::EncodeOutcome;
 
 #[test]
 fn test_encode_outcome_constructors_match_variants() {

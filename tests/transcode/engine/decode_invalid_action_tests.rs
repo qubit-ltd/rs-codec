@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::DecodeInvalidAction;
+use qubit_codec::engine::DecodeInvalidAction;
 
 #[test]
 fn test_decode_invalid_action_variants_are_public() {

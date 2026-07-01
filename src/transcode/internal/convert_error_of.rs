@@ -17,5 +17,4 @@ use crate::TranscodeConvertError;
 /// - `E`: Target codec type.
 /// - `DH`: Decode hook type.
 /// - `EH`: Encode hook type.
-pub(in crate::transcode) type ConvertErrorOf<D, E> =
-    TranscodeConvertError<D, E>;
+pub(in crate::transcode) type ConvertErrorOf<D, E> = TranscodeConvertError<D, E>;

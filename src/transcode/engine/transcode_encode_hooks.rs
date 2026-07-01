@@ -8,13 +8,9 @@
 //! Policy hooks used by buffered encoder engines.
 
 use super::encode_unencodable_action::EncodeUnencodableAction;
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeError,
-};
+use crate::{CapacityError, Codec, TranscodeEncodeError};
 
-/// Policy hooks for [`crate::TranscodeEncodeEngine`].
+/// Policy hooks for [`crate::engine::TranscodeEncodeEngine`].
 ///
 /// Hooks own policy state, such as replacement or ignore behavior, but not the
 /// codec or engine cursor state. The engine owns the normal one-value encode
@@ -43,11 +39,13 @@ use crate::{
 ///     num::NonZeroUsize,
 /// };
 /// use qubit_codec::{
-///     TranscodeEncodeHooks,
-///     TranscodeEncodeError,
 ///     Codec,
 ///     DecodeFailure,
+///     TranscodeEncodeError,
+/// };
+/// use qubit_codec::engine::{
 ///     EncodeUnencodableAction,
+///     TranscodeEncodeHooks,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -75,9 +73,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<NonZeroUsize, Self::EncodeError> {
+///     ) -> Result<usize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(NonZeroUsize::MIN)
+///         Ok(1)
 ///     }
 /// }
 ///
@@ -108,8 +106,8 @@ where
     /// Returns the maximum output units needed for `input_len` values.
     ///
     /// This bound covers only the streaming encode phase driven by
-    /// [`crate::TranscodeEncodeEngine::transcode`]. It must not include codec
-    /// reset output, codec flush output, or hook finish output.
+    /// [`crate::engine::TranscodeEncodeEngine::transcode`]. It must not include
+    /// codec reset output, codec flush output, or hook finish output.
     ///
     /// The default implementation multiplies `input_len` by
     /// [`Codec::MAX_UNITS_PER_VALUE`]. This bound is valid for direct encoding,

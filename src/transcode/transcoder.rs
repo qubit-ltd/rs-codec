@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError,
-    transcode_error::TranscodeError,
-    transcode_progress::TranscodeProgress,
-    transcode_status::TranscodeStatus,
+    capacity_error::CapacityError, transcode_error::TranscodeError,
+    transcode_progress::TranscodeProgress, transcode_status::TranscodeStatus,
 };
 
 /// Converts one logical stream of input units into one logical stream of output
@@ -69,6 +67,8 @@ use super::{
 ///
 /// impl Transcoder<u8, u16> for U16BeBytesDecoder {
 ///     type DomainError = core::convert::Infallible;
+///     type FailureValue = ();
+///
 ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
 ///         Ok(input_len / 2)
 ///     }
@@ -191,6 +191,13 @@ pub trait Transcoder<Input, Output> {
     /// Domain error type produced by codec, hook, or policy internals.
     type DomainError;
 
+    /// Value context type carried by framework failures.
+    ///
+    /// Decoders and policy-only transcoders usually use `()`. Encoders should
+    /// use their input value type when they can report an unencodable value
+    /// with context.
+    type FailureValue;
+
     /// Returns an upper bound for output units emitted when resetting stream
     /// state.
     ///
@@ -232,10 +239,7 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -257,10 +261,7 @@ pub trait Transcoder<Input, Output> {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -315,7 +316,7 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>>;
+    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
 
     /// Converts available input units into output units.
     ///
@@ -353,7 +354,7 @@ pub trait Transcoder<Input, Output> {
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>>;
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError, Self::FailureValue>>;
 
     /// Finishes internally retained output after all input has been supplied.
     ///
@@ -384,6 +385,7 @@ pub trait Transcoder<Input, Output> {
     ///
     /// impl Transcoder<u8, u8> for ByteCopy {
     ///     type DomainError = core::convert::Infallible;
+    ///     type FailureValue = ();
     ///
     ///     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, qubit_codec::CapacityError> {
     ///         Ok(input_len)
@@ -470,7 +472,7 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>>;
+    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
 
     /// Runs a complete one-shot `reset -> transcode -> finish` stream.
     ///
@@ -501,18 +503,14 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         input: &[Input],
         output: &mut [Output],
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>> {
         let mut output_cursor = self.reset(output, 0)?;
         let transcode_required = self.max_transcode_output_len(input.len())?;
         let finish_required = self.max_finish_output_len()?;
         let remaining_required = transcode_required
             .checked_add(finish_required)
             .ok_or(CapacityError::OutputLengthOverflow)?;
-        TranscodeError::ensure_output_capacity(
-            output.len(),
-            output_cursor,
-            remaining_required,
-        )?;
+        TranscodeError::ensure_output_capacity(output.len(), output_cursor, remaining_required)?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
         debug_assert!(
@@ -534,11 +532,8 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error = TranscodeError::insufficient_output(
-                    output_index,
-                    required.get(),
-                    available,
-                );
+                let error =
+                    TranscodeError::insufficient_output(output_index, required.get(), available);
                 return Err(error);
             }
             TranscodeStatus::NeedInput {
@@ -546,11 +541,8 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error = TranscodeError::incomplete_input(
-                    input_index,
-                    required.get(),
-                    available,
-                );
+                let error =
+                    TranscodeError::incomplete_input(input_index, required.get(), available);
                 return Err(error);
             }
         }

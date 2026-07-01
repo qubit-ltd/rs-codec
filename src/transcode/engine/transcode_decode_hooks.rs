@@ -9,17 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    decode_context::DecodeContext,
-    decode_invalid_action::DecodeInvalidAction,
-};
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeError,
-};
+use super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
+use crate::{CapacityError, Codec, TranscodeDecodeError};
 
-/// Policy hooks for [`crate::TranscodeDecodeEngine`].
+/// Policy hooks for [`crate::engine::TranscodeDecodeEngine`].
 ///
 /// Hooks own policy state, such as malformed-input replacement behavior. The
 /// engine passes the codec into hook methods when policy code needs codec
@@ -46,12 +39,14 @@ use crate::{
 /// ```rust
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
-///     TranscodeDecodeHooks,
-///     TranscodeDecodeError,
 ///     Codec,
 ///     DecodeFailure,
-///     DecodeInvalidAction,
+///     TranscodeDecodeError,
+/// };
+/// use qubit_codec::engine::{
 ///     DecodeContext,
+///     DecodeInvalidAction,
+///     TranscodeDecodeHooks,
 /// };
 ///
 /// #[derive(Clone, Copy)]
@@ -92,9 +87,9 @@ use crate::{
 ///         value: &u8,
 ///         output: &mut [u8],
 ///         index: usize,
-///     ) -> Result<NonZeroUsize, Self::EncodeError> {
+///     ) -> Result<usize, Self::EncodeError> {
 ///         output[index] = *value;
-///         Ok(NonZeroUsize::MIN)
+///         Ok(1)
 ///     }
 /// }
 ///
@@ -193,8 +188,9 @@ where
     ///
     /// - `codec`: Low-level codec owned by the engine.
     /// - `error`: Invalid domain error returned by the codec.
-    /// - `consumed`: Invalid input units that may be consumed by non-strict
-    ///   policies.
+    /// - `consumed`: Known invalid input units that may be consumed by
+    ///   non-strict policies, or `None` when the codec reported
+    ///   [`DecodeFailure::InvalidUnknown`](crate::DecodeFailure::InvalidUnknown).
     /// - `context`: Decode attempt context.
     ///
     /// # Returns

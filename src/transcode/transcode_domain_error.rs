@@ -7,6 +7,8 @@
 // =============================================================================
 //! Domain-specific transcode errors with codec phase context.
 
+use core::num::NonZeroUsize;
+
 use thiserror::Error;
 
 use super::codec_phase::CodecPhase;
@@ -26,4 +28,6 @@ pub struct TranscodeDomainError<E> {
     pub phase: CodecPhase,
     /// Absolute input index when the phase is associated with an input value.
     pub input_index: Option<usize>,
+    /// Invalid input units consumed by the codec-domain error, when known.
+    pub input_consumed: Option<NonZeroUsize>,
 }

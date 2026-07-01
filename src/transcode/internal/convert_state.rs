@@ -10,11 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{
-        DecodeContext,
-        DecodeOutcome,
-        EncodeOutcome,
-    },
+    engine::{DecodeContext, DecodeOutcome, EncodeOutcome},
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -22,7 +18,7 @@ use super::transcode_state::TranscodeState;
 /// Mutable state for one buffered conversion call.
 ///
 /// `ConvertState` is an internal cursor helper owned by
-/// [`crate::TranscodeConvertEngine`]. Hook implementations receive narrower
+/// [`crate::engine::TranscodeConvertEngine`]. Hook implementations receive narrower
 /// context objects and never own converter cursor state.
 pub(crate) struct ConvertState<'a, Input, Output> {
     /// Shared input/output state for this conversion call.
@@ -52,12 +48,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(
-                input,
-                input_index,
-                output,
-                output_index,
-            ),
+            state: TranscodeState::new(input, input_index, output, output_index),
         }
     }
 

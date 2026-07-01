@@ -10,7 +10,7 @@
 /// Context for one encode attempt inside a buffered encoder engine.
 ///
 /// The context carries the current input value and output cursor used by the
-/// encode engine while producing one [`crate::EncodeOutcome`]. It is public so
+/// encode engine while producing one [`crate::engine::EncodeOutcome`]. It is public so
 /// lower-level engine helpers can share the same cursor representation.
 ///
 /// # Type Parameters

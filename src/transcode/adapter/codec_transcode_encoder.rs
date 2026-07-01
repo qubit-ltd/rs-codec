@@ -7,15 +7,10 @@
 // =============================================================================
 //! Buffered encoder adapter backed by a low-level codec.
 
+use super::super::engine::TranscodeEncodeEngine;
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeEngine,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, TranscodeEncodeError, TranscodeEncoder, TranscodeProgress, Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -39,6 +34,7 @@ pub struct CodecTranscodeEncoder<C> {
 impl<C> CodecTranscodeEncoder<C>
 where
     C: Codec,
+    C::Value: Clone,
 {
     /// Creates a buffered encoder backed by `codec`.
     ///
@@ -53,10 +49,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(
-                codec,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
 }
@@ -64,8 +57,10 @@ where
 impl<C> Transcoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
 where
     C: Codec,
+    C::Value: Clone,
 {
     type DomainError = C::EncodeError;
+    type FailureValue = C::Value;
 
     /// Gets the maximum number of output units needed for `input_len`
     /// values.
@@ -78,10 +73,7 @@ where
     ///
     /// a conservative upper bound for output units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -172,6 +164,7 @@ where
 impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
 where
     C: Codec,
+    C::Value: Clone,
 {
     // empty
 }
@@ -179,6 +172,7 @@ where
 impl<C> Default for CodecTranscodeEncoder<C>
 where
     C: Codec + Default,
+    C::Value: Clone,
 {
     /// Creates a default codec-backed buffered encoder.
     ///

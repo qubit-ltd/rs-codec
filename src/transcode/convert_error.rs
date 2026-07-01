@@ -48,4 +48,5 @@ impl<D, E> ConvertError<D, E> {
 /// Intermediate error used by codec-backed converters.
 pub type TranscodeConvertError<D, E> = TranscodeError<
     ConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError>,
+    <D as Codec>::Value,
 >;

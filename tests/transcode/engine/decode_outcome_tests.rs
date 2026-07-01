@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for decode-side one-step outcomes.
 
-use qubit_codec::DecodeOutcome;
+use qubit_codec::engine::DecodeOutcome;
 
 #[test]
 fn test_emitted_creates_emitted_outcome() {

@@ -7,7 +7,7 @@
 // =============================================================================
 //! Tests for buffered decode context snapshots.
 
-use qubit_codec::DecodeContext;
+use qubit_codec::engine::DecodeContext;
 
 #[test]
 fn test_decode_context_reports_relative_progress() {

@@ -161,8 +161,8 @@ pub trait Codec {
         true
     }
 
-    /// Returns the exact non-zero unit count this codec will write when
-    /// encoding `value`.
+    /// Returns the exact unit count this codec will write when encoding
+    /// `value`.
     ///
     /// The default implementation returns
     /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE), which is the
@@ -187,12 +187,19 @@ pub trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the non-zero unit count [`encode`](Self::encode) will write for
-    /// an encodable `value`.
+    /// Returns the unit count [`encode`](Self::encode) will write for an
+    /// encodable `value`.
+    ///
+    /// A return value of `0` is valid for stateful encoders that accept a
+    /// value into internal state without immediately emitting units. Examples
+    /// include codecs that aggregate values into fixed-size quanta, shift-state
+    /// encodings, or framing layers that defer output until enough values have
+    /// been seen or EOF is flushed. Stateless and directly value-to-unit codecs
+    /// should continue returning a positive length.
     #[inline(always)]
     #[must_use]
-    fn encode_len(&self, _value: &Self::Value) -> NonZeroUsize {
-        Self::MAX_UNITS_PER_VALUE
+    fn encode_len(&self, _value: &Self::Value) -> usize {
+        Self::MAX_UNITS_PER_VALUE.get()
     }
 
     /// Emits stream-start output and resets encode-side state.
@@ -237,10 +244,16 @@ pub trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the non-zero number of written units. A successful encode
-    /// always emits at least one unit; stateful encoders that need to defer
-    /// output should report that intent through a custom encode error
-    /// instead of returning a zero count.
+    /// Returns the number of written units.
+    ///
+    /// A successful encode may return `0` when the codec accepted `value` into
+    /// internal encode-side state but intentionally deferred output. This is
+    /// the normal shape for accumulative encoders such as base64-byte
+    /// aggregators, shift-state encodings, or frame builders. In that case
+    /// [`encode_len`](Self::encode_len) for the same `value` and state must
+    /// also return `0`, and the retained output must be emitted by a later
+    /// successful [`encode`](Self::encode), [`encode_flush`](Self::encode_flush),
+    /// or codec-specific facade.
     ///
     /// # Errors
     ///
@@ -258,15 +271,16 @@ pub trait Codec {
     /// `value`, and that the implementation can write at least
     /// [`encode_len`](Self::encode_len) units for the same `value` and codec
     /// state starting at `output_index`. On success, implementations must
-    /// return that exact written unit count, and the count must be no
-    /// larger than [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
+    /// return that exact written unit count, including `0` for deliberate
+    /// buffering, and the count must be no larger than
+    /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
     #[must_use = "encoded length and encode errors must be handled"]
     unsafe fn encode(
         &mut self,
         value: &Self::Value,
         output: &mut [Self::Unit],
         output_index: usize,
-    ) -> Result<NonZeroUsize, Self::EncodeError>;
+    ) -> Result<usize, Self::EncodeError>;
 
     /// Emits EOF trailer output and flushes encode-side state.
     ///
@@ -274,6 +288,9 @@ pub trait Codec {
     /// [`decode_flush`](Self::decode_flush). Codecs that append stream
     /// trailers (padding, checksums, end-of-stream markers) emit them here.
     /// Stateless codecs use the default no-op.
+    ///
+    /// TODO(breaking): consider renaming this method to make the trailer
+    /// emission role explicit in a future public API revision.
     ///
     /// # Parameters
     ///
@@ -361,8 +378,10 @@ pub trait Codec {
     /// caller or higher-level adapter decides what an incomplete tail means
     /// when the upstream source is closed.
     /// Returns [`DecodeFailure::Invalid`] when the units are malformed,
-    /// non-canonical, unmappable, or otherwise invalid for this codec. The
-    /// concrete error type carries only codec-domain invalidity.
+    /// non-canonical, unmappable, or otherwise invalid for this codec and the
+    /// invalid span is known. Returns [`DecodeFailure::InvalidUnknown`] when
+    /// the codec cannot state the invalid span length. The concrete error type
+    /// carries only codec-domain invalidity.
     /// Implementations must leave their internal state consistent when
     /// returning an error.
     ///
@@ -394,6 +413,9 @@ pub trait Codec {
     /// flushing decode state. Implementations may emit retained values or
     /// validate internal EOF state, but they must not depend on re-reading the
     /// incomplete source tail.
+    ///
+    /// TODO(breaking): consider renaming this method to make the retained-state
+    /// draining role explicit in a future public API revision.
     ///
     /// # Parameters
     ///
