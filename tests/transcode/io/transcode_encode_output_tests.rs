@@ -596,6 +596,45 @@ impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
 }
 
 #[derive(Debug, Default)]
+struct NeedOutputAfterReadPastCapacityEncoder;
+
+impl Transcoder<u32, u16> for NeedOutputAfterReadPastCapacityEncoder {
+    type DomainError = PairEncodeError;
+    type FailureValue = ();
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    noop_reset!(u16);
+
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+        if input_index >= input.len() {
+            return Err(domain(PairEncodeError::BadInputIndex));
+        }
+        output[output_index] = input[input_index] as u16;
+        Ok(TranscodeProgress::need_output(
+            output_index + 1,
+            crate::nz(2),
+            output.len() - (output_index + 1),
+            1,
+            1,
+        ))
+    }
+
+    noop_finish!(u16);
+}
+
+#[derive(Debug, Default)]
 struct PrefixBeforeReadEncoder {
     emitted_prefix: bool,
 }
@@ -1308,6 +1347,20 @@ fn test_buffered_encode_output_flushes_after_partial_need_output_progress() {
     assert_eq!(1, written);
     output.flush().expect("flush should drain buffered units");
     assert_eq!(&[0x1234], output.inner().units.as_slice());
+}
+
+#[test]
+fn test_buffered_encode_output_reports_post_read_need_output_capacity() {
+    let output = FixedCapacityOutput::new(1);
+    let mut encoder = NeedOutputAfterReadPastCapacityEncoder;
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
+    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+
+    let error = output
+        .transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
+        .expect_err("post-read NeedOutput beyond capacity should fail");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
 }
 
 #[test]

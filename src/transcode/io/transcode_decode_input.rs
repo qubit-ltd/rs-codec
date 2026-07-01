@@ -657,7 +657,7 @@ where
             let start = self.scratch_unread.len();
             self.scratch_unread
                 .resize(start + missing, I::Item::default());
-            let read = unsafe {
+            let read_result = unsafe {
                 // SAFETY: The scratch vector was resized to provide the
                 // destination range being filled.
                 self.input.read_unchecked(
@@ -665,7 +665,14 @@ where
                     start,
                     missing,
                 )
-            }?;
+            };
+            let read = match read_result {
+                Ok(read) => read,
+                Err(error) => {
+                    self.scratch_unread.truncate(start);
+                    return Err(error);
+                }
+            };
             if read == 0 {
                 self.scratch_unread.truncate(start);
                 return Ok(false);
@@ -675,11 +682,12 @@ where
         Ok(true)
     }
 
-    /// Refills the underlying buffer unless scratch units are already unread.
+    /// Refills the underlying buffer.
     fn fill_more(&mut self) -> Result<bool> {
-        if self.has_scratch_unread() {
-            return Ok(true);
-        }
+        debug_assert!(
+            !self.has_scratch_unread(),
+            "scratch unread units must be consumed before refilling input",
+        );
         self.input.fill_more()
     }
 
@@ -699,13 +707,7 @@ where
         let SeekFrom::Current(offset) = position else {
             return Ok(position);
         };
-        let scratch =
-            i64::try_from(self.scratch_unread_len()).map_err(|_| {
-                Error::new(
-                    ErrorKind::InvalidInput,
-                    "scratch unread length exceeds seek offset range",
-                )
-            })?;
+        let scratch = self.scratch_unread_len().min(i64::MAX as usize) as i64;
         let adjusted = offset.checked_sub(scratch).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidInput,

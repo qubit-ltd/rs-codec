@@ -186,8 +186,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError`] when the policy rejects the value with a
-    /// codec-domain error.
+    /// Returns [`crate::TranscodeError`] when the policy rejects the value with
+    /// a codec-domain error.
     fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
@@ -231,7 +231,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeError`] when hook-owned state cannot be finalized.
+    /// Returns [`crate::TranscodeError`] when hook-owned state cannot be
+    /// finalized.
     #[inline(always)]
     fn finish_hooks(
         &mut self,

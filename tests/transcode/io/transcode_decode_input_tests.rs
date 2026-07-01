@@ -779,6 +779,30 @@ impl Input for FailingInput {
 }
 
 #[derive(Debug)]
+struct FailingSeekInput;
+
+impl Input for FailingSeekInput {
+    type Item = u8;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        _output: &mut [u8],
+        _index: usize,
+        _count: usize,
+    ) -> std::io::Result<usize> {
+        Ok(0)
+    }
+}
+
+impl qubit_io::Seekable for FailingSeekInput {
+    type Item = u8;
+
+    fn seek_to(&mut self, _position: SeekFrom) -> std::io::Result<u64> {
+        Err(Error::new(ErrorKind::BrokenPipe, "seek failure"))
+    }
+}
+
+#[derive(Debug)]
 struct ErrorAfterFirstReadInput {
     first_read: bool,
 }
@@ -1640,6 +1664,43 @@ impl Codec for ScratchGrowingReadCodec {
     }
 }
 
+#[derive(Debug, Default)]
+struct ScratchByteCodec;
+
+impl Codec for ScratchByteCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(2).expect("byte pair width");
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::new(3).expect("scratch byte width");
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        let available = input.len().saturating_sub(input_index);
+        if available < 3 {
+            return Err(DecodeFailure::incomplete(crate::nz(3)));
+        }
+        Ok((input[input_index], crate::nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(1)
+    }
+}
+
 #[test]
 fn test_buffered_decode_input_read_decoded_refills_to_maximum_window() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
@@ -1703,6 +1764,184 @@ fn test_buffered_decode_input_read_decoded_scratch_grows_required_window() {
 }
 
 #[test]
+fn test_buffered_decode_input_scratch_unread_supports_buffer_apis() {
+    let input = ChunkedInput::new(vec![
+        vec![0x0001],
+        vec![0x0002, 0x0003],
+        vec![0x0004],
+    ]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ScratchGrowingReadCodec;
+
+    let value = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should leave a scratch tail");
+    assert_eq!(0x0001_0002, value);
+    assert_eq!(1, input.unread_len());
+    assert_eq!(&[0x0003], input.unread());
+
+    assert!(
+        input
+            .fill_until(2)
+            .expect("scratch refill should append units"),
+        "scratch refill should reach the requested length",
+    );
+    assert_eq!(&[0x0003, 0x0004], input.unread());
+
+    let mut copied = [0_u16; 2];
+    // SAFETY: The destination range is valid and separate from the input
+    // buffer.
+    unsafe {
+        input.copy_unread_to(&mut copied, 0, 2);
+    }
+    assert_eq!([0x0003, 0x0004], copied);
+
+    input.consume(1);
+    assert_eq!(&[0x0004], input.unread());
+
+    let mut empty = [0_u16; 0];
+    // SAFETY: The empty destination range is valid.
+    let read = unsafe { input.read_unchecked(&mut empty, 0, 0) }
+        .expect("zero-count scratch read should succeed");
+    assert_eq!(0, read);
+
+    let mut one = [0_u16; 1];
+    // SAFETY: The destination range is valid.
+    let read = unsafe { input.read_unchecked(&mut one, 0, 1) }
+        .expect("scratch-only read should succeed");
+    assert_eq!(1, read);
+    assert_eq!([0x0004], one);
+}
+
+#[test]
+fn test_buffered_decode_input_scratch_fill_until_reports_eof() {
+    let input = ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ScratchGrowingReadCodec;
+
+    input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should leave one unread unit");
+
+    assert!(
+        !input
+            .fill_until(2)
+            .expect("scratch refill should report clean EOF"),
+        "scratch refill should return false when the wrapped input ends",
+    );
+    assert_eq!(&[0x0003], input.unread());
+}
+
+#[test]
+fn test_buffered_decode_input_scratch_fill_until_propagates_read_errors() {
+    let input = ErrorAfterThreeUnitInput::default();
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ScratchGrowingReadCodec;
+
+    input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should leave one unread unit");
+    let error = input
+        .fill_until(2)
+        .expect_err("scratch refill errors should propagate");
+
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    assert_eq!(&[0x0003], input.unread());
+}
+
+#[test]
+fn test_buffered_decode_input_scratch_read_unchecked_continues_into_input() {
+    let input = ChunkedInput::new(vec![
+        vec![0x0001],
+        vec![0x0002, 0x0003],
+        vec![0x0004, 0x0005],
+    ]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ScratchGrowingReadCodec;
+
+    input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should leave one unread unit");
+    assert!(input.fill_until(2).expect("scratch refill should succeed"));
+
+    let mut output = [0_u16; 3];
+    // SAFETY: The destination range is valid.
+    let read = unsafe { input.read_unchecked(&mut output, 0, 3) }
+        .expect("scratch read should continue into the wrapped input");
+
+    assert_eq!(3, read);
+    assert_eq!([0x0003, 0x0004, 0x0005], output);
+}
+
+#[test]
+fn test_buffered_decode_input_into_parts_preserves_scratch_unread() {
+    let input = ChunkedInput::new(vec![
+        vec![0x0001],
+        vec![0x0002, 0x0003],
+        vec![0x0004],
+    ]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ScratchGrowingReadCodec;
+
+    input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should leave one unread unit");
+    assert!(input.fill_until(2).expect("scratch refill should succeed"));
+
+    let (_inner, unread) = input.into_parts();
+
+    assert_eq!(&[0x0003, 0x0004], unread.readable());
+}
+
+#[test]
+fn test_buffered_decode_input_seek_adjusts_for_scratch_unread() {
+    let mut input =
+        TranscodeDecodeInput::with_capacity(Cursor::new(vec![1, 2, 3, 4]), 1);
+    let mut codec = ScratchByteCodec;
+
+    let value = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch byte decode should leave one unread byte");
+    assert_eq!(1, value);
+    assert_eq!(&[3], input.unread());
+
+    let position = Seek::seek(&mut input, SeekFrom::Current(0))
+        .expect("relative seek should account for scratch unread bytes");
+    assert_eq!(2, position);
+
+    let mut next = [0_u8; 1];
+    let read = Read::read(&mut input, &mut next)
+        .expect("seek should clear scratch and reposition the inner input");
+    assert_eq!(1, read);
+    assert_eq!([3], next);
+}
+
+#[test]
+fn test_buffered_decode_input_seek_rejects_underflowing_scratch_adjustment() {
+    let mut input =
+        TranscodeDecodeInput::with_capacity(Cursor::new(vec![1, 2, 3]), 1);
+    let mut codec = ScratchByteCodec;
+
+    input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch byte decode should leave one unread byte");
+    let error = Seek::seek(&mut input, SeekFrom::Current(i64::MIN))
+        .expect_err("relative seek adjustment should reject underflow");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_decode_input_seek_propagates_wrapped_seek_errors() {
+    let mut input = TranscodeDecodeInput::with_capacity(FailingSeekInput, 1);
+
+    let error = Seek::seek(&mut input, SeekFrom::Start(0))
+        .expect_err("wrapped seek errors should be propagated");
+
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+}
+
+#[test]
 fn test_buffered_decode_input_read_decoded_scratch_maps_invalid_input() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
@@ -1715,6 +1954,21 @@ fn test_buffered_decode_input_read_decoded_scratch_maps_invalid_input() {
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!("bad input index", error.to_string());
     assert_eq!(&[0x0002], input.unread());
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_scratch_maps_invalid_unknown() {
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = InvalidWithoutConsumedReadCodec;
+
+    let error = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect_err("scratch decode should map invalid unknown input");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("bad input index", error.to_string());
+    assert_eq!(&[0x0001, 0x0002], input.unread());
 }
 
 #[derive(Debug, Default)]
@@ -1854,6 +2108,44 @@ fn test_buffered_decode_input_read_decoded_scratch_rejects_impossible_incomplete
     assert!(error.to_string().contains("loaded scratch window"));
 }
 
+#[test]
+fn test_buffered_decode_input_read_decoded_scratch_rejects_overconsuming_codec()
+{
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = OverconsumeReadCodec;
+
+    let error = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect_err("scratch decode should reject over-consumption");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(
+        error
+            .to_string()
+            .contains("codec consumed units exceed loaded scratch window")
+    );
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_scratch_rejects_invalid_consumed_hint()
+ {
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = OverconsumeInvalidReadCodec;
+
+    let error = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect_err("scratch decode should reject invalid consumed hints");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(
+        error.to_string().contains(
+            "decode error consumed units exceed loaded scratch window"
+        )
+    );
+}
+
 #[derive(Debug, Default)]
 struct ImpossibleIncompleteMainLoopCodec;
 
@@ -1967,6 +2259,40 @@ impl Input for ErrorAfterTwoUnitInput {
             Ok(read)
         } else {
             Err(Error::new(ErrorKind::BrokenPipe, "refill failure"))
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct ErrorAfterThreeUnitInput {
+    read_count: usize,
+}
+
+impl Input for ErrorAfterThreeUnitInput {
+    type Item = u16;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u16],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
+        self.read_count += 1;
+        match self.read_count {
+            1 => {
+                let read = count.min(2);
+                output[index..index + read]
+                    .copy_from_slice(&[0x0001, 0x0002][..read]);
+                Ok(read)
+            }
+            2 => {
+                let read = count.min(1);
+                output[index..index + read].copy_from_slice(&[0x0003][..read]);
+                Ok(read)
+            }
+            _ => {
+                Err(Error::new(ErrorKind::BrokenPipe, "scratch refill failure"))
+            }
         }
     }
 }

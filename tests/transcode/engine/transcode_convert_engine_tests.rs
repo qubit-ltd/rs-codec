@@ -527,6 +527,24 @@ impl TranscodeDecodeHooks<SourceCodec> for StrictDecodeHooks {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ImpossibleFailureDecodeHooks;
+
+impl TranscodeDecodeHooks<ErrorSourceCodec> for ImpossibleFailureDecodeHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut ErrorSourceCodec,
+        _error: &EngineError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeError<ErrorSourceCodec>,
+    > {
+        Err(TranscodeError::unencodable_value(0, ()))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct StrictEncodeHooks;
 
 impl<C> TranscodeEncodeHooks<C> for StrictEncodeHooks
@@ -2715,6 +2733,20 @@ fn test_buffered_convert_engine_finish_hits_decoder_finish_unreachable() {
     let required = engine.max_finish_output_len().expect("finish bound");
     let mut output = vec![0_u8; required];
     let _ = engine.finish(&mut output, 0);
+}
+
+#[test]
+#[should_panic(expected = "decode engine does not carry encode value context")]
+fn test_buffered_convert_engine_decode_failure_value_context_is_unreachable() {
+    let mut engine = TranscodeConvertEngine::new(
+        ErrorSourceCodec,
+        TargetCodec,
+        ImpossibleFailureDecodeHooks,
+        StrictEncodeHooks,
+    );
+    let mut output = [0_u8; 1];
+
+    let _ = engine.transcode(&[1], 0, &mut output, 0);
 }
 
 // Decode-reset emit fixtures for regression testing

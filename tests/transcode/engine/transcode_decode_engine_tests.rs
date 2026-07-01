@@ -104,6 +104,41 @@ enum HintOnlyDecodeError {
     Invalid,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct UnknownInvalidCodec;
+
+impl Codec for UnknownInvalidCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = PrefixDecodeError;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+
+    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
+        Err(qubit_codec::DecodeFailure::invalid_unknown(
+            PrefixDecodeError::Invalid { consumed: 0 },
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
 impl Codec for HintOnlyCodec {
     type Value = u8;
     type Unit = u8;
@@ -1472,6 +1507,22 @@ impl TranscodeDecodeHooks<PrefixCodec> for RejectingDecodeHooks {
     }
 }
 
+impl TranscodeDecodeHooks<UnknownInvalidCodec> for RejectingDecodeHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut UnknownInvalidCodec,
+        _error: &PrefixDecodeError,
+        consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeError<UnknownInvalidCodec>,
+    > {
+        assert_eq!(None, consumed);
+        Ok(DecodeInvalidAction::Reject)
+    }
+}
+
 #[test]
 fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
     let mut decoder =
@@ -1489,6 +1540,27 @@ fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
             CodecPhase::Main,
             Some(0),
             Some(qubit_io::nz!(1)),
+        ),
+        error,
+    );
+}
+
+#[test]
+fn test_transcode_decode_engine_rejects_invalid_unknown_input_via_hooks() {
+    let mut decoder =
+        TranscodeDecodeEngine::new(UnknownInvalidCodec, RejectingDecodeHooks);
+    let input = [0xff_u8];
+    let mut output = [0_u8; 1];
+
+    let error = decoder
+        .transcode(&input, 0, &mut output, 0)
+        .expect_err("reject policy should surface invalid unknown input");
+
+    assert_eq!(
+        TranscodeError::domain(
+            PrefixDecodeError::Invalid { consumed: 0 },
+            CodecPhase::Main,
+            Some(0),
         ),
         error,
     );

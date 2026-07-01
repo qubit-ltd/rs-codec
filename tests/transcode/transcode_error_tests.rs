@@ -66,6 +66,14 @@ fn test_transcode_error_separates_failure_and_domain_errors() {
         }),
         domain.domain_error_ref(),
     );
+    assert_eq!(
+        Some(TranscodeFailure::InvalidInputIndex {
+            index: 3,
+            input_len: 1,
+        }),
+        failure.failure(),
+    );
+    assert_eq!(None, domain.failure());
 }
 
 #[test]
@@ -164,6 +172,117 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
     assert_eq!(
         TranscodeError::<String, &'static str>::unencodable_value(4, "x"),
         mapped,
+    );
+}
+
+#[test]
+fn test_transcode_error_map_failure_value_maps_framework_values() {
+    let mapped =
+        TranscodeError::<DomainError, &'static str>::unencodable_value(4, "x")
+            .map_failure_value(|value| value.len());
+
+    assert_eq!(TranscodeError::unencodable_value(4, 1), mapped);
+
+    let domain = TranscodeError::<DomainError, &'static str>::domain(
+        DomainError,
+        CodecPhase::Main,
+        Some(3),
+    )
+    .map_failure_value(|value| value.len());
+
+    assert_eq!(
+        TranscodeError::domain(DomainError, CodecPhase::Main, Some(3)),
+        domain,
+    );
+}
+
+#[test]
+fn test_transcode_failure_map_value_preserves_all_framework_variants() {
+    assert_eq!(
+        TranscodeFailure::InvalidInputIndex {
+            index: 1,
+            input_len: 0,
+        },
+        TranscodeFailure::<&'static str>::InvalidInputIndex {
+            index: 1,
+            input_len: 0,
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::InvalidOutputIndex {
+            index: 2,
+            output_len: 1,
+        },
+        TranscodeFailure::<&'static str>::InvalidOutputIndex {
+            index: 2,
+            output_len: 1,
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::InsufficientOutput {
+            output_index: 3,
+            required: 4,
+            available: 1,
+        },
+        TranscodeFailure::<&'static str>::InsufficientOutput {
+            output_index: 3,
+            required: 4,
+            available: 1,
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::OutputLengthOverflow,
+        TranscodeFailure::<&'static str>::OutputLengthOverflow
+            .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::IncompleteInput {
+            input_index: 5,
+            required: 6,
+            available: 2,
+        },
+        TranscodeFailure::<&'static str>::IncompleteInput {
+            input_index: 5,
+            required: 6,
+            available: 2,
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::TrailingInput {
+            consumed: 7,
+            remaining: 8,
+        },
+        TranscodeFailure::<&'static str>::TrailingInput {
+            consumed: 7,
+            remaining: 8,
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::UnencodableValue {
+            input_index: 9,
+            value: Some(3),
+        },
+        TranscodeFailure::UnencodableValue {
+            input_index: 9,
+            value: Some("abc"),
+        }
+        .map_value(str::len),
+    );
+    assert_eq!(
+        TranscodeFailure::UnencodableValue {
+            input_index: 10,
+            value: None,
+        },
+        TranscodeFailure::<&'static str>::UnencodableValue {
+            input_index: 10,
+            value: None,
+        }
+        .map_value(str::len),
     );
 }
 
@@ -320,6 +439,30 @@ fn test_transcode_error_into_decode_io_error_maps_framework_variants() {
         TranscodeError::<DomainError>::incomplete_input(2, 4, 1)
             .into_decode_io_error(&mut map_domain)
             .kind(),
+    );
+    assert_eq!(
+        ErrorKind::InvalidData,
+        TranscodeError::<DomainError>::unencodable_value_without_context(9)
+            .into_decode_io_error(&mut map_domain)
+            .kind(),
+    );
+    assert_eq!(
+        "codec cannot encode value",
+        TranscodeError::<DomainError>::unencodable_value_without_context(9)
+            .into_decode_io_error(&mut map_domain)
+            .to_string(),
+    );
+    assert_eq!(
+        ErrorKind::InvalidData,
+        TranscodeError::<DomainError>::trailing_input(2, 1)
+            .into_decode_io_error(&mut map_domain)
+            .kind(),
+    );
+    assert_eq!(
+        "trailing input: consumed 2 units, remaining 1",
+        TranscodeError::<DomainError>::trailing_input(2, 1)
+            .into_decode_io_error(&mut map_domain)
+            .to_string(),
     );
     assert_eq!(
         "domain failure",
