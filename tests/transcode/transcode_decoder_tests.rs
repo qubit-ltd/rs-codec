@@ -7,7 +7,13 @@
 // =============================================================================
 //! Tests for the semantic transcode decoder marker trait.
 
-use qubit_codec::{CapacityError, TranscodeDecoder, TranscodeError, TranscodeProgress, Transcoder};
+use qubit_codec::{
+    CapacityError,
+    TranscodeDecoder,
+    TranscodeError,
+    TranscodeProgress,
+    Transcoder,
+};
 
 #[derive(Default)]
 struct ByteToChar;
@@ -16,7 +22,10 @@ impl Transcoder<u8, char> for ByteToChar {
     type DomainError = core::convert::Infallible;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -25,7 +34,10 @@ impl Transcoder<u8, char> for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 
@@ -50,7 +62,10 @@ impl Transcoder<u8, char> for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
         Ok(0)
     }
 }

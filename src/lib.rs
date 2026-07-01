@@ -23,8 +23,8 @@
 //! - [`CodecTranscodeEncoder`], [`CodecTranscodeDecoder`], and
 //!   [`CodecTranscodeConverter`] for strict streaming adapters around a
 //!   [`Codec`].
-//! - [`engine::TranscodeEncodeEngine`], [`engine::TranscodeDecodeEngine`],
-//!   and [`engine::TranscodeConvertEngine`] for policy-aware buffered loops.
+//! - [`engine::TranscodeEncodeEngine`], [`engine::TranscodeDecodeEngine`], and
+//!   [`engine::TranscodeConvertEngine`] for policy-aware buffered loops.
 //! - [`engine::TranscodeEncodeHooks`] and [`engine::TranscodeDecodeHooks`] for
 //!   replacement, skip, report, finish, and reset policy decisions.
 //! - [`Transcoder`], [`TranscodeProgress`], and [`TranscodeStatus`] for
@@ -103,19 +103,57 @@ mod value;
 /// Policy-aware transcode engines, hooks, contexts, and per-step outcomes.
 pub mod engine {
     pub use crate::transcode::{
-        DecodeContext, DecodeInvalidAction, DecodeOutcome, EncodeContext, EncodeOutcome,
-        EncodeUnencodableAction, TranscodeConvertEngine, TranscodeDecodeEngine,
-        TranscodeDecodeHooks, TranscodeEncodeEngine, TranscodeEncodeHooks,
+        DecodeContext,
+        DecodeInvalidAction,
+        DecodeOutcome,
+        EncodeContext,
+        EncodeOutcome,
+        EncodeUnencodableAction,
+        TranscodeConvertEngine,
+        TranscodeDecodeEngine,
+        TranscodeDecodeHooks,
+        TranscodeEncodeEngine,
+        TranscodeEncodeHooks,
     };
 }
 
-pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian};
-pub use codec::{Codec, DecodeFailure};
-pub use transcode::{
-    CapacityError, CodecPhase, CodecTranscodeConverter, CodecTranscodeDecoder,
-    CodecTranscodeEncoder, ConvertError, TranscodeContractError, TranscodeConvertError,
-    TranscodeConverter, TranscodeDecodeError, TranscodeDecodeInput, TranscodeDecoder,
-    TranscodeDomainError, TranscodeEncodeError, TranscodeEncodeOutput, TranscodeEncoder,
-    TranscodeError, TranscodeFailure, TranscodeProgress, TranscodeStatus, Transcoder,
+pub use byte_order::{
+    BigEndian,
+    ByteOrder,
+    ByteOrderSpec,
+    LittleEndian,
 };
-pub use value::{CodecValueDecoder, CodecValueEncoder, CodecValueExt, ValueDecoder, ValueEncoder};
+pub use codec::{
+    Codec,
+    DecodeFailure,
+};
+pub use transcode::{
+    CapacityError,
+    CodecPhase,
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+    ConvertError,
+    TranscodeContractError,
+    TranscodeConvertError,
+    TranscodeConverter,
+    TranscodeDecodeError,
+    TranscodeDecodeInput,
+    TranscodeDecoder,
+    TranscodeDomainError,
+    TranscodeEncodeError,
+    TranscodeEncodeOutput,
+    TranscodeEncoder,
+    TranscodeError,
+    TranscodeFailure,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
+};
+pub use value::{
+    CodecValueDecoder,
+    CodecValueEncoder,
+    CodecValueExt,
+    ValueDecoder,
+    ValueEncoder,
+};

@@ -6,7 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{TranscodeContractError, TranscodeProgress, TranscodeStatus};
+use qubit_codec::{
+    TranscodeContractError,
+    TranscodeProgress,
+    TranscodeStatus,
+};
 
 #[test]
 fn test_transcoder_progress_exposes_status_and_counts() {
@@ -195,7 +199,8 @@ fn test_transcoder_progress_validate_rejects_status_available_mismatch() {
 
 #[test]
 fn test_transcoder_progress_validate_rejects_index_overflow() {
-    let need_input = TranscodeProgress::need_input(usize::MAX, crate::nz(2), 0, 1, 0);
+    let need_input =
+        TranscodeProgress::need_input(usize::MAX, crate::nz(2), 0, 1, 0);
     assert_eq!(
         Err(TranscodeContractError::ProgressIndexOverflow {
             index: usize::MAX,
@@ -204,7 +209,8 @@ fn test_transcoder_progress_validate_rejects_index_overflow() {
         need_input.validate(usize::MAX, 1, 0, 0),
     );
 
-    let need_output = TranscodeProgress::need_output(usize::MAX, crate::nz(2), 0, 0, 1);
+    let need_output =
+        TranscodeProgress::need_output(usize::MAX, crate::nz(2), 0, 0, 1);
     assert_eq!(
         Err(TranscodeContractError::ProgressIndexOverflow {
             index: usize::MAX,

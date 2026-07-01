@@ -72,7 +72,9 @@ pub enum TranscodeFailure<Value = ()> {
     },
 
     /// The input contains exactly one decoded value plus trailing units.
-    #[error("trailing input after value: consumed {consumed} units, remaining {remaining}")]
+    #[error(
+        "trailing input after value: consumed {consumed} units, remaining {remaining}"
+    )]
     TrailingInput {
         /// Units consumed by the decoded value.
         consumed: usize,
@@ -91,7 +93,8 @@ pub enum TranscodeFailure<Value = ()> {
 }
 
 impl<Value> TranscodeFailure<Value> {
-    /// Maps value context carried by [`UnencodableValue`](Self::UnencodableValue).
+    /// Maps value context carried by
+    /// [`UnencodableValue`](Self::UnencodableValue).
     ///
     /// Framework failures that do not carry value context are preserved
     /// unchanged.
@@ -116,7 +119,9 @@ impl<Value> TranscodeFailure<Value> {
                 required,
                 available,
             },
-            Self::OutputLengthOverflow => TranscodeFailure::OutputLengthOverflow,
+            Self::OutputLengthOverflow => {
+                TranscodeFailure::OutputLengthOverflow
+            }
             Self::IncompleteInput {
                 input_index,
                 required,
@@ -133,10 +138,12 @@ impl<Value> TranscodeFailure<Value> {
                 consumed,
                 remaining,
             },
-            Self::UnencodableValue { input_index, value } => TranscodeFailure::UnencodableValue {
-                input_index,
-                value: value.map(f),
-            },
+            Self::UnencodableValue { input_index, value } => {
+                TranscodeFailure::UnencodableValue {
+                    input_index,
+                    value: value.map(f),
+                }
+            }
         }
     }
 }

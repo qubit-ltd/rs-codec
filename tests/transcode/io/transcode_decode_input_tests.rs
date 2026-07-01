@@ -7,10 +7,22 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::io::{Cursor, Error, ErrorKind, Read, Seek, SeekFrom};
+use std::io::{
+    Cursor,
+    Error,
+    ErrorKind,
+    Read,
+    Seek,
+    SeekFrom,
+};
 
 use qubit_codec::{
-    CapacityError, Codec, DecodeFailure, TranscodeDecodeInput, TranscodeError, TranscodeProgress,
+    CapacityError,
+    Codec,
+    DecodeFailure,
+    TranscodeDecodeInput,
+    TranscodeError,
+    TranscodeProgress,
     Transcoder,
 };
 use qubit_io::Input;
@@ -57,7 +69,8 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         let available = input.len().saturating_sub(input_index);
         if available < 2 {
             return Err(DecodeFailure::incomplete(crate::nz(2)));
@@ -86,7 +99,10 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::DomainError>> {
-            TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
+            TranscodeError::<Self::DomainError>::ensure_output_index(
+                output.len(),
+                output_index,
+            )?;
             Ok(0)
         }
     };
@@ -99,7 +115,10 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeError<Self::DomainError>> {
-            TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
+            TranscodeError::<Self::DomainError>::ensure_output_index(
+                output.len(),
+                output_index,
+            )?;
             Ok(0)
         }
     };
@@ -110,8 +129,10 @@ struct PairDecoder;
 
 #[test]
 fn test_transcode_decode_input_exposes_unread_window() {
-    let mut input =
-        TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1_u16, 2, 3]]), 3);
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![1_u16, 2, 3]]),
+        3,
+    );
 
     assert!(input.fill_until(2).expect("fill should succeed"));
     assert_eq!(&[1, 2, 3], input.unread());
@@ -124,7 +145,10 @@ impl Transcoder<u16, u32> for PairDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len / 2)
     }
 
@@ -191,7 +215,10 @@ impl Transcoder<u16, u32> for NoProgressCompleteDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -212,12 +239,21 @@ impl Transcoder<u16, u32> for NoProgressCompleteDecoder {
 
 #[test]
 fn test_transcode_decode_input_rejects_complete_without_progress() {
-    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1_u16]]), 2);
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![1_u16]]),
+        2,
+    );
     let mut decoder = NoProgressCompleteDecoder;
     let mut output = [0_u32; 1];
 
     let error = input
-        .transcode_into(&mut decoder, &mut transcode_error_to_io, &mut output, 0, 1)
+        .transcode_into(
+            &mut decoder,
+            &mut transcode_error_to_io,
+            &mut output,
+            0,
+            1,
+        )
         .expect_err("non-progressing Complete must be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -236,7 +272,10 @@ impl Transcoder<u16, u32> for FinishDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -290,7 +329,10 @@ impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -366,7 +408,10 @@ impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -394,7 +439,11 @@ impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
         output: &mut [u32],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_capacity(output.len(), output_index, 2)?;
+        TranscodeError::<Self::DomainError>::ensure_output_capacity(
+            output.len(),
+            output_index,
+            2,
+        )?;
         output[output_index] = 0xaaaa;
         output[output_index + 1] = 0xbbbb;
         Ok(2)
@@ -408,7 +457,10 @@ impl Transcoder<u16, u32> for CapacityBoundDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -441,7 +493,10 @@ impl Transcoder<u16, u32> for FailingTranscodeDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -470,7 +525,10 @@ impl Transcoder<u16, u32> for OverreadingProgressDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -499,7 +557,10 @@ impl Transcoder<u16, u32> for OverwritingProgressDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(2)
     }
 
@@ -530,7 +591,10 @@ impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -567,7 +631,10 @@ impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -604,7 +671,10 @@ impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -647,7 +717,10 @@ impl Transcoder<u16, u32> for FailingFinishDecoder {
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -676,11 +749,15 @@ impl Transcoder<u16, u32> for FailingFinishDecoder {
         _output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError>> {
         match self.failure {
-            FinishFailure::Capacity => Err(domain(PairDecodeError::CapacityOverflow)),
-            FinishFailure::InvalidIndex => Err(domain(PairDecodeError::InvalidOutputIndex {
-                index: 4,
-                len: 1,
-            })),
+            FinishFailure::Capacity => {
+                Err(domain(PairDecodeError::CapacityOverflow))
+            }
+            FinishFailure::InvalidIndex => {
+                Err(domain(PairDecodeError::InvalidOutputIndex {
+                    index: 4,
+                    len: 1,
+                }))
+            }
         }
     }
 }
@@ -770,7 +847,13 @@ where
     D: Transcoder<u16, u32, DomainError = PairDecodeError, FailureValue = ()>,
 {
     let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
-    input.finish_transcode_into(decoder, &mut mapper, output, output_index, count)
+    input.finish_transcode_into(
+        decoder,
+        &mut mapper,
+        output,
+        output_index,
+        count,
+    )
 }
 
 #[test]
@@ -793,19 +876,22 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
     input.inner_mut().set_position(0);
 
     let mut first = [0_u8; 1];
-    let read = Read::read(&mut input, &mut first).expect("raw unit read should succeed");
+    let read = Read::read(&mut input, &mut first)
+        .expect("raw unit read should succeed");
     assert_eq!(1, read);
     assert_eq!([1], first);
 
     let mut middle = [0_u8; 4];
-    let read = Read::read(&mut input, &mut middle[1..3]).expect("raw unit read should succeed");
+    let read = Read::read(&mut input, &mut middle[1..3])
+        .expect("raw unit read should succeed");
     assert_eq!(2, read);
     assert_eq!([0, 2, 3, 0], middle);
 
     let mut next = [0_u8; 1];
     assert_eq!(
         1,
-        Read::read(&mut input, &mut next).expect("std::io::Read should delegate to raw unit reads")
+        Read::read(&mut input, &mut next)
+            .expect("std::io::Read should delegate to raw unit reads")
     );
     assert_eq!([4], next);
 
@@ -815,7 +901,8 @@ fn test_buffered_decode_input_exposes_raw_byte_read_and_seek_adapters() {
             .expect("std::io::Seek should delegate to the buffered input")
     );
     let mut after_seek = [0_u8; 1];
-    let read = Read::read(&mut input, &mut after_seek).expect("seek should discard buffered bytes");
+    let read = Read::read(&mut input, &mut after_seek)
+        .expect("seek should discard buffered bytes");
     assert_eq!(1, read);
     assert_eq!([1], after_seek);
 }
@@ -889,7 +976,8 @@ fn test_buffered_decode_input_transcode_into_rejects_invalid_output_range() {
 
 #[test]
 fn test_buffered_decode_input_decodes_across_refills() {
-    let input = ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
+    let input =
+        ChunkedInput::new(vec![vec![0x0001], vec![0x0002, 0x0003, 0x0004]]);
     let mut decoder = PairDecoder;
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
@@ -1247,8 +1335,8 @@ fn test_buffered_decode_input_copy_unread_and_read_unchecked() {
 
     let mut read = [0_u16; 2];
     // SAFETY: The destination range is valid.
-    let read_count =
-        unsafe { input.read_unchecked(&mut read, 0, 2) }.expect("read should copy unread units");
+    let read_count = unsafe { input.read_unchecked(&mut read, 0, 2) }
+        .expect("read should copy unread units");
     assert_eq!(2, read_count);
     assert_eq!([0x0001, 0x0002], read);
     assert_eq!(1, input.unread_len());
@@ -1272,7 +1360,8 @@ impl Codec for InvalidPairReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         let _ = input[input_index];
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
@@ -1310,7 +1399,8 @@ impl Codec for GrowingPairReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         let available = input.len().saturating_sub(input_index);
         if !self.pass && available < 4 {
             return Err(DecodeFailure::incomplete(crate::nz(4)));
@@ -1349,7 +1439,8 @@ impl Codec for OverconsumeReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Ok((0, core::num::NonZeroUsize::new(3).expect("three units")))
     }
 
@@ -1391,7 +1482,8 @@ fn test_buffered_decode_input_read_decoded_maps_invalid_input() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_uses_scratch_when_value_exceeds_capacity() {
+fn test_buffered_decode_input_read_decoded_uses_scratch_when_value_exceeds_capacity()
+ {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = FixedPairCodec;
@@ -1452,7 +1544,8 @@ impl Codec for PartialWindowIncompleteCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         let available = input.len().saturating_sub(input_index);
         if available < 4 {
             return Err(DecodeFailure::incomplete(crate::nz(4)));
@@ -1490,7 +1583,8 @@ impl Codec for OverconsumeInvalidReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
             core::num::NonZeroUsize::new(3).expect("three units"),
@@ -1525,7 +1619,8 @@ impl Codec for ScratchGrowingReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         let available = input.len().saturating_sub(input_index);
         if available < 3 {
             return Err(DecodeFailure::incomplete(crate::nz(3)));
@@ -1561,7 +1656,8 @@ fn test_buffered_decode_input_read_decoded_refills_to_maximum_window() {
 
 #[test]
 fn test_buffered_decode_input_read_decoded_handles_incomplete_in_main_loop() {
-    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002], vec![0x0003, 0x0004]]);
+    let input =
+        ChunkedInput::new(vec![vec![0x0001, 0x0002], vec![0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     let mut codec = PartialWindowIncompleteCodec;
 
@@ -1580,7 +1676,9 @@ fn test_buffered_decode_input_read_decoded_rejects_invalid_consumed_hint() {
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("invalid consumed hints beyond the unread window should fail");
+        .expect_err(
+            "invalid consumed hints beyond the unread window should fail",
+        );
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
@@ -1596,9 +1694,9 @@ fn test_buffered_decode_input_read_decoded_scratch_grows_required_window() {
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = ScratchGrowingReadCodec;
 
-    let value = input
-        .read_decoded_with(&mut codec, map_codec_error)
-        .expect("scratch decode should grow the required window across refills");
+    let value = input.read_decoded_with(&mut codec, map_codec_error).expect(
+        "scratch decode should grow the required window across refills",
+    );
 
     assert_eq!(0x0001_0002, value);
     assert_eq!(&[0x0003], input.unread());
@@ -1637,7 +1735,8 @@ impl Codec for AlwaysIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::incomplete(crate::nz(4)))
     }
 
@@ -1669,7 +1768,8 @@ impl Codec for StuckIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::incomplete(crate::nz(2)))
     }
 
@@ -1710,7 +1810,8 @@ fn test_buffered_decode_input_read_decoded_reports_eof_after_incomplete() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_refills_after_required_window_growth() {
+fn test_buffered_decode_input_read_decoded_refills_after_required_window_growth()
+ {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002], vec![0x0003]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut codec = ScratchGrowingReadCodec;
@@ -1737,14 +1838,17 @@ fn test_buffered_decode_input_read_decoded_scratch_reports_eof() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_scratch_rejects_impossible_incomplete() {
+fn test_buffered_decode_input_read_decoded_scratch_rejects_impossible_incomplete()
+ {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = StuckIncompleteReadCodec;
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("scratch decode should reject impossible incomplete windows");
+        .expect_err(
+            "scratch decode should reject impossible incomplete windows",
+        );
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("loaded scratch window"));
@@ -1768,7 +1872,8 @@ impl Codec for ImpossibleIncompleteMainLoopCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::incomplete(crate::nz(2)))
     }
 
@@ -1800,7 +1905,8 @@ impl Codec for InvalidWithConsumedReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
             core::num::NonZeroUsize::MIN,
@@ -1856,7 +1962,8 @@ impl Input for ErrorAfterTwoUnitInput {
         if self.first_read {
             self.first_read = false;
             let read = count.min(2);
-            output[index..index + read].copy_from_slice(&[0x0001, 0x0002][..read]);
+            output[index..index + read]
+                .copy_from_slice(&[0x0001, 0x0002][..read]);
             Ok(read)
         } else {
             Err(Error::new(ErrorKind::BrokenPipe, "refill failure"))
@@ -1882,7 +1989,8 @@ impl Codec for IncompleteBeyondBufferReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::incomplete(crate::nz(4)))
     }
 
@@ -1914,7 +2022,8 @@ impl Codec for InvalidWithoutConsumedReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Err(DecodeFailure::invalid_unknown(
             PairDecodeError::BadInputIndex,
         ))
@@ -1931,7 +2040,8 @@ impl Codec for InvalidWithoutConsumedReadCodec {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_rejects_impossible_incomplete_in_window() {
+fn test_buffered_decode_input_read_decoded_rejects_impossible_incomplete_in_window()
+ {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     let mut codec = ImpossibleIncompleteMainLoopCodec;
@@ -1942,9 +2052,9 @@ fn test_buffered_decode_input_read_decoded_rejects_impossible_incomplete_in_wind
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
-        error
-            .to_string()
-            .contains("codec reported incomplete input within available window")
+        error.to_string().contains(
+            "codec reported incomplete input within available window"
+        )
     );
 }
 
@@ -1956,7 +2066,9 @@ fn test_buffered_decode_input_read_decoded_consumes_invalid_consumed_hint() {
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("invalid consumed hints should be mapped after consumption");
+        .expect_err(
+            "invalid consumed hints should be mapped after consumption",
+        );
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!("bad input index", error.to_string());
@@ -1976,26 +2088,35 @@ fn test_buffered_decode_input_read_decoded_propagates_initial_refill_error() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_propagates_max_window_refill_error() {
-    let mut input = TranscodeDecodeInput::with_capacity(ErrorAfterTwoUnitInput::default(), 4);
+fn test_buffered_decode_input_read_decoded_propagates_max_window_refill_error()
+{
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ErrorAfterTwoUnitInput::default(),
+        4,
+    );
     let mut codec = GrowingPairReadCodec::default();
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("refill errors while reserving the maximum window should propagate");
+        .expect_err(
+            "refill errors while reserving the maximum window should propagate",
+        );
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_propagates_incomplete_refill_error() {
+fn test_buffered_decode_input_read_decoded_propagates_incomplete_refill_error()
+{
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut codec = IncompleteBeyondBufferReadCodec;
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("refill errors after an incomplete decode should propagate");
+        .expect_err(
+            "refill errors after an incomplete decode should propagate",
+        );
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
 }
@@ -2044,7 +2165,8 @@ fn test_buffered_decode_input_transcode_into_accepts_zero_count() {
 
 #[test]
 fn test_buffered_decode_input_debug_shows_wrapped_input() {
-    let input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![]), 2);
+    let input =
+        TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![]), 2);
     let debug = format!("{input:?}");
 
     assert!(debug.contains("TranscodeDecodeInput"));

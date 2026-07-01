@@ -8,8 +8,15 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeHooks};
-use qubit_codec::{CodecPhase, TranscodeError};
+use qubit_codec::engine::{
+    DecodeContext,
+    DecodeInvalidAction,
+    TranscodeDecodeHooks,
+};
+use qubit_codec::{
+    CodecPhase,
+    TranscodeError,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -24,15 +31,20 @@ impl qubit_codec::Codec for UnitCodec {
     type DecodeError = UnitDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -57,7 +69,10 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         error: &UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<UnitCodec>> {
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeError<UnitCodec>,
+    > {
         Err(TranscodeError::domain(*error, CodecPhase::Main, None))
     }
 }
@@ -68,9 +83,13 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written =
-        TranscodeDecodeHooks::<UnitCodec>::finish_hooks(&mut hooks, &mut codec, &mut output, 0)
-            .expect("default finish should be a no-op");
+    let written = TranscodeDecodeHooks::<UnitCodec>::finish_hooks(
+        &mut hooks,
+        &mut codec,
+        &mut output,
+        0,
+    )
+    .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }

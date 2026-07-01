@@ -118,7 +118,9 @@ impl<E> DecodeFailure<E> {
     #[must_use]
     pub const fn invalid_source(&self) -> Option<&E> {
         match self {
-            Self::Invalid { source, .. } | Self::InvalidUnknown { source } => Some(source),
+            Self::Invalid { source, .. } | Self::InvalidUnknown { source } => {
+                Some(source)
+            }
             Self::Incomplete { .. } => None,
         }
     }

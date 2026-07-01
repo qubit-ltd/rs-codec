@@ -66,7 +66,10 @@ impl<Value> DecodeInvalidAction<Value> {
     /// Panics when `available == 0` or when `consumed > available`.
     #[inline(always)]
     #[must_use]
-    pub(super) fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
+    pub(super) fn bound_consumed(
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> NonZeroUsize {
         assert!(
             available > 0,
             "DecodeInvalidAction cannot consume empty input",

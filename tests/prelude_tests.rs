@@ -7,15 +7,39 @@
 // =============================================================================
 
 use qubit_codec::engine::{
-    DecodeContext, DecodeInvalidAction, DecodeOutcome, EncodeContext, EncodeOutcome,
-    EncodeUnencodableAction, TranscodeConvertEngine, TranscodeDecodeEngine, TranscodeDecodeHooks,
-    TranscodeEncodeEngine, TranscodeEncodeHooks,
+    DecodeContext,
+    DecodeInvalidAction,
+    DecodeOutcome,
+    EncodeContext,
+    EncodeOutcome,
+    EncodeUnencodableAction,
+    TranscodeConvertEngine,
+    TranscodeDecodeEngine,
+    TranscodeDecodeHooks,
+    TranscodeEncodeEngine,
+    TranscodeEncodeHooks,
 };
 use qubit_codec::{
-    BigEndian, ByteOrder, ByteOrderSpec, Codec, CodecTranscodeConverter, CodecTranscodeDecoder,
-    CodecTranscodeEncoder, CodecValueDecoder, CodecValueEncoder, CodecValueExt, ConvertError,
-    TranscodeConverter, TranscodeDecoder, TranscodeEncoder, TranscodeError, TranscodeFailure,
-    TranscodeProgress, TranscodeStatus, ValueDecoder, ValueEncoder,
+    BigEndian,
+    ByteOrder,
+    ByteOrderSpec,
+    Codec,
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+    CodecValueDecoder,
+    CodecValueEncoder,
+    CodecValueExt,
+    ConvertError,
+    TranscodeConverter,
+    TranscodeDecoder,
+    TranscodeEncoder,
+    TranscodeError,
+    TranscodeFailure,
+    TranscodeProgress,
+    TranscodeStatus,
+    ValueDecoder,
+    ValueEncoder,
 };
 
 #[derive(Default)]
@@ -55,15 +79,20 @@ impl Codec for EchoCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
+        core::num::NonZeroUsize::MIN;
 
     unsafe fn decode(
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -96,7 +125,10 @@ impl TranscodeDecodeHooks<EchoCodec> for EchoDecodeHooks {
         error: &core::convert::Infallible,
         _consumed: Option<core::num::NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<EchoCodec>> {
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeError<EchoCodec>,
+    > {
         match *error {}
     }
 }
@@ -109,7 +141,10 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
         _codec: &mut EchoCodec,
         _value: &u8,
         _input_index: usize,
-    ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<EchoCodec>> {
+    ) -> Result<
+        EncodeUnencodableAction<u8>,
+        qubit_codec::TranscodeEncodeError<EchoCodec>,
+    > {
         Ok(EncodeUnencodableAction::Reject)
     }
 }
@@ -136,16 +171,23 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_value_ext::<EchoCodec>();
     _accept_codec_transcode_encoder::<CodecTranscodeEncoder<EchoCodec>>();
     _accept_codec_transcode_decoder::<CodecTranscodeDecoder<EchoCodec>>();
-    _accept_codec_transcode_converter::<CodecTranscodeConverter<EchoCodec, EchoCodec>>();
+    _accept_codec_transcode_converter::<
+        CodecTranscodeConverter<EchoCodec, EchoCodec>,
+    >();
     _accept_transcode_decode_engine::<TranscodeDecodeEngine<EchoCodec, ()>>();
     _accept_transcode_encode_engine::<TranscodeEncodeEngine<EchoCodec, ()>>();
     _accept_transcode_convert_engine::<
-        TranscodeConvertEngine<EchoCodec, EchoCodec, EchoDecodeHooks, EchoEncodeHooks>,
+        TranscodeConvertEngine<
+            EchoCodec,
+            EchoCodec,
+            EchoDecodeHooks,
+            EchoEncodeHooks,
+        >,
     >();
     let mut codec = EchoCodec;
 
-    let encoded =
-        ValueEncoder::<str>::encode(&mut codec, "abc").expect("echo encode should be infallible");
+    let encoded = ValueEncoder::<str>::encode(&mut codec, "abc")
+        .expect("echo encode should be infallible");
     let decoded = ValueDecoder::<str>::decode(&mut codec, &encoded)
         .expect("echo decode should be infallible");
     assert_eq!("abc", decoded);
@@ -159,7 +201,8 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         TranscodeError::invalid_output_index(1, 0),
     );
 
-    let decode_error = TranscodeError::<core::convert::Infallible>::incomplete_input(0, 2, 1);
+    let decode_error =
+        TranscodeError::<core::convert::Infallible>::incomplete_input(0, 2, 1);
     assert!(matches!(
         decode_error,
         TranscodeError::Failure(TranscodeFailure::IncompleteInput {
@@ -169,7 +212,8 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         })
     ));
 
-    let convert_error = ConvertError::<&'static str, &'static str>::decode("decode failed");
+    let convert_error =
+        ConvertError::<&'static str, &'static str>::decode("decode failed");
     assert!(matches!(
         convert_error,
         ConvertError::Decode("decode failed")
@@ -184,7 +228,8 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
             value: None,
         })
     ));
-    let convert_error = ConvertError::<&'static str, &'static str>::encode("encode failed");
+    let convert_error =
+        ConvertError::<&'static str, &'static str>::encode("encode failed");
     assert!(matches!(
         convert_error,
         ConvertError::Encode("encode failed")
@@ -213,7 +258,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         },
     );
 
-    let (decoded, consumed) =
-        unsafe { Codec::decode(&mut codec, &[1], 0) }.expect("decode should be infallible");
+    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[1], 0) }
+        .expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));
 }

@@ -10,7 +10,13 @@
 use core::fmt;
 
 use super::ValueDecoder;
-use crate::{Codec, CodecPhase, CodecValueExt, TranscodeError, codec::assert_unit_bounds};
+use crate::{
+    Codec,
+    CodecPhase,
+    CodecValueExt,
+    TranscodeError,
+    codec::assert_unit_bounds,
+};
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///
@@ -128,7 +134,10 @@ where
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when flush output exceeds
     /// [`Codec::MAX_DECODE_FLUSH_VALUES`].
-    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
         let flush_cap = C::MAX_DECODE_FLUSH_VALUES;
         let (value, _) = if flush_cap == 0 {
             self.codec
@@ -137,8 +146,11 @@ where
             if self.flush_scratch.len() < flush_cap {
                 self.flush_scratch.resize_with(flush_cap, C::Value::default);
             }
-            self.codec
-                .decode_exact_value_with_flush(input, &mut self.flush_scratch, 0)?
+            self.codec.decode_exact_value_with_flush(
+                input,
+                &mut self.flush_scratch,
+                0,
+            )?
         };
 
         Ok(value)

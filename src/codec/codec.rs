@@ -252,8 +252,8 @@ pub trait Codec {
     /// aggregators, shift-state encodings, or frame builders. In that case
     /// [`encode_len`](Self::encode_len) for the same `value` and state must
     /// also return `0`, and the retained output must be emitted by a later
-    /// successful [`encode`](Self::encode), [`encode_flush`](Self::encode_flush),
-    /// or codec-specific facade.
+    /// successful [`encode`](Self::encode),
+    /// [`encode_flush`](Self::encode_flush), or codec-specific facade.
     ///
     /// # Errors
     ///

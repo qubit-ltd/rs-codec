@@ -10,7 +10,12 @@
 use super::super::engine::TranscodeDecodeEngine;
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError, Codec, TranscodeDecodeError, TranscodeDecoder, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    TranscodeDecodeError,
+    TranscodeDecoder,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -53,7 +58,10 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
+            engine: TranscodeDecodeEngine::new(
+                codec,
+                CodecTranscodeDecodeHooks,
+            ),
         }
     }
 }
@@ -76,7 +84,10 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -160,4 +171,7 @@ where
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where C: Codec {}
+impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
+    C: Codec
+{
+}

@@ -10,7 +10,12 @@
 use super::super::engine::TranscodeEncodeEngine;
 use super::CodecTranscodeEncodeHooks;
 use crate::{
-    CapacityError, Codec, TranscodeEncodeError, TranscodeEncoder, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    TranscodeEncodeError,
+    TranscodeEncoder,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Encodes values into caller-provided output units by using a [`Codec`].
@@ -49,7 +54,10 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
+            engine: TranscodeEncodeEngine::new(
+                codec,
+                CodecTranscodeEncodeHooks,
+            ),
         }
     }
 }
@@ -73,7 +81,10 @@ where
     ///
     /// a conservative upper bound for output units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 

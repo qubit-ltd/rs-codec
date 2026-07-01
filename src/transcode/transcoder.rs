@@ -6,8 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError, transcode_error::TranscodeError,
-    transcode_progress::TranscodeProgress, transcode_status::TranscodeStatus,
+    capacity_error::CapacityError,
+    transcode_error::TranscodeError,
+    transcode_progress::TranscodeProgress,
+    transcode_status::TranscodeStatus,
 };
 
 /// Converts one logical stream of input units into one logical stream of output
@@ -239,7 +241,10 @@ pub trait Transcoder<Input, Output> {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -261,7 +266,10 @@ pub trait Transcoder<Input, Output> {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -354,7 +362,10 @@ pub trait Transcoder<Input, Output> {
         input_index: usize,
         output: &mut [Output],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError, Self::FailureValue>>;
+    ) -> Result<
+        TranscodeProgress,
+        TranscodeError<Self::DomainError, Self::FailureValue>,
+    >;
 
     /// Finishes internally retained output after all input has been supplied.
     ///
@@ -503,14 +514,19 @@ pub trait Transcoder<Input, Output> {
         &mut self,
         input: &[Input],
         output: &mut [Output],
-    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>> {
+    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>
+    {
         let mut output_cursor = self.reset(output, 0)?;
         let transcode_required = self.max_transcode_output_len(input.len())?;
         let finish_required = self.max_finish_output_len()?;
         let remaining_required = transcode_required
             .checked_add(finish_required)
             .ok_or(CapacityError::OutputLengthOverflow)?;
-        TranscodeError::ensure_output_capacity(output.len(), output_cursor, remaining_required)?;
+        TranscodeError::ensure_output_capacity(
+            output.len(),
+            output_cursor,
+            remaining_required,
+        )?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
         debug_assert!(
@@ -532,8 +548,11 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error =
-                    TranscodeError::insufficient_output(output_index, required.get(), available);
+                let error = TranscodeError::insufficient_output(
+                    output_index,
+                    required.get(),
+                    available,
+                );
                 return Err(error);
             }
             TranscodeStatus::NeedInput {
@@ -541,8 +560,11 @@ pub trait Transcoder<Input, Output> {
                 required,
                 available,
             } => {
-                let error =
-                    TranscodeError::incomplete_input(input_index, required.get(), available);
+                let error = TranscodeError::incomplete_input(
+                    input_index,
+                    required.get(),
+                    available,
+                );
                 return Err(error);
             }
         }
