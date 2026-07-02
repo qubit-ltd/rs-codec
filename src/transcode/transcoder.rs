@@ -67,7 +67,9 @@ use super::{
 /// #[derive(Default)]
 /// struct U16BeBytesDecoder;
 ///
-/// impl Transcoder<u8, u16> for U16BeBytesDecoder {
+/// impl Transcoder for U16BeBytesDecoder {
+///     type Input = u8;
+///     type Output = u16;
 ///     type DomainError = core::convert::Infallible;
 ///     type FailureValue = ();
 ///
@@ -184,12 +186,13 @@ use super::{
 /// slices. Returned progress counters are relative counts from those positions.
 /// For raw codecs this gives a compact API; higher-level workflows can wrap
 /// this trait with their own semantic policies.
-///
-/// # Type Parameters
-///
-/// - `Input`: Input unit type accepted by this transcoder.
-/// - `Output`: Output unit type produced by this transcoder.
-pub trait Transcoder<Input, Output> {
+pub trait Transcoder {
+    /// Input unit type accepted by this transcoder.
+    type Input;
+
+    /// Output unit type produced by this transcoder.
+    type Output;
+
     /// Domain error type produced by codec, hook, or policy internals.
     type DomainError;
 
@@ -322,7 +325,7 @@ pub trait Transcoder<Input, Output> {
     /// when capacity checks fail, or policy errors when reset itself fails.
     fn reset(
         &mut self,
-        output: &mut [Output],
+        output: &mut [Self::Output],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
 
@@ -358,9 +361,9 @@ pub trait Transcoder<Input, Output> {
     /// absorb.
     fn transcode(
         &mut self,
-        input: &[Input],
+        input: &[Self::Input],
         input_index: usize,
-        output: &mut [Output],
+        output: &mut [Self::Output],
         output_index: usize,
     ) -> Result<
         TranscodeProgress,
@@ -394,7 +397,9 @@ pub trait Transcoder<Input, Output> {
     /// #[derive(Default)]
     /// struct ByteCopy;
     ///
-    /// impl Transcoder<u8, u8> for ByteCopy {
+    /// impl Transcoder for ByteCopy {
+    ///     type Input = u8;
+    ///     type Output = u8;
     ///     type DomainError = core::convert::Infallible;
     ///     type FailureValue = ();
     ///
@@ -481,7 +486,7 @@ pub trait Transcoder<Input, Output> {
     /// fails.
     fn finish(
         &mut self,
-        output: &mut [Output],
+        output: &mut [Self::Output],
         output_index: usize,
     ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
 
@@ -512,8 +517,8 @@ pub trait Transcoder<Input, Output> {
     /// Returns domain errors from reset, transcode, or finish.
     fn transcode_complete_into(
         &mut self,
-        input: &[Input],
-        output: &mut [Output],
+        input: &[Self::Input],
+        output: &mut [Self::Output],
     ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>
     {
         let mut output_cursor = self.reset(output, 0)?;

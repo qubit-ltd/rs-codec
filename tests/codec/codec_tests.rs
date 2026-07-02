@@ -18,11 +18,9 @@ impl Codec for ByteIncrementCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -67,15 +65,13 @@ impl Codec for StatefulLifecycleCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
-    const MAX_DECODE_FLUSH_VALUES: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -111,7 +107,7 @@ impl Codec for StatefulLifecycleCodec {
         Ok(1)
     }
 
-    unsafe fn decode_flush(
+    unsafe fn decode_finish(
         &mut self,
         output: &mut [u8],
         output_index: usize,
@@ -132,8 +128,8 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
     let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &output, 0) }
         .expect("decoding should be infallible");
 
-    assert_eq!(1, <ByteIncrementCodec as Codec>::MIN_UNITS_PER_VALUE.get(),);
-    assert_eq!(1, <ByteIncrementCodec as Codec>::MAX_UNITS_PER_VALUE.get(),);
+    assert_eq!(1, <ByteIncrementCodec as Codec>::MIN_UNITS_PER_VALUE,);
+    assert_eq!(1, <ByteIncrementCodec as Codec>::MAX_UNITS_PER_VALUE,);
     assert!(codec.can_encode_value(&41));
     assert_eq!(1, written);
     assert_eq!(1, consumed.get());
@@ -148,12 +144,12 @@ fn test_codec_trait_default_lifecycle_methods_are_noop() {
 
     let reset_written = unsafe { codec.encode_reset(&mut reset_output, 0) }
         .expect("default reset should be infallible");
-    let flushed = unsafe { codec.decode_flush(&mut flush_output, 0) }
+    let flushed = unsafe { codec.decode_finish(&mut flush_output, 0) }
         .expect("default flush should be infallible");
 
     assert_eq!(1, codec.encode_len(&41));
     assert_eq!(0, <ByteIncrementCodec as Codec>::MAX_ENCODE_RESET_UNITS);
-    assert_eq!(0, <ByteIncrementCodec as Codec>::MAX_DECODE_FLUSH_VALUES);
+    assert_eq!(0, <ByteIncrementCodec as Codec>::MAX_DECODE_FINISH_VALUES);
     assert_eq!(0, reset_written);
     assert_eq!(0, flushed);
     assert_eq!([0], reset_output);
@@ -179,7 +175,7 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
 
     let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[42], 0) }
         .expect("decoding should be infallible");
-    let flushed_len = unsafe { codec.decode_flush(&mut flushed, 0) }
+    let flushed_len = unsafe { codec.decode_finish(&mut flushed, 0) }
         .expect("flush should be infallible");
 
     assert_eq!(42, decoded);
@@ -200,11 +196,9 @@ impl Codec for BufferedEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn encode_len(&self, value: &u8) -> usize {
         usize::from(*value == 0)

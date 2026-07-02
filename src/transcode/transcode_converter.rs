@@ -18,13 +18,6 @@ use super::Transcoder;
 /// The trait adds no methods. It exists to make generic bounds distinguish
 /// unit-to-unit conversion from value-to-unit encoding and unit-to-value
 /// decoding.
-///
-/// # Type Parameters
-///
-/// - `InputUnit`: Encoded input unit type accepted by the converter.
-/// - `OutputUnit`: Encoded output unit type produced by the converter.
-pub trait TranscodeConverter<InputUnit, OutputUnit>:
-    Transcoder<InputUnit, OutputUnit>
-{
+pub trait TranscodeConverter: Transcoder {
     //  empty
 }

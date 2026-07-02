@@ -26,10 +26,9 @@ impl Codec for PairByteCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -73,10 +72,9 @@ impl Codec for VariableWidthCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(3);
+    const MAX_UNITS_PER_VALUE: usize = 3;
 
     fn encode_len(&self, value: &u8) -> usize {
         match *value {
@@ -130,11 +128,9 @@ impl Codec for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -174,7 +170,10 @@ impl Codec for RejectOddCodec {
 
 #[test]
 fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
-    fn assert_transcode_encoder<T: TranscodeEncoder<u8, u8>>() {}
+    fn assert_transcode_encoder<
+        T: TranscodeEncoder<Input = u8, Output = u8>,
+    >() {
+    }
 
     assert_transcode_encoder::<CodecTranscodeEncoder<PairByteCodec>>();
 
@@ -302,7 +301,7 @@ fn test_codec_transcode_encoder_propagates_encode_error() {
         .transcode(&[2, 3], 0, &mut output, 0)
         .expect_err("odd value should be rejected before unsafe encode");
 
-    assert_eq!(TranscodeError::unencodable_value(1, 3), error,);
+    assert_eq!(TranscodeError::unencodable_value_without_context(1), error,);
     assert_eq!([2, 0], output);
 }
 

@@ -9,6 +9,8 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_io::UncheckedSlice;
+
 use super::super::internal::{
     decode_state::DecodeState,
     lifecycle::LifecycleGuard,
@@ -23,7 +25,6 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecPhase,
     DecodeFailure,
     TranscodeDecodeError,
     TranscodeError,
@@ -88,8 +89,8 @@ use crate::{
 ///     type DecodeError = ByteDecodeError;
 ///     type EncodeError = core::convert::Infallible;
 ///
-///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -197,12 +198,11 @@ where
     ///
     /// Returns a buffered decoder engine.
     ///
-    /// # Panics
+    /// # Compile-Time Checks
     ///
-    /// In debug builds, panics when the supplied codec violates the
-    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant. Release builds skip this check because the invariant is the
-    /// responsibility of the [`Codec`] implementation.
+    /// Fails to compile when the supplied codec declares zero unit bounds or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
@@ -297,20 +297,20 @@ where
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
-    /// Returns the maximum values emitted by flushing codec state and finishing
-    /// hook-owned state.
+    /// Returns the maximum values emitted by finishing codec state and
+    /// finishing hook-owned state.
     ///
     /// # Returns
     ///
-    /// Returns the sum of [`Codec::MAX_DECODE_FLUSH_VALUES`] and the
-    /// hook-provided final-output bound. The codec flush portion covers values
-    /// written by [`Codec::decode_flush`]; hook implementations must not
+    /// Returns the sum of [`Codec::MAX_DECODE_FINISH_VALUES`] and the
+    /// hook-provided final-output bound. The codec finish portion covers values
+    /// written by [`Codec::decode_finish`]; hook implementations must not
     /// include that portion in
     /// [`TranscodeDecodeHooks::max_finish_output_len`].
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        C::MAX_DECODE_FLUSH_VALUES
+        C::MAX_DECODE_FINISH_VALUES
             .checked_add(self.hooks.max_finish_output_len(&self.codec))
             .ok_or(CapacityError::OutputLengthOverflow)
     }
@@ -394,9 +394,7 @@ where
             // reset-output bound at `output_index`.
             self.codec.decode_reset(output, output_index)
         }
-        .map_err(|error| {
-            TranscodeError::domain(error, CodecPhase::Reset, None)
-        })?;
+        .map_err(TranscodeError::domain_reset)?;
         assert!(
             written <= required,
             "Codec::decode_reset wrote beyond its reset bound",
@@ -438,13 +436,15 @@ where
             output_index,
         )?;
 
-        let min_units = C::MIN_UNITS_PER_VALUE;
+        let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE)
+            .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+        let min_units_len = min_units.get();
         let mut state =
             DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
             let available = context.available();
-            if available < min_units.get() {
+            if available < min_units_len {
                 return Ok(state.need_input_progress_with(min_units, available));
             }
             if state.needs_output() {
@@ -455,11 +455,9 @@ where
             let (outcome, _) =
                 self.decode_one(input, context, |value, _input_index| {
                     // SAFETY: `needs_output()` returned false, so the output
-                    // cursor points at a writable slot. `ptr::write` moves
-                    // the decoded value into that slot without requiring
-                    // `C::Value: Copy`.
+                    // cursor points at a writable initialized slot.
                     unsafe {
-                        output.as_mut_ptr().add(output_index).write(value);
+                        UncheckedSlice::write(output, output_index, value);
                     }
                 })?;
             if let Some(progress) = state.apply_decode_outcome(outcome) {
@@ -472,11 +470,11 @@ where
 
     /// Finishes codec and hook-owned output after EOF.
     ///
-    /// Finalization first flushes decode-side codec state through
-    /// [`Codec::decode_flush`], then lets hook implementations finish their
+    /// Finalization first finishes decode-side codec state through
+    /// [`Codec::decode_finish`], then lets hook implementations finish their
     /// own retained state. The caller must provide enough output capacity for
     /// [`TranscodeDecodeEngine::max_finish_output_len`], which includes both
-    /// the codec flush bound and the hook-owned finish bound.
+    /// the codec finish bound and the hook-owned finish bound.
     ///
     /// # Parameters
     ///
@@ -490,13 +488,13 @@ where
     /// # Errors
     ///
     /// Returns framework errors when the caller provides invalid or
-    /// insufficient output capacity. Returns domain errors when codec flush or
+    /// insufficient output capacity. Returns domain errors when codec finish or
     /// hook finalization fails.
     ///
     /// # Panics
     ///
-    /// Panics when the codec flush writes beyond
-    /// [`Codec::MAX_DECODE_FLUSH_VALUES`] or when the combined codec and hook
+    /// Panics when the codec finish writes beyond
+    /// [`Codec::MAX_DECODE_FINISH_VALUES`] or when the combined codec and hook
     /// finalization writes beyond
     /// [`TranscodeDecodeEngine::max_finish_output_len`].
     pub fn finish(
@@ -511,25 +509,24 @@ where
             output_index,
             required,
         )?;
-        let flushed = unsafe { self.codec.decode_flush(output, output_index) }
-            .map_err(|error| {
-                TranscodeError::domain(error, CodecPhase::Flush, None)
-            })?;
+        let finished =
+            unsafe { self.codec.decode_finish(output, output_index) }
+                .map_err(TranscodeError::domain_finish)?;
         assert!(
-            flushed <= C::MAX_DECODE_FLUSH_VALUES,
-            "Codec::decode_flush wrote beyond its flush bound",
+            finished <= C::MAX_DECODE_FINISH_VALUES,
+            "Codec::decode_finish wrote beyond its finish bound",
         );
         let written = self.hooks.finish_hooks(
             &mut self.codec,
             output,
-            output_index + flushed,
+            output_index + finished,
         )?;
         assert!(
-            flushed + written <= required,
+            finished + written <= required,
             "TranscodeDecodeEngine hook wrote beyond its finish bound",
         );
         self.lifecycle.on_finish_success();
-        Ok(flushed + written)
+        Ok(finished + written)
     }
 
     /// Runs a complete one-shot `reset -> transcode -> finish` decode stream.
@@ -560,9 +557,7 @@ where
         input: &[C::Unit],
         output: &mut [C::Value],
     ) -> Result<usize, TranscodeDecodeError<C>> {
-        <Self as Transcoder<C::Unit, C::Value>>::transcode_complete_into(
-            self, input, output,
-        )
+        <Self as Transcoder>::transcode_complete_into(self, input, output)
     }
 
     /// Decodes one source value attempt and delivers emitted values.
@@ -598,7 +593,7 @@ where
         F: FnOnce(C::Value, usize) -> R,
     {
         debug_assert!(
-            context.available() >= C::MIN_UNITS_PER_VALUE.get(),
+            context.available() >= C::MIN_UNITS_PER_VALUE,
             "decode_one requires at least Codec::MIN_UNITS_PER_VALUE input units",
         );
 
@@ -632,10 +627,9 @@ where
                     context,
                 )? {
                     DecodeInvalidAction::Reject => {
-                        return Err(TranscodeError::domain_with_consumed(
+                        return Err(TranscodeError::domain_main_with_consumed(
                             source,
-                            CodecPhase::Main,
-                            Some(context.input_index()),
+                            context.input_index(),
                             Some(consumed),
                         ));
                     }
@@ -656,10 +650,9 @@ where
                     context,
                 )? {
                     DecodeInvalidAction::Reject => {
-                        return Err(TranscodeError::domain(
+                        return Err(TranscodeError::domain_main(
                             source,
-                            CodecPhase::Main,
-                            Some(context.input_index()),
+                            context.input_index(),
                         ));
                     }
                     DecodeInvalidAction::Skip { consumed } => {
@@ -706,11 +699,13 @@ where
     }
 }
 
-impl<C, H> Transcoder<C::Unit, C::Value> for TranscodeDecodeEngine<C, H>
+impl<C, H> Transcoder for TranscodeDecodeEngine<C, H>
 where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
+    type Input = C::Unit;
+    type Output = C::Value;
     type DomainError = C::DecodeError;
     type FailureValue = ();
 

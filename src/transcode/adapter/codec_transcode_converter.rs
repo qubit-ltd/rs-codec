@@ -239,12 +239,14 @@ where
     }
 }
 
-impl<D, E> Transcoder<D::Unit, E::Unit> for CodecTranscodeConverter<D, E>
+impl<D, E> Transcoder for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
     D::Value: Clone + Default,
 {
+    type Input = D::Unit;
+    type Output = E::Unit;
     type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
     type FailureValue = D::Value;
 
@@ -351,8 +353,7 @@ where
     }
 }
 
-impl<D, E> TranscodeConverter<D::Unit, E::Unit>
-    for CodecTranscodeConverter<D, E>
+impl<D, E> TranscodeConverter for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,

@@ -7,11 +7,12 @@
 // =============================================================================
 //! Errors reported by transcode engines and transcoder adapters.
 
+use std::io::ErrorKind;
+
 use thiserror::Error;
 
 use super::{
     capacity_error::CapacityError,
-    codec_phase::CodecPhase,
     transcode_domain_error::TranscodeDomainError,
     transcode_failure::TranscodeFailure,
 };
@@ -51,47 +52,73 @@ pub enum TranscodeError<E, Value = ()> {
 }
 
 impl<E, Value> TranscodeError<E, Value> {
-    /// Creates a domain-specific transcode error.
+    /// Creates a reset-phase domain-specific transcode error.
     ///
     /// # Parameters
     ///
-    /// - `source`: Domain error reported by the codec or policy.
-    /// - `phase`: Codec lifecycle phase where the error occurred.
-    /// - `input_index`: Absolute input index when the error is tied to an input
-    ///   value.
+    /// - `source`: Domain error reported by reset handling.
     ///
     /// # Returns
     ///
-    /// Returns a transcode error wrapping `error`.
+    /// Returns a transcode error wrapping `source`.
     #[inline(always)]
-    pub const fn domain(
-        source: E,
-        phase: CodecPhase,
-        input_index: Option<usize>,
-    ) -> Self {
-        Self::Domain(TranscodeDomainError {
-            source,
-            phase,
-            input_index,
-            input_consumed: None,
-        })
+    pub const fn domain_reset(source: E) -> Self {
+        Self::Domain(TranscodeDomainError::reset(source))
     }
 
-    /// Creates a domain-specific transcode error with decode consumption
-    /// context.
+    /// Creates a main-phase domain-specific transcode error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Domain error reported by value processing.
+    /// - `input_index`: Absolute input index where the error occurred.
+    ///
+    /// # Returns
+    ///
+    /// Returns a transcode error wrapping `source`.
     #[inline(always)]
-    pub const fn domain_with_consumed(
+    pub const fn domain_main(source: E, input_index: usize) -> Self {
+        Self::Domain(TranscodeDomainError::main(source, input_index))
+    }
+
+    /// Creates a main-phase domain-specific transcode error with decode
+    /// consumption context.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Domain error reported by value processing.
+    /// - `input_index`: Absolute input index where the error occurred.
+    /// - `input_consumed`: Invalid input units consumed by the codec-domain
+    ///   error, when known.
+    ///
+    /// # Returns
+    ///
+    /// Returns a transcode error wrapping `source`.
+    #[inline(always)]
+    pub const fn domain_main_with_consumed(
         source: E,
-        phase: CodecPhase,
-        input_index: Option<usize>,
+        input_index: usize,
         input_consumed: Option<core::num::NonZeroUsize>,
     ) -> Self {
-        Self::Domain(TranscodeDomainError {
+        Self::Domain(TranscodeDomainError::main_with_consumed(
             source,
-            phase,
             input_index,
             input_consumed,
-        })
+        ))
+    }
+
+    /// Creates a finish-phase domain-specific transcode error.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Domain error reported by finish handling.
+    ///
+    /// # Returns
+    ///
+    /// Returns a transcode error wrapping `source`.
+    #[inline(always)]
+    pub const fn domain_finish(source: E) -> Self {
+        Self::Domain(TranscodeDomainError::finish(source))
     }
 
     /// Creates an invalid-input-index error.
@@ -214,15 +241,14 @@ impl<E, Value> TranscodeError<E, Value> {
                 )
             }
             DecodeFailure::Invalid { source, consumed } => {
-                Self::domain_with_consumed(
+                Self::domain_main_with_consumed(
                     source,
-                    CodecPhase::Main,
-                    Some(input_index),
+                    input_index,
                     Some(consumed),
                 )
             }
             DecodeFailure::InvalidUnknown { source } => {
-                Self::domain(source, CodecPhase::Main, Some(input_index))
+                Self::domain_main(source, input_index)
             }
         }
     }
@@ -292,7 +318,7 @@ impl<E, Value> TranscodeError<E, Value> {
     #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
-            Self::Domain(error) => Some(&error.source),
+            Self::Domain(error) => Some(error.source()),
             Self::Failure(_) => None,
         }
     }
@@ -318,14 +344,7 @@ impl<E, Value> TranscodeError<E, Value> {
     {
         match self {
             Self::Failure(failure) => TranscodeError::Failure(failure),
-            Self::Domain(error) => {
-                TranscodeError::Domain(TranscodeDomainError {
-                    source: f(error.source),
-                    phase: error.phase,
-                    input_index: error.input_index,
-                    input_consumed: error.input_consumed,
-                })
-            }
+            Self::Domain(error) => TranscodeError::Domain(error.map_source(f)),
         }
     }
 
@@ -488,70 +507,7 @@ impl<E, Value> TranscodeError<E, Value> {
     where
         M: FnMut(E) -> std::io::Error,
     {
-        use std::io::{
-            Error,
-            ErrorKind,
-        };
-
-        match self {
-            Self::Domain(error) => map_domain(error.source),
-            Self::Failure(TranscodeFailure::InvalidInputIndex {
-                index,
-                input_len,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "invalid input index {index} for input length {input_len}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::InvalidOutputIndex {
-                index,
-                output_len,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "invalid output index {index} for output length {output_len}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::InsufficientOutput {
-                output_index,
-                required,
-                available,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "insufficient output at index {output_index}: required {required} units, available {available}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::OutputLengthOverflow) => {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "output length arithmetic overflow",
-                )
-            }
-            Self::Failure(TranscodeFailure::UnencodableValue { .. }) => {
-                Error::new(ErrorKind::InvalidInput, "codec cannot encode value")
-            }
-            Self::Failure(TranscodeFailure::IncompleteInput {
-                input_index,
-                required,
-                available,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "incomplete input at index {input_index}: required {required} units, available {available}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::TrailingInput {
-                consumed,
-                remaining,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "trailing input: consumed {consumed} units, remaining {remaining}"
-                ),
-            ),
-        }
+        self.into_io_error_with(map_domain, ErrorKind::InvalidInput)
     }
 
     /// Maps this error into the I/O surface used by decode adapters.
@@ -563,13 +519,22 @@ impl<E, Value> TranscodeError<E, Value> {
     where
         M: FnMut(E) -> std::io::Error,
     {
-        use std::io::{
-            Error,
-            ErrorKind,
-        };
+        self.into_io_error_with(map_domain, ErrorKind::InvalidData)
+    }
+
+    /// Maps this error into an I/O error with a configurable unencodable kind.
+    fn into_io_error_with<M>(
+        self,
+        map_domain: &mut M,
+        unencodable_kind: ErrorKind,
+    ) -> std::io::Error
+    where
+        M: FnMut(E) -> std::io::Error,
+    {
+        use std::io::Error;
 
         match self {
-            Self::Domain(error) => map_domain(error.source),
+            Self::Domain(error) => map_domain(error.into_source()),
             Self::Failure(TranscodeFailure::InvalidInputIndex {
                 index,
                 input_len,
@@ -605,7 +570,7 @@ impl<E, Value> TranscodeError<E, Value> {
                 )
             }
             Self::Failure(TranscodeFailure::UnencodableValue { .. }) => {
-                Error::new(ErrorKind::InvalidData, "codec cannot encode value")
+                Error::new(unencodable_kind, "codec cannot encode value")
             }
             Self::Failure(TranscodeFailure::IncompleteInput {
                 input_index,

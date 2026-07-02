@@ -289,7 +289,7 @@ where
         count: usize,
     ) -> Result<usize>
     where
-        E: Transcoder<Value, O::Item>,
+        E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(TranscodeError<E::DomainError, E::FailureValue>) -> Error,
     {
         let input_end = UncheckedSlice::checked_range_end(
@@ -373,7 +373,7 @@ where
         map_error: &mut M,
     ) -> Result<()>
     where
-        E: Transcoder<Value, O::Item>,
+        E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(TranscodeError<E::DomainError, E::FailureValue>) -> Error,
     {
         let required = encoder

@@ -8,7 +8,6 @@
 
 use qubit_codec::{
     Codec,
-    CodecPhase,
     CodecTranscodeEncoder,
     TranscodeError,
     Transcoder,
@@ -27,11 +26,9 @@ impl Codec for ResetFailCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = ResetFailError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -78,11 +75,9 @@ impl Codec for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -120,11 +115,9 @@ impl Codec for OverreportingEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -157,7 +150,7 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
         .transcode(&[7], 0, &mut output, 0)
         .expect_err("strict encode hooks should reject unencodable values");
 
-    assert_eq!(TranscodeError::unencodable_value(0, 7), error,);
+    assert_eq!(TranscodeError::unencodable_value_without_context(0), error,);
 }
 
 #[test]
@@ -181,8 +174,5 @@ fn test_codec_transcode_encode_hooks_wraps_encode_reset_errors() {
         .reset(&mut output, 0)
         .expect_err("reset errors should be wrapped");
 
-    assert_eq!(
-        TranscodeError::domain(ResetFailError, CodecPhase::Reset, None),
-        error,
-    );
+    assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
 }

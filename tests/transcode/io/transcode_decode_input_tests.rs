@@ -48,7 +48,7 @@ enum PairDecodeError {
 }
 
 fn domain(error: PairDecodeError) -> TranscodeError<PairDecodeError> {
-    TranscodeError::domain(error, qubit_codec::CodecPhase::Main, None)
+    TranscodeError::domain_main(error, 0)
 }
 
 #[derive(Debug, Default)]
@@ -60,10 +60,8 @@ impl Codec for FixedPairCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -141,7 +139,9 @@ fn test_transcode_decode_input_exposes_unread_window() {
     assert_eq!(&[3], input.unread());
 }
 
-impl Transcoder<u16, u32> for PairDecoder {
+impl Transcoder for PairDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -211,7 +211,9 @@ impl Transcoder<u16, u32> for PairDecoder {
 #[derive(Debug, Default)]
 struct NoProgressCompleteDecoder;
 
-impl Transcoder<u16, u32> for NoProgressCompleteDecoder {
+impl Transcoder for NoProgressCompleteDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -268,7 +270,9 @@ struct FinishDecoder {
     finished: bool,
 }
 
-impl Transcoder<u16, u32> for FinishDecoder {
+impl Transcoder for FinishDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -325,7 +329,9 @@ impl Transcoder<u16, u32> for FinishDecoder {
 #[derive(Debug, Default)]
 struct ZeroWidthFailingFinishDecoder;
 
-impl Transcoder<u16, u32> for ZeroWidthFailingFinishDecoder {
+impl Transcoder for ZeroWidthFailingFinishDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -404,7 +410,9 @@ impl Input for ChunkedInput {
 #[derive(Debug, Default)]
 struct TwoUnitFinishDecoder;
 
-impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
+impl Transcoder for TwoUnitFinishDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -453,7 +461,9 @@ impl Transcoder<u16, u32> for TwoUnitFinishDecoder {
 #[derive(Debug, Default)]
 struct CapacityBoundDecoder;
 
-impl Transcoder<u16, u32> for CapacityBoundDecoder {
+impl Transcoder for CapacityBoundDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -489,7 +499,9 @@ impl Transcoder<u16, u32> for CapacityBoundDecoder {
 #[derive(Debug, Default)]
 struct FailingTranscodeDecoder;
 
-impl Transcoder<u16, u32> for FailingTranscodeDecoder {
+impl Transcoder for FailingTranscodeDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -521,7 +533,9 @@ impl Transcoder<u16, u32> for FailingTranscodeDecoder {
 #[derive(Debug, Default)]
 struct OverreadingProgressDecoder;
 
-impl Transcoder<u16, u32> for OverreadingProgressDecoder {
+impl Transcoder for OverreadingProgressDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -553,7 +567,9 @@ impl Transcoder<u16, u32> for OverreadingProgressDecoder {
 #[derive(Debug, Default)]
 struct OverwritingProgressDecoder;
 
-impl Transcoder<u16, u32> for OverwritingProgressDecoder {
+impl Transcoder for OverwritingProgressDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -587,7 +603,9 @@ impl Transcoder<u16, u32> for OverwritingProgressDecoder {
 struct OverflowingNeedInputDecoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
+impl Transcoder for OverflowingNeedInputDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -627,7 +645,9 @@ impl Transcoder<u16, u32> for OverflowingNeedInputDecoder {
 struct MisindexedNeedInputDecoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
+impl Transcoder for MisindexedNeedInputDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -667,7 +687,9 @@ impl Transcoder<u16, u32> for MisindexedNeedInputDecoder {
 struct MisindexedNeedOutputDecoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u16, u32> for MisindexedNeedOutputDecoder {
+impl Transcoder for MisindexedNeedOutputDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -713,7 +735,9 @@ struct FailingFinishDecoder {
     failure: FinishFailure,
 }
 
-impl Transcoder<u16, u32> for FailingFinishDecoder {
+impl Transcoder for FailingFinishDecoder {
+    type Input = u16;
+    type Output = u32;
     type DomainError = PairDecodeError;
     type FailureValue = ();
 
@@ -853,7 +877,12 @@ fn decode_with<I, D>(
 ) -> std::io::Result<usize>
 where
     I: Input<Item = u16>,
-    D: Transcoder<u16, u32, DomainError = PairDecodeError, FailureValue = ()>,
+    D: Transcoder<
+            Input = u16,
+            Output = u32,
+            DomainError = PairDecodeError,
+            FailureValue = (),
+        >,
 {
     let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
     input.transcode_into(decoder, &mut mapper, output, output_index, count)
@@ -868,7 +897,12 @@ fn finish_with<I, D>(
 ) -> std::io::Result<usize>
 where
     I: Input<Item = u16>,
-    D: Transcoder<u16, u32, DomainError = PairDecodeError, FailureValue = ()>,
+    D: Transcoder<
+            Input = u16,
+            Output = u32,
+            DomainError = PairDecodeError,
+            FailureValue = (),
+        >,
 {
     let mut mapper: fn(TranscodeError<PairDecodeError>) -> Error = map_error;
     input.finish_transcode_into(
@@ -1375,10 +1409,8 @@ impl Codec for InvalidPairReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -1414,10 +1446,8 @@ impl Codec for GrowingPairReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(4).expect("variable width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -1454,10 +1484,8 @@ impl Codec for OverconsumeReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -1559,10 +1587,8 @@ impl Codec for PartialWindowIncompleteCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(4).expect("variable width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -1598,10 +1624,8 @@ impl Codec for OverconsumeInvalidReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -1634,10 +1658,8 @@ impl Codec for ScratchGrowingReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(4).expect("variable width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -1673,10 +1695,8 @@ impl Codec for ScratchByteCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("byte pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(3).expect("scratch byte width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 3;
 
     unsafe fn decode(
         &mut self,
@@ -1980,10 +2000,8 @@ impl Codec for AlwaysIncompleteReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(4).expect("variable width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2013,10 +2031,8 @@ impl Codec for StuckIncompleteReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2155,10 +2171,8 @@ impl Codec for ImpossibleIncompleteMainLoopCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2188,10 +2202,8 @@ impl Codec for InvalidWithConsumedReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2306,10 +2318,8 @@ impl Codec for IncompleteBeyondBufferReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(4).expect("variable width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2339,10 +2349,8 @@ impl Codec for InvalidWithoutConsumedReadCodec {
     type DecodeError = PairDecodeError;
     type EncodeError = PairDecodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,

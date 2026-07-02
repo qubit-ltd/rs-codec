@@ -70,8 +70,8 @@ use crate::{
 ///     type DecodeError = MyDecodeError;
 ///     type EncodeError = core::convert::Infallible;
 ///
-///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -133,7 +133,7 @@ where
     /// units.
     ///
     /// This bound covers only the streaming decode phase. It must not include
-    /// codec reset values, codec flush values, or hook finish output.
+    /// codec reset values, codec finish values, or hook finish output.
     ///
     /// The default implementation divides `input_len` by
     /// [`Codec::MIN_UNITS_PER_VALUE`]. Override it when hook policy can emit a
@@ -161,7 +161,7 @@ where
         _codec: &C,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        Ok(input_len / C::MIN_UNITS_PER_VALUE.get())
+        Ok(input_len / C::MIN_UNITS_PER_VALUE)
     }
 
     /// Returns an upper bound for values emitted by finishing hook-owned state.
@@ -173,7 +173,7 @@ where
     /// The default implementation returns `0`. Override it when
     /// [`finish_hooks`](Self::finish_hooks) can write trailers, delayed
     /// replacements, or any other hook-owned final output. Do not include
-    /// [`Codec::MAX_DECODE_FLUSH_VALUES`]; the engine adds the codec flush
+    /// [`Codec::MAX_DECODE_FINISH_VALUES`]; the engine adds the codec finish
     /// bound separately.
     ///
     /// # Parameters
@@ -241,8 +241,8 @@ where
     /// `output_index`. Implementations must not write beyond that declared
     /// final-output bound.
     ///
-    /// Called after [`Codec::decode_flush`](crate::Codec::decode_flush) has
-    /// written its own flush output.
+    /// Called after [`Codec::decode_finish`](crate::Codec::decode_finish) has
+    /// written its own finish output.
     ///
     /// # Parameters
     ///

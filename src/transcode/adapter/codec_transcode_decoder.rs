@@ -66,10 +66,12 @@ where
     }
 }
 
-impl<C> Transcoder<C::Unit, C::Value> for CodecTranscodeDecoder<C>
+impl<C> Transcoder for CodecTranscodeDecoder<C>
 where
     C: Codec,
 {
+    type Input = C::Unit;
+    type Output = C::Value;
     type DomainError = C::DecodeError;
     type FailureValue = ();
 
@@ -171,7 +173,4 @@ where
     }
 }
 
-impl<C> TranscodeDecoder<C::Unit, C::Value> for CodecTranscodeDecoder<C> where
-    C: Codec
-{
-}
+impl<C> TranscodeDecoder for CodecTranscodeDecoder<C> where C: Codec {}

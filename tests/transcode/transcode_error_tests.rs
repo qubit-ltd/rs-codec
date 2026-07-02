@@ -41,28 +41,18 @@ fn test_transcode_error_separates_failure_and_domain_errors() {
     );
     assert_eq!(None, failure.domain_ref());
 
-    let domain = TranscodeError::<DomainError>::domain(
-        DomainError,
-        CodecPhase::Flush,
-        None,
-    );
+    let domain = TranscodeError::<DomainError>::domain_finish(DomainError);
     assert_eq!(
-        TranscodeError::Domain(TranscodeDomainError {
+        TranscodeError::Domain(TranscodeDomainError::Finish {
             source: DomainError,
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
         domain,
     );
     assert_eq!(None, domain.failure_ref());
     assert_eq!(Some(&DomainError), domain.domain_ref());
     assert_eq!(
-        Some(&TranscodeDomainError {
+        Some(&TranscodeDomainError::Finish {
             source: DomainError,
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
         domain.domain_error_ref(),
     );
@@ -78,11 +68,7 @@ fn test_transcode_error_separates_failure_and_domain_errors() {
 
 #[test]
 fn test_transcode_error_domain_helpers() {
-    let domain = TranscodeError::<&'static str>::domain(
-        "failure",
-        CodecPhase::Main,
-        Some(7),
-    );
+    let domain = TranscodeError::<&'static str>::domain_main("failure", 7);
     assert!(domain.is_domain());
     assert_eq!(Some(&"failure"), domain.domain_ref());
 
@@ -106,6 +92,77 @@ fn test_transcode_error_domain_helpers() {
     assert_eq!(
         None,
         TranscodeError::<&'static str>::incomplete_input(2, 4, 1).domain_ref(),
+    );
+}
+
+#[test]
+fn test_transcode_domain_error_accessors_describe_all_phases() {
+    let reset = TranscodeDomainError::reset("reset");
+    assert_eq!(&"reset", reset.source());
+    assert_eq!("reset", reset.into_source());
+    assert_eq!(CodecPhase::Reset, reset.phase());
+    assert_eq!(None, reset.input_index());
+    assert_eq!(None, reset.input_consumed());
+
+    let main = TranscodeDomainError::main("main", 7);
+    assert_eq!(&"main", main.source());
+    assert_eq!("main", main.into_source());
+    assert_eq!(CodecPhase::Main, main.phase());
+    assert_eq!(Some(7), main.input_index());
+    assert_eq!(None, main.input_consumed());
+
+    let main_with_consumed = TranscodeDomainError::main_with_consumed(
+        "invalid",
+        9,
+        Some(qubit_io::nz!(2)),
+    );
+    assert_eq!(&"invalid", main_with_consumed.source());
+    assert_eq!("invalid", main_with_consumed.into_source());
+    assert_eq!(CodecPhase::Main, main_with_consumed.phase());
+    assert_eq!(Some(9), main_with_consumed.input_index());
+    assert_eq!(Some(qubit_io::nz!(2)), main_with_consumed.input_consumed());
+
+    let finish = TranscodeDomainError::finish("finish");
+    assert_eq!(&"finish", finish.source());
+    assert_eq!("finish", finish.into_source());
+    assert_eq!(CodecPhase::Finish, finish.phase());
+    assert_eq!(None, finish.input_index());
+    assert_eq!(None, finish.input_consumed());
+}
+
+#[test]
+fn test_transcode_domain_error_map_source_preserves_phase_context() {
+    let reset = TranscodeDomainError::reset("reset")
+        .map_source(|source| format!("mapped {source}"));
+    assert_eq!(
+        TranscodeDomainError::Reset {
+            source: "mapped reset".to_string(),
+        },
+        reset,
+    );
+
+    let main = TranscodeDomainError::main_with_consumed(
+        "main",
+        7,
+        Some(qubit_io::nz!(3)),
+    )
+    .map_source(|source| format!("mapped {source}"));
+    assert_eq!(
+        TranscodeDomainError::Main {
+            source: "mapped main".to_string(),
+            input_index: 7,
+            input_consumed: Some(qubit_io::nz!(3)),
+        },
+        main,
+    );
+
+    let finish = TranscodeDomainError::finish("finish")
+        .map_source(|source| format!("mapped {source}"));
+    assert_eq!(
+        TranscodeDomainError::Finish {
+            source: "mapped finish".to_string(),
+        },
+        finish,
     );
 }
 
@@ -142,18 +199,11 @@ fn test_transcode_error_map_domain_preserves_framework_errors() {
         .map_domain(|error: &'static str| format!("mapped {error}"));
     assert_eq!(TranscodeError::<String>::incomplete_input(2, 4, 1), mapped,);
 
-    let mapped = TranscodeError::<String>::domain(
-        "inner".to_string(),
-        CodecPhase::Flush,
-        None,
-    )
-    .map_domain(|error| format!("mapped {error}"));
+    let mapped = TranscodeError::<String>::domain_finish("inner".to_string())
+        .map_domain(|error| format!("mapped {error}"));
     assert_eq!(
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Finish {
             source: "mapped inner".to_string(),
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
         mapped,
     );
@@ -183,17 +233,13 @@ fn test_transcode_error_map_failure_value_maps_framework_values() {
 
     assert_eq!(TranscodeError::unencodable_value(4, 1), mapped);
 
-    let domain = TranscodeError::<DomainError, &'static str>::domain(
+    let domain = TranscodeError::<DomainError, &'static str>::domain_main(
         DomainError,
-        CodecPhase::Main,
-        Some(3),
+        3,
     )
     .map_failure_value(|value| value.len());
 
-    assert_eq!(
-        TranscodeError::domain(DomainError, CodecPhase::Main, Some(3)),
-        domain,
-    );
+    assert_eq!(TranscodeError::domain_main(DomainError, 3), domain,);
 }
 
 #[test]
@@ -314,13 +360,8 @@ fn test_transcode_error_display_formats_all_variants() {
             .to_string(),
     );
     assert_eq!(
-        "codec Main error at input index Some(5): domain failure",
-        TranscodeError::<DomainError>::domain(
-            DomainError,
-            CodecPhase::Main,
-            Some(5)
-        )
-        .to_string(),
+        "codec main error at input index 5: domain failure",
+        TranscodeError::<DomainError>::domain_main(DomainError, 5).to_string(),
     );
 }
 
@@ -395,13 +436,9 @@ fn test_transcode_error_into_encode_io_error_maps_framework_variants() {
     );
     assert_eq!(
         "domain failure",
-        TranscodeError::<DomainError>::domain(
-            DomainError,
-            CodecPhase::Main,
-            Some(5)
-        )
-        .into_encode_io_error(&mut map_domain)
-        .to_string(),
+        TranscodeError::<DomainError>::domain_main(DomainError, 5)
+            .into_encode_io_error(&mut map_domain)
+            .to_string(),
     );
 }
 
@@ -466,23 +503,15 @@ fn test_transcode_error_into_decode_io_error_maps_framework_variants() {
     );
     assert_eq!(
         "domain failure",
-        TranscodeError::<DomainError>::domain(
-            DomainError,
-            CodecPhase::Main,
-            Some(5)
-        )
-        .into_decode_io_error(&mut map_domain)
-        .to_string(),
+        TranscodeError::<DomainError>::domain_main(DomainError, 5)
+            .into_decode_io_error(&mut map_domain)
+            .to_string(),
     );
 }
 
 #[test]
 fn test_transcode_error_source_returns_domain_error() {
-    let error = TranscodeError::<DomainError>::domain(
-        DomainError,
-        CodecPhase::Reset,
-        None,
-    );
+    let error = TranscodeError::<DomainError>::domain_reset(DomainError);
     assert!(error.source().is_some());
     assert!(
         TranscodeError::<DomainError>::invalid_input_index(0, 0)
@@ -579,10 +608,9 @@ fn test_transcode_error_from_decode_failure_maps_invalid_with_consumed() {
         TranscodeError::<DomainError>::from_decode_failure(failure, 5, 3);
 
     assert_eq!(
-        TranscodeError::<DomainError>::domain_with_consumed(
+        TranscodeError::<DomainError>::domain_main_with_consumed(
             DomainError,
-            CodecPhase::Main,
-            Some(5),
+            5,
             Some(qubit_io::nz!(1)),
         ),
         error,
@@ -591,7 +619,7 @@ fn test_transcode_error_from_decode_failure_maps_invalid_with_consumed() {
     assert_eq!(Some(&DomainError), error.domain_ref());
     assert_eq!(
         Some(qubit_io::nz!(1)),
-        error.domain_error_ref().unwrap().input_consumed
+        error.domain_error_ref().unwrap().input_consumed()
     );
 }
 
@@ -602,14 +630,10 @@ fn test_transcode_error_from_decode_failure_maps_invalid_unknown() {
         TranscodeError::<DomainError>::from_decode_failure(failure, 0, 8);
 
     assert_eq!(
-        TranscodeError::<DomainError>::domain(
-            DomainError,
-            CodecPhase::Main,
-            Some(0)
-        ),
+        TranscodeError::<DomainError>::domain_main(DomainError, 0),
         error,
     );
-    assert_eq!(None, error.domain_error_ref().unwrap().input_consumed);
+    assert_eq!(None, error.domain_error_ref().unwrap().input_consumed());
 }
 
 #[test]

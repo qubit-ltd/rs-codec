@@ -79,11 +79,9 @@ impl Codec for EchoCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -139,8 +137,7 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut EchoCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<EchoCodec>,
@@ -151,15 +148,33 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
 
 #[test]
 fn test_prelude_imports_core_codec_traits_and_markers() {
-    fn _accept_transcode_encoder<T: TranscodeEncoder<char, u8>>() {}
-    fn _accept_transcode_decoder<T: TranscodeDecoder<u8, char>>() {}
-    fn _accept_transcode_converter<T: TranscodeConverter<u8, u16>>() {}
+    fn _accept_transcode_encoder<
+        T: TranscodeEncoder<Input = char, Output = u8>,
+    >() {
+    }
+    fn _accept_transcode_decoder<
+        T: TranscodeDecoder<Input = u8, Output = char>,
+    >() {
+    }
+    fn _accept_transcode_converter<
+        T: TranscodeConverter<Input = u8, Output = u16>,
+    >() {
+    }
     fn _accept_codec_value_encoder<T: ValueEncoder<u8, Output = Vec<u8>>>() {}
     fn _accept_codec_value_decoder<T: ValueDecoder<[u8], Output = u8>>() {}
     fn _accept_codec_value_ext<T: CodecValueExt>() {}
-    fn _accept_codec_transcode_encoder<T: TranscodeEncoder<u8, u8>>() {}
-    fn _accept_codec_transcode_decoder<T: TranscodeDecoder<u8, u8>>() {}
-    fn _accept_codec_transcode_converter<T: TranscodeConverter<u8, u8>>() {}
+    fn _accept_codec_transcode_encoder<
+        T: TranscodeEncoder<Input = u8, Output = u8>,
+    >() {
+    }
+    fn _accept_codec_transcode_decoder<
+        T: TranscodeDecoder<Input = u8, Output = u8>,
+    >() {
+    }
+    fn _accept_codec_transcode_converter<
+        T: TranscodeConverter<Input = u8, Output = u8>,
+    >() {
+    }
     fn _accept_transcode_decode_engine<T>() {}
     fn _accept_transcode_encode_engine<T>() {}
     fn _accept_transcode_convert_engine<T>() {}

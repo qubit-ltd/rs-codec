@@ -75,21 +75,21 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`CodecValueDecoder<C>`**: wraps a `Codec` as a
   `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
 - **`CodecValueExt`**: extension trait for checked one-value codec helpers such
-  as reset-prefixed encode and exact decode with flush handling.
+  as reset-prefixed encode and exact decode with finish handling.
 
 ### Buffered Transcoder Primitives
 
-- **`Transcoder<Input, Output>`**: converts input units into output units inside
-  caller-provided buffers, then finishes internally retained output after the
-  caller has handled any incomplete input tail.
-- **`TranscodeEncoder<Value, Unit>`**: semantic `Transcoder` bound for value-to-unit
-  buffered encoding.
-- **`TranscodeDecoder<Unit, Value>`**: semantic `Transcoder` bound for unit-to-value
-  buffered decoding.
-- **`TranscodeConverter<InputUnit, OutputUnit>`**: semantic `Transcoder` bound for
-  unit-to-unit buffered conversion.
-- **`CodecTranscodeEncoder<C>`**: wraps a `Codec` as a
-  `TranscodeEncoder<C::Value, C::Unit>` over caller-provided output buffers.
+- **`Transcoder`**: converts `Input` associated items into `Output` associated
+  items inside caller-provided buffers, then finishes internally retained output
+  after the caller has handled any incomplete input tail.
+- **`TranscodeEncoder`**: semantic `Transcoder` bound for value-to-unit buffered
+  encoding.
+- **`TranscodeDecoder`**: semantic `Transcoder` bound for unit-to-value buffered
+  decoding.
+- **`TranscodeConverter`**: semantic `Transcoder` bound for unit-to-unit buffered
+  conversion.
+- **`CodecTranscodeEncoder<C>`**: wraps a `Codec` as a `TranscodeEncoder` over
+  caller-provided output buffers.
 - **`TranscodeEncodeEngine<C, H>`**: reusable engine that owns a
   codec plus policy hooks and runs the common buffered encoding loop.
 - **`TranscodeEncodeHooks<C>`**: policy hook trait used by
@@ -99,9 +99,9 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   unencodable values: skip the value or encode a replacement.
 - **`EncodeOutcome` / `EncodeContext<'a, Value, Unit>`**: low-level engine
   plumbing for one buffered encode attempt.
-- **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a
-  strict `TranscodeDecoder<C::Unit, C::Value>` that leaves engine-detected incomplete
-  tails in the caller's input buffer and wraps codec-reported decode errors.
+- **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a strict
+  `TranscodeDecoder` that leaves engine-detected incomplete tails in the
+  caller's input buffer and wraps codec-reported decode errors.
 - **`TranscodeDecodeEngine<C, H>`**: reusable engine that owns a
   codec, policy hooks, and the common decode loop.
 - **`TranscodeDecodeHooks<C>`**: policy hook trait used by
@@ -192,7 +192,7 @@ decode codec + an encode codec:
 │  TranscodeXxxEngine + TranscodeXxxHooks       (policy + loop)  │
 │  CodecTranscodeDecoder / Encoder / Converter  (strict bridges) │
 ├────────────────────────────────────────────────────────────────┤
-│  Transcoder<Input, Output> + TranscodeProgress + TranscodeStatus│
+│  Transcoder + TranscodeProgress + TranscodeStatus               │
 │  ValueEncoder<Input> / ValueDecoder<Input>      (convenience)  │
 ├────────────────────────────────────────────────────────────────┤
 │  Codec                                  (single-value, unchecked) │
@@ -258,9 +258,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Codec` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
 | `ValueEncoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
 | `ValueDecoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
-| `TranscodeEncoder<Value, Unit>` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
-| `TranscodeDecoder<Unit, Value>` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
-| `TranscodeConverter<InputUnit, OutputUnit>` | Convert encoded units between representations | Charset or binary buffered converter |
+| `TranscodeEncoder` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
+| `TranscodeDecoder` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
+| `TranscodeConverter` | Convert encoded units between representations | Charset or binary buffered converter |
 
 | Type | Purpose |
 |------|---------|
@@ -278,8 +278,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `CodecValueExt` | Provide checked one-value helper methods for all `C: Codec` without expanding the low-level `Codec` contract |
 | `CodecEncodeValueResult<E>` | Result alias returned by reset-prefixed one-value encode helpers |
-| `CodecDecodeValueWithFlushResult<V, E>` | Result alias returned by decode-and-flush one-value helpers with consumed and flushed counts |
-| `CodecDecodeExactValueWithFlushResult<V, E>` | Result alias returned by exact decode-and-flush one-value helpers |
+| `CodecDecodeValueWithFinishResult<V, E>` | Result alias returned by decode-and-finish one-value helpers with consumed and finished counts |
+| `CodecDecodeExactValueWithFinishResult<V, E>` | Result alias returned by exact decode-and-finish one-value helpers |
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
 | `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
 | `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
@@ -355,8 +355,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `Codec::MAX_UNITS_PER_VALUE`.
 - Stateful one-value callers should use `CodecValueExt::max_encode_value_units()`
   with `CodecValueExt::encode_value_with_reset()`, or
-  `CodecValueExt::decode_exact_value_with_flush()` when the input must contain
-  exactly one encoded value. These helpers keep reset/flush capacity checks and
+  `CodecValueExt::decode_exact_value_with_finish()` when the input must contain
+  exactly one encoded value. These helpers keep reset/finish capacity checks and
   overflow handling in the value adapter layer.
 - `TranscodeError<E>` is the shared intermediate error for engine and adapter
   internals. Default streaming adapters expose it directly, while value and

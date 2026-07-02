@@ -60,17 +60,17 @@ use super::decode_failure::DecodeFailure;
 /// Implementors must uphold the safety contract documented by
 /// [`decode`](Self::decode), [`encode`](Self::encode),
 /// [`encode_reset`](Self::encode_reset), and
-/// [`decode_flush`](Self::decode_flush). Unchecked implementations must not
+/// [`decode_finish`](Self::decode_finish). Unchecked implementations must not
 /// read or write outside the caller-provided ranges. Implementations should use
 /// `debug_assert!` to state the expected buffer bounds at the unchecked entry
 /// point.
 ///
 /// Implementations must also guarantee that
 /// [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE) is less than or equal to
-/// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE). Both bounds are non-zero
-/// by type, and `MAX_UNITS_PER_VALUE` must be a valid upper bound for one
-/// complete encoded value or codec quantum. Checked adapters assert this
-/// invariant before using codec-provided bounds.
+/// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE). Both bounds must be
+/// non-zero, and `MAX_UNITS_PER_VALUE` must be a valid upper bound for one
+/// complete encoded value or codec quantum. Checked adapters enforce this
+/// invariant with compile-time assertions before using codec-provided bounds.
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
     type Value;
@@ -84,7 +84,7 @@ pub trait Codec {
     /// The type of errors reported when encoding an unsupported value.
     type EncodeError;
 
-    /// The minimum possible unit count for one encoded value.
+    /// The minimum possible non-zero unit count for one encoded value.
     ///
     /// This is a lower bound used by checked callers for planning and fast
     /// impossibility checks. If a streaming decoder has fewer than this many
@@ -92,7 +92,7 @@ pub trait Codec {
     /// position. It is also the denominator used by default decode hooks when
     /// estimating the maximum number of values that can be produced from an
     /// input unit count.
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize;
 
     /// The maximum non-zero unit count needed to encode or decode one value.
     ///
@@ -100,7 +100,7 @@ pub trait Codec {
     /// or codec quantum. It is the multiplier used by default encode hooks
     /// when estimating the maximum number of output units needed for an input
     /// value count.
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize;
 
     /// The maximum unit count emitted when resetting encode state.
     ///
@@ -110,14 +110,14 @@ pub trait Codec {
     /// should use the default `0`.
     const MAX_ENCODE_RESET_UNITS: usize = 0;
 
-    /// The maximum unit count emitted when flushing encode state at EOF.
+    /// The maximum unit count emitted when finishing encode state at EOF.
     ///
     /// This bound covers only output written by
-    /// [`encode_flush`](Self::encode_flush). It does not include hook-owned
+    /// [`encode_finish`](Self::encode_finish). It does not include hook-owned
     /// finish output. Stateless codecs should use the default `0`. Codecs
     /// that emit a stream trailer (padding, checksum, or end-of-stream marker)
     /// should override this with the exact maximum unit count.
-    const MAX_ENCODE_FLUSH_UNITS: usize = 0;
+    const MAX_ENCODE_FINISH_UNITS: usize = 0;
 
     /// The maximum value count emitted when resetting decode state.
     ///
@@ -128,12 +128,12 @@ pub trait Codec {
     /// BOM on reset should override this.
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
-    /// The maximum value count emitted when flushing decode state.
+    /// The maximum value count emitted when finishing decode state.
     ///
     /// This bound covers only values written by
-    /// [`decode_flush`](Self::decode_flush). It does not include hook-owned
+    /// [`decode_finish`](Self::decode_finish). It does not include hook-owned
     /// finish output. Stateless codecs should use the default `0`.
-    const MAX_DECODE_FLUSH_VALUES: usize = 0;
+    const MAX_DECODE_FINISH_VALUES: usize = 0;
 
     /// Returns whether `value` is in this codec's encodable value domain.
     ///
@@ -194,12 +194,12 @@ pub trait Codec {
     /// value into internal state without immediately emitting units. Examples
     /// include codecs that aggregate values into fixed-size quanta, shift-state
     /// encodings, or framing layers that defer output until enough values have
-    /// been seen or EOF is flushed. Stateless and directly value-to-unit codecs
-    /// should continue returning a positive length.
+    /// been seen or EOF is finalized. Stateless and directly value-to-unit
+    /// codecs should continue returning a positive length.
     #[inline(always)]
     #[must_use]
     fn encode_len(&self, _value: &Self::Value) -> usize {
-        Self::MAX_UNITS_PER_VALUE.get()
+        Self::MAX_UNITS_PER_VALUE
     }
 
     /// Emits stream-start output and resets encode-side state.
@@ -253,7 +253,7 @@ pub trait Codec {
     /// [`encode_len`](Self::encode_len) for the same `value` and state must
     /// also return `0`, and the retained output must be emitted by a later
     /// successful [`encode`](Self::encode),
-    /// [`encode_flush`](Self::encode_flush), or codec-specific facade.
+    /// [`encode_finish`](Self::encode_finish), or codec-specific facade.
     ///
     /// # Errors
     ///
@@ -282,15 +282,12 @@ pub trait Codec {
         output_index: usize,
     ) -> Result<usize, Self::EncodeError>;
 
-    /// Emits EOF trailer output and flushes encode-side state.
+    /// Emits EOF trailer output and finishes encode-side state.
     ///
     /// This is the encode-side counterpart of
-    /// [`decode_flush`](Self::decode_flush). Codecs that append stream
+    /// [`decode_finish`](Self::decode_finish). Codecs that append stream
     /// trailers (padding, checksums, end-of-stream markers) emit them here.
     /// Stateless codecs use the default no-op.
-    ///
-    /// TODO(breaking): consider renaming this method to make the trailer
-    /// emission role explicit in a future public API revision.
     ///
     /// # Parameters
     ///
@@ -299,22 +296,22 @@ pub trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the number of flush units written.
+    /// Returns the number of finish units written.
     ///
     /// # Errors
     ///
-    /// Returns `Self::EncodeError` when flush output cannot be emitted.
+    /// Returns `Self::EncodeError` when finish output cannot be emitted.
     /// Implementations must leave their internal state consistent when
     /// returning an error.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that the implementation can write up to
-    /// [`MAX_ENCODE_FLUSH_UNITS`](Self::MAX_ENCODE_FLUSH_UNITS) units starting
-    /// at `output_index`.
+    /// [`MAX_ENCODE_FINISH_UNITS`](Self::MAX_ENCODE_FINISH_UNITS) units
+    /// starting at `output_index`.
     #[inline(always)]
-    #[must_use = "flush output and flush errors must be handled"]
-    unsafe fn encode_flush(
+    #[must_use = "finish output and finish errors must be handled"]
+    unsafe fn encode_finish(
         &mut self,
         _output: &mut [Self::Unit],
         _output_index: usize,
@@ -406,16 +403,13 @@ pub trait Codec {
         input_index: usize,
     ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>>;
 
-    /// Flushes decode-side EOF state into `output`.
+    /// Finishes decode-side EOF state into `output`.
     ///
-    /// `decode_flush` receives no source input. Callers must have already
+    /// `decode_finish` receives no source input. Callers must have already
     /// handled any tail reported by [`DecodeFailure::Incomplete`] before
-    /// flushing decode state. Implementations may emit retained values or
+    /// finishing decode state. Implementations may emit retained values or
     /// validate internal EOF state, but they must not depend on re-reading the
     /// incomplete source tail.
-    ///
-    /// TODO(breaking): consider renaming this method to make the retained-state
-    /// draining role explicit in a future public API revision.
     ///
     /// # Parameters
     ///
@@ -424,7 +418,7 @@ pub trait Codec {
     ///
     /// # Returns
     ///
-    /// Returns the number of flushed values written.
+    /// Returns the number of finished values written.
     ///
     /// # Errors
     ///
@@ -435,11 +429,11 @@ pub trait Codec {
     /// # Safety
     ///
     /// The caller must guarantee that the implementation can write up to
-    /// [`MAX_DECODE_FLUSH_VALUES`](Self::MAX_DECODE_FLUSH_VALUES) values
+    /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES) values
     /// starting at `output_index`.
     #[inline(always)]
-    #[must_use = "flush output length and flush errors must be handled"]
-    unsafe fn decode_flush(
+    #[must_use = "finish output length and finish errors must be handled"]
+    unsafe fn decode_finish(
         &mut self,
         _output: &mut [Self::Value],
         _output_index: usize,
@@ -448,7 +442,7 @@ pub trait Codec {
     }
 }
 
-/// Compile-time asserts the public unit-bound invariant required by [`Codec`].
+/// Compile-time asserts the public unit-bound invariants required by [`Codec`].
 ///
 /// # Type Parameters
 ///
@@ -460,9 +454,10 @@ pub trait Codec {
 ///
 /// # Panics
 ///
-/// Panics at compile time when [`Codec::MIN_UNITS_PER_VALUE`] is greater than
-/// [`Codec::MAX_UNITS_PER_VALUE`], because the invariant must hold for any
-/// well-formed [`Codec`] implementation and violating it is always a bug.
+/// Panics at compile time when either width bound is zero or when
+/// [`Codec::MIN_UNITS_PER_VALUE`] is greater than
+/// [`Codec::MAX_UNITS_PER_VALUE`], because these invariants must hold for any
+/// well-formed [`Codec`] implementation and violating them is always a bug.
 #[inline(always)]
 pub(crate) fn assert_unit_bounds<C>()
 where
@@ -470,7 +465,15 @@ where
 {
     const {
         assert!(
-            C::MIN_UNITS_PER_VALUE.get() <= C::MAX_UNITS_PER_VALUE.get(),
+            C::MIN_UNITS_PER_VALUE > 0,
+            "Codec::MIN_UNITS_PER_VALUE must be non-zero",
+        );
+        assert!(
+            C::MAX_UNITS_PER_VALUE > 0,
+            "Codec::MAX_UNITS_PER_VALUE must be non-zero",
+        );
+        assert!(
+            C::MIN_UNITS_PER_VALUE <= C::MAX_UNITS_PER_VALUE,
             "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
         );
     }

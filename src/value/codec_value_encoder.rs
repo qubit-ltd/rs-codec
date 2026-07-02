@@ -10,7 +10,6 @@
 use super::ValueEncoder;
 use crate::{
     Codec,
-    CodecPhase,
     CodecValueExt,
     TranscodeError,
     codec::assert_unit_bounds,
@@ -21,9 +20,9 @@ use crate::{
 /// `CodecValueEncoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueEncoder`] contract. Each
 /// call emits stream-start output through [`Codec::encode_reset`], encodes one
-/// value through [`Codec::encode`], flushes encode-side state through
-/// [`Codec::encode_flush`], and returns the owned output truncated to the units
-/// actually written.
+/// value through [`Codec::encode`], finishes encode-side state through
+/// [`Codec::encode_finish`], and returns the owned output truncated to the
+/// units actually written.
 ///
 /// # Type Parameters
 ///
@@ -48,12 +47,11 @@ where
     ///
     /// Returns a value encoder adapter for the supplied codec.
     ///
-    /// # Panics
+    /// # Compile-Time Checks
     ///
-    /// In debug builds, panics when the supplied codec violates the
-    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant. Release builds skip this check because the invariant is the
-    /// responsibility of the [`Codec`] implementation.
+    /// Fails to compile when the supplied codec declares zero unit bounds or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(codec: C) -> Self {
@@ -66,7 +64,7 @@ where
     /// This method is the reusable-buffer counterpart of
     /// [`ValueEncoder::encode`]. It emits stream-start output through
     /// [`Codec::encode_reset`], encodes `input` through [`Codec::encode`], and
-    /// flushes encode-side state through [`Codec::encode_flush`], appending
+    /// finishes encode-side state through [`Codec::encode_finish`], appending
     /// only the units actually written. When encoding fails, the vector length
     /// is restored to its original value.
     ///
@@ -82,12 +80,12 @@ where
     /// # Errors
     ///
     /// Returns the wrapped codec's encode error when reset output, `input`, or
-    /// flush output cannot be represented. Returns a framework error when
+    /// finish output cannot be represented. Returns a framework error when
     /// output length arithmetic overflows.
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more reset or flush output than
+    /// Panics when the wrapped codec reports more reset or finish output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
     pub fn encode_into(
@@ -104,7 +102,7 @@ where
         }
         let units = C::MAX_ENCODE_RESET_UNITS
             .checked_add(self.codec.encode_len(input))
-            .and_then(|units| units.checked_add(C::MAX_ENCODE_FLUSH_UNITS))
+            .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))
             .ok_or_else(TranscodeError::output_length_overflow)?;
         let original_len = output.len();
         let target_len = original_len
@@ -141,7 +139,7 @@ where
     /// Maps a codec-domain error from the main encode phase.
     #[inline(always)]
     fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        TranscodeError::domain(error, CodecPhase::Main, Some(0))
+        TranscodeError::domain_main(error, 0)
     }
 
     /// Encodes one borrowed value into owned units.
@@ -153,16 +151,16 @@ where
     /// # Returns
     ///
     /// Returns stream-start output followed by the units written for `input`
-    /// and any encode-flush output.
+    /// and any encode-finish output.
     ///
     /// # Errors
     ///
     /// Returns the wrapped codec's encode error when reset output, `input`, or
-    /// flush output cannot be represented.
+    /// finish output cannot be represented.
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports more reset or flush output than
+    /// Panics when the wrapped codec reports more reset or finish output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
     fn encode(

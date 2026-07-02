@@ -18,11 +18,6 @@ use super::Transcoder;
 ///
 /// The word "buffered" describes the caller-managed buffer and progress model.
 /// It does not require the implementor to own an internal buffer.
-///
-/// # Type Parameters
-///
-/// - `Value`: Logical value type accepted by the encoder.
-/// - `Unit`: Encoded unit type produced by the encoder.
-pub trait TranscodeEncoder<Value, Unit>: Transcoder<Value, Unit> {
+pub trait TranscodeEncoder: Transcoder {
     // empty
 }

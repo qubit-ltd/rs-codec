@@ -7,7 +7,10 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::encode_unencodable_action::EncodeUnencodableAction;
+use super::{
+    encode_context::EncodeContext,
+    encode_unencodable_action::EncodeUnencodableAction,
+};
 use crate::{
     CapacityError,
     Codec,
@@ -48,6 +51,7 @@ use crate::{
 ///     TranscodeEncodeError,
 /// };
 /// use qubit_codec::engine::{
+///     EncodeContext,
 ///     EncodeUnencodableAction,
 ///     TranscodeEncodeHooks,
 /// };
@@ -61,8 +65,8 @@ use crate::{
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
-///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -92,8 +96,7 @@ use crate::{
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut C,
-///         _value: &C::Value,
-///         input_index: usize,
+///         _context: &EncodeContext<'_, C::Value, C::Unit>,
 ///     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>> {
 ///         Ok(EncodeUnencodableAction::Reject)
 ///     }
@@ -111,7 +114,7 @@ where
     ///
     /// This bound covers only the streaming encode phase driven by
     /// [`crate::engine::TranscodeEncodeEngine::transcode`]. It must not include
-    /// codec reset output, codec flush output, or hook finish output.
+    /// codec reset output, codec finish output, or hook finish output.
     ///
     /// The default implementation multiplies `input_len` by
     /// [`Codec::MAX_UNITS_PER_VALUE`]. This bound is valid for direct encoding,
@@ -139,7 +142,7 @@ where
         input_len: usize,
     ) -> Result<usize, CapacityError> {
         input_len
-            .checked_mul(C::MAX_UNITS_PER_VALUE.get())
+            .checked_mul(C::MAX_UNITS_PER_VALUE)
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 
@@ -152,8 +155,8 @@ where
     /// The default implementation returns `0`. Override it when
     /// [`finish_hooks`](Self::finish_hooks) can write trailers, checksums,
     /// delayed replacements, or any other hook-owned final output. Do not
-    /// include [`Codec::MAX_ENCODE_FLUSH_UNITS`]; the engine adds the codec
-    /// flush bound separately.
+    /// include [`Codec::MAX_ENCODE_FINISH_UNITS`]; the engine adds the codec
+    /// finish bound separately.
     ///
     /// # Parameters
     ///
@@ -173,8 +176,8 @@ where
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    /// - `value`: Input value that [`Codec::can_encode_value`] rejected.
-    /// - `input_index`: Absolute input index of `value`.
+    /// - `context`: Encode context for the input value that
+    ///   [`Codec::can_encode_value`] rejected.
     ///
     /// # Returns
     ///
@@ -191,8 +194,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
-        value: &C::Value,
-        input_index: usize,
+        context: &EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
@@ -215,8 +217,8 @@ where
     /// `output_index`. Implementations must not write beyond that declared
     /// final-output bound.
     ///
-    /// Called after [`Codec::encode_flush`](crate::Codec::encode_flush) has
-    /// written its own flush output.
+    /// Called after [`Codec::encode_finish`](crate::Codec::encode_finish) has
+    /// written its own finish output.
     ///
     /// # Parameters
     ///

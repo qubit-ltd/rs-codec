@@ -12,7 +12,6 @@ use core::fmt;
 use super::ValueDecoder;
 use crate::{
     Codec,
-    CodecPhase,
     CodecValueExt,
     TranscodeError,
     codec::assert_unit_bounds,
@@ -23,7 +22,7 @@ use crate::{
 /// `CodecValueDecoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueDecoder`] contract. The
 /// supplied input slice must contain exactly one encoded value. After a
-/// successful decode, the adapter calls [`Codec::decode_flush`] to reset
+/// successful decode, the adapter calls [`Codec::decode_finish`] to reset
 /// decode-side stream state for the next call.
 ///
 /// # Type Parameters
@@ -35,21 +34,21 @@ where
 {
     /// Low-level codec used for one-value decoding.
     codec: C,
-    /// Reusable storage for values emitted by `Codec::decode_flush`.
-    flush_scratch: Vec<C::Value>,
+    /// Reusable storage for values emitted by `Codec::decode_finish`.
+    finish_scratch: Vec<C::Value>,
 }
 
 impl<C> fmt::Debug for CodecValueDecoder<C>
 where
     C: Codec + fmt::Debug,
 {
-    /// Formats the decoder without requiring flushed values to be printable.
+    /// Formats the decoder without requiring finished values to be printable.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("CodecValueDecoder")
             .field("codec", &self.codec)
-            .field("flush_scratch_len", &self.flush_scratch.len())
-            .field("flush_scratch_capacity", &self.flush_scratch.capacity())
+            .field("finish_scratch_len", &self.finish_scratch.len())
+            .field("finish_scratch_capacity", &self.finish_scratch.capacity())
             .finish()
     }
 }
@@ -79,19 +78,18 @@ where
     ///
     /// Returns a value decoder adapter for the supplied codec.
     ///
-    /// # Panics
+    /// # Compile-Time Checks
     ///
-    /// In debug builds, panics when the supplied codec violates the
-    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant. Release builds skip this check because the invariant is the
-    /// responsibility of the [`Codec`] implementation.
+    /// Fails to compile when the supplied codec declares zero unit bounds or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(codec: C) -> Self {
         assert_unit_bounds::<C>();
         Self {
             codec,
-            flush_scratch: Vec::new(),
+            finish_scratch: Vec::new(),
         }
     }
 }
@@ -108,7 +106,7 @@ where
     /// Maps a codec-domain error from the main decode phase.
     #[inline(always)]
     fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        TranscodeError::domain(error, CodecPhase::Main, Some(0))
+        TranscodeError::domain_main(error, 0)
     }
 
     /// Decodes exactly one encoded value from `input`.
@@ -124,31 +122,35 @@ where
     /// # Errors
     ///
     /// Returns [`crate::TranscodeFailure::IncompleteInput`] when fewer than
-    /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. Returns
-    /// [`TranscodeError::Domain`] when the wrapped codec rejects or cannot
-    /// flush the input. Returns [`crate::TranscodeFailure::TrailingInput`] when
-    /// a value is decoded but extra input remains.
+    /// [`Codec::MIN_UNITS_PER_VALUE`] units are available or when
+    /// [`crate::DecodeFailure::Incomplete`] is reported by the codec. In this
+    /// one-shot API, incomplete input is a terminal error rather than a
+    /// resumable streaming status. Returns [`TranscodeError::Domain`] when the
+    /// wrapped codec rejects or cannot finish the input. Returns
+    /// [`crate::TranscodeFailure::TrailingInput`] when a value is decoded but
+    /// extra input remains.
     ///
     /// # Panics
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
-    /// the input slice length, or when flush output exceeds
-    /// [`Codec::MAX_DECODE_FLUSH_VALUES`].
+    /// the input slice length, or when finish output exceeds
+    /// [`Codec::MAX_DECODE_FINISH_VALUES`].
     fn decode(
         &mut self,
         input: &[C::Unit],
     ) -> Result<Self::Output, Self::Error> {
-        let flush_cap = C::MAX_DECODE_FLUSH_VALUES;
-        let (value, _) = if flush_cap == 0 {
+        let finish_cap = C::MAX_DECODE_FINISH_VALUES;
+        let (value, _) = if finish_cap == 0 {
             self.codec
-                .decode_exact_value_with_flush(input, &mut [], 0)?
+                .decode_exact_value_with_finish(input, &mut [], 0)?
         } else {
-            if self.flush_scratch.len() < flush_cap {
-                self.flush_scratch.resize_with(flush_cap, C::Value::default);
+            if self.finish_scratch.len() < finish_cap {
+                self.finish_scratch
+                    .resize_with(finish_cap, C::Value::default);
             }
-            self.codec.decode_exact_value_with_flush(
+            self.codec.decode_exact_value_with_finish(
                 input,
-                &mut self.flush_scratch,
+                &mut self.finish_scratch,
                 0,
             )?
         };

@@ -7,6 +7,7 @@
 // =============================================================================
 
 use qubit_codec::engine::{
+    EncodeContext,
     EncodeUnencodableAction,
     TranscodeEncodeHooks,
 };
@@ -24,11 +25,9 @@ impl qubit_codec::Codec for UnitCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = UnitEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -69,8 +68,7 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut UnitCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<UnitCodec>,

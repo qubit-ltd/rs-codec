@@ -8,14 +8,11 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_codec::TranscodeError;
 use qubit_codec::engine::{
     DecodeContext,
     DecodeInvalidAction,
     TranscodeDecodeHooks,
-};
-use qubit_codec::{
-    CodecPhase,
-    TranscodeError,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -31,11 +28,9 @@ impl qubit_codec::Codec for UnitCodec {
     type DecodeError = UnitDecodeError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -73,7 +68,7 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         DecodeInvalidAction<u8>,
         qubit_codec::TranscodeDecodeError<UnitCodec>,
     > {
-        Err(TranscodeError::domain(*error, CodecPhase::Main, None))
+        Err(TranscodeError::domain_main(*error, 0))
     }
 }
 

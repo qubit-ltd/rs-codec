@@ -8,6 +8,7 @@
 //! Tests for the reusable buffered encoder engine.
 
 use qubit_codec::engine::{
+    EncodeContext,
     EncodeUnencodableAction,
     TranscodeEncodeEngine,
     TranscodeEncodeHooks,
@@ -15,7 +16,6 @@ use qubit_codec::engine::{
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecPhase,
     TranscodeError,
     TranscodeProgress,
     TranscodeStatus,
@@ -31,10 +31,9 @@ impl Codec for WideCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(4);
+    const MAX_UNITS_PER_VALUE: usize = 4;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 0
@@ -97,8 +96,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<C>>
     {
         Ok(EncodeUnencodableAction::Reject)
@@ -112,8 +110,7 @@ impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -129,8 +126,7 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -148,8 +144,7 @@ impl TranscodeEncodeHooks<WideCodec> for ReplacingHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -167,11 +162,9 @@ impl Codec for ReplacementEncodeFailCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 0
@@ -213,8 +206,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec>
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ReplacementEncodeFailCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
@@ -230,8 +222,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ReplacementEncodeFailCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
@@ -255,29 +246,24 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
         usize,
         qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
     > {
-        Err(TranscodeError::domain(
-            EngineError::Rejected {
-                input_index: output_index,
-            },
-            CodecPhase::Flush,
-            None,
-        ))
+        Err(TranscodeError::domain_finish(EngineError::Rejected {
+            input_index: output_index,
+        }))
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FlushFailingCodec;
+struct FinishFailingCodec;
 
-impl Codec for FlushFailingCodec {
+impl Codec for FinishFailingCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(1);
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -300,7 +286,7 @@ impl Codec for FlushFailingCodec {
         Ok(1)
     }
 
-    unsafe fn encode_flush(
+    unsafe fn encode_finish(
         &mut self,
         _output: &mut [u8],
         _output_index: usize,
@@ -310,17 +296,16 @@ impl Codec for FlushFailingCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FlushFailingHooks;
+struct FinishFailingHooks;
 
-impl TranscodeEncodeHooks<FlushFailingCodec> for FlushFailingHooks {
+impl TranscodeEncodeHooks<FinishFailingCodec> for FinishFailingHooks {
     fn handle_unencodable_encode(
         &mut self,
-        _codec: &mut FlushFailingCodec,
-        _value: &u8,
-        _input_index: usize,
+        _codec: &mut FinishFailingCodec,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<FlushFailingCodec>,
+        qubit_codec::TranscodeEncodeError<FinishFailingCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -335,11 +320,9 @@ impl Codec for OverreportingEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -380,8 +363,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -420,8 +402,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -452,8 +433,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
@@ -576,23 +556,16 @@ fn test_buffered_encode_engine_implements_transcoder() {
     let max_transcode_output_len: fn(
         &Engine,
         usize,
-    ) -> Result<usize, CapacityError> = std::hint::black_box(
-        <Engine as Transcoder<u8, u8>>::max_transcode_output_len,
-    );
+    ) -> Result<usize, CapacityError> =
+        std::hint::black_box(<Engine as Transcoder>::max_transcode_output_len);
     let max_finish_output_len: fn(&Engine) -> Result<usize, CapacityError> =
-        std::hint::black_box(
-            <Engine as Transcoder<u8, u8>>::max_finish_output_len,
-        );
+        std::hint::black_box(<Engine as Transcoder>::max_finish_output_len);
     let max_reset_output_len: fn(&Engine) -> Result<usize, CapacityError> =
-        std::hint::black_box(
-            <Engine as Transcoder<u8, u8>>::max_reset_output_len,
-        );
+        std::hint::black_box(<Engine as Transcoder>::max_reset_output_len);
     let transcode: TranscodeFn =
-        std::hint::black_box(<Engine as Transcoder<u8, u8>>::transcode);
-    let reset: OutputFn =
-        std::hint::black_box(<Engine as Transcoder<u8, u8>>::reset);
-    let finish: OutputFn =
-        std::hint::black_box(<Engine as Transcoder<u8, u8>>::finish);
+        std::hint::black_box(<Engine as Transcoder>::transcode);
+    let reset: OutputFn = std::hint::black_box(<Engine as Transcoder>::reset);
+    let finish: OutputFn = std::hint::black_box(<Engine as Transcoder>::finish);
 
     assert_eq!(Ok(8), max_transcode_output_len(&encoder, 2));
     assert_eq!(Ok(0), max_finish_output_len(&encoder));
@@ -627,33 +600,25 @@ fn test_buffered_encode_engine_finish_maps_hook_errors() {
         .expect_err("finish hook error should be propagated");
 
     assert_eq!(
-        TranscodeError::domain(
-            EngineError::Rejected { input_index: 0 },
-            CodecPhase::Flush,
-            None,
-        ),
+        TranscodeError::domain_finish(EngineError::Rejected { input_index: 0 }),
         error,
     );
 }
 
 #[test]
-fn test_buffered_encode_engine_finish_converts_codec_flush_errors() {
+fn test_buffered_encode_engine_finish_converts_codec_finish_errors() {
     let mut encoder = TranscodeEncodeEngine::<_, _>::new(
-        FlushFailingCodec,
-        FlushFailingHooks,
+        FinishFailingCodec,
+        FinishFailingHooks,
     );
     let mut output = [0_u8; 1];
 
     let error = encoder
         .finish(&mut output, 0)
-        .expect_err("finish should convert codec flush errors");
+        .expect_err("finish should convert codec finish errors");
 
     assert_eq!(
-        TranscodeError::domain(
-            EngineError::Rejected { input_index: 0 },
-            CodecPhase::Flush,
-            None,
-        ),
+        TranscodeError::domain_finish(EngineError::Rejected { input_index: 0 }),
         error,
     );
 }
@@ -858,11 +823,10 @@ fn test_buffered_encode_engine_maps_replacement_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: EngineError::Rejected { input_index: 0 },
-            phase: CodecPhase::Main,
-            input_index: Some(0),
-            input_consumed: None,
+            input_index: 0,
+            input_consumed: None
         }),
     ));
     assert_eq!([0], output);
@@ -878,7 +842,7 @@ fn test_buffered_encode_engine_propagates_unencodable_hook_error_without_consumi
         .transcode(&[0], 0, &mut output, 0)
         .expect_err("encode hook error should be propagated");
 
-    assert_eq!(TranscodeError::unencodable_value(0, 0), error);
+    assert_eq!(TranscodeError::unencodable_value_without_context(0), error);
     assert_eq!([0, 0, 0, 0], output);
 }
 
@@ -903,11 +867,9 @@ impl Codec for ResetEmittingCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -955,11 +917,9 @@ impl Codec for ResetFailCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = ResetFailError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -1000,16 +960,14 @@ impl TranscodeEncodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetFailCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ResetFailCodec>,
     > {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             ResetFailError,
-            CodecPhase::Main,
-            Some(_input_index),
+            _context.input_index(),
         ))
     }
 }
@@ -1036,8 +994,7 @@ impl TranscodeEncodeHooks<ResetEmittingCodec> for ResetPassthroughHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetEmittingCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ResetEmittingCodec>,
@@ -1117,10 +1074,7 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
         .reset(&mut output, 0)
         .expect_err("reset should convert codec reset errors");
 
-    assert_eq!(
-        TranscodeError::domain(ResetFailError, CodecPhase::Reset, None),
-        error,
-    );
+    assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
 }
 
 // ============================================================================
@@ -1193,13 +1147,15 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut WideCodec,
-        value: &u8,
-        input_index: usize,
+        context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<WideCodec>,
     > {
-        Err(TranscodeError::unencodable_value(input_index, *value))
+        Err(TranscodeError::unencodable_value(
+            context.input_index(),
+            *context.input_value(),
+        ))
     }
 }
 

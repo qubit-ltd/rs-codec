@@ -8,6 +8,7 @@
 //! Policy hooks used by the default codec-backed buffered encoder.
 
 use super::super::engine::{
+    EncodeContext,
     EncodeUnencodableAction,
     TranscodeEncodeHooks,
 };
@@ -29,8 +30,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,
-        _value: &C::Value,
-        _input_index: usize,
+        _context: &EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>>
     {
         Ok(EncodeUnencodableAction::Reject)

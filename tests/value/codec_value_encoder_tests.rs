@@ -9,7 +9,6 @@
 
 use qubit_codec::{
     Codec,
-    CodecPhase,
     CodecValueEncoder,
     TranscodeError,
     ValueEncoder,
@@ -24,10 +23,9 @@ impl Codec for PairByteCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize = qubit_io::nz!(2);
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -71,11 +69,9 @@ impl Codec for RejectOddCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)
@@ -122,11 +118,9 @@ impl Codec for OverreportingEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -163,11 +157,9 @@ impl Codec for FailingEncodeCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = &'static str;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -199,11 +191,9 @@ impl Codec for AppendOverflowCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = usize::MAX - 1;
 
@@ -243,11 +233,9 @@ impl Codec for NonCloneValueCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -293,11 +281,9 @@ impl Codec for ResetFailLifecycleCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = ResetFailError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -340,11 +326,9 @@ impl Codec for OverflowEncodeBoundCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = usize::MAX;
 
@@ -381,15 +365,13 @@ impl Codec for StatefulLifecycleCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
-    const MAX_ENCODE_FLUSH_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -423,7 +405,7 @@ impl Codec for StatefulLifecycleCodec {
         Ok(1)
     }
 
-    unsafe fn encode_flush(
+    unsafe fn encode_finish(
         &mut self,
         output: &mut [u8],
         output_index: usize,
@@ -520,11 +502,10 @@ fn test_codec_value_encoder_truncates_output_after_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: "encode failed",
-            phase: CodecPhase::Main,
-            input_index: Some(0),
-            input_consumed: None,
+            input_index: 0,
+            input_consumed: None
         })
     ),);
     assert_eq!(vec![0xaa], output);
@@ -592,17 +573,14 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("encode reset failure should propagate");
 
-    assert_eq!(
-        TranscodeError::domain(ResetFailError, CodecPhase::Reset, None,),
-        error,
-    );
+    assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
 }
 
 #[test]
 fn test_codec_value_encoder_maps_domain_errors() {
     let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
     assert_eq!(
-        TranscodeError::domain("odd", CodecPhase::Main, Some(0)),
+        TranscodeError::domain_main("odd", 0),
         ValueEncoder::map_error(&encoder, "odd"),
     );
 }

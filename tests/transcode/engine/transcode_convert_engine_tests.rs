@@ -16,6 +16,7 @@ use std::rc::Rc;
 use qubit_codec::engine::{
     DecodeContext,
     DecodeInvalidAction,
+    EncodeContext,
     EncodeUnencodableAction,
     TranscodeConvertEngine,
     TranscodeDecodeHooks,
@@ -24,7 +25,6 @@ use qubit_codec::engine::{
 use qubit_codec::{
     CapacityError,
     Codec,
-    CodecPhase,
     ConvertError,
     TranscodeError,
     TranscodeProgress,
@@ -42,7 +42,7 @@ struct TargetCodec;
 struct ErrorSourceCodec;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct FlushValueSourceCodec<const FLUSH_BOUND: usize>;
+struct FinishValueSourceCodec<const FINISH_BOUND: usize>;
 
 fn one_consumed() -> NonZeroUsize {
     NonZeroUsize::MIN
@@ -89,9 +89,9 @@ impl Codec for SourceCodec {
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -124,9 +124,9 @@ impl Codec for TargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 99
@@ -169,9 +169,9 @@ impl Codec for ResetEmittingTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -223,9 +223,9 @@ impl Codec for ResetFailTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = TargetResetFailError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -263,9 +263,9 @@ impl Codec for FinishOverflowTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_ENCODE_FLUSH_UNITS: usize = usize::MAX;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = usize::MAX;
 
     unsafe fn decode(
         &mut self,
@@ -293,8 +293,8 @@ impl Codec for MismatchCapacityTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = qubit_io::nz!(2);
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = qubit_io::nz!(2);
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -324,8 +324,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetEmittingTargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ResetEmittingTargetCodec>,
@@ -359,8 +358,7 @@ impl TranscodeEncodeHooks<FinishOverflowTargetCodec>
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut FinishOverflowTargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<FinishOverflowTargetCodec>,
@@ -402,16 +400,14 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetFailTargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<ResetFailTargetCodec>,
     > {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             TargetResetFailError,
-            CodecPhase::Main,
-            Some(_input_index),
+            _context.input_index(),
         ))
     }
 }
@@ -438,9 +434,9 @@ impl Codec for ErrorSourceCodec {
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -467,17 +463,17 @@ impl Codec for ErrorSourceCodec {
     }
 }
 
-impl<const FLUSH_BOUND: usize> Codec for FlushValueSourceCodec<FLUSH_BOUND> {
+impl<const FINISH_BOUND: usize> Codec for FinishValueSourceCodec<FINISH_BOUND> {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_DECODE_FLUSH_VALUES: usize = FLUSH_BOUND;
+    const MAX_DECODE_FINISH_VALUES: usize = FINISH_BOUND;
 
     unsafe fn decode(
         &mut self,
@@ -554,14 +550,12 @@ where
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<C>>
     {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             EngineError::Encode,
-            CodecPhase::Main,
-            Some(_input_index),
+            _context.input_index(),
         ))
     }
 }
@@ -583,16 +577,14 @@ impl TranscodeEncodeHooks<MismatchCapacityTargetCodec>
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut MismatchCapacityTargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<MismatchCapacityTargetCodec>,
     > {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             EngineError::Encode,
-            CodecPhase::Main,
-            Some(_input_index),
+            _context.input_index(),
         ))
     }
 }
@@ -698,26 +690,26 @@ struct FixedFinishBoundDecodeHooks {
     finish_len: usize,
 }
 
-impl<const FLUSH_BOUND: usize>
-    TranscodeDecodeHooks<FlushValueSourceCodec<FLUSH_BOUND>>
+impl<const FINISH_BOUND: usize>
+    TranscodeDecodeHooks<FinishValueSourceCodec<FINISH_BOUND>>
     for FixedFinishBoundDecodeHooks
 {
     fn max_finish_output_len(
         &self,
-        _codec: &FlushValueSourceCodec<FLUSH_BOUND>,
+        _codec: &FinishValueSourceCodec<FINISH_BOUND>,
     ) -> usize {
         self.finish_len
     }
 
     fn handle_invalid_decode(
         &mut self,
-        _codec: &mut FlushValueSourceCodec<FLUSH_BOUND>,
+        _codec: &mut FinishValueSourceCodec<FINISH_BOUND>,
         error: &core::convert::Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<FlushValueSourceCodec<FLUSH_BOUND>>,
+        qubit_codec::TranscodeDecodeError<FinishValueSourceCodec<FINISH_BOUND>>,
     > {
         match *error {}
     }
@@ -728,13 +720,13 @@ struct ChangingFinishBoundDecodeHooks {
     calls: Cell<usize>,
 }
 
-impl<const FLUSH_BOUND: usize>
-    TranscodeDecodeHooks<FlushValueSourceCodec<FLUSH_BOUND>>
+impl<const FINISH_BOUND: usize>
+    TranscodeDecodeHooks<FinishValueSourceCodec<FINISH_BOUND>>
     for ChangingFinishBoundDecodeHooks
 {
     fn max_finish_output_len(
         &self,
-        _codec: &FlushValueSourceCodec<FLUSH_BOUND>,
+        _codec: &FinishValueSourceCodec<FINISH_BOUND>,
     ) -> usize {
         let calls = self.calls.get();
         self.calls.set(calls + 1);
@@ -743,13 +735,13 @@ impl<const FLUSH_BOUND: usize>
 
     fn handle_invalid_decode(
         &mut self,
-        _codec: &mut FlushValueSourceCodec<FLUSH_BOUND>,
+        _codec: &mut FinishValueSourceCodec<FINISH_BOUND>,
         error: &core::convert::Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<FlushValueSourceCodec<FLUSH_BOUND>>,
+        qubit_codec::TranscodeDecodeError<FinishValueSourceCodec<FINISH_BOUND>>,
     > {
         match *error {}
     }
@@ -760,8 +752,8 @@ struct FixedFinishBoundHooks {
     finish_len: usize,
 }
 
-impl<const FLUSH_BOUND: usize>
-    LegacyConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
+impl<const FINISH_BOUND: usize>
+    LegacyConvertHooks<FinishValueSourceCodec<FINISH_BOUND>, TargetCodec>
     for FixedFinishBoundHooks
 {
     type DecodeError = EngineError;
@@ -780,8 +772,8 @@ impl<const FLUSH_BOUND: usize>
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ChangingFinishBoundHooks;
 
-impl<const FLUSH_BOUND: usize>
-    LegacyConvertHooks<FlushValueSourceCodec<FLUSH_BOUND>, TargetCodec>
+impl<const FINISH_BOUND: usize>
+    LegacyConvertHooks<FinishValueSourceCodec<FINISH_BOUND>, TargetCodec>
     for ChangingFinishBoundHooks
 {
     type DecodeError = EngineError;
@@ -977,16 +969,14 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        _value: &u8,
-        input_index: usize,
+        context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<TargetCodec>,
     > {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             EngineError::Encode,
-            CodecPhase::Main,
-            Some(input_index),
+            context.input_index(),
         ))
     }
 
@@ -1042,7 +1032,7 @@ impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
         if self.max_output_error {
             Err(CapacityError::OutputLengthOverflow)
         } else {
-            Ok(input_len / <SourceCodec as Codec>::MIN_UNITS_PER_VALUE.get())
+            Ok(input_len / <SourceCodec as Codec>::MIN_UNITS_PER_VALUE)
         }
     }
 
@@ -1075,11 +1065,9 @@ impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
     ) -> Result<usize, qubit_codec::TranscodeDecodeError<SourceCodec>> {
         match self.finish {
             ErrorPathDecodeFinish::Normal => Ok(0),
-            ErrorPathDecodeFinish::Error => Err(TranscodeError::domain(
-                EngineError::Decode,
-                CodecPhase::Flush,
-                None,
-            )),
+            ErrorPathDecodeFinish::Error => {
+                Err(TranscodeError::domain_finish(EngineError::Decode))
+            }
         }
     }
 }
@@ -1116,7 +1104,7 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
             Err(CapacityError::OutputLengthOverflow)
         } else {
             input_len
-                .checked_mul(<TargetCodec as Codec>::MAX_UNITS_PER_VALUE.get())
+                .checked_mul(<TargetCodec as Codec>::MAX_UNITS_PER_VALUE)
                 .ok_or(CapacityError::OutputLengthOverflow)
         }
     }
@@ -1128,18 +1116,18 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<TargetCodec>,
     > {
         match self.mode {
-            ErrorPathEncodeMode::PrepareError => Err(TranscodeError::domain(
-                EngineError::Encode,
-                CodecPhase::Main,
-                Some(_input_index),
-            )),
+            ErrorPathEncodeMode::PrepareError => {
+                Err(TranscodeError::domain_main(
+                    EngineError::Encode,
+                    _context.input_index(),
+                ))
+            }
             ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::FinishError => {
                 Ok(EncodeUnencodableAction::Skip)
             }
@@ -1153,11 +1141,9 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         _output_index: usize,
     ) -> Result<usize, qubit_codec::TranscodeEncodeError<TargetCodec>> {
         match self.mode {
-            ErrorPathEncodeMode::FinishError => Err(TranscodeError::domain(
-                EngineError::Encode,
-                CodecPhase::Flush,
-                None,
-            )),
+            ErrorPathEncodeMode::FinishError => {
+                Err(TranscodeError::domain_finish(EngineError::Encode))
+            }
             ErrorPathEncodeMode::Normal | ErrorPathEncodeMode::PrepareError => {
                 Ok(0)
             }
@@ -1234,16 +1220,14 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<TargetCodec>,
     > {
-        Err(TranscodeError::domain(
+        Err(TranscodeError::domain_main(
             EngineError::Encode,
-            CodecPhase::Main,
-            Some(_input_index),
+            _context.input_index(),
         ))
     }
 }
@@ -1446,25 +1430,24 @@ fn test_buffered_convert_engine_implements_transcoder() {
         &CopyConvertEngine,
         usize,
     ) -> Result<usize, CapacityError> = std::hint::black_box(
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_transcode_output_len,
+        <CopyConvertEngine as Transcoder>::max_transcode_output_len,
     );
     let max_finish_output_len: fn(
         &CopyConvertEngine,
     ) -> Result<usize, CapacityError> = std::hint::black_box(
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_finish_output_len,
+        <CopyConvertEngine as Transcoder>::max_finish_output_len,
     );
     let max_reset_output_len: fn(
         &CopyConvertEngine,
     ) -> Result<usize, CapacityError> = std::hint::black_box(
-        <CopyConvertEngine as Transcoder<u8, u8>>::max_reset_output_len,
+        <CopyConvertEngine as Transcoder>::max_reset_output_len,
     );
-    let transcode: TranscodeFn = std::hint::black_box(
-        <CopyConvertEngine as Transcoder<u8, u8>>::transcode,
-    );
+    let transcode: TranscodeFn =
+        std::hint::black_box(<CopyConvertEngine as Transcoder>::transcode);
     let reset: OutputFn =
-        std::hint::black_box(<CopyConvertEngine as Transcoder<u8, u8>>::reset);
+        std::hint::black_box(<CopyConvertEngine as Transcoder>::reset);
     let finish: OutputFn =
-        std::hint::black_box(<CopyConvertEngine as Transcoder<u8, u8>>::finish);
+        std::hint::black_box(<CopyConvertEngine as Transcoder>::finish);
 
     assert_eq!(Ok(2), max_transcode_output_len(&engine, 2));
     assert_eq!(Ok(0), max_finish_output_len(&engine));
@@ -1641,11 +1624,10 @@ fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Main,
-            input_index: Some(_),
-            input_consumed: None,
+            input_index: _,
+            input_consumed: None
         }),
     ));
     assert_eq!([0], output);
@@ -1784,7 +1766,7 @@ fn test_buffered_convert_engine_finish_maps_encoder_finish_bound_overflow() {
 fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow()
  {
     let mut engine = TranscodeConvertEngine::new(
-        FlushValueSourceCodec::<{ usize::MAX }>,
+        FinishValueSourceCodec::<{ usize::MAX }>,
         TargetCodec,
         FixedFinishBoundDecodeHooks { finish_len: 1 },
         StrictEncodeHooks,
@@ -1802,7 +1784,7 @@ fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow
 fn test_buffered_convert_engine_finish_maps_late_decode_finish_bound_overflow()
 {
     let mut engine = TranscodeConvertEngine::new(
-        FlushValueSourceCodec::<1>,
+        FinishValueSourceCodec::<1>,
         TargetCodec,
         ChangingFinishBoundDecodeHooks {
             calls: Cell::new(0),
@@ -1833,11 +1815,10 @@ fn test_buffered_convert_engine_maps_encode_value_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Main,
-            input_index: Some(_),
-            input_consumed: None,
+            input_index: _,
+            input_consumed: None
         }),
     ));
     assert_eq!([0], output);
@@ -1870,11 +1851,8 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Finish {
             source: ConvertError::Decode(EngineError::Decode),
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
     ));
     assert_eq!([0], output);
@@ -1895,11 +1873,8 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Finish {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
     ));
     assert_eq!([0], output);
@@ -1924,10 +1899,9 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Main,
-            input_index: Some(_),
+            input_index: _,
             input_consumed: None,
         }),
     ));
@@ -1945,11 +1919,10 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Main,
-            input_index: Some(_),
-            input_consumed: None,
+            input_index: _,
+            input_consumed: None
         }),
     ));
     assert_eq!([0], output);
@@ -2154,8 +2127,8 @@ impl Codec for StatelessResetSourceCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     unsafe fn decode(
@@ -2195,8 +2168,8 @@ impl Codec for StatelessResetFailingSourceCodec {
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     unsafe fn decode(
@@ -2327,8 +2300,8 @@ impl Codec for OverflowResetSourceCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = usize::MAX;
 
     unsafe fn decode(
@@ -2371,8 +2344,8 @@ impl Codec for OverflowResetTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
     unsafe fn decode(
@@ -2435,8 +2408,7 @@ impl TranscodeEncodeHooks<OverflowResetTargetCodec>
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut OverflowResetTargetCodec,
-        _value: &u8,
-        _input_index: usize,
+        _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<OverflowResetTargetCodec>,
@@ -2561,11 +2533,9 @@ fn test_buffered_convert_engine_reset_maps_target_reset_errors() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Reset {
             source: ConvertError::Encode(TargetResetFailError),
-            phase: CodecPhase::Reset,
-            input_index: None,
-            input_consumed: None,
+            ..
         }),
     ));
 }
@@ -2627,11 +2597,8 @@ fn test_buffered_convert_engine_reset_maps_stateless_decoder_reset_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
-            source: ConvertError::Decode(EngineError::Decode),
-            phase: CodecPhase::Reset,
-            input_index: None,
-            input_consumed: None,
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Reset {
+            source: ConvertError::Decode(EngineError::Decode)
         }),
     ));
 }
@@ -2771,8 +2738,8 @@ impl Codec for ResetEmittingSourceCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -2819,8 +2786,8 @@ impl Codec for ResetEncodingFailSourceCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -2946,8 +2913,8 @@ impl Codec for ResetFailingSourceCodec {
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -3026,17 +2993,17 @@ impl LegacyConvertHooks<ResetFailingSourceCodec, TargetCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FlushFailingSourceCodec;
+struct FinishFailingSourceCodec;
 
-impl Codec for FlushFailingSourceCodec {
+impl Codec for FinishFailingSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-    const MAX_DECODE_FLUSH_VALUES: usize = 1;
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -3061,7 +3028,7 @@ impl Codec for FlushFailingSourceCodec {
         Ok(1)
     }
 
-    unsafe fn decode_flush(
+    unsafe fn decode_finish(
         &mut self,
         _output: &mut [u8],
         _output_index: usize,
@@ -3071,20 +3038,20 @@ impl Codec for FlushFailingSourceCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FlushFailSourceDecodeHooks;
+struct FinishFailSourceDecodeHooks;
 
-impl TranscodeDecodeHooks<FlushFailingSourceCodec>
-    for FlushFailSourceDecodeHooks
+impl TranscodeDecodeHooks<FinishFailingSourceCodec>
+    for FinishFailSourceDecodeHooks
 {
     fn handle_invalid_decode(
         &mut self,
-        _codec: &mut FlushFailingSourceCodec,
+        _codec: &mut FinishFailingSourceCodec,
         error: &EngineError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<FlushFailingSourceCodec>,
+        qubit_codec::TranscodeDecodeError<FinishFailingSourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -3095,10 +3062,10 @@ impl TranscodeDecodeHooks<FlushFailingSourceCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FlushFailConvertHooks;
+struct FinishFailConvertHooks;
 
-impl LegacyConvertHooks<FlushFailingSourceCodec, TargetCodec>
-    for FlushFailConvertHooks
+impl LegacyConvertHooks<FinishFailingSourceCodec, TargetCodec>
+    for FinishFailConvertHooks
 {
     type DecodeError = EngineError;
     type EncodeError = EngineError;
@@ -3175,10 +3142,9 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: ConvertError::Encode(EngineError::Encode),
-            phase: CodecPhase::Main,
-            input_index: Some(_),
+            input_index: _,
             input_consumed: None,
         }),
     ));
@@ -3200,21 +3166,18 @@ fn test_buffered_convert_engine_reset_maps_decoder_reset_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Reset {
             source: ConvertError::Decode(EngineError::Decode),
-            phase: CodecPhase::Reset,
-            input_index: None,
-            input_consumed: None,
         }),
     ));
 }
 
 #[test]
-fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
+fn test_buffered_convert_engine_finish_maps_decoder_finish_error() {
     let mut engine = TranscodeConvertEngine::new(
-        FlushFailingSourceCodec,
+        FinishFailingSourceCodec,
         TargetCodec,
-        FlushFailSourceDecodeHooks,
+        FinishFailSourceDecodeHooks,
         StrictEncodeHooks,
     );
     let mut output = [0_u8; 1];
@@ -3225,11 +3188,8 @@ fn test_buffered_convert_engine_finish_maps_decoder_flush_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError {
+        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Finish {
             source: ConvertError::Decode(EngineError::Decode),
-            phase: CodecPhase::Flush,
-            input_index: None,
-            input_consumed: None,
         }),
     ));
 }

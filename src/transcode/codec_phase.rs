@@ -10,7 +10,7 @@
 /// Phase of a codec lifecycle operation.
 ///
 /// The phase is carried by [`crate::TranscodeError::Domain`] so callers can
-/// distinguish ordinary value conversion from reset and flush failures without
+/// distinguish ordinary value conversion from reset and finish failures without
 /// introducing separate engine error enums.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
@@ -21,6 +21,6 @@ pub enum CodecPhase {
     /// Main encode or decode operation.
     Main,
 
-    /// Codec flush operation.
-    Flush,
+    /// Codec finish operation.
+    Finish,
 }

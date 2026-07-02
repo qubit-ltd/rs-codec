@@ -11,6 +11,8 @@
 //! [`crate::engine::TranscodeEncodeEngine`] into one unit-to-unit conversion
 //! pipeline.
 
+use core::num::NonZeroUsize;
+
 use super::super::internal::{
     convert_error_of::ConvertErrorOf,
     convert_state::ConvertState,
@@ -41,7 +43,7 @@ use crate::{
 ///
 /// The engine owns reusable buffered decode and encode engines. It keeps
 /// common converter control flow private: index validation, pending-value
-/// retention, pending flush, decode-error policy dispatch, encode attempts,
+/// retention, finish draining, decode-error policy dispatch, encode attempts,
 /// output-capacity checks, and [`crate::TranscodeStatus`] reporting.
 ///
 /// Use this type to build a streaming converter over two one-value [`Codec`]
@@ -83,6 +85,7 @@ use crate::{
 /// };
 /// use qubit_codec::engine::{
 ///     DecodeContext,
+///     EncodeContext,
 ///     EncodeUnencodableAction,
 ///     TranscodeConvertEngine,
 ///     TranscodeDecodeHooks,
@@ -101,8 +104,8 @@ use crate::{
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
-///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -129,8 +132,8 @@ use crate::{
 ///     type DecodeError = Infallible;
 ///     type EncodeError = Infallible;
 ///
-///     const MIN_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
-///     const MAX_UNITS_PER_VALUE: NonZeroUsize = NonZeroUsize::MIN;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -171,8 +174,7 @@ use crate::{
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut TargetCodec,
-///         _value: &u8,
-///         _input_index: usize,
+///         _context: &EncodeContext<'_, u8, u8>,
 ///     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<TargetCodec>> {
 ///         unreachable!("TargetCodec accepts every u8")
 ///     }
@@ -251,12 +253,11 @@ where
     ///
     /// Returns a buffered converter engine.
     ///
-    /// # Panics
+    /// # Compile-Time Checks
     ///
-    /// In debug builds, panics when either codec violates the
-    /// [`Codec::MIN_UNITS_PER_VALUE`] / [`Codec::MAX_UNITS_PER_VALUE`] ordering
-    /// invariant. Release builds skip this check because the invariant is the
-    /// responsibility of each [`Codec`] implementation.
+    /// Fails to compile when either codec declares zero unit bounds or when
+    /// [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(
@@ -566,10 +567,12 @@ where
             return Ok(progress);
         }
 
-        let min_input_units = D::MIN_UNITS_PER_VALUE;
+        let min_input_units = NonZeroUsize::new(D::MIN_UNITS_PER_VALUE)
+            .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+        let min_input_len = min_input_units.get();
         while state.has_input() {
             let available = state.available_input();
-            if available < min_input_units.get() {
+            if available < min_input_len {
                 return Ok(
                     state.need_input_progress(min_input_units, available)
                 );
@@ -689,9 +692,7 @@ where
     where
         D::Value: Default,
     {
-        <Self as Transcoder<D::Unit, E::Unit>>::transcode_complete_into(
-            self, input, output,
-        )
+        <Self as Transcoder>::transcode_complete_into(self, input, output)
     }
 
     /// Drains source-side decode reset output and encodes emitted reset
@@ -837,7 +838,7 @@ where
     /// values.
     ///
     /// When the decoder declares no finish output, still calls
-    /// [`TranscodeDecodeEngine::finish`] so codec flush and hook teardown can
+    /// [`TranscodeDecodeEngine::finish`] so codec finish and hook teardown can
     /// run and fail even when zero values are emitted.
     ///
     /// # Parameters
@@ -867,7 +868,7 @@ where
         if value_count == 0 {
             // Skip the Vec allocation when the decoder declares no finish
             // output. We still call finish() so that
-            // codec.decode_flush and hooks.finish_hooks both run —
+            // codec.decode_finish and hooks.finish_hooks both run —
             // hooks may do validation or teardown (e.g. checksum
             // verification) that can fail even when emitting zero
             // values. Passing an empty slice is safe here because the capacity
@@ -973,8 +974,7 @@ where
     }
 }
 
-impl<D, E, DH, EH> Transcoder<D::Unit, E::Unit>
-    for TranscodeConvertEngine<D, E, DH, EH>
+impl<D, E, DH, EH> Transcoder for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
@@ -982,6 +982,8 @@ where
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
 {
+    type Input = D::Unit;
+    type Output = E::Unit;
     type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
     type FailureValue = D::Value;
 

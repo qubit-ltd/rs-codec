@@ -30,13 +30,20 @@ fn static_domain(
     error: &'static str,
     phase: CodecPhase,
 ) -> TranscodeError<&'static str> {
-    TranscodeError::domain(error, phase, None)
+    match phase {
+        CodecPhase::Reset => TranscodeError::domain_reset(error),
+        CodecPhase::Main => TranscodeError::domain_main(error, 0),
+        CodecPhase::Finish => TranscodeError::domain_finish(error),
+        _ => TranscodeError::domain_finish(error),
+    }
 }
 
 #[derive(Default)]
 struct MappingTranscoder;
 
-impl Transcoder<u8, u8> for MappingTranscoder {
+impl Transcoder for MappingTranscoder {
+    type Input = u8;
+    type Output = u8;
     type DomainError = DomainFailure;
     type FailureValue = ();
 
@@ -62,11 +69,7 @@ impl Transcoder<u8, u8> for MappingTranscoder {
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
-        Err(TranscodeError::domain(
-            DomainFailure,
-            CodecPhase::Main,
-            Some(0),
-        ))
+        Err(TranscodeError::domain_main(DomainFailure, 0))
     }
 
     fn finish(
@@ -91,7 +94,9 @@ fn test_transcoder_default_method_returns_fixed_transcode_error() {
 #[derive(Default)]
 struct CopyTranscoder;
 
-impl Transcoder<u8, u8> for CopyTranscoder {
+impl Transcoder for CopyTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -159,7 +164,9 @@ struct FinishingTranscoder {
     suffix_index: usize,
 }
 
-impl Transcoder<u8, u8> for FinishingTranscoder {
+impl Transcoder for FinishingTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -221,7 +228,9 @@ impl Transcoder<u8, u8> for FinishingTranscoder {
 #[derive(Default)]
 struct PairTranscoder;
 
-impl Transcoder<u8, u8> for PairTranscoder {
+impl Transcoder for PairTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -290,7 +299,9 @@ impl Transcoder<u8, u8> for PairTranscoder {
 #[derive(Default)]
 struct UnderestimatingTranscoder;
 
-impl Transcoder<u8, u8> for UnderestimatingTranscoder {
+impl Transcoder for UnderestimatingTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -340,7 +351,9 @@ impl Transcoder<u8, u8> for UnderestimatingTranscoder {
 struct OverreportingCompleteTranscoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u8, u8> for OverreportingCompleteTranscoder {
+impl Transcoder for OverreportingCompleteTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -388,7 +401,9 @@ impl Transcoder<u8, u8> for OverreportingCompleteTranscoder {
 #[derive(Default)]
 struct OverflowBoundTranscoder;
 
-impl Transcoder<u8, u8> for OverflowBoundTranscoder {
+impl Transcoder for OverflowBoundTranscoder {
+    type Input = u8;
+    type Output = u8;
     infallible_transcoder_error!();
 
     fn max_transcode_output_len(
@@ -447,7 +462,9 @@ struct FailingTranscoder {
     failure: FailurePoint,
 }
 
-impl Transcoder<u8, u8> for FailingTranscoder {
+impl Transcoder for FailingTranscoder {
+    type Input = u8;
+    type Output = u8;
     type DomainError = &'static str;
     type FailureValue = ();
 
@@ -518,7 +535,7 @@ impl Transcoder<u8, u8> for FailingTranscoder {
             output_index,
         )?;
         if matches!(self.failure, FailurePoint::Finish) {
-            Err(static_domain("finish", CodecPhase::Flush))
+            Err(static_domain("finish", CodecPhase::Finish))
         } else {
             Ok(0)
         }
@@ -529,7 +546,7 @@ impl Transcoder<u8, u8> for FailingTranscoder {
 fn test_transcoder_error_is_domain_error_type() {
     fn assert_domain_error<T, Input, Output>()
     where
-        T: Transcoder<Input, Output>,
+        T: Transcoder<Input = Input, Output = Output>,
     {
     }
 
@@ -561,8 +578,7 @@ fn test_transcoder_stateless_reset_and_finish_are_explicit_noops() {
     assert_eq!(Ok(0), transcoder.max_finish_output_len());
     assert_eq!(Ok(0), transcoder.max_reset_output_len());
 
-    Transcoder::<u8, u8>::reset(&mut transcoder, &mut output, 0)
-        .expect("reset is noop");
+    Transcoder::reset(&mut transcoder, &mut output, 0).expect("reset is noop");
     let written = transcoder.finish(&mut output, 0).expect("finish is noop");
 
     assert_eq!(0, written);
@@ -627,7 +643,7 @@ fn test_transcoder_transcode_complete_into_reports_stage_errors() {
         ),
         (
             FailurePoint::Finish,
-            static_domain("finish", CodecPhase::Flush),
+            static_domain("finish", CodecPhase::Finish),
         ),
     ] {
         let mut transcoder = FailingTranscoder { failure };

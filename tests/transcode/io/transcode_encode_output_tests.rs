@@ -47,7 +47,7 @@ enum PairEncodeError {
 }
 
 fn domain(error: PairEncodeError) -> TranscodeError<PairEncodeError> {
-    TranscodeError::domain(error, qubit_codec::CodecPhase::Main, None)
+    TranscodeError::domain_main(error, 0)
 }
 
 #[derive(Debug, Default)]
@@ -59,10 +59,8 @@ impl Codec for FixedPairCodec {
     type DecodeError = PairEncodeError;
     type EncodeError = PairEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("fixed pair width is non-zero");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -126,7 +124,9 @@ macro_rules! noop_finish {
 #[derive(Debug, Default)]
 struct PairEncoder;
 
-impl Transcoder<u32, u16> for PairEncoder {
+impl Transcoder for PairEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -193,7 +193,9 @@ struct FinishEncoder {
     finished: bool,
 }
 
-impl Transcoder<u32, u16> for FinishEncoder {
+impl Transcoder for FinishEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -263,7 +265,9 @@ impl Transcoder<u32, u16> for FinishEncoder {
 #[derive(Debug, Default)]
 struct TwoUnitFinishEncoder;
 
-impl Transcoder<u32, u16> for TwoUnitFinishEncoder {
+impl Transcoder for TwoUnitFinishEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -307,7 +311,9 @@ impl Transcoder<u32, u16> for TwoUnitFinishEncoder {
 #[derive(Debug, Default)]
 struct ZeroWidthFailingFinishEncoder;
 
-impl Transcoder<u32, u16> for ZeroWidthFailingFinishEncoder {
+impl Transcoder for ZeroWidthFailingFinishEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -377,7 +383,9 @@ impl Output for UnitOutput {
 #[derive(Debug, Default)]
 struct CapacityBoundEncoder;
 
-impl Transcoder<u32, u16> for CapacityBoundEncoder {
+impl Transcoder for CapacityBoundEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -422,7 +430,9 @@ struct FailingFinishEncoder {
     failure: FinishFailure,
 }
 
-impl Transcoder<u32, u16> for FailingFinishEncoder {
+impl Transcoder for FailingFinishEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -481,7 +491,9 @@ impl Transcoder<u32, u16> for FailingFinishEncoder {
 #[derive(Debug, Default)]
 struct NeedInputEncoder;
 
-impl Transcoder<u32, u16> for NeedInputEncoder {
+impl Transcoder for NeedInputEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -521,7 +533,9 @@ impl Transcoder<u32, u16> for NeedInputEncoder {
 struct NeedOutputAfterReadEncoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
+impl Transcoder for NeedOutputAfterReadEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -559,7 +573,9 @@ impl Transcoder<u32, u16> for NeedOutputAfterReadEncoder {
 #[derive(Debug, Default)]
 struct NeedOutputAfterWriteEncoder;
 
-impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
+impl Transcoder for NeedOutputAfterWriteEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -598,7 +614,9 @@ impl Transcoder<u32, u16> for NeedOutputAfterWriteEncoder {
 #[derive(Debug, Default)]
 struct NeedOutputAfterReadPastCapacityEncoder;
 
-impl Transcoder<u32, u16> for NeedOutputAfterReadPastCapacityEncoder {
+impl Transcoder for NeedOutputAfterReadPastCapacityEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -639,7 +657,9 @@ struct PrefixBeforeReadEncoder {
     emitted_prefix: bool,
 }
 
-impl Transcoder<u32, u16> for PrefixBeforeReadEncoder {
+impl Transcoder for PrefixBeforeReadEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -709,7 +729,9 @@ impl Transcoder<u32, u16> for PrefixBeforeReadEncoder {
 #[derive(Debug, Default)]
 struct OverreadingProgressEncoder;
 
-impl Transcoder<u32, u16> for OverreadingProgressEncoder {
+impl Transcoder for OverreadingProgressEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -741,7 +763,9 @@ impl Transcoder<u32, u16> for OverreadingProgressEncoder {
 #[derive(Debug, Default)]
 struct OverwritingProgressEncoder;
 
-impl Transcoder<u32, u16> for OverwritingProgressEncoder {
+impl Transcoder for OverwritingProgressEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -776,7 +800,9 @@ impl Transcoder<u32, u16> for OverwritingProgressEncoder {
 struct OverflowingNeedOutputEncoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
+impl Transcoder for OverflowingNeedOutputEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -816,7 +842,9 @@ impl Transcoder<u32, u16> for OverflowingNeedOutputEncoder {
 struct MisindexedNeedOutputEncoder;
 
 #[cfg(debug_assertions)]
-impl Transcoder<u32, u16> for MisindexedNeedOutputEncoder {
+impl Transcoder for MisindexedNeedOutputEncoder {
+    type Input = u32;
+    type Output = u16;
     type DomainError = PairEncodeError;
     type FailureValue = ();
 
@@ -909,7 +937,12 @@ fn encode_with<E>(
     count: usize,
 ) -> std::io::Result<usize>
 where
-    E: Transcoder<u32, u16, DomainError = PairEncodeError, FailureValue = ()>,
+    E: Transcoder<
+            Input = u32,
+            Output = u16,
+            DomainError = PairEncodeError,
+            FailureValue = (),
+        >,
 {
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
     output.transcode_from(encoder, &mut mapper, input, input_index, count)
@@ -920,7 +953,12 @@ fn finish_with<E>(
     encoder: &mut E,
 ) -> std::io::Result<()>
 where
-    E: Transcoder<u32, u16, DomainError = PairEncodeError, FailureValue = ()>,
+    E: Transcoder<
+            Input = u32,
+            Output = u16,
+            DomainError = PairEncodeError,
+            FailureValue = (),
+        >,
 {
     let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
     output.finish(encoder, &mut mapper)
@@ -1418,10 +1456,8 @@ impl Codec for RejectAllEncodeCodec {
     type DecodeError = PairEncodeError;
     type EncodeError = PairEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     fn can_encode_value(&self, _value: &u32) -> bool {
         false
@@ -1455,10 +1491,8 @@ impl Codec for DomainFailEncodeCodec {
     type DecodeError = PairEncodeError;
     type EncodeError = PairEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -1561,12 +1595,10 @@ impl Codec for OverflowEncodeBoundCodec {
     type DecodeError = PairEncodeError;
     type EncodeError = PairEncodeError;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::new(2).expect("pair width");
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_UNITS_PER_VALUE: usize = 2;
     const MAX_ENCODE_RESET_UNITS: usize = usize::MAX;
-    const MAX_ENCODE_FLUSH_UNITS: usize = usize::MAX;
+    const MAX_ENCODE_FINISH_UNITS: usize = usize::MAX;
 
     unsafe fn decode(
         &mut self,

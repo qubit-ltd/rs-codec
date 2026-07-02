@@ -66,19 +66,19 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`CodecValueDecoder<C>`**：把 `Codec` 包装为
   接收恰好一个完整编码值的 `ValueDecoder<[C::Unit]>`。
 - **`CodecValueExt`**：为所有 `C: Codec` 提供带检查的单值 helper，例如
-  reset-prefixed encode 和带 flush 处理的 exact decode。
+  reset-prefixed encode 和带 finish 处理的 exact decode。
 
 ### 缓冲区转换原语
 
-- **`Transcoder<Input, Output>`**：在调用方提供的缓冲区中把输入单元转换为输出单元，并在调用方处理完不完整输入尾部后完成内部收尾输出。
-- **`TranscodeEncoder<Value, Unit>`**：表示 value-to-unit 缓冲区编码的语义化
+- **`Transcoder`**：在调用方提供的缓冲区中把关联类型 `Input` 转换为关联类型 `Output`，并在调用方处理完不完整输入尾部后完成内部收尾输出。
+- **`TranscodeEncoder`**：表示 value-to-unit 缓冲区编码的语义化
   `Transcoder` bound。
-- **`TranscodeDecoder<Unit, Value>`**：表示 unit-to-value 缓冲区解码的语义化
+- **`TranscodeDecoder`**：表示 unit-to-value 缓冲区解码的语义化
   `Transcoder` bound。
-- **`TranscodeConverter<InputUnit, OutputUnit>`**：表示 unit-to-unit 缓冲区转换的语义化
+- **`TranscodeConverter`**：表示 unit-to-unit 缓冲区转换的语义化
   `Transcoder` bound。
 - **`CodecTranscodeEncoder<C>`**：把 `Codec` 包装为在调用方输出缓冲区上工作的
-  `TranscodeEncoder<C::Value, C::Unit>`。
+  `TranscodeEncoder`。
 - **`TranscodeEncodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
   buffered encode 循环的可复用 engine。
 - **`TranscodeEncodeHooks<C>`**：供带策略 codec-backed encoder
@@ -88,7 +88,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`EncodeContext<'a, Value, Unit>`**：传给 encode hook 的输入值、输入索引、
   输出切片和游标上下文。
 - **`CodecTranscodeDecoder<C>`**：把 `Codec` 包装为无策略的
-  严格 `TranscodeDecoder<C::Unit, C::Value>`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
+  严格 `TranscodeDecoder`；engine 自己检测到的不完整尾部保留在调用方输入缓冲区中，
   codec 返回的 decode error 会被直接包装返回。
 - **`TranscodeDecodeEngine<C, H>`**：持有 codec 与策略 hooks，并运行公共
   decode 循环的可复用 engine。
@@ -174,7 +174,7 @@ unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一
 │  TranscodeXxxEngine + TranscodeXxxHooks       （策略 + 循环）   │
 │  CodecTranscodeDecoder / Encoder / Converter  （严格 bridge）   │
 ├────────────────────────────────────────────────────────────────┤
-│  Transcoder<Input, Output> + TranscodeProgress + TranscodeStatus│
+│  Transcoder + TranscodeProgress + TranscodeStatus               │
 │  ValueEncoder<Input> / ValueDecoder<Input>      （便利层）      │
 ├────────────────────────────────────────────────────────────────┤
 │  Codec                              （单值、unchecked）         │
@@ -239,9 +239,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `Codec` | 在调用方缓冲区中编码/解码一个值或 quantum | 二进制标量、字符集字符、转义 byte、Base64 quantum |
 | `ValueEncoder<Input>` | 把借用输入编码为自有输出 | 文本、二进制或 misc 便捷 helper |
 | `ValueDecoder<Input>` | 把借用输入解码为自有输出 | 文本、二进制或 misc 便捷 helper |
-| `TranscodeEncoder<Value, Unit>` | 把逻辑值编码进调用方提供的 unit 缓冲区 | Charset 或 binary buffered encoder |
-| `TranscodeDecoder<Unit, Value>` | 把编码 unit 解码进调用方提供的 value 缓冲区 | Charset 或 binary buffered decoder |
-| `TranscodeConverter<InputUnit, OutputUnit>` | 在两种编码 unit 表示之间转换 | Charset 或 binary buffered converter |
+| `TranscodeEncoder` | 把逻辑值编码进调用方提供的 unit 缓冲区 | Charset 或 binary buffered encoder |
+| `TranscodeDecoder` | 把编码 unit 解码进调用方提供的 value 缓冲区 | Charset 或 binary buffered decoder |
+| `TranscodeConverter` | 在两种编码 unit 表示之间转换 | Charset 或 binary buffered converter |
 
 | 类型 | 用途 |
 |------|------|
@@ -259,8 +259,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `CodecValueExt` | 为所有 `C: Codec` 提供带检查的单值 helper，同时不扩大底层 `Codec` 契约 |
 | `CodecEncodeValueResult<E>` | reset-prefixed 单值 encode helper 返回的结果类型别名 |
-| `CodecDecodeValueWithFlushResult<V, E>` | decode-and-flush 单值 helper 返回的结果类型别名，成功时包含 consumed 与 flushed 计数 |
-| `CodecDecodeExactValueWithFlushResult<V, E>` | exact decode-and-flush 单值 helper 返回的结果类型别名 |
+| `CodecDecodeValueWithFinishResult<V, E>` | decode-and-finish 单值 helper 返回的结果类型别名，成功时包含 consumed 与 finished 计数 |
+| `CodecDecodeExactValueWithFinishResult<V, E>` | exact decode-and-finish 单值 helper 返回的结果类型别名 |
 | `CodecValueEncoder<C>` | 通过 `C: Codec` 把一个借用 `C::Value` 编码成自有 `Vec<C::Unit>`，不要求 `C::Value: Clone` |
 | `CodecValueDecoder<C>` | 通过 `C: Codec` 把恰好一个借用 `[C::Unit]` slice 解码成 `C::Value` |
 | `CodecTranscodeEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |
@@ -334,8 +334,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - 需要处理状态化单值编码时，应配合使用
   `CodecValueExt::max_encode_value_units()` 与
   `CodecValueExt::encode_value_with_reset()`；输入必须恰好是一个编码值时，
-  应使用 `CodecValueExt::decode_exact_value_with_flush()`。这些 helper 把
-  reset/flush 容量检查和 overflow 处理统一放在 value adapter 层。
+  应使用 `CodecValueExt::decode_exact_value_with_finish()`。这些 helper 把
+  reset/finish 容量检查和 overflow 处理统一放在 value adapter 层。
 - `TranscodeError<E>` 是 engine 与 adapter 内部共享的中间错误。默认 streaming
   adapter 直接暴露它，value adapter 和下游 facade adapter 则把它映射成自己的最终错误类型。
 - `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。

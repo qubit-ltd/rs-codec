@@ -18,7 +18,9 @@ use qubit_codec::{
 #[derive(Default)]
 struct CharToByte;
 
-impl Transcoder<char, u8> for CharToByte {
+impl Transcoder for CharToByte {
+    type Input = char;
+    type Output = u8;
     type DomainError = core::convert::Infallible;
     type FailureValue = ();
 
@@ -70,11 +72,11 @@ impl Transcoder<char, u8> for CharToByte {
     }
 }
 
-impl TranscodeEncoder<char, u8> for CharToByte {}
+impl TranscodeEncoder for CharToByte {}
 
 #[test]
 fn test_transcode_encoder_is_a_semantic_transcoder_bound() {
-    fn assert_encoder<T: TranscodeEncoder<char, u8>>() {}
+    fn assert_encoder<T: TranscodeEncoder<Input = char, Output = u8>>() {}
 
     assert_encoder::<CharToByte>();
 }

@@ -348,9 +348,9 @@ where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
-        let min_units_per_value = C::MIN_UNITS_PER_VALUE.get();
+        let min_units_per_value = C::MIN_UNITS_PER_VALUE;
         let max_units_per_value =
-            C::MAX_UNITS_PER_VALUE.get().max(min_units_per_value);
+            C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
         if min_units_per_value > self.capacity() {
             return read_decoded_via_scratch(
                 self,
@@ -415,6 +415,7 @@ where
                             "failed to decode complete value",
                         ));
                     }
+                    // continue to the next loop
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
                     if consumed.get() > units.len() {
@@ -463,7 +464,7 @@ where
         count: usize,
     ) -> Result<usize>
     where
-        D: Transcoder<I::Item, Value>,
+        D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(TranscodeError<D::DomainError, D::FailureValue>) -> Error,
     {
         let output_end = UncheckedSlice::checked_range_end(
@@ -551,7 +552,7 @@ where
         count: usize,
     ) -> Result<usize>
     where
-        D: Transcoder<I::Item, Value>,
+        D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(TranscodeError<D::DomainError, D::FailureValue>) -> Error,
     {
         let required = decoder

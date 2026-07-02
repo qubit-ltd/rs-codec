@@ -39,7 +39,6 @@ pub struct CodecTranscodeEncoder<C> {
 impl<C> CodecTranscodeEncoder<C>
 where
     C: Codec,
-    C::Value: Clone,
 {
     /// Creates a buffered encoder backed by `codec`.
     ///
@@ -62,11 +61,12 @@ where
     }
 }
 
-impl<C> Transcoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
+impl<C> Transcoder for CodecTranscodeEncoder<C>
 where
     C: Codec,
-    C::Value: Clone,
 {
+    type Input = C::Value;
+    type Output = C::Unit;
     type DomainError = C::EncodeError;
     type FailureValue = C::Value;
 
@@ -172,10 +172,9 @@ where
     }
 }
 
-impl<C> TranscodeEncoder<C::Value, C::Unit> for CodecTranscodeEncoder<C>
+impl<C> TranscodeEncoder for CodecTranscodeEncoder<C>
 where
     C: Codec,
-    C::Value: Clone,
 {
     // empty
 }
@@ -183,7 +182,6 @@ where
 impl<C> Default for CodecTranscodeEncoder<C>
 where
     C: Codec + Default,
-    C::Value: Clone,
 {
     /// Creates a default codec-backed buffered encoder.
     ///

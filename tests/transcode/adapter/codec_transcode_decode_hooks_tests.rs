@@ -8,7 +8,6 @@
 
 use qubit_codec::{
     Codec,
-    CodecPhase,
     CodecTranscodeDecoder,
     TranscodeError,
     Transcoder,
@@ -27,13 +26,11 @@ impl Codec for FlushFailCodec {
     type DecodeError = FlushFailError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_DECODE_FLUSH_VALUES: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -56,7 +53,7 @@ impl Codec for FlushFailCodec {
         Ok(1)
     }
 
-    unsafe fn decode_flush(
+    unsafe fn decode_finish(
         &mut self,
         _output: &mut [u8],
         _output_index: usize,
@@ -78,11 +75,9 @@ impl Codec for InvalidByteCodec {
     type DecodeError = InvalidByteError;
     type EncodeError = core::convert::Infallible;
 
-    const MIN_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: core::num::NonZeroUsize =
-        core::num::NonZeroUsize::MIN;
+    const MAX_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -123,10 +118,9 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeError::domain_with_consumed(
+        TranscodeError::domain_main_with_consumed(
             InvalidByteError,
-            CodecPhase::Main,
-            Some(0),
+            0,
             Some(qubit_io::nz!(1)),
         ),
         error,
@@ -134,7 +128,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
 }
 
 #[test]
-fn test_codec_transcode_decode_hooks_wraps_decode_flush_errors() {
+fn test_codec_transcode_decode_hooks_wraps_decode_finish_errors() {
     let mut decoder = CodecTranscodeDecoder::new(FlushFailCodec);
     let mut output = [0_u8; 1];
 
@@ -142,8 +136,5 @@ fn test_codec_transcode_decode_hooks_wraps_decode_flush_errors() {
         .finish(&mut output, 0)
         .expect_err("flush errors should be wrapped");
 
-    assert_eq!(
-        TranscodeError::domain(FlushFailError, CodecPhase::Flush, None),
-        error,
-    );
+    assert_eq!(TranscodeError::domain_finish(FlushFailError), error,);
 }

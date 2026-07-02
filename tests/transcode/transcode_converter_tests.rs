@@ -18,7 +18,9 @@ use qubit_codec::{
 #[derive(Default)]
 struct ByteToWord;
 
-impl Transcoder<u8, u16> for ByteToWord {
+impl Transcoder for ByteToWord {
+    type Input = u8;
+    type Output = u16;
     type DomainError = core::convert::Infallible;
     type FailureValue = ();
 
@@ -70,11 +72,11 @@ impl Transcoder<u8, u16> for ByteToWord {
     }
 }
 
-impl TranscodeConverter<u8, u16> for ByteToWord {}
+impl TranscodeConverter for ByteToWord {}
 
 #[test]
 fn test_transcode_converter_is_a_semantic_transcoder_bound() {
-    fn assert_converter<T: TranscodeConverter<u8, u16>>() {}
+    fn assert_converter<T: TranscodeConverter<Input = u8, Output = u16>>() {}
 
     assert_converter::<ByteToWord>();
 }
