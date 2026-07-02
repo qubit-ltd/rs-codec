@@ -575,12 +575,3 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
 
     assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
 }
-
-#[test]
-fn test_codec_value_encoder_maps_domain_errors() {
-    let encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
-    assert_eq!(
-        TranscodeError::domain_main("odd", 0),
-        ValueEncoder::map_error(&encoder, "odd"),
-    );
-}

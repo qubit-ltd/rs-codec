@@ -15,11 +15,6 @@ struct StringDecoder;
 impl ValueDecoder<str> for StringDecoder {
     type Output = String;
     type Error = core::convert::Infallible;
-    type DomainError = core::convert::Infallible;
-
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        match error {}
-    }
 
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -40,11 +35,6 @@ struct LowercaseCodec;
 impl ValueDecoder<str> for LowercaseCodec {
     type Output = String;
     type Error = core::convert::Infallible;
-    type DomainError = core::convert::Infallible;
-
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        match error {}
-    }
 
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_ascii_lowercase())

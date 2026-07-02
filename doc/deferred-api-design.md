@@ -35,20 +35,15 @@ Open questions for later review:
 - Which public adapters should keep requiring `Default` for simpler caller
   ergonomics even if lower layers become more general.
 
+## Resolved Items
+
 ### ValueEncoder and ValueDecoder error mapping
 
-Item 17 is deferred. `ValueEncoder::map_error` and `ValueDecoder::map_error`
-currently create repeated identity-mapping boilerplate in downstream codecs.
-
-Open questions for later review:
-
-- Whether to remove `DomainError` and `map_error` entirely from the value-level
-  traits.
-- Whether mapping belongs in I/O adapters instead of value facades.
-- Whether a separate extension trait should provide mapped-error helpers for
-  callers that still need them.
-- How a breaking change would affect `rs-codec-misc` implementations such as
-  Base64, hex, percent, C string literal, and form URL encoding.
+Item 17 has been resolved. `ValueEncoder::map_error`,
+`ValueDecoder::map_error`, and their `DomainError` associated types were
+removed from the value-level traits. Error mapping now belongs at explicit
+facade or I/O adapter boundaries instead of being part of the one-shot value
+conversion contract.
 
 ## Review Trigger
 

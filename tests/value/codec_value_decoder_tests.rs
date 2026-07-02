@@ -497,18 +497,3 @@ fn test_codec_value_decoder_default_and_debug() {
     assert!(debug.contains("CodecValueDecoder"));
     assert!(debug.contains("finish_scratch_len"));
 }
-
-#[test]
-fn test_codec_value_decoder_maps_domain_errors() {
-    let decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
-    assert_eq!(
-        TranscodeError::domain_main(
-            TestDecodeError::Invalid { consumed: 1 },
-            0
-        ),
-        ValueDecoder::map_error(
-            &decoder,
-            TestDecodeError::Invalid { consumed: 1 },
-        ),
-    );
-}

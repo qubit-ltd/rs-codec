@@ -101,13 +101,6 @@ where
 {
     type Output = C::Value;
     type Error = TranscodeError<C::DecodeError>;
-    type DomainError = C::DecodeError;
-
-    /// Maps a codec-domain error from the main decode phase.
-    #[inline(always)]
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        TranscodeError::domain_main(error, 0)
-    }
 
     /// Decodes exactly one encoded value from `input`.
     ///

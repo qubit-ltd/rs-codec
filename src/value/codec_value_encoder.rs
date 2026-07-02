@@ -134,13 +134,6 @@ where
 {
     type Output = Vec<C::Unit>;
     type Error = TranscodeError<C::EncodeError, C::Value>;
-    type DomainError = C::EncodeError;
-
-    /// Maps a codec-domain error from the main encode phase.
-    #[inline(always)]
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        TranscodeError::domain_main(error, 0)
-    }
 
     /// Encodes one borrowed value into owned units.
     ///

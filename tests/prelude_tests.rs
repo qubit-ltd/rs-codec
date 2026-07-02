@@ -48,11 +48,6 @@ struct EchoCodec;
 impl ValueEncoder<str> for EchoCodec {
     type Output = String;
     type Error = core::convert::Infallible;
-    type DomainError = core::convert::Infallible;
-
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        match error {}
-    }
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -62,11 +57,6 @@ impl ValueEncoder<str> for EchoCodec {
 impl ValueDecoder<str> for EchoCodec {
     type Output = String;
     type Error = core::convert::Infallible;
-    type DomainError = core::convert::Infallible;
-
-    fn map_error(&self, error: Self::DomainError) -> Self::Error {
-        match error {}
-    }
 
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
