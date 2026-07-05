@@ -1682,6 +1682,41 @@ impl Output for BrokenPipeByteOutput {
     }
 }
 
+#[derive(Debug, Default)]
+struct EncodeLenOverflowCodec;
+
+impl Codec for EncodeLenOverflowCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairEncodeError;
+    type EncodeError = PairEncodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+
+    fn encode_len(&self, _value: &u32) -> usize {
+        usize::MAX
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        Ok((u32::from(input[input_index]), crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u32,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(1)
+    }
+}
+
 #[test]
 fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
     let mut output =
@@ -1694,6 +1729,25 @@ fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert_eq!("codec output bound overflow", error.to_string());
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_maps_framework_error_locally() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
+    let mut codec = EncodeLenOverflowCodec;
+
+    let error = output
+        .write_encoded_with(&mut codec, &0x0001_0002, |_| {
+            panic!("framework failures must not call the domain mapper")
+        })
+        .expect_err("encode length overflow should be mapped locally");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        "insufficient output at index 0: required 18446744073709551615 units, available 4",
+        error.to_string(),
+    );
 }
 
 #[test]

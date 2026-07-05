@@ -7,8 +7,6 @@
 // =============================================================================
 //! Errors reported by transcode engines and transcoder adapters.
 
-use std::io::ErrorKind;
-
 use thiserror::Error;
 
 use super::{
@@ -495,103 +493,6 @@ impl<E, Value> TranscodeError<E, Value> {
             ));
         }
         Ok(())
-    }
-
-    /// Maps this error into the I/O surface used by one-value encode adapters.
-    ///
-    /// Domain errors are forwarded through `map_domain`. Framework errors
-    /// become `InvalidData`, except
-    /// [`TranscodeFailure::UnencodableValue`] which maps to `InvalidInput`
-    /// with the stable message expected by encode I/O helpers.
-    pub fn into_encode_io_error<M>(self, map_domain: &mut M) -> std::io::Error
-    where
-        M: FnMut(E) -> std::io::Error,
-    {
-        self.into_io_error_with(map_domain, ErrorKind::InvalidInput)
-    }
-
-    /// Maps this error into the I/O surface used by decode adapters.
-    ///
-    /// Domain errors are forwarded through `map_domain`. Framework errors
-    /// become `InvalidData` because they describe malformed input, invalid
-    /// caller ranges, or impossible output planning at the decode boundary.
-    pub fn into_decode_io_error<M>(self, map_domain: &mut M) -> std::io::Error
-    where
-        M: FnMut(E) -> std::io::Error,
-    {
-        self.into_io_error_with(map_domain, ErrorKind::InvalidData)
-    }
-
-    /// Maps this error into an I/O error with a configurable unencodable kind.
-    fn into_io_error_with<M>(
-        self,
-        map_domain: &mut M,
-        unencodable_kind: ErrorKind,
-    ) -> std::io::Error
-    where
-        M: FnMut(E) -> std::io::Error,
-    {
-        use std::io::Error;
-
-        match self {
-            Self::Domain(error) => map_domain(error.into_source()),
-            Self::Failure(TranscodeFailure::InvalidInputIndex {
-                index,
-                input_len,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "invalid input index {index} for input length {input_len}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::InvalidOutputIndex {
-                index,
-                output_len,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "invalid output index {index} for output length {output_len}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::InsufficientOutput {
-                output_index,
-                required,
-                available,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "insufficient output at index {output_index}: required {required} units, available {available}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::OutputLengthOverflow) => {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "output length arithmetic overflow",
-                )
-            }
-            Self::Failure(TranscodeFailure::UnencodableValue { .. }) => {
-                Error::new(unencodable_kind, "codec cannot encode value")
-            }
-            Self::Failure(TranscodeFailure::IncompleteInput {
-                input_index,
-                required,
-                available,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "incomplete input at index {input_index}: required {required} units, available {available}"
-                ),
-            ),
-            Self::Failure(TranscodeFailure::TrailingInput {
-                consumed,
-                remaining,
-            }) => Error::new(
-                ErrorKind::InvalidData,
-                format!(
-                    "trailing input: consumed {consumed} units, remaining {remaining}"
-                ),
-            ),
-        }
     }
 }
 

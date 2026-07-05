@@ -32,6 +32,7 @@ use crate::{
     Codec,
     CodecValueExt,
     TranscodeError,
+    TranscodeFailure,
     TranscodeStatus,
     Transcoder,
 };
@@ -204,7 +205,7 @@ where
     /// Returns I/O errors from the wrapped output, `InvalidInput` when the
     /// codec output bound overflows or the value is outside the codec domain,
     /// `InvalidData` for framework-level codec adapter failures, or the error
-    /// returned by `map_error` for codec encode, reset, and flush failures.
+    /// returned by `map_error` for codec encode, reset, and finish failures.
     pub fn write_encoded_with<C, M>(
         &mut self,
         codec: &mut C,
@@ -488,5 +489,13 @@ fn map_encode_value_error<E, Value, M>(
 where
     M: FnMut(E) -> Error,
 {
-    error.into_encode_io_error(map_error)
+    match error {
+        TranscodeError::Domain(error) => map_error(error.into_source()),
+        TranscodeError::Failure(TranscodeFailure::UnencodableValue {
+            ..
+        }) => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
+        TranscodeError::Failure(failure) => {
+            Error::new(ErrorKind::InvalidData, failure.to_string())
+        }
+    }
 }
