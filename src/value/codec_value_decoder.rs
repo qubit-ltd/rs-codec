@@ -38,32 +38,6 @@ where
     finish_scratch: Vec<C::Value>,
 }
 
-impl<C> fmt::Debug for CodecValueDecoder<C>
-where
-    C: Codec + fmt::Debug,
-{
-    /// Formats the decoder without requiring finished values to be printable.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("CodecValueDecoder")
-            .field("codec", &self.codec)
-            .field("finish_scratch_len", &self.finish_scratch.len())
-            .field("finish_scratch_capacity", &self.finish_scratch.capacity())
-            .finish()
-    }
-}
-
-impl<C> Default for CodecValueDecoder<C>
-where
-    C: Codec + Default,
-{
-    /// Creates a decoder from the default codec.
-    #[inline(always)]
-    fn default() -> Self {
-        Self::new(C::default())
-    }
-}
-
 impl<C> CodecValueDecoder<C>
 where
     C: Codec,
@@ -149,5 +123,31 @@ where
         };
 
         Ok(value)
+    }
+}
+
+impl<C> fmt::Debug for CodecValueDecoder<C>
+where
+    C: Codec + fmt::Debug,
+{
+    /// Formats the decoder without requiring finished values to be printable.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CodecValueDecoder")
+            .field("codec", &self.codec)
+            .field("finish_scratch_len", &self.finish_scratch.len())
+            .field("finish_scratch_capacity", &self.finish_scratch.capacity())
+            .finish()
+    }
+}
+
+impl<C> Default for CodecValueDecoder<C>
+where
+    C: Codec + Default,
+{
+    /// Creates a decoder from the default codec.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(C::default())
     }
 }
