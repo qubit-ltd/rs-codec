@@ -275,6 +275,13 @@ struct ResetFailLifecycleCodec;
 #[error("reset failed")]
 struct ResetFailError;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FinishFailLifecycleCodec;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("finish failed")]
+struct FinishFailError;
+
 impl Codec for ResetFailLifecycleCodec {
     type Value = u8;
     type Unit = u8;
@@ -314,6 +321,48 @@ impl Codec for ResetFailLifecycleCodec {
         _output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
         Err(ResetFailError)
+    }
+}
+
+impl Codec for FinishFailLifecycleCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = FinishFailError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Err(FinishFailError)
     }
 }
 
@@ -441,6 +490,15 @@ fn test_codec_value_encoder_resets_stream_state_on_each_call() {
 
     assert_eq!(vec![0xfe, 42, 2], first);
     assert_eq!(vec![0xfe, 42, 2], second);
+}
+
+#[test]
+fn test_codec_value_encoder_default_and_debug() {
+    let encoder = CodecValueEncoder::<PairByteCodec>::default();
+    let debug = format!("{encoder:?}");
+
+    assert!(debug.contains("CodecValueEncoder"));
+    assert!(debug.contains("codec"));
 }
 
 #[test]
@@ -574,4 +632,16 @@ fn test_codec_value_encoder_propagates_encode_reset_error() {
         .expect_err("encode reset failure should propagate");
 
     assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
+}
+
+#[test]
+fn test_codec_value_encoder_propagates_encode_finish_error() {
+    let mut encoder = CodecValueEncoder::<FinishFailLifecycleCodec>::new(
+        FinishFailLifecycleCodec,
+    );
+
+    let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
+        .expect_err("encode finish failure should propagate");
+
+    assert_eq!(TranscodeError::domain_finish(FinishFailError), error,);
 }

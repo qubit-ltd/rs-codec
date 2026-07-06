@@ -9,7 +9,6 @@
 
 mod adapter;
 mod capacity_error;
-mod codec_phase;
 mod convert_error;
 mod engine;
 mod internal;
@@ -31,7 +30,6 @@ pub use adapter::{
     CodecTranscodeEncoder,
 };
 pub use capacity_error::CapacityError;
-pub use codec_phase::CodecPhase;
 pub use convert_error::{
     ConvertError,
     TranscodeConvertError,
@@ -66,4 +64,7 @@ pub use transcode_error::{
 pub use transcode_failure::TranscodeFailure;
 pub use transcode_progress::TranscodeProgress;
 pub use transcode_status::TranscodeStatus;
-pub use transcoder::Transcoder;
+pub use transcoder::{
+    TranscodeErrorOf,
+    Transcoder,
+};

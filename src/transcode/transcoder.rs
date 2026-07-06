@@ -12,11 +12,26 @@ use super::{
     transcode_status::TranscodeStatus,
 };
 
+/// Error type returned by a concrete [`Transcoder`] implementation.
+///
+/// This alias expands to
+/// `TranscodeError<T::DomainError, T::FailureValue>` for the supplied
+/// transcoder type. It keeps public method signatures readable without adding
+/// another associated type to the trait.
+pub type TranscodeErrorOf<T> = TranscodeError<
+    <T as Transcoder>::DomainError,
+    <T as Transcoder>::FailureValue,
+>;
+
 /// Converts one logical stream of input units into one logical stream of output
 /// units.
 ///
 /// `transcode` is the main streaming API. It transforms a provided input
-/// segment and writes as much output as available buffer space allows.
+/// segment and writes as much output as available buffer space allows. A
+/// successful `transcode` call must stop with exactly one of three meanings:
+/// all visible input was consumed (`Complete`), an incomplete tail remains
+/// caller-owned (`NeedInput`), or output capacity prevented further progress
+/// (`NeedOutput`).
 ///
 /// A transcoder instance has a simple lifecycle:
 ///
@@ -62,6 +77,7 @@ use super::{
 ///     TranscodeProgress,
 ///     TranscodeStatus,
 ///     Transcoder,
+///     TranscodeErrorOf,
 /// };
 ///
 /// #[derive(Default)]
@@ -81,7 +97,7 @@ use super::{
 ///         &mut self,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
+///     ) -> Result<usize, TranscodeErrorOf<Self>> {
 ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
@@ -92,7 +108,7 @@ use super::{
 ///         input_index: usize,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+///     ) -> Result<TranscodeProgress, TranscodeErrorOf<Self>> {
 ///         TranscodeError::<Self::DomainError>::ensure_transcode_indices(
 ///             input.len(),
 ///             input_index,
@@ -134,7 +150,7 @@ use super::{
 ///         &mut self,
 ///         output: &mut [u16],
 ///         output_index: usize,
-///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
+///     ) -> Result<usize, TranscodeErrorOf<Self>> {
 ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
@@ -196,11 +212,23 @@ pub trait Transcoder {
     /// Domain error type produced by codec, hook, or policy internals.
     type DomainError;
 
-    /// Value context type carried by framework failures.
+    /// Logical value type carried by framework failures.
     ///
-    /// Decoders and policy-only transcoders usually use `()`. Encoders should
-    /// use their input value type when they can report an unencodable value
-    /// with context.
+    /// This type parameterizes
+    /// [`TranscodeFailure::UnencodableValue`](crate::TranscodeFailure::UnencodableValue)
+    /// inside this transcoder's [`TranscodeError`](crate::TranscodeError).
+    /// It is intentionally separate from [`Transcoder::Input`]: an input unit
+    /// is not always the value that failed. Decoders and policy-only
+    /// transcoders usually use `()`, because they do not report target-side
+    /// unencodable values. Encoders usually use their logical input value
+    /// type. Unit-to-unit converters should use the decoded intermediate value
+    /// type when target encoding can reject that value.
+    ///
+    /// The framework failure stores this context as
+    /// `Option<Self::FailureValue>`. `Some(value)` means the failing value
+    /// is available to callers. `None` means only the absolute input index
+    /// is available, typically because a streaming path cannot retain or
+    /// clone the original value.
     type FailureValue;
 
     /// Returns an upper bound for output units emitted when resetting stream
@@ -327,7 +355,7 @@ pub trait Transcoder {
         &mut self,
         output: &mut [Self::Output],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
+    ) -> Result<usize, TranscodeErrorOf<Self>>;
 
     /// Converts available input units into output units.
     ///
@@ -336,6 +364,14 @@ pub trait Transcoder {
     /// reports [`crate::TranscodeStatus::NeedInput`] without consuming that
     /// tail. The caller owns input-buffer refill and EOF incomplete-tail
     /// policy.
+    ///
+    /// Returning [`crate::TranscodeStatus::Complete`] means all input visible
+    /// from `input_index` was consumed. Implementations must not return
+    /// `Complete` after consuming only a prefix of the supplied input; they
+    /// must instead continue processing, report `NeedInput` for an
+    /// incomplete tail, or report `NeedOutput` if output capacity prevents
+    /// progress. This invariant is checked by
+    /// [`crate::TranscodeProgress::validate`].
     ///
     /// # Parameters
     ///
@@ -349,9 +385,11 @@ pub trait Transcoder {
     /// Returns progress describing how many units were consumed and produced
     /// and why conversion stopped. Implementations must keep the returned
     /// counters and status fields consistent with the supplied input and
-    /// output ranges. The default one-shot helper checks this contract with a
-    /// debug assertion; streaming I/O drivers may validate progress in
-    /// release builds before advancing unsafe cursors.
+    /// output ranges. For `Complete`, `read` must equal `input.len() -
+    /// input_index`. The default one-shot helper rejects incomplete `Complete`
+    /// progress in all builds and checks the remaining progress contract with a
+    /// debug assertion; streaming I/O drivers may validate progress in release
+    /// builds before advancing unsafe cursors.
     ///
     /// # Errors
     ///
@@ -365,10 +403,7 @@ pub trait Transcoder {
         input_index: usize,
         output: &mut [Self::Output],
         output_index: usize,
-    ) -> Result<
-        TranscodeProgress,
-        TranscodeError<Self::DomainError, Self::FailureValue>,
-    >;
+    ) -> Result<TranscodeProgress, TranscodeErrorOf<Self>>;
 
     /// Finishes internally retained output after all input has been supplied.
     ///
@@ -391,6 +426,7 @@ pub trait Transcoder {
     /// use qubit_codec::{
     ///     TranscodeError,
     ///     Transcoder,
+    ///     TranscodeErrorOf,
     ///     TranscodeStatus,
     /// };
     ///
@@ -411,7 +447,7 @@ pub trait Transcoder {
     ///         &mut self,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ///     ) -> Result<usize, TranscodeErrorOf<Self>> {
     ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
@@ -422,7 +458,7 @@ pub trait Transcoder {
     ///         input_index: usize,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<qubit_codec::TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ///     ) -> Result<qubit_codec::TranscodeProgress, TranscodeErrorOf<Self>> {
     ///         let mut read = 0;
     ///         let mut written = 0;
     ///         while input_index + read < input.len() && output_index + written < output.len() {
@@ -450,7 +486,7 @@ pub trait Transcoder {
     ///         &mut self,
     ///         output: &mut [u8],
     ///         output_index: usize,
-    ///     ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ///     ) -> Result<usize, TranscodeErrorOf<Self>> {
     ///         TranscodeError::<Self::DomainError>::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
@@ -488,7 +524,7 @@ pub trait Transcoder {
         &mut self,
         output: &mut [Self::Output],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>;
+    ) -> Result<usize, TranscodeErrorOf<Self>>;
 
     /// Runs a complete one-shot `reset -> transcode -> finish` stream.
     ///
@@ -519,8 +555,7 @@ pub trait Transcoder {
         &mut self,
         input: &[Self::Input],
         output: &mut [Self::Output],
-    ) -> Result<usize, TranscodeError<Self::DomainError, Self::FailureValue>>
-    {
+    ) -> Result<usize, TranscodeErrorOf<Self>> {
         let mut output_cursor = self.reset(output, 0)?;
         let transcode_required = self.max_transcode_output_len(input.len())?;
         let finish_required = self.max_finish_output_len()?;
@@ -534,6 +569,13 @@ pub trait Transcoder {
         )?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
+        if progress.is_complete() && progress.read() < input.len() {
+            let error = TranscodeError::<Self::DomainError, Self::FailureValue>::trailing_input(
+                progress.read(),
+                input.len() - progress.read(),
+            );
+            return Err(error);
+        }
         debug_assert!(
             progress
                 .validate(
@@ -553,10 +595,11 @@ pub trait Transcoder {
                 required,
                 available,
             } => {
-                let error = TranscodeError::insufficient_output(
-                    output_index,
-                    required.get(),
-                    available,
+                let error = TranscodeError::<
+                    Self::DomainError,
+                    Self::FailureValue,
+                >::insufficient_output(
+                    output_index, required.get(), available
                 );
                 return Err(error);
             }
@@ -565,10 +608,11 @@ pub trait Transcoder {
                 required,
                 available,
             } => {
-                let error = TranscodeError::incomplete_input(
-                    input_index,
-                    required.get(),
-                    available,
+                let error = TranscodeError::<
+                    Self::DomainError,
+                    Self::FailureValue,
+                >::incomplete_input(
+                    input_index, required.get(), available
                 );
                 return Err(error);
             }

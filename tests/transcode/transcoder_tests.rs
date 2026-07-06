@@ -8,8 +8,8 @@
 
 use qubit_codec::{
     CapacityError,
-    CodecPhase,
     TranscodeError,
+    TranscodeErrorOf,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -24,18 +24,6 @@ macro_rules! infallible_transcoder_error {
         type DomainError = core::convert::Infallible;
         type FailureValue = ();
     };
-}
-
-fn static_domain(
-    error: &'static str,
-    phase: CodecPhase,
-) -> TranscodeError<&'static str> {
-    match phase {
-        CodecPhase::Reset => TranscodeError::domain_reset(error),
-        CodecPhase::Main => TranscodeError::domain_main(error, 0),
-        CodecPhase::Finish => TranscodeError::domain_finish(error),
-        _ => TranscodeError::domain_finish(error),
-    }
 }
 
 #[derive(Default)]
@@ -346,6 +334,63 @@ impl Transcoder for UnderestimatingTranscoder {
     }
 }
 
+#[derive(Default)]
+struct PartialCompleteTranscoder;
+
+impl Transcoder for PartialCompleteTranscoder {
+    type Input = u8;
+    type Output = u8;
+    infallible_transcoder_error!();
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_transcode_indices(
+            input.len(),
+            input_index,
+            output.len(),
+            output_index,
+        )?;
+        output[output_index] = input[input_index];
+        Ok(TranscodeProgress::complete(1, 1))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+        TranscodeError::<Self::DomainError>::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        Ok(0)
+    }
+}
+
 #[cfg(debug_assertions)]
 #[derive(Default)]
 struct OverreportingCompleteTranscoder;
@@ -505,7 +550,7 @@ impl Transcoder for FailingTranscoder {
             output_index,
         )?;
         if matches!(self.failure, FailurePoint::Reset) {
-            Err(static_domain("reset", CodecPhase::Reset))
+            Err(TranscodeError::domain_reset("reset"))
         } else {
             Ok(0)
         }
@@ -519,7 +564,7 @@ impl Transcoder for FailingTranscoder {
         _output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
         if matches!(self.failure, FailurePoint::Transcode) {
-            Err(static_domain("transcode", CodecPhase::Main))
+            Err(TranscodeError::domain_main("transcode", 0))
         } else {
             Ok(TranscodeProgress::complete(0, 0))
         }
@@ -535,7 +580,7 @@ impl Transcoder for FailingTranscoder {
             output_index,
         )?;
         if matches!(self.failure, FailurePoint::Finish) {
-            Err(static_domain("finish", CodecPhase::Finish))
+            Err(TranscodeError::domain_finish("finish"))
         } else {
             Ok(0)
         }
@@ -551,6 +596,21 @@ fn test_transcoder_error_is_domain_error_type() {
     }
 
     assert_domain_error::<CopyTranscoder, u8, u8>();
+}
+
+#[test]
+fn test_transcode_error_of_alias_matches_framework_error() {
+    type ResetFn<T> = fn(
+        &mut T,
+        &mut [<T as Transcoder>::Output],
+        usize,
+    ) -> Result<usize, TranscodeErrorOf<T>>;
+
+    let reset: ResetFn<CopyTranscoder> = <CopyTranscoder as Transcoder>::reset;
+
+    let mut transcoder = CopyTranscoder;
+    let mut output = [];
+    assert_eq!(Ok(0), reset(&mut transcoder, &mut output, 0));
 }
 
 #[test]
@@ -625,10 +685,7 @@ fn test_transcoder_transcode_complete_into_runs_reset_transcode_and_finish() {
 #[test]
 fn test_transcoder_transcode_complete_into_reports_stage_errors() {
     for (failure, expected) in [
-        (
-            FailurePoint::Reset,
-            static_domain("reset", CodecPhase::Reset),
-        ),
+        (FailurePoint::Reset, TranscodeError::domain_reset("reset")),
         (
             FailurePoint::TranscodeBound,
             TranscodeError::output_length_overflow(),
@@ -639,11 +696,11 @@ fn test_transcoder_transcode_complete_into_reports_stage_errors() {
         ),
         (
             FailurePoint::Transcode,
-            static_domain("transcode", CodecPhase::Main),
+            TranscodeError::domain_main("transcode", 0),
         ),
         (
             FailurePoint::Finish,
-            static_domain("finish", CodecPhase::Finish),
+            TranscodeError::domain_finish("finish"),
         ),
     ] {
         let mut transcoder = FailingTranscoder { failure };
@@ -679,6 +736,18 @@ fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
         .expect_err("runtime need-output status should be an output error");
 
     assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
+}
+
+#[test]
+fn test_transcoder_transcode_complete_into_reports_trailing_input() {
+    let mut transcoder = PartialCompleteTranscoder;
+    let mut output = [0_u8; 2];
+
+    let error = transcoder
+        .transcode_complete_into(b"ab", &mut output)
+        .expect_err("Complete must consume all complete input");
+
+    assert_eq!(TranscodeError::trailing_input(1, 1), error,);
 }
 
 #[cfg(debug_assertions)]

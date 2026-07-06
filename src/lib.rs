@@ -18,8 +18,8 @@
 //! The crate provides:
 //!
 //! - [`Codec`] for low-level single-value codecs over caller-managed buffers.
-//! - [`CodecValueEncoder`], [`CodecValueDecoder`], and [`CodecValueExt`] for
-//!   owned one-value convenience APIs.
+//! - [`CodecValueEncoder`] and [`CodecValueDecoder`] for owned one-value
+//!   convenience APIs.
 //! - [`CodecTranscodeEncoder`], [`CodecTranscodeDecoder`], and
 //!   [`CodecTranscodeConverter`] for strict streaming adapters around a
 //!   [`Codec`].
@@ -129,7 +129,6 @@ pub use codec::{
 };
 pub use transcode::{
     CapacityError,
-    CodecPhase,
     CodecTranscodeConverter,
     CodecTranscodeDecoder,
     CodecTranscodeEncoder,
@@ -145,6 +144,7 @@ pub use transcode::{
     TranscodeEncodeOutput,
     TranscodeEncoder,
     TranscodeError,
+    TranscodeErrorOf,
     TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
@@ -153,7 +153,6 @@ pub use transcode::{
 pub use value::{
     CodecValueDecoder,
     CodecValueEncoder,
-    CodecValueExt,
     ValueDecoder,
     ValueEncoder,
 };

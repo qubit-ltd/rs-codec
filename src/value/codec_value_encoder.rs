@@ -7,12 +7,18 @@
 // =============================================================================
 //! Value encoder adapter backed by a low-level codec.
 
+use core::fmt;
+
 use super::ValueEncoder;
 use crate::{
     Codec,
-    CodecValueExt,
     TranscodeError,
     codec::assert_unit_bounds,
+    value::codec_value_lifecycle::{
+        complete_encode_len,
+        encode_complete_value_into_reserved,
+        max_complete_encode_units,
+    },
 };
 
 /// Encodes one borrowed value into owned units by using a [`Codec`].
@@ -27,7 +33,6 @@ use crate::{
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode one value.
-#[derive(Debug, Default)]
 pub struct CodecValueEncoder<C> {
     /// Low-level codec used for one-value encoding.
     codec: C,
@@ -97,23 +102,20 @@ where
         C::Value: Clone,
         C::Unit: Default,
     {
-        if !self.codec.can_encode_value(input) {
-            return Err(TranscodeError::unencodable_value(0, input.clone()));
-        }
-        let units = C::MAX_ENCODE_RESET_UNITS
-            .checked_add(self.codec.encode_len(input))
-            .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))
-            .ok_or_else(TranscodeError::output_length_overflow)?;
+        let units = complete_encode_len(&self.codec, input)?;
         let original_len = output.len();
         let target_len = original_len
             .checked_add(units)
             .ok_or(TranscodeError::output_length_overflow())?;
         output.resize_with(target_len, C::Unit::default);
 
-        match self
-            .codec
-            .encode_value_with_reset(input, output, original_len)
-        {
+        match encode_complete_value_into_reserved(
+            &mut self.codec,
+            input,
+            output,
+            original_len,
+            units,
+        ) {
             Ok(written) => {
                 output.truncate(original_len + written);
                 Ok(written)
@@ -160,12 +162,34 @@ where
         &mut self,
         input: &C::Value,
     ) -> Result<Self::Output, Self::Error> {
-        let units = self
-            .codec
-            .max_encode_value_units()
+        let units = max_complete_encode_units::<C>()
             .map_err(|_| TranscodeError::output_length_overflow())?;
         let mut output = Vec::with_capacity(units);
         self.encode_into(input, &mut output)?;
         Ok(output)
+    }
+}
+
+impl<C> fmt::Debug for CodecValueEncoder<C>
+where
+    C: Codec + fmt::Debug,
+{
+    /// Formats the encoder without requiring finished values to be printable.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CodecValueEncoder")
+            .field("codec", &self.codec)
+            .finish()
+    }
+}
+
+impl<C> Default for CodecValueEncoder<C>
+where
+    C: Codec + Default,
+{
+    /// Creates an encoder from the default codec.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(C::default())
     }
 }

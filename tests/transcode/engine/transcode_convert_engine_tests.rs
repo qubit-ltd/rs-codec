@@ -62,27 +62,6 @@ impl From<core::convert::Infallible> for EngineError {
     }
 }
 
-#[allow(dead_code)]
-trait LegacyConvertHooks<D: Codec, E: Codec<Value = D::Value>> {
-    type DecodeError;
-    type EncodeError;
-    type Error;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error;
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error;
-
-    fn reset_hooks(&mut self) {}
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
-enum ConvertEngineError<E> {
-    #[error("decode: {0}")]
-    Decode(EngineError),
-    #[error("encode: {0}")]
-    Encode(E),
-}
-
 impl Codec for SourceCodec {
     type Value = u8;
     type Unit = u8;
@@ -333,22 +312,6 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
     }
 }
 
-impl LegacyConvertHooks<SourceCodec, ResetEmittingTargetCodec>
-    for ResetTargetHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FinishOverflowEncodeHooks;
 
@@ -375,25 +338,6 @@ impl TranscodeEncodeHooks<FinishOverflowTargetCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FinishOverflowConvertHooks;
-
-impl LegacyConvertHooks<SourceCodec, FinishOverflowTargetCodec>
-    for FinishOverflowConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailTargetHooks;
 
 impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
@@ -409,22 +353,6 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
             TargetResetFailError,
             _context.input_index(),
         ))
-    }
-}
-
-impl LegacyConvertHooks<SourceCodec, ResetFailTargetCodec>
-    for ResetFailTargetHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = TargetResetFailError;
-    type Error = ConvertEngineError<TargetResetFailError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 
@@ -589,49 +517,6 @@ impl TranscodeEncodeHooks<MismatchCapacityTargetCodec>
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct MismatchPendingFinishHooks;
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec>
-    for MismatchPendingFinishHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct MismatchDecoderFinishHooks;
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec>
-    for MismatchDecoderFinishHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct CopyHooks {
-    reset_called: bool,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RepairAction {
     Emit,
@@ -663,25 +548,6 @@ impl TranscodeDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
                 consumed: one_consumed(),
             }),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct RepairHooks {
-    action: RepairAction,
-}
-
-impl LegacyConvertHooks<ErrorSourceCodec, TargetCodec> for RepairHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 
@@ -748,65 +614,6 @@ impl<const FINISH_BOUND: usize>
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct FixedFinishBoundHooks {
-    finish_len: usize,
-}
-
-impl<const FINISH_BOUND: usize>
-    LegacyConvertHooks<FinishValueSourceCodec<FINISH_BOUND>, TargetCodec>
-    for FixedFinishBoundHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ChangingFinishBoundHooks;
-
-impl<const FINISH_BOUND: usize>
-    LegacyConvertHooks<FinishValueSourceCodec<FINISH_BOUND>, TargetCodec>
-    for ChangingFinishBoundHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for CopyHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-    fn reset_hooks(&mut self) {
-        self.reset_called = true;
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct FinishDecodeHooks {
     value: Option<u8>,
 }
@@ -862,20 +669,6 @@ struct FinishHooks {
 impl Default for FinishHooks {
     fn default() -> Self {
         Self { value: 40 }
-    }
-}
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for FinishHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 
@@ -937,23 +730,6 @@ impl TranscodeDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct BatchFinishHooks;
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for BatchFinishHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct FinishEncodeHooks {
     pending: bool,
@@ -996,23 +772,6 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
         output[output_index] = 0xee;
         self.pending = false;
         Ok(1)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FinishEncodeHooksOnly;
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for FinishEncodeHooksOnly {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 
@@ -1161,20 +920,6 @@ struct ErrorPathHooks {
     encode_mode: ErrorPathEncodeMode,
 }
 
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for ErrorPathHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct FactoryDecodeHooks {
     marker: u8,
@@ -1229,26 +974,6 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
             EngineError::Encode,
             _context.input_index(),
         ))
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct DirectConvertHooks {
-    decode_marker: u8,
-    encode_offset: u8,
-}
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec> for DirectConvertHooks {
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 
@@ -2097,25 +1822,6 @@ impl TranscodeDecodeHooks<SourceCodec> for ResetObservingDecodeHooks {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetFailDecodeConvertHooks;
-
-impl LegacyConvertHooks<SourceCodec, TargetCodec>
-    for ResetFailDecodeConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct StatelessResetSourceCodec;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -2254,44 +1960,6 @@ impl TranscodeDecodeHooks<StatelessResetFailingSourceCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct StatelessResetSourceConvertHooks;
-
-impl LegacyConvertHooks<StatelessResetSourceCodec, TargetCodec>
-    for StatelessResetSourceConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = EngineError;
-
-    fn map_decode_error(&self, error: EngineError) -> Self::Error {
-        error
-    }
-
-    fn map_encode_error(&self, error: EngineError) -> Self::Error {
-        error
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct StatelessResetFailingSourceConvertHooks;
-
-impl LegacyConvertHooks<StatelessResetFailingSourceCodec, TargetCodec>
-    for StatelessResetFailingSourceConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = EngineError;
-
-    fn map_decode_error(&self, error: EngineError) -> Self::Error {
-        error
-    }
-
-    fn map_encode_error(&self, error: EngineError) -> Self::Error {
-        error
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverflowResetSourceCodec;
 
 impl Codec for OverflowResetSourceCodec {
@@ -2418,31 +2086,6 @@ impl TranscodeEncodeHooks<OverflowResetTargetCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct OverflowResetConvertHooks;
-
-impl LegacyConvertHooks<OverflowResetSourceCodec, OverflowResetTargetCodec>
-    for OverflowResetConvertHooks
-{
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
-    type Error = core::convert::Infallible;
-
-    fn map_decode_error(
-        &self,
-        error: core::convert::Infallible,
-    ) -> Self::Error {
-        match error {}
-    }
-
-    fn map_encode_error(
-        &self,
-        error: core::convert::Infallible,
-    ) -> Self::Error {
-        match error {}
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchCapacityResetEmittingDecodeHooks;
 
 impl TranscodeDecodeHooks<ResetEmittingSourceCodec>
@@ -2459,25 +2102,6 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec>
         qubit_codec::TranscodeDecodeError<ResetEmittingSourceCodec>,
     > {
         match *error {}
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct MismatchCapacityResetEmittingConvertHooks;
-
-impl LegacyConvertHooks<ResetEmittingSourceCodec, TargetCodec>
-    for MismatchCapacityResetEmittingConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = EngineError;
-
-    fn map_decode_error(&self, error: EngineError) -> Self::Error {
-        error
-    }
-
-    fn map_encode_error(&self, error: EngineError) -> Self::Error {
-        error
     }
 }
 
@@ -2867,44 +2491,6 @@ impl TranscodeDecodeHooks<ResetEncodingFailSourceCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetSourceConvertHooks;
-
-impl LegacyConvertHooks<ResetEmittingSourceCodec, TargetCodec>
-    for ResetSourceConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetEncodingFailSourceConvertHooks;
-
-impl LegacyConvertHooks<ResetEncodingFailSourceCodec, TargetCodec>
-    for ResetEncodingFailSourceConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailingSourceCodec;
 
 impl Codec for ResetFailingSourceCodec {
@@ -2974,25 +2560,6 @@ impl TranscodeDecodeHooks<ResetFailingSourceCodec>
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetFailSourceDecodeConvertHooks;
-
-impl LegacyConvertHooks<ResetFailingSourceCodec, TargetCodec>
-    for ResetFailSourceDecodeConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FinishFailingSourceCodec;
 
 impl Codec for FinishFailingSourceCodec {
@@ -3058,25 +2625,6 @@ impl TranscodeDecodeHooks<FinishFailingSourceCodec>
                 unreachable!("finish path should not produce decode errors")
             }
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FinishFailConvertHooks;
-
-impl LegacyConvertHooks<FinishFailingSourceCodec, TargetCodec>
-    for FinishFailConvertHooks
-{
-    type DecodeError = EngineError;
-    type EncodeError = EngineError;
-    type Error = ConvertEngineError<EngineError>;
-
-    fn map_decode_error(&self, error: Self::DecodeError) -> Self::Error {
-        ConvertEngineError::Decode(error)
-    }
-
-    fn map_encode_error(&self, error: Self::EncodeError) -> Self::Error {
-        ConvertEngineError::Encode(error)
     }
 }
 

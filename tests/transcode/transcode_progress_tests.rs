@@ -135,6 +135,19 @@ fn test_transcoder_progress_validate_rejects_counter_bounds() {
 }
 
 #[test]
+fn test_transcoder_progress_validate_rejects_incomplete_complete() {
+    let progress = TranscodeProgress::complete(1, 1);
+
+    assert_eq!(
+        Err(TranscodeContractError::CompleteWithRemainingInput {
+            read: 1,
+            available: 2,
+        }),
+        progress.validate(0, 2, 0, 2),
+    );
+}
+
+#[test]
 fn test_transcoder_progress_validate_rejects_status_index_mismatch() {
     let need_input = TranscodeProgress::need_input(11, crate::nz(3), 1, 2, 0);
     assert_eq!(

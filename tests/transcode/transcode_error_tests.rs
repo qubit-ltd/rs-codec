@@ -9,7 +9,6 @@
 use core::error::Error;
 use qubit_codec::{
     CapacityError,
-    CodecPhase,
     DecodeFailure,
     TranscodeDomainError,
     TranscodeError,
@@ -98,14 +97,12 @@ fn test_transcode_domain_error_accessors_describe_all_phases() {
     let reset = TranscodeDomainError::reset("reset");
     assert_eq!(&"reset", reset.source());
     assert_eq!("reset", reset.into_source());
-    assert_eq!(CodecPhase::Reset, reset.phase());
     assert_eq!(None, reset.input_index());
     assert_eq!(None, reset.input_consumed());
 
     let main = TranscodeDomainError::main("main", 7);
     assert_eq!(&"main", main.source());
     assert_eq!("main", main.into_source());
-    assert_eq!(CodecPhase::Main, main.phase());
     assert_eq!(Some(7), main.input_index());
     assert_eq!(None, main.input_consumed());
 
@@ -116,14 +113,12 @@ fn test_transcode_domain_error_accessors_describe_all_phases() {
     );
     assert_eq!(&"invalid", main_with_consumed.source());
     assert_eq!("invalid", main_with_consumed.into_source());
-    assert_eq!(CodecPhase::Main, main_with_consumed.phase());
     assert_eq!(Some(9), main_with_consumed.input_index());
     assert_eq!(Some(qubit_io::nz!(2)), main_with_consumed.input_consumed());
 
     let finish = TranscodeDomainError::finish("finish");
     assert_eq!(&"finish", finish.source());
     assert_eq!("finish", finish.into_source());
-    assert_eq!(CodecPhase::Finish, finish.phase());
     assert_eq!(None, finish.input_index());
     assert_eq!(None, finish.input_consumed());
 }

@@ -65,6 +65,14 @@ fn test_transcode_contract_error_display_formats_all_variants() {
         }
         .to_string(),
     );
+    assert_eq!(
+        "transcoder reported Complete after consuming 1 of 2 available input units",
+        TranscodeContractError::CompleteWithRemainingInput {
+            read: 1,
+            available: 2,
+        }
+        .to_string(),
+    );
 }
 
 #[test]

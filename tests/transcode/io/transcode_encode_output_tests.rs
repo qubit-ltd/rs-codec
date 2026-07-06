@@ -929,6 +929,10 @@ fn map_codec_error(error: PairEncodeError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
+fn panic_codec_error(_error: PairEncodeError) -> Error {
+    panic!("framework failures must not call the domain mapper")
+}
+
 fn encode_with<E>(
     output: &mut TranscodeEncodeOutput<UnitOutput>,
     encoder: &mut E,
@@ -1014,14 +1018,14 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
 fn test_buffered_encode_output_writes_one_codec_value() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 2);
-    let mut codec = FixedPairCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     output
         .write_encoded_with(&mut codec, &0x1234_5678, map_codec_error)
         .expect("one codec value should encode into the output buffer");
     output.flush().expect("encoded units should flush");
 
-    assert_eq!(&[0x1234, 0x5678], output.inner().units.as_slice());
+    assert_eq!(&[0x5678, 0x1234], output.inner().units.as_slice());
 }
 
 #[test]
@@ -1447,52 +1451,49 @@ fn test_buffered_encode_output_finish_reports_required_spare_capacity_error() {
     assert!(error.to_string().contains("spare capacity"));
 }
 
-#[derive(Debug, Default)]
-struct RejectAllEncodeCodec;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScriptedEncodeMode {
+    Success,
+    Reject,
+    EncodeError,
+    FinishError,
+    LenOverflow,
+    ExactLenExceedsBound,
+}
 
-impl Codec for RejectAllEncodeCodec {
-    type Value = u32;
-    type Unit = u16;
-    type DecodeError = PairEncodeError;
-    type EncodeError = PairEncodeError;
+#[derive(Debug)]
+struct ScriptedEncodeCodec {
+    mode: ScriptedEncodeMode,
+}
 
-    const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
-
-    fn can_encode_value(&self, _value: &u32) -> bool {
-        false
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u16],
-        input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        _value: &u32,
-        _output: &mut [u16],
-        _output_index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        Err(PairEncodeError::BadInputIndex)
+impl ScriptedEncodeCodec {
+    fn new(mode: ScriptedEncodeMode) -> Self {
+        Self { mode }
     }
 }
 
-#[derive(Debug, Default)]
-struct DomainFailEncodeCodec;
-
-impl Codec for DomainFailEncodeCodec {
+impl Codec for ScriptedEncodeCodec {
     type Value = u32;
     type Unit = u16;
     type DecodeError = PairEncodeError;
     type EncodeError = PairEncodeError;
 
-    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
+
+    fn can_encode_value(&self, _value: &u32) -> bool {
+        self.mode != ScriptedEncodeMode::Reject
+    }
+
+    fn encode_len(&self, _value: &u32) -> usize {
+        match self.mode {
+            ScriptedEncodeMode::LenOverflow => usize::MAX,
+            ScriptedEncodeMode::ExactLenExceedsBound => 4,
+            _ => 2,
+        }
+    }
 
     unsafe fn decode(
         &mut self,
@@ -1505,11 +1506,35 @@ impl Codec for DomainFailEncodeCodec {
 
     unsafe fn encode(
         &mut self,
-        _value: &u32,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        if self.mode == ScriptedEncodeMode::EncodeError {
+            return Err(PairEncodeError::BadOutputIndex);
+        }
+        output[output_index] = *value as u16;
+        output[output_index + 1] = (*value >> 16) as u16;
+        Ok(2)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
         _output: &mut [u16],
         _output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        Err(PairEncodeError::BadOutputIndex)
+        Ok(0)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        if self.mode == ScriptedEncodeMode::FinishError {
+            return Err(PairEncodeError::BadInputIndex);
+        }
+        Ok(0)
     }
 }
 
@@ -1538,21 +1563,21 @@ fn test_buffered_encode_output_write_encoded_uses_scratch_when_buffer_is_too_sma
  {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
-    let mut codec = FixedPairCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
         .expect("large value should encode through scratch storage");
     output.flush().expect("encoded units should flush");
 
-    assert_eq!(&[0x0001, 0x0002], output.inner().units.as_slice());
+    assert_eq!(&[0x0002, 0x0001], output.inner().units.as_slice());
 }
 
 #[test]
 fn test_buffered_encode_output_write_encoded_maps_domain_error() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
-    let mut codec = DomainFailEncodeCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::EncodeError);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1566,7 +1591,7 @@ fn test_buffered_encode_output_write_encoded_maps_domain_error() {
 fn test_buffered_encode_output_write_encoded_reports_unencodable_value() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
-    let mut codec = RejectAllEncodeCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Reject);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1682,41 +1707,6 @@ impl Output for BrokenPipeByteOutput {
     }
 }
 
-#[derive(Debug, Default)]
-struct EncodeLenOverflowCodec;
-
-impl Codec for EncodeLenOverflowCodec {
-    type Value = u32;
-    type Unit = u16;
-    type DecodeError = PairEncodeError;
-    type EncodeError = PairEncodeError;
-
-    const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
-
-    fn encode_len(&self, _value: &u32) -> usize {
-        usize::MAX
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u16],
-        input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        _value: &u32,
-        _output: &mut [u16],
-        _output_index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        Ok(1)
-    }
-}
-
 #[test]
 fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
     let mut output =
@@ -1735,26 +1725,54 @@ fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
 fn test_buffered_encode_output_write_encoded_maps_framework_error_locally() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
-    let mut codec = EncodeLenOverflowCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::LenOverflow);
 
     let error = output
-        .write_encoded_with(&mut codec, &0x0001_0002, |_| {
-            panic!("framework failures must not call the domain mapper")
-        })
+        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
         .expect_err("encode length overflow should be mapped locally");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("output length arithmetic overflow", error.to_string());
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_rechecks_spare_capacity() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
+    let mut codec =
+        ScriptedEncodeCodec::new(ScriptedEncodeMode::ExactLenExceedsBound);
+
+    let error = output
+        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
+        .expect_err("spare capacity mismatch should be mapped locally");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!(
-        "insufficient output at index 0: required 18446744073709551615 units, available 4",
+        "insufficient output at index 0: required 6 units, available 4",
         error.to_string(),
     );
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_maps_scratch_framework_error_locally()
+ {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::LenOverflow);
+
+    let error = output
+        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
+        .expect_err("scratch encode length overflow should be mapped locally");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("output length arithmetic overflow", error.to_string());
 }
 
 #[test]
 fn test_buffered_encode_output_write_encoded_propagates_non_capacity_spare_errors()
  {
     let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeOutput, 0);
-    let mut codec = FixedPairCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1766,7 +1784,7 @@ fn test_buffered_encode_output_write_encoded_propagates_non_capacity_spare_error
 #[test]
 fn test_buffered_encode_output_write_encoded_scratch_propagates_flush_errors() {
     let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeOutput, 0);
-    let mut codec = FixedPairCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1778,7 +1796,7 @@ fn test_buffered_encode_output_write_encoded_scratch_propagates_flush_errors() {
 #[test]
 fn test_buffered_encode_output_write_encoded_scratch_propagates_write_errors() {
     let mut output = TranscodeEncodeOutput::with_capacity(WriteErrorOutput, 0);
-    let mut codec = FixedPairCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1791,7 +1809,7 @@ fn test_buffered_encode_output_write_encoded_scratch_propagates_write_errors() {
 fn test_buffered_encode_output_write_encoded_maps_domain_error_via_scratch() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
-    let mut codec = DomainFailEncodeCodec;
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::EncodeError);
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
@@ -1799,6 +1817,38 @@ fn test_buffered_encode_output_write_encoded_maps_domain_error_via_scratch() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!("bad output index", error.to_string());
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_maps_finish_error_via_scratch() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::FinishError);
+
+    let error = output
+        .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
+        .expect_err("scratch encode should map finish failures");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("bad input index", error.to_string());
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_rechecks_scratch_capacity() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
+    let mut codec =
+        ScriptedEncodeCodec::new(ScriptedEncodeMode::ExactLenExceedsBound);
+
+    let error = output
+        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
+        .expect_err("scratch capacity mismatch should be mapped locally");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(
+        "insufficient output at index 0: required 6 units, available 4",
+        error.to_string(),
+    );
 }
 
 #[test]

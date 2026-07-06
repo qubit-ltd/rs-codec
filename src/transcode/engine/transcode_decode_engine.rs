@@ -623,36 +623,14 @@ where
                 let action = match self.hooks.handle_invalid_decode(
                     &mut self.codec,
                     &source,
-                    Some(consumed),
+                    consumed,
                     context,
                 )? {
                     DecodeInvalidAction::Reject => {
                         return Err(TranscodeError::domain_main_with_consumed(
                             source,
                             context.input_index(),
-                            Some(consumed),
-                        ));
-                    }
-                    DecodeInvalidAction::Skip { consumed } => {
-                        AppliedDecodeInvalidAction::Skip { consumed }
-                    }
-                    DecodeInvalidAction::Emit { value, consumed } => {
-                        AppliedDecodeInvalidAction::Emit { value, consumed }
-                    }
-                };
-                Ok(Self::apply_invalid_decode_action(action, context, consume))
-            }
-            Err(DecodeFailure::InvalidUnknown { source }) => {
-                let action = match self.hooks.handle_invalid_decode(
-                    &mut self.codec,
-                    &source,
-                    None,
-                    context,
-                )? {
-                    DecodeInvalidAction::Reject => {
-                        return Err(TranscodeError::domain_main(
-                            source,
-                            context.input_index(),
+                            consumed,
                         ));
                     }
                     DecodeInvalidAction::Skip { consumed } => {

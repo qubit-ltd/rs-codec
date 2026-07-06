@@ -11,8 +11,6 @@ use core::num::NonZeroUsize;
 
 use thiserror::Error;
 
-use super::codec_phase::CodecPhase;
-
 /// Domain-specific codec, charset, or policy error with transcode context.
 ///
 /// Reset and finish failures are lifecycle failures and therefore cannot carry
@@ -156,22 +154,6 @@ impl<E> TranscodeDomainError<E> {
             Self::Reset { source }
             | Self::Main { source, .. }
             | Self::Finish { source } => source,
-        }
-    }
-
-    /// Returns the lifecycle phase where the error occurred.
-    ///
-    /// # Returns
-    ///
-    /// Returns [`CodecPhase::Reset`], [`CodecPhase::Main`], or
-    /// [`CodecPhase::Finish`] according to the enum variant.
-    #[inline(always)]
-    #[must_use]
-    pub const fn phase(&self) -> CodecPhase {
-        match self {
-            Self::Reset { .. } => CodecPhase::Reset,
-            Self::Main { .. } => CodecPhase::Main,
-            Self::Finish { .. } => CodecPhase::Finish,
         }
     }
 

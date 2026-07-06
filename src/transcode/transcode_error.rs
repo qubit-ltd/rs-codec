@@ -239,14 +239,7 @@ impl<E, Value> TranscodeError<E, Value> {
                 )
             }
             DecodeFailure::Invalid { source, consumed } => {
-                Self::domain_main_with_consumed(
-                    source,
-                    input_index,
-                    Some(consumed),
-                )
-            }
-            DecodeFailure::InvalidUnknown { source } => {
-                Self::domain_main(source, input_index)
+                Self::domain_main_with_consumed(source, input_index, consumed)
             }
         }
     }

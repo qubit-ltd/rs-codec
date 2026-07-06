@@ -196,8 +196,8 @@ where
     /// - `codec`: Low-level codec owned by the engine.
     /// - `error`: Invalid domain error returned by the codec.
     /// - `consumed`: Known invalid input units that may be consumed by
-    ///   non-strict policies, or `None` when the codec reported
-    ///   [`DecodeFailure::InvalidUnknown`](crate::DecodeFailure::InvalidUnknown).
+    ///   non-strict policies, or `None` when the codec cannot state an invalid
+    ///   span length.
     /// - `context`: Decode attempt context.
     ///
     /// # Returns

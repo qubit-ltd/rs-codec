@@ -204,8 +204,9 @@ impl TranscodeProgress {
     ///
     /// Buffered drivers should call this before using [`Self::read`] or
     /// [`Self::written`] to advance unchecked input or output cursors. The
-    /// method checks relative counters, absolute status indices, and
-    /// unsatisfied `NeedInput` / `NeedOutput` requirements.
+    /// method checks relative counters, absolute status indices, unsatisfied
+    /// `NeedInput` / `NeedOutput` requirements, and the `Complete` invariant
+    /// that all visible input was consumed.
     ///
     /// This is a contract checker, not a semantic recovery policy. Drivers
     /// that advance unsafe cursors may run it in release builds and convert
@@ -268,7 +269,17 @@ impl TranscodeProgress {
         let expected_output_available = available_output - self.written;
 
         match self.status {
-            TranscodeStatus::Complete => Ok(()),
+            TranscodeStatus::Complete => {
+                if self.read != available_input {
+                    return Err(
+                        TranscodeContractError::CompleteWithRemainingInput {
+                            read: self.read,
+                            available: available_input,
+                        },
+                    );
+                }
+                Ok(())
+            }
             TranscodeStatus::NeedInput {
                 input_index,
                 required,

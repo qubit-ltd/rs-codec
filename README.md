@@ -18,8 +18,7 @@ adapter crates, without concrete format implementations.
 This crate provides:
 
 - `Codec` for low-level single-value buffer codecs.
-- `CodecValueExt`, `CodecValueEncoder`, `CodecValueDecoder`,
-  `CodecTranscodeEncoder`,
+- `CodecValueEncoder`, `CodecValueDecoder`, `CodecTranscodeEncoder`,
   `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
   codec-backed value and buffered conversion.
 - `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, and
@@ -74,8 +73,6 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   `ValueEncoder<C::Value>` that returns owned `Vec<C::Unit>` output.
 - **`CodecValueDecoder<C>`**: wraps a `Codec` as a
   `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
-- **`CodecValueExt`**: extension trait for checked one-value codec helpers such
-  as reset-prefixed encode and exact decode with finish handling.
 
 ### Buffered Transcoder Primitives
 
@@ -271,10 +268,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `CodecValueExt` | Provide checked one-value helper methods for all `C: Codec` without expanding the low-level `Codec` contract |
-| `CodecEncodeValueResult<E>` | Result alias returned by reset-prefixed one-value encode helpers |
-| `CodecDecodeValueWithFinishResult<V, E>` | Result alias returned by decode-and-finish one-value helpers with consumed and finished counts |
-| `CodecDecodeExactValueWithFinishResult<V, E>` | Result alias returned by exact decode-and-finish one-value helpers |
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
 | `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
 | `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
@@ -348,11 +341,10 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - `encode_len(value)` must equal the number of units `Codec::encode` writes for
   the same value and codec state, and it must not exceed
   `Codec::MAX_UNITS_PER_VALUE`.
-- Stateful one-value callers should use `CodecValueExt::max_encode_value_units()`
-  with `CodecValueExt::encode_value_with_reset()`, or
-  `CodecValueExt::decode_exact_value_with_finish()` when the input must contain
-  exactly one encoded value. These helpers keep reset/finish capacity checks and
-  overflow handling in the value adapter layer.
+- Stateful owned one-value callers should use `CodecValueEncoder<C>` and
+  `CodecValueDecoder<C>`. Callers that need caller-provided buffers should use
+  the streaming transcoder adapters so reset, main value, and finish lifecycle
+  handling stays centralized.
 - `TranscodeError<E>` is the shared intermediate error for engine and adapter
   internals. Default streaming adapters expose it directly, while value and
   downstream facade adapters map it into their own final error types.

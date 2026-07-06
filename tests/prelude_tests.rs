@@ -29,7 +29,6 @@ use qubit_codec::{
     CodecTranscodeEncoder,
     CodecValueDecoder,
     CodecValueEncoder,
-    CodecValueExt,
     ConvertError,
     TranscodeConverter,
     TranscodeDecoder,
@@ -152,7 +151,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     }
     fn _accept_codec_value_encoder<T: ValueEncoder<u8, Output = Vec<u8>>>() {}
     fn _accept_codec_value_decoder<T: ValueDecoder<[u8], Output = u8>>() {}
-    fn _accept_codec_value_ext<T: CodecValueExt>() {}
     fn _accept_codec_transcode_encoder<
         T: TranscodeEncoder<Input = u8, Output = u8>,
     >() {
@@ -173,7 +171,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec>>();
-    _accept_codec_value_ext::<EchoCodec>();
     _accept_codec_transcode_encoder::<CodecTranscodeEncoder<EchoCodec>>();
     _accept_codec_transcode_decoder::<CodecTranscodeDecoder<EchoCodec>>();
     _accept_codec_transcode_converter::<

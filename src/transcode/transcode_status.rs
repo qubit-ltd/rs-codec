@@ -11,6 +11,12 @@ use core::num::NonZeroUsize;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscodeStatus {
     /// All currently supplied input was consumed.
+    ///
+    /// A `Complete` status means the current [`crate::Transcoder::transcode`]
+    /// call consumed every input unit visible from the supplied `input_index`.
+    /// Implementations must report [`NeedInput`](Self::NeedInput) for an
+    /// incomplete input tail and [`NeedOutput`](Self::NeedOutput) when output
+    /// capacity prevents further input consumption.
     Complete,
 
     /// More input is needed to complete the next output value.

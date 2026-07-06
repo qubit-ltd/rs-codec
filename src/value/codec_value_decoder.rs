@@ -12,9 +12,9 @@ use core::fmt;
 use super::ValueDecoder;
 use crate::{
     Codec,
-    CodecValueExt,
     TranscodeError,
     codec::assert_unit_bounds,
+    value::codec_value_lifecycle::decode_exact_complete_value,
 };
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
@@ -34,8 +34,8 @@ where
 {
     /// Low-level codec used for one-value decoding.
     codec: C,
-    /// Reusable storage for values emitted by `Codec::decode_finish`.
-    finish_scratch: Vec<C::Value>,
+    /// Reusable storage for values emitted by decode reset and finish hooks.
+    decode_lifecycle_scratch: Vec<C::Value>,
 }
 
 impl<C> CodecValueDecoder<C>
@@ -63,18 +63,9 @@ where
         assert_unit_bounds::<C>();
         Self {
             codec,
-            finish_scratch: Vec::new(),
+            decode_lifecycle_scratch: Vec::new(),
         }
     }
-}
-
-impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
-where
-    C: Codec,
-    C::Value: Default,
-{
-    type Output = C::Value;
-    type Error = TranscodeError<C::DecodeError>;
 
     /// Decodes exactly one encoded value from `input`.
     ///
@@ -102,27 +93,47 @@ where
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length, or when finish output exceeds
     /// [`Codec::MAX_DECODE_FINISH_VALUES`].
-    fn decode(
+    pub fn decode(
         &mut self,
         input: &[C::Unit],
-    ) -> Result<Self::Output, Self::Error> {
-        let finish_cap = C::MAX_DECODE_FINISH_VALUES;
-        let (value, _) = if finish_cap == 0 {
-            self.codec
-                .decode_exact_value_with_finish(input, &mut [], 0)?
+    ) -> Result<C::Value, TranscodeError<C::DecodeError>>
+    where
+        C::Value: Default,
+    {
+        let scratch_cap =
+            C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
+        let value = if scratch_cap == 0 {
+            decode_exact_complete_value(&mut self.codec, input, &mut [])?
         } else {
-            if self.finish_scratch.len() < finish_cap {
-                self.finish_scratch
-                    .resize_with(finish_cap, C::Value::default);
+            if self.decode_lifecycle_scratch.len() < scratch_cap {
+                self.decode_lifecycle_scratch
+                    .resize_with(scratch_cap, C::Value::default);
             }
-            self.codec.decode_exact_value_with_finish(
+            decode_exact_complete_value(
+                &mut self.codec,
                 input,
-                &mut self.finish_scratch,
-                0,
+                &mut self.decode_lifecycle_scratch,
             )?
         };
 
         Ok(value)
+    }
+}
+
+impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
+where
+    C: Codec,
+    C::Value: Default,
+{
+    type Output = C::Value;
+    type Error = TranscodeError<C::DecodeError>;
+
+    #[inline(always)]
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
+        self.decode(input)
     }
 }
 
@@ -135,8 +146,14 @@ where
         formatter
             .debug_struct("CodecValueDecoder")
             .field("codec", &self.codec)
-            .field("finish_scratch_len", &self.finish_scratch.len())
-            .field("finish_scratch_capacity", &self.finish_scratch.capacity())
+            .field(
+                "decode_lifecycle_scratch_len",
+                &self.decode_lifecycle_scratch.len(),
+            )
+            .field(
+                "decode_lifecycle_scratch_capacity",
+                &self.decode_lifecycle_scratch.capacity(),
+            )
             .finish()
     }
 }

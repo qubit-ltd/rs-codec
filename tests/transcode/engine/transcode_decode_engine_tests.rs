@@ -1357,7 +1357,7 @@ fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
 
     assert_eq!(
         TranscodeError::domain_reset(PrefixDecodeError::Invalid {
-            consumed: 1,
+            consumed: 1
         }),
         error,
     );

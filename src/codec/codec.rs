@@ -376,9 +376,8 @@ pub trait Codec {
     /// when the upstream source is closed.
     /// Returns [`DecodeFailure::Invalid`] when the units are malformed,
     /// non-canonical, unmappable, or otherwise invalid for this codec and the
-    /// invalid span is known. Returns [`DecodeFailure::InvalidUnknown`] when
-    /// the codec cannot state the invalid span length. The concrete error type
-    /// carries only codec-domain invalidity.
+    /// span is known or unknown. Unknown span is represented as
+    /// [`DecodeFailure::Invalid`] with an unknown consumed-unit hint.
     /// Implementations must leave their internal state consistent when
     /// returning an error.
     ///

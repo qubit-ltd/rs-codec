@@ -18,8 +18,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 - 用于底层单值缓冲区编码解码的 `Codec` trait。
 - 基于给定 `Codec` 显式适配 value 与 buffered 转换的
-  `CodecValueExt`、`CodecValueEncoder`、`CodecValueDecoder`、
-  `CodecTranscodeEncoder`、`CodecTranscodeDecoder` 和
+  `CodecValueEncoder`、`CodecValueDecoder`、`CodecTranscodeEncoder`、
+  `CodecTranscodeDecoder` 和
   `CodecTranscodeConverter` adapter。
 - 用于下游带策略 encoder 复用公共 buffered encode 循环的
   `TranscodeEncodeEngine`、`TranscodeEncodeHooks`、`EncodeOutcome` 和
@@ -65,8 +65,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   返回自有 `Vec<C::Unit>` 的 `ValueEncoder<C::Value>`。
 - **`CodecValueDecoder<C>`**：把 `Codec` 包装为
   接收恰好一个完整编码值的 `ValueDecoder<[C::Unit]>`。
-- **`CodecValueExt`**：为所有 `C: Codec` 提供带检查的单值 helper，例如
-  reset-prefixed encode 和带 finish 处理的 exact decode。
 
 ### 缓冲区转换原语
 
@@ -252,10 +250,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `CodecValueExt` | 为所有 `C: Codec` 提供带检查的单值 helper，同时不扩大底层 `Codec` 契约 |
-| `CodecEncodeValueResult<E>` | reset-prefixed 单值 encode helper 返回的结果类型别名 |
-| `CodecDecodeValueWithFinishResult<V, E>` | decode-and-finish 单值 helper 返回的结果类型别名，成功时包含 consumed 与 finished 计数 |
-| `CodecDecodeExactValueWithFinishResult<V, E>` | exact decode-and-finish 单值 helper 返回的结果类型别名 |
 | `CodecValueEncoder<C>` | 通过 `C: Codec` 把一个借用 `C::Value` 编码成自有 `Vec<C::Unit>`，不要求 `C::Value: Clone` |
 | `CodecValueDecoder<C>` | 通过 `C: Codec` 把恰好一个借用 `[C::Unit]` slice 解码成 `C::Value` |
 | `CodecTranscodeEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |
@@ -326,11 +320,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   unit，用 `DecodeFailure::Invalid` 表示 codec-domain 的畸形、非规范或其他非法输入。
 - `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
   实际写入的 unit 数量，并且不能超过 `Codec::MAX_UNITS_PER_VALUE`。
-- 需要处理状态化单值编码时，应配合使用
-  `CodecValueExt::max_encode_value_units()` 与
-  `CodecValueExt::encode_value_with_reset()`；输入必须恰好是一个编码值时，
-  应使用 `CodecValueExt::decode_exact_value_with_finish()`。这些 helper 把
-  reset/finish 容量检查和 overflow 处理统一放在 value adapter 层。
+- 需要处理状态化自有单值转换时，应使用 `CodecValueEncoder<C>` 和
+  `CodecValueDecoder<C>`。需要调用方提供缓冲区时，应使用 streaming
+  transcoder adapter，确保 reset、主值与 finish 生命周期处理集中在 adapter 层。
 - `TranscodeError<E>` 是 engine 与 adapter 内部共享的中间错误。默认 streaming
   adapter 直接暴露它，value adapter 和下游 facade adapter 则把它映射成自己的最终错误类型。
 - `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。

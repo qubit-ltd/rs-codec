@@ -74,7 +74,7 @@ fn test_decode_failure_reports_invalid_domain_error() {
     assert_eq!(
         DecodeFailure::Invalid {
             source: DomainDecodeError,
-            consumed,
+            consumed: Some(consumed),
         },
         failure
     );
@@ -88,8 +88,9 @@ fn test_decode_failure_reports_invalid_unknown_consumption() {
     let failure = DecodeFailure::invalid_unknown(DomainDecodeError);
 
     assert_eq!(
-        DecodeFailure::InvalidUnknown {
+        DecodeFailure::Invalid {
             source: DomainDecodeError,
+            consumed: None,
         },
         failure
     );

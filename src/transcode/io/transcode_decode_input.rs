@@ -7,7 +7,10 @@
 // =============================================================================
 //! Buffered input driver that decodes units into values.
 
-use core::fmt;
+use core::{
+    fmt,
+    num::NonZeroUsize,
+};
 use std::io::{
     Error,
     ErrorKind,
@@ -28,7 +31,7 @@ use qubit_io::{
 use crate::{
     Codec,
     DecodeFailure,
-    TranscodeError,
+    TranscodeErrorOf,
     TranscodeStatus,
     Transcoder,
 };
@@ -418,16 +421,15 @@ where
                     // continue to the next loop
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
-                    if consumed.get() > units.len() {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "decode error consumed units exceed unread window",
-                        ));
+                    if let Some(consumed) = consumed {
+                        if consumed.get() > units.len() {
+                            return Err(Error::new(
+                                ErrorKind::InvalidData,
+                                "decode error consumed units exceed unread window",
+                            ));
+                        }
+                        self.consume(consumed.get());
                     }
-                    self.consume(consumed.get());
-                    return Err(map_error(source));
-                }
-                Err(DecodeFailure::InvalidUnknown { source }) => {
                     return Err(map_error(source));
                 }
             }
@@ -465,7 +467,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<Input = I::Item, Output = Value>,
-        M: FnMut(TranscodeError<D::DomainError, D::FailureValue>) -> Error,
+        M: FnMut(TranscodeErrorOf<D>) -> Error,
     {
         let output_end = UncheckedSlice::checked_range_end(
             output.len(),
@@ -553,7 +555,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<Input = I::Item, Output = Value>,
-        M: FnMut(TranscodeError<D::DomainError, D::FailureValue>) -> Error,
+        M: FnMut(TranscodeErrorOf<D>) -> Error,
     {
         let required = decoder
             .max_finish_output_len()
@@ -822,7 +824,7 @@ where
                 required_total = next_required_total;
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {
-                let consumed = consumed.get();
+                let consumed = consumed.map(NonZeroUsize::get).unwrap_or(0);
                 if consumed > loaded {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
@@ -830,10 +832,6 @@ where
                     ));
                 }
                 input.store_scratch_tail(&units[..loaded], consumed);
-                return Err(map_error(source));
-            }
-            Err(DecodeFailure::InvalidUnknown { source }) => {
-                input.store_scratch_tail(&units[..loaded], 0);
                 return Err(map_error(source));
             }
         }

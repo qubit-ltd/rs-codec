@@ -7,7 +7,6 @@
 // =============================================================================
 //! Internal state machines and step types for transcode engines.
 
-pub(in crate::transcode) mod convert_error_of;
 pub(in crate::transcode) mod convert_state;
 pub(in crate::transcode) mod decode_state;
 pub(in crate::transcode) mod encode_state;

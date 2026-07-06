@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod convert_error_of_tests;
 mod convert_state_tests;
 mod decode_state_tests;
 mod encode_state_tests;

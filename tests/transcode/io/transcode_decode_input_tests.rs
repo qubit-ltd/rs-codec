@@ -260,7 +260,7 @@ fn test_transcode_decode_input_rejects_complete_without_progress() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!(
-        "decoder reported Complete without consuming non-empty input",
+        "transcoder reported Complete after consuming 0 of 1 available input units",
         error.to_string(),
     );
 }

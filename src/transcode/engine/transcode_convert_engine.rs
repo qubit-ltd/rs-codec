@@ -14,7 +14,6 @@
 use core::num::NonZeroUsize;
 
 use super::super::internal::{
-    convert_error_of::ConvertErrorOf,
     convert_state::ConvertState,
     lifecycle::LifecycleGuard,
     pending_value::PendingValue,
@@ -486,7 +485,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E>>
+    ) -> Result<usize, TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -549,7 +548,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, ConvertErrorOf<D, E>> {
+    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
         self.lifecycle.on_transcode();
         TranscodeError::ensure_transcode_indices(
             input.len(),
@@ -625,7 +624,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, ConvertErrorOf<D, E>>
+    ) -> Result<usize, TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -688,7 +687,7 @@ where
         &mut self,
         input: &[D::Unit],
         output: &mut [E::Unit],
-    ) -> Result<usize, ConvertErrorOf<D, E>>
+    ) -> Result<usize, TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -721,7 +720,7 @@ where
     fn drain_decoder_reset(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), ConvertErrorOf<D, E>>
+    ) -> Result<(), TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -776,7 +775,7 @@ where
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E>> {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
         let (outcome, pending) = self
             .decode_engine
             .decode_one(
@@ -827,7 +826,7 @@ where
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E>> {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
@@ -860,7 +859,7 @@ where
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), ConvertErrorOf<D, E>>
+    ) -> Result<(), TranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -921,7 +920,7 @@ where
         &mut self,
         pending: PendingValue<D::Value>,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, ConvertErrorOf<D, E>> {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let context = EncodeContext::new(
@@ -944,7 +943,7 @@ where
     /// Maps source decoder errors into the converter error domain.
     fn map_decode_error(
         error: TranscodeDecodeError<D>,
-    ) -> ConvertErrorOf<D, E> {
+    ) -> TranscodeConvertError<D, E> {
         error
             .map_domain(ConvertError::decode)
             .map_failure_value(|()| {
