@@ -24,7 +24,7 @@ pub enum DecodeInvalidAction<Value> {
     /// Reject the current invalid input.
     ///
     /// The decode engine reports the original codec decode error as
-    /// [`crate::TranscodeError::Domain`] at the current input index.
+    /// [`crate::TranscodeDecodeError::Domain`] at the current input index.
     Reject,
 
     /// Consume invalid input without producing output.

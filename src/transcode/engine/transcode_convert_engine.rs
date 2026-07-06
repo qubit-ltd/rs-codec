@@ -30,10 +30,9 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    ConvertError,
+    CodecTranscodeConvertError,
     TranscodeConvertError,
-    TranscodeDecodeError,
-    TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -79,6 +78,8 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     Codec,
+///     CodecTranscodeDecodeError,
+///     CodecTranscodeEncodeError,
 ///     DecodeFailure,
 ///     TranscodeStatus,
 /// };
@@ -162,7 +163,7 @@ use crate::{
 ///         error: &Infallible,
 ///         _consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<SourceCodec>> {
+///     ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, CodecTranscodeDecodeError<SourceCodec>> {
 ///         match *error {}
 ///     }
 /// }
@@ -174,7 +175,7 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut TargetCodec,
 ///         _context: &EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<TargetCodec>> {
+///     ) -> Result<EncodeUnencodableAction<u8>, CodecTranscodeEncodeError<TargetCodec>> {
 ///         unreachable!("TargetCodec accepts every u8")
 ///     }
 /// }
@@ -199,7 +200,7 @@ use crate::{
 ///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("input is complete"),
 /// }
-/// # Ok::<(), qubit_codec::TranscodeConvertError<SourceCodec, TargetCodec>>(())
+/// # Ok::<(), qubit_codec::CodecTranscodeConvertError<SourceCodec, TargetCodec>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -485,13 +486,13 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>>
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -511,8 +512,7 @@ where
         let output_cursor = state.output_cursor();
         let encoder_written = self
             .encode_engine
-            .reset(state.output_mut(), output_cursor)
-            .map_err(|error| error.map_domain(ConvertError::encode))?;
+            .reset(state.output_mut(), output_cursor)?;
         state.advance_output(encoder_written);
         Ok(state.written())
     }
@@ -548,9 +548,9 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
         self.lifecycle.on_transcode();
-        TranscodeError::ensure_transcode_indices(
+        TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
             output.len(),
@@ -624,13 +624,13 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>>
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -653,8 +653,7 @@ where
         let output_cursor = state.output_cursor();
         let written = self
             .encode_engine
-            .finish(state.output_mut(), output_cursor)
-            .map_err(|error| error.map_domain(ConvertError::encode))?;
+            .finish(state.output_mut(), output_cursor)?;
         state.advance_output(written);
         self.lifecycle.on_finish_success();
         Ok(state.written())
@@ -687,7 +686,7 @@ where
         &mut self,
         input: &[D::Unit],
         output: &mut [E::Unit],
-    ) -> Result<usize, TranscodeConvertError<D, E>>
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -720,7 +719,7 @@ where
     fn drain_decoder_reset(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), TranscodeConvertError<D, E>>
+    ) -> Result<(), CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -730,19 +729,14 @@ where
             // hooks own teardown side effects (e.g. clearing accumulators)
             // run them. The empty slice is safe because the capacity check
             // inside `reset` accepts `required == 0` against any slice.
-            self.decode_engine
-                .reset(&mut [], 0)
-                .map_err(Self::map_decode_error)?;
+            self.decode_engine.reset(&mut [], 0)?;
             return Ok(());
         }
         // `D::Value: Default` is only consulted when the decoder declares
         // reset output. Stateless codecs never reach this branch.
         let mut reset_values: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
-        let written = self
-            .decode_engine
-            .reset(&mut reset_values, 0)
-            .map_err(Self::map_decode_error)?;
+        let written = self.decode_engine.reset(&mut reset_values, 0)?;
         for value in reset_values.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self.encode_pending(pending, state)?.is_some() {
@@ -775,15 +769,13 @@ where
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
-        let (outcome, pending) = self
-            .decode_engine
-            .decode_one(
-                state.input(),
-                state.decode_context(),
-                PendingValue::new,
-            )
-            .map_err(Self::map_decode_error)?;
+    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
+    {
+        let (outcome, pending) = self.decode_engine.decode_one(
+            state.input(),
+            state.decode_context(),
+            PendingValue::new,
+        )?;
         if let Some(pending) = pending {
             self.pending.put(pending);
         }
@@ -826,7 +818,8 @@ where
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
+    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
+    {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
@@ -859,7 +852,7 @@ where
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), TranscodeConvertError<D, E>>
+    ) -> Result<(), CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -872,9 +865,7 @@ where
             // verification) that can fail even when emitting zero
             // values. Passing an empty slice is safe here because the capacity
             // check inside finish() accepts required == 0 against any slice.
-            self.decode_engine
-                .finish(&mut [], 0)
-                .map_err(Self::map_decode_error)?;
+            self.decode_engine.finish(&mut [], 0)?;
             return Ok(());
         }
         // D::Value: Default is required only when value_count > 0. The bound
@@ -882,10 +873,7 @@ where
         // codecs never reach this branch.
         let mut decoded: Vec<D::Value> =
             (0..value_count).map(|_| D::Value::default()).collect();
-        let written = self
-            .decode_engine
-            .finish(&mut decoded, 0)
-            .map_err(Self::map_decode_error)?;
+        let written = self.decode_engine.finish(&mut decoded, 0)?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
             if self.encode_pending(pending, state)?.is_some() {
@@ -920,7 +908,8 @@ where
         &mut self,
         pending: PendingValue<D::Value>,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, TranscodeConvertError<D, E>> {
+    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
+    {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let context = EncodeContext::new(
@@ -929,28 +918,18 @@ where
             state.output_mut(),
             output_index,
         );
-        let outcome = self
-            .encode_engine
-            .encode_one(context)
-            .map_err(|error| error.map_domain(ConvertError::encode))?;
+        let outcome =
+            self.encode_engine.encode_one(context).map_err(|error| {
+                TranscodeConvertError::from_encode_error_with_value(
+                    error,
+                    pending.value().clone(),
+                )
+            })?;
         let progress = state.apply_encode_outcome(outcome);
         if progress.is_some() {
             self.pending.put(pending);
         }
         Ok(progress)
-    }
-
-    /// Maps source decoder errors into the converter error domain.
-    fn map_decode_error(
-        error: TranscodeDecodeError<D>,
-    ) -> TranscodeConvertError<D, E> {
-        error
-            .map_domain(ConvertError::decode)
-            .map_failure_value(|()| {
-                unreachable!(
-                    "decode engine does not carry encode value context"
-                )
-            })
     }
 }
 
@@ -983,8 +962,7 @@ where
 {
     type Input = D::Unit;
     type Output = E::Unit;
-    type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
-    type FailureValue = D::Value;
+    type Error = CodecTranscodeConvertError<D, E>;
 
     /// Returns an upper bound for target units produced from `input_len`
     /// units.
@@ -1016,7 +994,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>> {
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
         TranscodeConvertEngine::reset(self, output, output_index)
     }
 
@@ -1028,7 +1006,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
         TranscodeConvertEngine::transcode(
             self,
             input,
@@ -1044,7 +1022,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>> {
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
         TranscodeConvertEngine::finish(self, output, output_index)
     }
 }

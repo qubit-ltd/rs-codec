@@ -23,8 +23,9 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecTranscodeEncodeError,
     TranscodeEncodeError,
-    TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -60,8 +61,8 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     Codec,
+///     CodecTranscodeEncodeError,
 ///     DecodeFailure,
-///     TranscodeEncodeError,
 ///     TranscodeStatus,
 /// };
 /// use qubit_codec::engine::{
@@ -109,7 +110,7 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
 ///         _context: &EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeError<ByteCodec>> {
+///     ) -> Result<EncodeUnencodableAction<u8>, CodecTranscodeEncodeError<ByteCodec>> {
 ///         unreachable!("ByteCodec accepts every u8")
 ///     }
 /// }
@@ -129,7 +130,7 @@ use crate::{
 ///     }
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),
 /// }
-/// # Ok::<(), TranscodeEncodeError<ByteCodec>>(())
+/// # Ok::<(), CodecTranscodeEncodeError<ByteCodec>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -342,10 +343,10 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -356,7 +357,7 @@ where
             // reset-output bound at `output_index`.
             self.codec.encode_reset(output, output_index)
         }
-        .map_err(TranscodeError::domain_reset)?;
+        .map_err(TranscodeEncodeError::domain_reset)?;
         assert!(
             written <= required,
             "Codec::encode_reset wrote beyond its reset bound",
@@ -392,9 +393,9 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeEncodeError<C>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeEncodeError<C>> {
         self.lifecycle.on_transcode();
-        TranscodeError::ensure_transcode_indices(
+        TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
             output.len(),
@@ -449,10 +450,10 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -462,7 +463,7 @@ where
             // finish-output bound at `output_index`.
             self.codec.encode_finish(output, output_index)
         }
-        .map_err(TranscodeError::domain_finish)?;
+        .map_err(TranscodeEncodeError::domain_finish)?;
         assert!(
             finished <= C::MAX_ENCODE_FINISH_UNITS,
             "Codec::encode_finish wrote beyond its finish bound",
@@ -506,7 +507,7 @@ where
         &mut self,
         input: &[C::Value],
         output: &mut [C::Unit],
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         <Self as Transcoder>::transcode_complete_into(self, input, output)
     }
 
@@ -530,7 +531,7 @@ where
     pub(crate) fn encode_one(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+    ) -> Result<EncodeOutcome, CodecTranscodeEncodeError<C>> {
         if self.codec.can_encode_value(context.input_value()) {
             return self.encode_encodable_value(context);
         }
@@ -556,7 +557,7 @@ where
     fn encode_encodable_value(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+    ) -> Result<EncodeOutcome, CodecTranscodeEncodeError<C>> {
         let required = self.codec.encode_len(context.input_value());
         if context.available_output() < required {
             return Ok(EncodeOutcome::need_output(
@@ -570,7 +571,9 @@ where
             // SAFETY: The capacity check above reserves the exact value width.
             self.codec.encode(value, output, output_index)
         }
-        .map_err(|error| TranscodeError::domain_main(error, input_index))?;
+        .map_err(|error| {
+            TranscodeEncodeError::domain_main(error, input_index)
+        })?;
         assert!(
             written == required,
             "Codec::encode wrote a different length than Codec::encode_len",
@@ -597,13 +600,13 @@ where
         &mut self,
         action: EncodeUnencodableAction<C::Value>,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+    ) -> Result<EncodeOutcome, CodecTranscodeEncodeError<C>> {
         match action {
             EncodeUnencodableAction::Reject => {
                 // Keep the streaming encoder usable for non-Clone values.
                 // The failure still carries the absolute input index; callers
                 // that need value context can add it in a higher-level facade.
-                Err(TranscodeError::unencodable_value_without_context(
+                Err(TranscodeEncodeError::unencodable_without_context(
                     context.input_index(),
                 ))
             }
@@ -637,7 +640,7 @@ where
         &mut self,
         value: C::Value,
         context: EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeOutcome, TranscodeEncodeError<C>> {
+    ) -> Result<EncodeOutcome, CodecTranscodeEncodeError<C>> {
         assert!(
             self.codec.can_encode_value(&value),
             "EncodeUnencodableAction::Replace returned an unencodable replacement value",
@@ -656,7 +659,9 @@ where
             // value width, and the hook contract requires encodability.
             self.codec.encode(&value, output, output_index)
         }
-        .map_err(|error| TranscodeError::domain_main(error, input_index))?;
+        .map_err(|error| {
+            TranscodeEncodeError::domain_main(error, input_index)
+        })?;
         assert!(
             written == required,
             "Codec::encode wrote a different length than Codec::encode_len",
@@ -688,8 +693,7 @@ where
 {
     type Input = C::Value;
     type Output = C::Unit;
-    type DomainError = C::EncodeError;
-    type FailureValue = C::Value;
+    type Error = CodecTranscodeEncodeError<C>;
 
     /// Returns an upper bound for units produced from `input_len` values.
     #[inline(always)]
@@ -718,7 +722,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         TranscodeEncodeEngine::reset(self, output, output_index)
     }
 
@@ -730,7 +734,7 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeEncodeError<C>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeEncodeError<C>> {
         TranscodeEncodeEngine::transcode(
             self,
             input,
@@ -746,7 +750,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         TranscodeEncodeEngine::finish(self, output, output_index)
     }
 }

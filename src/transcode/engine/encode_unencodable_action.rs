@@ -21,9 +21,8 @@
 pub enum EncodeUnencodableAction<Value> {
     /// Reject the current input value.
     ///
-    /// The encode engine reports
-    /// [`crate::TranscodeFailure::UnencodableValue`] at the current input
-    /// index.
+    /// The encode engine reports [`crate::TranscodeEncodeError::Unencodable`]
+    /// at the current input index.
     Reject,
 
     /// Consume the current input value without producing output.

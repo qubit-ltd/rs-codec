@@ -9,8 +9,8 @@
 
 use qubit_codec::{
     CapacityError,
+    TranscodeConvertError,
     TranscodeConverter,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -21,8 +21,11 @@ struct ByteToWord;
 impl Transcoder for ByteToWord {
     type Input = u8;
     type Output = u16;
-    type DomainError = core::convert::Infallible;
-    type FailureValue = ();
+    type Error = TranscodeConvertError<
+        core::convert::Infallible,
+        core::convert::Infallible,
+        u8,
+    >;
 
     fn max_transcode_output_len(
         &self,
@@ -35,11 +38,8 @@ impl Transcoder for ByteToWord {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -49,7 +49,7 @@ impl Transcoder for ByteToWord {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, Self::Error> {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -63,16 +63,17 @@ impl Transcoder for ByteToWord {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    ) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
 
-impl TranscodeConverter for ByteToWord {}
+impl TranscodeConverter for ByteToWord {
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+    type Value = u8;
+}
 
 #[test]
 fn test_transcode_converter_is_a_semantic_transcoder_bound() {

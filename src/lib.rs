@@ -30,8 +30,8 @@
 //! - [`Transcoder`], [`TranscodeProgress`], and [`TranscodeStatus`] for
 //!   caller-managed streaming conversion.
 //! - [`ValueEncoder`] and [`ValueDecoder`] for whole-value convenience APIs.
-//! - [`ByteOrder`], [`ByteOrderSpec`], [`BigEndian`], and [`LittleEndian`] for
-//!   shared byte-order metadata.
+//! - [`ByteOrder`], [`ByteOrderSpec`], [`BigEndian`], [`LittleEndian`], and
+//!   [`NativeEndian`] for shared byte-order metadata.
 //!
 //! Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 //! `qubit-codec-text`, and `qubit-codec-misc`.
@@ -122,6 +122,7 @@ pub use byte_order::{
     ByteOrder,
     ByteOrderSpec,
     LittleEndian,
+    NativeEndian,
 };
 pub use codec::{
     Codec,
@@ -129,10 +130,12 @@ pub use codec::{
 };
 pub use transcode::{
     CapacityError,
+    CodecTranscodeConvertError,
     CodecTranscodeConverter,
+    CodecTranscodeDecodeError,
     CodecTranscodeDecoder,
+    CodecTranscodeEncodeError,
     CodecTranscodeEncoder,
-    ConvertError,
     TranscodeContractError,
     TranscodeConvertError,
     TranscodeConverter,
@@ -143,8 +146,6 @@ pub use transcode::{
     TranscodeEncodeError,
     TranscodeEncodeOutput,
     TranscodeEncoder,
-    TranscodeError,
-    TranscodeErrorOf,
     TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,

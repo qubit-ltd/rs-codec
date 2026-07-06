@@ -11,8 +11,9 @@ use core::fmt;
 
 use super::ValueEncoder;
 use crate::{
+    CapacityError,
     Codec,
-    TranscodeError,
+    CodecTranscodeEncodeError,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::{
         complete_encode_len,
@@ -97,7 +98,7 @@ where
         &mut self,
         input: &C::Value,
         output: &mut Vec<C::Unit>,
-    ) -> Result<usize, TranscodeError<C::EncodeError, C::Value>>
+    ) -> Result<usize, CodecTranscodeEncodeError<C>>
     where
         C::Value: Clone,
         C::Unit: Default,
@@ -106,7 +107,7 @@ where
         let original_len = output.len();
         let target_len = original_len
             .checked_add(units)
-            .ok_or(TranscodeError::output_length_overflow())?;
+            .ok_or(CapacityError::OutputLengthOverflow)?;
         output.resize_with(target_len, C::Unit::default);
 
         match encode_complete_value_into_reserved(
@@ -135,7 +136,7 @@ where
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
-    type Error = TranscodeError<C::EncodeError, C::Value>;
+    type Error = CodecTranscodeEncodeError<C>;
 
     /// Encodes one borrowed value into owned units.
     ///
@@ -162,8 +163,7 @@ where
         &mut self,
         input: &C::Value,
     ) -> Result<Self::Output, Self::Error> {
-        let units = max_complete_encode_units::<C>()
-            .map_err(|_| TranscodeError::output_length_overflow())?;
+        let units = max_complete_encode_units::<C>()?;
         let mut output = Vec::with_capacity(units);
         self.encode_into(input, &mut output)?;
         Ok(output)

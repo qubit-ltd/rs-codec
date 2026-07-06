@@ -9,7 +9,7 @@
 use qubit_codec::{
     Codec,
     CodecTranscodeDecoder,
-    TranscodeError,
+    TranscodeDecodeError,
     Transcoder,
 };
 
@@ -118,7 +118,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeError::domain_main_with_consumed(
+        TranscodeDecodeError::domain_main_with_consumed(
             InvalidByteError,
             0,
             Some(qubit_io::nz!(1)),
@@ -136,5 +136,5 @@ fn test_codec_transcode_decode_hooks_wraps_decode_finish_errors() {
         .finish(&mut output, 0)
         .expect_err("flush errors should be wrapped");
 
-    assert_eq!(TranscodeError::domain_finish(FlushFailError), error,);
+    assert_eq!(TranscodeDecodeError::domain_finish(FlushFailError), error,);
 }

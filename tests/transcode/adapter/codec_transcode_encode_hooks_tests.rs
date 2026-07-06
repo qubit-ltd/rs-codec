@@ -9,7 +9,7 @@
 use qubit_codec::{
     Codec,
     CodecTranscodeEncoder,
-    TranscodeError,
+    TranscodeEncodeError,
     Transcoder,
 };
 
@@ -150,7 +150,7 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
         .transcode(&[7], 0, &mut output, 0)
         .expect_err("strict encode hooks should reject unencodable values");
 
-    assert_eq!(TranscodeError::unencodable_value_without_context(0), error,);
+    assert_eq!(TranscodeEncodeError::unencodable_without_context(0), error,);
 }
 
 #[test]
@@ -174,5 +174,5 @@ fn test_codec_transcode_encode_hooks_wraps_encode_reset_errors() {
         .reset(&mut output, 0)
         .expect_err("reset errors should be wrapped");
 
-    assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
+    assert_eq!(TranscodeEncodeError::domain_reset(ResetFailError), error,);
 }

@@ -12,7 +12,7 @@ use core::fmt;
 use super::ValueDecoder;
 use crate::{
     Codec,
-    TranscodeError,
+    CodecTranscodeDecodeError,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
@@ -83,8 +83,8 @@ where
     /// [`Codec::MIN_UNITS_PER_VALUE`] units are available or when
     /// [`crate::DecodeFailure::Incomplete`] is reported by the codec. In this
     /// one-shot API, incomplete input is a terminal error rather than a
-    /// resumable streaming status. Returns [`TranscodeError::Domain`] when the
-    /// wrapped codec rejects or cannot finish the input. Returns
+    /// resumable streaming status. Returns a domain error when the wrapped
+    /// codec rejects or cannot finish the input. Returns
     /// [`crate::TranscodeFailure::TrailingInput`] when a value is decoded but
     /// extra input remains.
     ///
@@ -96,7 +96,7 @@ where
     pub fn decode(
         &mut self,
         input: &[C::Unit],
-    ) -> Result<C::Value, TranscodeError<C::DecodeError>>
+    ) -> Result<C::Value, CodecTranscodeDecodeError<C>>
     where
         C::Value: Default,
     {
@@ -126,7 +126,7 @@ where
     C::Value: Default,
 {
     type Output = C::Value;
-    type Error = TranscodeError<C::DecodeError>;
+    type Error = CodecTranscodeDecodeError<C>;
 
     #[inline(always)]
     fn decode(

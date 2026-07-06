@@ -17,8 +17,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    ConvertError,
-    TranscodeConvertError,
+    CodecTranscodeConvertError,
     TranscodeConverter,
     TranscodeProgress,
     Transcoder,
@@ -168,7 +167,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>>
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -203,7 +202,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
@@ -231,7 +230,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>>
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
     where
         D::Value: Default,
     {
@@ -247,8 +246,7 @@ where
 {
     type Input = D::Unit;
     type Output = E::Unit;
-    type DomainError = ConvertError<D::DecodeError, E::EncodeError>;
-    type FailureValue = D::Value;
+    type Error = CodecTranscodeConvertError<D, E>;
 
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
@@ -290,7 +288,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>> {
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -319,7 +317,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
         CodecTranscodeConverter::transcode(
             self,
             input,
@@ -348,7 +346,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, TranscodeConvertError<D, E>> {
+    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }
@@ -359,7 +357,9 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Clone + Default,
 {
-    // empty
+    type DecodeError = D::DecodeError;
+    type EncodeError = E::EncodeError;
+    type Value = D::Value;
 }
 
 impl<D, E> Default for CodecTranscodeConverter<D, E>

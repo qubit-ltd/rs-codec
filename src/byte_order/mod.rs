@@ -11,8 +11,10 @@ mod big_endian;
 mod byte_order;
 mod byte_order_spec;
 mod little_endian;
+mod native_endian;
 
 pub use big_endian::BigEndian;
 pub use byte_order::ByteOrder;
 pub use byte_order_spec::ByteOrderSpec;
 pub use little_endian::LittleEndian;
+pub use native_endian::NativeEndian;

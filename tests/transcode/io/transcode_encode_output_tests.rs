@@ -19,8 +19,8 @@ use qubit_codec::{
     CapacityError,
     Codec,
     DecodeFailure,
+    TranscodeEncodeError,
     TranscodeEncodeOutput,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -46,8 +46,10 @@ enum PairEncodeError {
     CapacityOverflow,
 }
 
-fn domain(error: PairEncodeError) -> TranscodeError<PairEncodeError> {
-    TranscodeError::domain_main(error, 0)
+fn domain<Value>(
+    error: PairEncodeError,
+) -> TranscodeEncodeError<PairEncodeError, Value> {
+    TranscodeEncodeError::domain_main(error, 0)
 }
 
 #[derive(Debug, Default)]
@@ -95,8 +97,8 @@ macro_rules! noop_reset {
             &mut self,
             output: &mut [$output],
             output_index: usize,
-        ) -> Result<usize, TranscodeError<Self::DomainError>> {
-            TranscodeError::<Self::DomainError>::ensure_output_index(
+        ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
+            TranscodeEncodeError::<PairEncodeError, ()>::ensure_output_index(
                 output.len(),
                 output_index,
             )?;
@@ -111,8 +113,8 @@ macro_rules! noop_finish {
             &mut self,
             output: &mut [$output],
             output_index: usize,
-        ) -> Result<usize, TranscodeError<Self::DomainError>> {
-            TranscodeError::<Self::DomainError>::ensure_output_index(
+        ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
+            TranscodeEncodeError::<PairEncodeError, ()>::ensure_output_index(
                 output.len(),
                 output_index,
             )?;
@@ -127,8 +129,7 @@ struct PairEncoder;
 impl Transcoder for PairEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -147,7 +148,8 @@ impl Transcoder for PairEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -183,7 +185,7 @@ impl Transcoder for PairEncoder {
         &mut self,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         Ok(0)
     }
 }
@@ -196,8 +198,7 @@ struct FinishEncoder {
 impl Transcoder for FinishEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -218,7 +219,8 @@ impl Transcoder for FinishEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -245,7 +247,7 @@ impl Transcoder for FinishEncoder {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         if self.finished {
             return Ok(0);
         }
@@ -268,8 +270,7 @@ struct TwoUnitFinishEncoder;
 impl Transcoder for TwoUnitFinishEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -290,7 +291,8 @@ impl Transcoder for TwoUnitFinishEncoder {
         input_index: usize,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -301,7 +303,7 @@ impl Transcoder for TwoUnitFinishEncoder {
         &mut self,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         output[output_index] = 0xaaaa;
         output[output_index + 1] = 0xbbbb;
         Ok(2)
@@ -314,8 +316,7 @@ struct ZeroWidthFailingFinishEncoder;
 impl Transcoder for ZeroWidthFailingFinishEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -336,7 +337,8 @@ impl Transcoder for ZeroWidthFailingFinishEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -350,7 +352,7 @@ impl Transcoder for ZeroWidthFailingFinishEncoder {
         &mut self,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         Err(domain(PairEncodeError::BadInputIndex))
     }
 }
@@ -386,8 +388,7 @@ struct CapacityBoundEncoder;
 impl Transcoder for CapacityBoundEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -408,7 +409,8 @@ impl Transcoder for CapacityBoundEncoder {
         input_index: usize,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -433,8 +435,7 @@ struct FailingFinishEncoder {
 impl Transcoder for FailingFinishEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -455,7 +456,8 @@ impl Transcoder for FailingFinishEncoder {
         input_index: usize,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -466,7 +468,7 @@ impl Transcoder for FailingFinishEncoder {
         &mut self,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         match self.failure {
             FinishFailure::Capacity => {
                 Err(domain(PairEncodeError::CapacityOverflow))
@@ -494,8 +496,7 @@ struct NeedInputEncoder;
 impl Transcoder for NeedInputEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -512,7 +513,8 @@ impl Transcoder for NeedInputEncoder {
         input_index: usize,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -536,8 +538,7 @@ struct NeedOutputAfterReadEncoder;
 impl Transcoder for NeedOutputAfterReadEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -554,7 +555,8 @@ impl Transcoder for NeedOutputAfterReadEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -576,8 +578,7 @@ struct NeedOutputAfterWriteEncoder;
 impl Transcoder for NeedOutputAfterWriteEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -594,7 +595,8 @@ impl Transcoder for NeedOutputAfterWriteEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index >= input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -617,8 +619,7 @@ struct NeedOutputAfterReadPastCapacityEncoder;
 impl Transcoder for NeedOutputAfterReadPastCapacityEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -635,7 +636,8 @@ impl Transcoder for NeedOutputAfterReadPastCapacityEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index >= input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -660,8 +662,7 @@ struct PrefixBeforeReadEncoder {
 impl Transcoder for PrefixBeforeReadEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -680,7 +681,8 @@ impl Transcoder for PrefixBeforeReadEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -732,8 +734,7 @@ struct OverreadingProgressEncoder;
 impl Transcoder for OverreadingProgressEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -750,7 +751,8 @@ impl Transcoder for OverreadingProgressEncoder {
         input_index: usize,
         _output: &mut [u16],
         _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -766,8 +768,7 @@ struct OverwritingProgressEncoder;
 impl Transcoder for OverwritingProgressEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -784,7 +785,8 @@ impl Transcoder for OverwritingProgressEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -803,8 +805,7 @@ struct OverflowingNeedOutputEncoder;
 impl Transcoder for OverflowingNeedOutputEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -821,7 +822,8 @@ impl Transcoder for OverflowingNeedOutputEncoder {
         input_index: usize,
         output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -845,8 +847,7 @@ struct MisindexedNeedOutputEncoder;
 impl Transcoder for MisindexedNeedOutputEncoder {
     type Input = u32;
     type Output = u16;
-    type DomainError = PairEncodeError;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
 
     fn max_transcode_output_len(
         &self,
@@ -863,7 +864,8 @@ impl Transcoder for MisindexedNeedOutputEncoder {
         input_index: usize,
         _output: &mut [u16],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
@@ -921,7 +923,7 @@ impl Output for FixedCapacityOutput {
     }
 }
 
-fn map_error(error: TranscodeError<PairEncodeError>) -> Error {
+fn map_error(error: TranscodeEncodeError<PairEncodeError, ()>) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
@@ -944,11 +946,11 @@ where
     E: Transcoder<
             Input = u32,
             Output = u16,
-            DomainError = PairEncodeError,
-            FailureValue = (),
+            Error = TranscodeEncodeError<PairEncodeError, ()>,
         >,
 {
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
     output.transcode_from(encoder, &mut mapper, input, input_index, count)
 }
 
@@ -960,11 +962,11 @@ where
     E: Transcoder<
             Input = u32,
             Output = u16,
-            DomainError = PairEncodeError,
-            FailureValue = (),
+            Error = TranscodeEncodeError<PairEncodeError, ()>,
         >,
 {
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
     output.finish(encoder, &mut mapper)
 }
 
@@ -1045,7 +1047,8 @@ fn test_buffered_encode_output_transcode_from_respects_input_range() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let written = output
         .transcode_from(&mut encoder, &mut mapper, &[0x0001_0002], 0, 1)
@@ -1062,7 +1065,8 @@ fn test_buffered_encode_output_transcode_from_rejects_invalid_input_range() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let error = output
         .transcode_from(&mut encoder, &mut mapper, &[0x0001_0002], 1, 1)
@@ -1118,7 +1122,8 @@ fn test_buffered_encode_output_transcode_from_reports_entry_flush_error() {
     let output = FixedCapacityOutput::new(0);
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let written = output
         .transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
@@ -1324,7 +1329,8 @@ fn test_buffered_encode_output_takes_encoder_per_call() {
     let mut output = TranscodeEncodeOutput::with_capacity(output, 4);
     let mut first_encoder = PairEncoder;
     let mut second_encoder = PairEncoder;
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
     let first = output
         .transcode_from(&mut first_encoder, &mut mapper, &[0x0001_0002], 0, 1)
         .expect("first encoder should write one value");
@@ -1396,7 +1402,8 @@ fn test_buffered_encode_output_reports_post_read_need_output_capacity() {
     let output = FixedCapacityOutput::new(1);
     let mut encoder = NeedOutputAfterReadPastCapacityEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let error = output
         .transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
@@ -1427,7 +1434,8 @@ fn test_buffered_encode_output_finish_reports_spare_capacity_error() {
     let output = FixedCapacityOutput::new(0);
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let error = output
         .finish(&mut encoder, &mut mapper)
@@ -1441,7 +1449,8 @@ fn test_buffered_encode_output_finish_reports_required_spare_capacity_error() {
     let output = UnitOutput::default();
     let mut encoder = TwoUnitFinishEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let mut mapper: fn(TranscodeError<PairEncodeError>) -> Error = map_error;
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
 
     let error = output
         .finish(&mut encoder, &mut mapper)
@@ -1588,7 +1597,7 @@ fn test_buffered_encode_output_write_encoded_maps_domain_error() {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_reports_unencodable_value() {
+fn test_buffered_encode_output_write_encoded_reports_unencodable() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
     let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Reject);

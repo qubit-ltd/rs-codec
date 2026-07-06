@@ -9,20 +9,16 @@
 
 use thiserror::Error;
 
+use super::capacity_error::CapacityError;
+
 /// Framework-level failure reported by a transcode operation.
 ///
 /// These failures are part of the safe public transcode API. They describe
-/// caller-supplied buffer ranges, capacity planning, complete-input shape, or
-/// unhandled value-domain boundaries that the transcode layer can detect
-/// without interpreting a concrete codec error.
-///
-/// # Type Parameters
-///
-/// - `Value`: Encoded-domain value type carried by
-///   [`UnencodableValue`](Self::UnencodableValue) when the caller can retain
-///   value context.
-#[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
-pub enum TranscodeFailure<Value = ()> {
+/// caller-supplied buffer ranges, capacity planning, and complete-input shape
+/// that the transcode layer can detect without interpreting a concrete codec
+/// error.
+#[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+pub enum TranscodeFailure {
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {input_len}")]
     InvalidInputIndex {
@@ -81,69 +77,196 @@ pub enum TranscodeFailure<Value = ()> {
         /// Extra units left after the decoded value.
         remaining: usize,
     },
-
-    /// The codec could not encode a value and no hook policy handled it.
-    #[error("unencodable value at input index {input_index}")]
-    UnencodableValue {
-        /// Absolute input index of the value being encoded.
-        input_index: usize,
-        /// Value being encoded, when the transcoder can expose it.
-        value: Option<Value>,
-    },
 }
 
-impl<Value> TranscodeFailure<Value> {
-    /// Maps value context carried by
-    /// [`UnencodableValue`](Self::UnencodableValue).
-    ///
-    /// Framework failures that do not carry value context are preserved
-    /// unchanged.
+impl TranscodeFailure {
+    /// Creates an invalid-input-index error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn invalid_input_index(index: usize, len: usize) -> Self {
+        Self::InvalidInputIndex {
+            index,
+            input_len: len,
+        }
+    }
+
+    /// Creates an invalid-output-index error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn invalid_output_index(index: usize, len: usize) -> Self {
+        Self::InvalidOutputIndex {
+            index,
+            output_len: len,
+        }
+    }
+
+    /// Creates an insufficient-output error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn insufficient_output(
+        output_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::InsufficientOutput {
+            output_index,
+            required,
+            available,
+        }
+    }
+
+    /// Creates an output-length-overflow error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn output_length_overflow() -> Self {
+        Self::OutputLengthOverflow
+    }
+
+    /// Creates an incomplete-input error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn incomplete_input(
+        input_index: usize,
+        required: usize,
+        available: usize,
+    ) -> Self {
+        Self::IncompleteInput {
+            input_index,
+            required,
+            available,
+        }
+    }
+
+    /// Creates a trailing-input error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
+        Self::TrailingInput {
+            consumed,
+            remaining,
+        }
+    }
+
+    /// Validates that `input_index` is within an input slice.
     #[inline]
-    pub fn map_value<T, F>(self, f: F) -> TranscodeFailure<T>
-    where
-        F: FnOnce(Value) -> T,
-    {
-        match self {
-            Self::InvalidInputIndex { index, input_len } => {
-                TranscodeFailure::InvalidInputIndex { index, input_len }
-            }
-            Self::InvalidOutputIndex { index, output_len } => {
-                TranscodeFailure::InvalidOutputIndex { index, output_len }
-            }
-            Self::InsufficientOutput {
+    pub fn ensure_input_index(
+        input_len: usize,
+        input_index: usize,
+    ) -> Result<(), Self> {
+        if input_index > input_len {
+            return Err(Self::invalid_input_index(input_index, input_len));
+        }
+        Ok(())
+    }
+
+    /// Validates that enough input units are available from `input_index`.
+    #[inline]
+    pub fn ensure_min_input(
+        input_len: usize,
+        input_index: usize,
+        min_required: usize,
+    ) -> Result<(), Self> {
+        Self::ensure_input_index(input_len, input_index)?;
+        let available = input_len - input_index;
+        if available < min_required {
+            return Err(Self::incomplete_input(
+                input_index,
+                min_required,
+                available,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates that no input units remain after a decoded value.
+    #[inline]
+    pub fn ensure_no_trailing_input(
+        consumed: usize,
+        total: usize,
+    ) -> Result<(), Self> {
+        let remaining = total.saturating_sub(consumed);
+        if remaining != 0 {
+            return Err(Self::trailing_input(consumed, remaining));
+        }
+        Ok(())
+    }
+
+    /// Validates that `output_index` is within an output slice.
+    #[inline]
+    pub fn ensure_output_index(
+        output_len: usize,
+        output_index: usize,
+    ) -> Result<(), Self> {
+        if output_index > output_len {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        Ok(())
+    }
+
+    /// Validates input and output start indices for a transcode call.
+    #[inline]
+    pub fn ensure_transcode_indices(
+        input_len: usize,
+        input_index: usize,
+        output_len: usize,
+        output_index: usize,
+    ) -> Result<(), Self> {
+        Self::ensure_input_index(input_len, input_index)?;
+        Self::ensure_output_index(output_len, output_index)
+    }
+
+    /// Validates that an output slice can hold one-shot finalization output.
+    #[inline]
+    pub fn ensure_output_capacity(
+        output_len: usize,
+        output_index: usize,
+        required: usize,
+    ) -> Result<(), Self> {
+        Self::ensure_output_index(output_len, output_index)?;
+        let available = output_len - output_index;
+        if available < required {
+            return Err(Self::insufficient_output(
                 output_index,
                 required,
                 available,
-            } => TranscodeFailure::InsufficientOutput {
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates an indexed output range and its minimum writable capacity.
+    #[inline]
+    pub fn ensure_output_range(
+        output_len: usize,
+        output_index: usize,
+        range_len: usize,
+        required: usize,
+    ) -> Result<(), Self> {
+        Self::ensure_output_index(output_len, output_index)?;
+        if !qubit_io::UncheckedSlice::range_fits(
+            output_len,
+            output_index,
+            range_len,
+        ) {
+            return Err(Self::invalid_output_index(output_index, output_len));
+        }
+        if range_len < required {
+            return Err(Self::insufficient_output(
                 output_index,
                 required,
-                available,
-            },
-            Self::OutputLengthOverflow => {
-                TranscodeFailure::OutputLengthOverflow
-            }
-            Self::IncompleteInput {
-                input_index,
-                required,
-                available,
-            } => TranscodeFailure::IncompleteInput {
-                input_index,
-                required,
-                available,
-            },
-            Self::TrailingInput {
-                consumed,
-                remaining,
-            } => TranscodeFailure::TrailingInput {
-                consumed,
-                remaining,
-            },
-            Self::UnencodableValue { input_index, value } => {
-                TranscodeFailure::UnencodableValue {
-                    input_index,
-                    value: value.map(f),
-                }
-            }
+                range_len,
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl From<CapacityError> for TranscodeFailure {
+    /// Converts capacity planning errors into transcode framework failures.
+    #[inline(always)]
+    fn from(error: CapacityError) -> Self {
+        match error {
+            CapacityError::OutputLengthOverflow => Self::OutputLengthOverflow,
         }
     }
 }

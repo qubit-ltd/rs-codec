@@ -25,9 +25,10 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
+    CodecTranscodeDecodeError,
     DecodeFailure,
     TranscodeDecodeError,
-    TranscodeError,
+    TranscodeFailure,
     TranscodeProgress,
     Transcoder,
 };
@@ -64,8 +65,8 @@ use crate::{
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     Codec,
+///     CodecTranscodeDecodeError,
 ///     DecodeFailure,
-///     TranscodeError,
 ///     TranscodeStatus,
 /// };
 /// use qubit_codec::engine::{
@@ -128,7 +129,7 @@ use crate::{
 ///         error: &ByteDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<ByteCodec>> {
+///     ) -> Result<DecodeInvalidAction<u8>, CodecTranscodeDecodeError<ByteCodec>> {
 ///         match error {
 ///             ByteDecodeError::Malformed { .. } => {
 ///                 Ok(DecodeInvalidAction::Emit {
@@ -154,7 +155,7 @@ use crate::{
 ///         // Drain `output[..output_index]`, then resume with more output room.
 ///     }
 /// }
-/// # Ok::<(), TranscodeError<ByteDecodeError>>(())
+/// # Ok::<(), qubit_codec::TranscodeDecodeError<ByteDecodeError>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -380,10 +381,10 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
@@ -394,7 +395,7 @@ where
             // reset-output bound at `output_index`.
             self.codec.decode_reset(output, output_index)
         }
-        .map_err(TranscodeError::domain_reset)?;
+        .map_err(TranscodeDecodeError::domain_reset)?;
         assert!(
             written <= required,
             "Codec::decode_reset wrote beyond its reset bound",
@@ -427,9 +428,9 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeDecodeError<C>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeDecodeError<C>> {
         self.lifecycle.on_transcode();
-        TranscodeError::ensure_transcode_indices(
+        TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
             output.len(),
@@ -501,17 +502,17 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeError::ensure_output_capacity(
+        TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
         let finished =
             unsafe { self.codec.decode_finish(output, output_index) }
-                .map_err(TranscodeError::domain_finish)?;
+                .map_err(TranscodeDecodeError::domain_finish)?;
         assert!(
             finished <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
@@ -556,7 +557,7 @@ where
         &mut self,
         input: &[C::Unit],
         output: &mut [C::Value],
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         <Self as Transcoder>::transcode_complete_into(self, input, output)
     }
 
@@ -588,7 +589,7 @@ where
         input: &[C::Unit],
         context: DecodeContext,
         consume: F,
-    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeError<C>>
+    ) -> Result<(DecodeOutcome, Option<R>), CodecTranscodeDecodeError<C>>
     where
         F: FnOnce(C::Value, usize) -> R,
     {
@@ -627,11 +628,13 @@ where
                     context,
                 )? {
                     DecodeInvalidAction::Reject => {
-                        return Err(TranscodeError::domain_main_with_consumed(
-                            source,
-                            context.input_index(),
-                            consumed,
-                        ));
+                        return Err(
+                            TranscodeDecodeError::domain_main_with_consumed(
+                                source,
+                                context.input_index(),
+                                consumed,
+                            ),
+                        );
                     }
                     DecodeInvalidAction::Skip { consumed } => {
                         AppliedDecodeInvalidAction::Skip { consumed }
@@ -684,8 +687,7 @@ where
 {
     type Input = C::Unit;
     type Output = C::Value;
-    type DomainError = C::DecodeError;
-    type FailureValue = ();
+    type Error = CodecTranscodeDecodeError<C>;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -716,7 +718,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
@@ -728,7 +730,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeDecodeError<C>> {
+    ) -> Result<TranscodeProgress, CodecTranscodeDecodeError<C>> {
         TranscodeDecodeEngine::transcode(
             self,
             input,
@@ -744,7 +746,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
 }

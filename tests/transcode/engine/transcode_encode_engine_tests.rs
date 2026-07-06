@@ -16,7 +16,7 @@ use qubit_codec::engine::{
 use qubit_codec::{
     CapacityError,
     Codec,
-    TranscodeError,
+    TranscodeEncodeError,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -97,8 +97,10 @@ where
         &mut self,
         _codec: &mut C,
         _context: &EncodeContext<'_, u8, u8>,
-    ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeError<C>>
-    {
+    ) -> Result<
+        EncodeUnencodableAction<u8>,
+        qubit_codec::CodecTranscodeEncodeError<C>,
+    > {
         Ok(EncodeUnencodableAction::Reject)
     }
 }
@@ -113,7 +115,7 @@ impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Skip)
     }
@@ -129,7 +131,7 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -147,7 +149,7 @@ impl TranscodeEncodeHooks<WideCodec> for ReplacingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::replace(self.replacement))
     }
@@ -209,7 +211,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec>
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
     > {
         Ok(EncodeUnencodableAction::replace(7))
     }
@@ -225,7 +227,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -244,9 +246,9 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
         output_index: usize,
     ) -> Result<
         usize,
-        qubit_codec::TranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
     > {
-        Err(TranscodeError::domain_finish(EngineError::Rejected {
+        Err(TranscodeEncodeError::domain_finish(EngineError::Rejected {
             input_index: output_index,
         }))
     }
@@ -305,7 +307,7 @@ impl TranscodeEncodeHooks<FinishFailingCodec> for FinishFailingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<FinishFailingCodec>,
+        qubit_codec::CodecTranscodeEncodeError<FinishFailingCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -366,7 +368,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -380,7 +382,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::TranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
         if !self.pending_suffix {
             return Ok(0);
         }
@@ -405,7 +407,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -419,7 +421,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::TranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
         output[output_index] = 0xee;
         output[output_index + 1] = 0xdd;
         Ok(1)
@@ -436,7 +438,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -450,7 +452,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::TranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
         output[output_index] = 0xee;
         Ok(2)
     }
@@ -473,13 +475,14 @@ fn test_transcode_encode_engine_exposes_codec_hooks_and_parts() {
 #[test]
 fn test_buffered_encode_engine_reports_bounds_and_resets() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
-    type TranscodeCompleteIntoFn =
-        fn(
-            &mut Engine,
-            &[u8],
-            &mut [u8],
-        )
-            -> Result<usize, TranscodeError<core::convert::Infallible, u8>>;
+    type TranscodeCompleteIntoFn = fn(
+        &mut Engine,
+        &[u8],
+        &mut [u8],
+    ) -> Result<
+        usize,
+        TranscodeEncodeError<core::convert::Infallible, u8>,
+    >;
 
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
@@ -520,7 +523,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     let error = encoder.finish(&mut [], 0).expect_err(
         "finish should reject insufficient output before calling hooks",
     );
-    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error,);
     assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let written = encoder
@@ -540,7 +543,7 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
 fn test_buffered_encode_engine_implements_transcoder() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
     type EngineResult<T> =
-        Result<T, TranscodeError<core::convert::Infallible, u8>>;
+        Result<T, TranscodeEncodeError<core::convert::Infallible, u8>>;
     type TranscodeFn = fn(
         &mut Engine,
         &[u8],
@@ -600,7 +603,9 @@ fn test_buffered_encode_engine_finish_maps_hook_errors() {
         .expect_err("finish hook error should be propagated");
 
     assert_eq!(
-        TranscodeError::domain_finish(EngineError::Rejected { input_index: 0 }),
+        TranscodeEncodeError::domain_finish(EngineError::Rejected {
+            input_index: 0
+        }),
         error,
     );
 }
@@ -618,7 +623,9 @@ fn test_buffered_encode_engine_finish_converts_codec_finish_errors() {
         .expect_err("finish should convert codec finish errors");
 
     assert_eq!(
-        TranscodeError::domain_finish(EngineError::Rejected { input_index: 0 }),
+        TranscodeEncodeError::domain_finish(EngineError::Rejected {
+            input_index: 0
+        }),
         error,
     );
 }
@@ -659,7 +666,7 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -673,7 +680,7 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -738,7 +745,7 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(TranscodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
 }
 
 #[test]
@@ -754,7 +761,7 @@ fn test_buffered_encode_engine_panics_when_codec_reports_wrong_value_width() {
 }
 
 #[test]
-fn test_buffered_encode_engine_encodes_replacement_for_unencodable_value() {
+fn test_buffered_encode_engine_encodes_replacement_for_unencodable() {
     let mut encoder = TranscodeEncodeEngine::new(
         WideCodec,
         ReplacingHooks { replacement: 5 },
@@ -823,7 +830,7 @@ fn test_buffered_encode_engine_maps_replacement_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeError::Domain(qubit_codec::TranscodeDomainError::Main {
+        TranscodeEncodeError::Domain(qubit_codec::TranscodeDomainError::Main {
             source: EngineError::Rejected { input_index: 0 },
             input_index: 0,
             input_consumed: None
@@ -842,7 +849,7 @@ fn test_buffered_encode_engine_propagates_unencodable_hook_error_without_consumi
         .transcode(&[0], 0, &mut output, 0)
         .expect_err("encode hook error should be propagated");
 
-    assert_eq!(TranscodeError::unencodable_value_without_context(0), error);
+    assert_eq!(TranscodeEncodeError::unencodable_without_context(0), error);
     assert_eq!([0, 0, 0, 0], output);
 }
 
@@ -855,7 +862,7 @@ fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should be rejected");
 
-    assert_eq!(TranscodeError::invalid_input_index(2, 1), error,);
+    assert_eq!(TranscodeEncodeError::invalid_input_index(2, 1), error,);
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -963,9 +970,9 @@ impl TranscodeEncodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<ResetFailCodec>,
+        qubit_codec::CodecTranscodeEncodeError<ResetFailCodec>,
     > {
-        Err(TranscodeError::domain_main(
+        Err(TranscodeEncodeError::domain_main(
             ResetFailError,
             _context.input_index(),
         ))
@@ -997,7 +1004,7 @@ impl TranscodeEncodeHooks<ResetEmittingCodec> for ResetPassthroughHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<ResetEmittingCodec>,
+        qubit_codec::CodecTranscodeEncodeError<ResetEmittingCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -1031,7 +1038,7 @@ fn test_buffered_encode_engine_reset_rejects_insufficient_output() {
         .reset(&mut output, 0)
         .expect_err("reset should reject insufficient output capacity");
 
-    assert_eq!(TranscodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error,);
 }
 
 #[test]
@@ -1046,7 +1053,7 @@ fn test_buffered_encode_engine_reset_reports_output_index_beyond_buffer() {
         .reset(&mut output, 2)
         .expect_err("reset should reject an out-of-range output index");
 
-    assert_eq!(TranscodeError::invalid_output_index(2, 1), error,);
+    assert_eq!(TranscodeEncodeError::invalid_output_index(2, 1), error,);
 }
 
 #[test]
@@ -1074,7 +1081,7 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
         .reset(&mut output, 0)
         .expect_err("reset should convert codec reset errors");
 
-    assert_eq!(TranscodeError::domain_reset(ResetFailError), error,);
+    assert_eq!(TranscodeEncodeError::domain_reset(ResetFailError), error,);
 }
 
 // ============================================================================
@@ -1150,9 +1157,9 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
         context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<WideCodec>,
+        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
     > {
-        Err(TranscodeError::unencodable_value(
+        Err(TranscodeEncodeError::unencodable(
             context.input_index(),
             *context.input_value(),
         ))

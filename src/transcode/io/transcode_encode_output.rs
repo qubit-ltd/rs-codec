@@ -31,8 +31,8 @@ use qubit_io::{
 use crate::{
     CapacityError,
     Codec,
-    TranscodeError,
-    TranscodeErrorOf,
+    CodecTranscodeEncodeError,
+    TranscodeEncodeError,
     TranscodeFailure,
     TranscodeStatus,
     Transcoder,
@@ -238,11 +238,12 @@ where
                 &mut map_error,
             )?;
             map_encode_value_result(
-                TranscodeError::<C::EncodeError, C::Value>::ensure_output_capacity(
+                TranscodeFailure::ensure_output_capacity(
                     scratch.len(),
                     0,
                     required,
-                ),
+                )
+                .map_err(CodecTranscodeEncodeError::<C>::from),
                 &mut map_error,
             )?;
             let written = map_encode_value_result(
@@ -275,11 +276,12 @@ where
             &mut map_error,
         )?;
         map_encode_value_result(
-            TranscodeError::<C::EncodeError, C::Value>::ensure_output_capacity(
+            TranscodeFailure::ensure_output_capacity(
                 units.len(),
                 output_index,
                 required,
-            ),
+            )
+            .map_err(CodecTranscodeEncodeError::<C>::from),
             &mut map_error,
         )?;
         let written = map_encode_value_result(
@@ -333,7 +335,7 @@ where
     ) -> Result<usize>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
-        M: FnMut(TranscodeErrorOf<E>) -> Error,
+        M: FnMut(E::Error) -> Error,
     {
         let input_end = UncheckedSlice::checked_range_end(
             input.len(),
@@ -417,7 +419,7 @@ where
     ) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
-        M: FnMut(TranscodeErrorOf<E>) -> Error,
+        M: FnMut(E::Error) -> Error,
     {
         let required = match encoder.max_finish_output_len() {
             Ok(required) => required,
@@ -534,7 +536,7 @@ fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
 
 /// Maps a one-value codec result into the I/O surface used by this adapter.
 fn map_encode_value_result<T, E, Value, M>(
-    result: core::result::Result<T, TranscodeError<E, Value>>,
+    result: core::result::Result<T, TranscodeEncodeError<E, Value>>,
     map_error: &mut M,
 ) -> Result<T>
 where
@@ -550,18 +552,18 @@ where
 /// adapter.
 #[inline(never)]
 fn map_encode_value_error<E, Value, M>(
-    error: TranscodeError<E, Value>,
+    error: TranscodeEncodeError<E, Value>,
     map_error: &mut M,
 ) -> Error
 where
     M: FnMut(E) -> Error,
 {
     match error {
-        TranscodeError::Domain(error) => map_error(error.into_source()),
-        TranscodeError::Failure(TranscodeFailure::UnencodableValue {
-            ..
-        }) => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
-        TranscodeError::Failure(failure) => {
+        TranscodeEncodeError::Domain(error) => map_error(error.into_source()),
+        TranscodeEncodeError::Unencodable { .. } => {
+            Error::new(ErrorKind::InvalidInput, "codec cannot encode value")
+        }
+        TranscodeEncodeError::Failure(failure) => {
             Error::new(ErrorKind::InvalidData, failure.to_string())
         }
     }

@@ -10,7 +10,11 @@
 use crate::{
     CapacityError,
     Codec,
-    TranscodeError,
+    CodecTranscodeDecodeError,
+    CodecTranscodeEncodeError,
+    TranscodeDecodeError,
+    TranscodeEncodeError,
+    TranscodeFailure,
 };
 
 /// Returns the conservative maximum unit count for a complete encode lifecycle.
@@ -51,23 +55,24 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeError`] when `value` is outside the codec domain or
+/// Returns [`TranscodeEncodeError`] when `value` is outside the codec domain or
 /// when output length arithmetic overflows.
 pub(crate) fn complete_encode_len<C>(
     codec: &C,
     value: &C::Value,
-) -> Result<usize, TranscodeError<C::EncodeError, C::Value>>
+) -> Result<usize, CodecTranscodeEncodeError<C>>
 where
     C: Codec,
     C::Value: Clone,
 {
     if !codec.can_encode_value(value) {
-        return Err(TranscodeError::unencodable_value(0, value.clone()));
+        return Err(TranscodeEncodeError::unencodable(0, value.clone()));
     }
-    C::MAX_ENCODE_RESET_UNITS
+    let units = C::MAX_ENCODE_RESET_UNITS
         .checked_add(codec.encode_len(value))
         .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))
-        .ok_or_else(TranscodeError::output_length_overflow)
+        .ok_or(CapacityError::OutputLengthOverflow)?;
+    Ok(units)
 }
 
 /// Encodes one value through reset, encode, and finish into reserved output.
@@ -87,7 +92,7 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeError`] when a codec reset, encode, or finish hook
+/// Returns [`TranscodeEncodeError`] when a codec reset, encode, or finish hook
 /// reports a domain error.
 ///
 /// # Panics
@@ -100,7 +105,7 @@ pub(crate) fn encode_complete_value_into_reserved<C>(
     output: &mut [C::Unit],
     output_index: usize,
     required: usize,
-) -> Result<usize, TranscodeError<C::EncodeError, C::Value>>
+) -> Result<usize, CodecTranscodeEncodeError<C>>
 where
     C: Codec,
 {
@@ -117,7 +122,7 @@ where
         // codec-declared reset bound at `output_index`.
         codec.encode_reset(output, output_index)
     }
-    .map_err(TranscodeError::domain_reset)?;
+    .map_err(TranscodeEncodeError::domain_reset)?;
     assert!(
         reset_written <= C::MAX_ENCODE_RESET_UNITS,
         "Codec::encode_reset wrote beyond its reset bound",
@@ -129,7 +134,7 @@ where
         // value width writable after reset output.
         codec.encode(value, output, output_index + reset_written)
     }
-    .map_err(|error| TranscodeError::domain_main(error, 0))?;
+    .map_err(|error| TranscodeEncodeError::domain_main(error, 0))?;
     assert!(
         value_written == value_units,
         "Codec::encode wrote a different length than Codec::encode_len",
@@ -141,7 +146,7 @@ where
         // codec-declared finish bound after reset and value output.
         codec.encode_finish(output, finish_index)
     }
-    .map_err(TranscodeError::domain_finish)?;
+    .map_err(TranscodeEncodeError::domain_finish)?;
     assert!(
         finish_written <= C::MAX_ENCODE_FINISH_UNITS,
         "Codec::encode_finish wrote beyond its finish bound",
@@ -166,7 +171,7 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeError`] when decoding fails, when trailing input
+/// Returns [`TranscodeDecodeError`] when decoding fails, when trailing input
 /// remains, or when reset or finish fails.
 ///
 /// # Panics
@@ -179,11 +184,11 @@ pub(crate) fn decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
     scratch: &mut [C::Value],
-) -> Result<C::Value, TranscodeError<C::DecodeError>>
+) -> Result<C::Value, CodecTranscodeDecodeError<C>>
 where
     C: Codec,
 {
-    TranscodeError::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
+    TranscodeFailure::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
 
     let scratch_cap =
         C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
@@ -196,7 +201,7 @@ where
         // declared decode-reset output bound.
         codec.decode_reset(scratch, 0)
     }
-    .map_err(TranscodeError::domain_reset)?;
+    .map_err(TranscodeDecodeError::domain_reset)?;
     assert!(
         reset_written <= C::MAX_DECODE_RESET_VALUES,
         "Codec::decode_reset wrote beyond its reset bound",
@@ -208,20 +213,20 @@ where
         codec.decode(input, 0)
     }
     .map_err(|failure| {
-        TranscodeError::from_decode_failure(failure, 0, input.len())
+        TranscodeDecodeError::from_decode_failure(failure, 0, input.len())
     })?;
     assert!(
         consumed.get() <= input.len(),
         "Codec::decode consumed beyond available input",
     );
-    TranscodeError::ensure_no_trailing_input(consumed.get(), input.len())?;
+    TranscodeFailure::ensure_no_trailing_input(consumed.get(), input.len())?;
 
     let finish_written = unsafe {
         // SAFETY: The scratch capacity check above reserves the codec's
         // declared decode-finish output bound.
         codec.decode_finish(scratch, 0)
     }
-    .map_err(TranscodeError::domain_finish)?;
+    .map_err(TranscodeDecodeError::domain_finish)?;
     assert!(
         finish_written <= C::MAX_DECODE_FINISH_VALUES,
         "Codec::decode_finish wrote beyond its finish bound",

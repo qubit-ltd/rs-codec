@@ -16,7 +16,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    TranscodeDecodeError,
+    CodecTranscodeDecodeError,
 };
 
 /// Policy hooks for [`crate::engine::TranscodeDecodeEngine`].
@@ -109,7 +109,7 @@ use crate::{
 ///         error: &MyDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeError<MyCodec>> {
+///     ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeError<MyDecodeError>> {
 ///         match error {
 ///             MyDecodeError::Malformed { .. } => {
 ///                 Ok(DecodeInvalidAction::Emit {
@@ -211,15 +211,15 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`TranscodeDecodeError`] when the policy rejects the input with
-    /// a codec-domain error.
+    /// Returns [`crate::TranscodeDecodeError`] when the policy rejects the
+    /// input with a codec-domain error.
     fn handle_invalid_decode(
         &mut self,
         codec: &mut C,
         error: &C::DecodeError,
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeError<C>>;
+    ) -> Result<DecodeInvalidAction<C::Value>, CodecTranscodeDecodeError<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -257,7 +257,7 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`crate::TranscodeError`] when hook-owned state cannot be
+    /// Returns a transcode decode error when hook-owned state cannot be
     /// finalized.
     #[inline]
     fn finish_hooks(
@@ -265,7 +265,7 @@ where
         _codec: &mut C,
         _output: &mut [C::Value],
         _output_index: usize,
-    ) -> Result<usize, TranscodeDecodeError<C>> {
+    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
         Ok(0)
     }
 }

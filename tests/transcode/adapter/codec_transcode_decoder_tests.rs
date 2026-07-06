@@ -11,8 +11,8 @@ use qubit_codec::{
     Codec,
     CodecTranscodeDecoder,
     DecodeFailure,
+    TranscodeDecodeError,
     TranscodeDecoder,
-    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -301,7 +301,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
+    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("out-of-range input index should fail");
 
-    assert_eq!(TranscodeError::invalid_input_index(2, 1), error);
+    assert_eq!(TranscodeDecodeError::invalid_input_index(2, 1), error);
 }
 
 #[test]
@@ -325,7 +325,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeError::invalid_output_index(1, 0), error);
+    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error);
 }
 
 #[test]
@@ -362,7 +362,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         .expect_err("invalid input should fail");
 
     assert_eq!(
-        TranscodeError::domain_main_with_consumed(
+        TranscodeDecodeError::domain_main_with_consumed(
             TestDecodeError::Invalid,
             0,
             Some(qubit_io::nz!(1)),
@@ -380,7 +380,7 @@ fn test_codec_transcode_decoder_wraps_decode_finish_error() {
         .finish(&mut output, 0)
         .expect_err("decode flush errors should be flattened");
 
-    assert_eq!(TranscodeError::domain_finish("flush failure"), error,);
+    assert_eq!(TranscodeDecodeError::domain_finish("flush failure"), error,);
 }
 
 #[test]
@@ -391,7 +391,7 @@ fn test_codec_transcode_decoder_wraps_decode_reset_error() {
         .reset(&mut [], 0)
         .expect_err("decode reset errors should be flattened");
 
-    assert_eq!(TranscodeError::domain_reset("reset failure"), error,);
+    assert_eq!(TranscodeDecodeError::domain_reset("reset failure"), error,);
 }
 
 #[test]

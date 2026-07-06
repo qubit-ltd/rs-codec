@@ -14,7 +14,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    TranscodeEncodeError,
+    CodecTranscodeEncodeError,
 };
 
 /// Policy hooks for [`crate::engine::TranscodeEncodeEngine`].
@@ -47,8 +47,8 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     Codec,
+///     CodecTranscodeEncodeError,
 ///     DecodeFailure,
-///     TranscodeEncodeError,
 /// };
 /// use qubit_codec::engine::{
 ///     EncodeContext,
@@ -97,7 +97,7 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut C,
 ///         _context: &EncodeContext<'_, C::Value, C::Unit>,
-///     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>> {
+///     ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>> {
 ///         Ok(EncodeUnencodableAction::Reject)
 ///     }
 /// }
@@ -189,13 +189,13 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`crate::TranscodeError`] when the policy rejects the value with
-    /// a codec-domain error.
+    /// Returns [`crate::TranscodeEncodeError`] when the policy rejects the
+    /// value with a codec-domain error.
     fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
         context: &EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeError<C>>;
+    ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -233,7 +233,7 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`crate::TranscodeError`] when hook-owned state cannot be
+    /// Returns a transcode encode error when hook-owned state cannot be
     /// finalized.
     #[inline(always)]
     fn finish_hooks(
@@ -241,7 +241,7 @@ where
         _codec: &mut C,
         _output: &mut [C::Unit],
         _output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<C>> {
+    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
         Ok(0)
     }
 }

@@ -11,9 +11,8 @@ use qubit_codec::{
     CapacityError,
     Codec,
     CodecTranscodeConverter,
-    ConvertError,
+    TranscodeConvertError,
     TranscodeConverter,
-    TranscodeError,
     TranscodeStatus,
     Transcoder,
 };
@@ -686,12 +685,12 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
     let error = converter
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
-    assert_eq!(TranscodeError::invalid_input_index(2, 1), error);
+    assert_eq!(TranscodeConvertError::invalid_input_index(2, 1), error);
 
     let error = converter
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
-    assert_eq!(TranscodeError::invalid_output_index(3, 2), error);
+    assert_eq!(TranscodeConvertError::invalid_output_index(3, 2), error);
 }
 
 #[test]
@@ -706,8 +705,8 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[0xff], 0, &mut output, 0)
         .expect_err("invalid decode input should fail");
     assert_eq!(
-        TranscodeError::domain_main_with_consumed(
-            ConvertError::decode(TestDecodeError::Invalid { consumed: 1 }),
+        TranscodeConvertError::decode_domain_main_with_consumed(
+            TestDecodeError::Invalid { consumed: 1 },
             0,
             Some(qubit_io::nz!(1)),
         ),
@@ -718,7 +717,7 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable value should fail");
     assert_eq!(
-        TranscodeError::domain_main(ConvertError::encode(TestEncodeError), 0,),
+        TranscodeConvertError::encode_domain_main(TestEncodeError, 0,),
         error,
     );
 }
@@ -736,7 +735,7 @@ fn test_codec_transcode_converter_wraps_decode_finish_error() {
         .expect_err("decode flush errors should be flattened");
 
     assert_eq!(
-        TranscodeError::domain_finish(ConvertError::decode("flush failure")),
+        TranscodeConvertError::decode_domain_finish("flush failure"),
         error,
     );
 }
@@ -754,7 +753,7 @@ fn test_codec_transcode_converter_wraps_encode_reset_error() {
         .expect_err("encode reset errors should be flattened");
 
     assert_eq!(
-        TranscodeError::domain_reset(ConvertError::encode("reset failure")),
+        TranscodeConvertError::encode_domain_reset("reset failure"),
         error,
     );
 }
@@ -814,5 +813,5 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .finish(&mut output, 4)
         .expect_err("finish should reject insufficient output");
 
-    assert_eq!(TranscodeError::insufficient_output(4, 2, 0), error,);
+    assert_eq!(TranscodeConvertError::insufficient_output(4, 2, 0), error,);
 }

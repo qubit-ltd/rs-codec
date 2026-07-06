@@ -9,8 +9,8 @@
 
 use qubit_codec::{
     CapacityError,
+    TranscodeEncodeError,
     TranscodeEncoder,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -21,8 +21,7 @@ struct CharToByte;
 impl Transcoder for CharToByte {
     type Input = char;
     type Output = u8;
-    type DomainError = core::convert::Infallible;
-    type FailureValue = ();
+    type Error = TranscodeEncodeError<core::convert::Infallible, char>;
 
     fn max_transcode_output_len(
         &self,
@@ -35,8 +34,9 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
+    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>>
+    {
+        TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -49,7 +49,10 @@ impl Transcoder for CharToByte {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<
+        TranscodeProgress,
+        TranscodeEncodeError<core::convert::Infallible, char>,
+    > {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -63,8 +66,9 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
+    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>>
+    {
+        TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -72,7 +76,9 @@ impl Transcoder for CharToByte {
     }
 }
 
-impl TranscodeEncoder for CharToByte {}
+impl TranscodeEncoder for CharToByte {
+    type EncodeError = core::convert::Infallible;
+}
 
 #[test]
 fn test_transcode_encoder_is_a_semantic_transcoder_bound() {

@@ -10,7 +10,7 @@
 use qubit_codec::{
     Codec,
     CodecValueDecoder,
-    TranscodeError,
+    TranscodeDecodeError,
     ValueDecoder,
 };
 use std::sync::atomic::{
@@ -664,7 +664,7 @@ fn test_codec_value_decoder_reports_too_short_input_before_codec_call() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("one byte is incomplete");
 
-    assert_eq!(TranscodeError::incomplete_input(0, 2, 1), error,);
+    assert_eq!(TranscodeDecodeError::incomplete_input(0, 2, 1), error,);
 }
 
 #[test]
@@ -675,7 +675,7 @@ fn test_codec_value_decoder_wraps_codec_incomplete_failure() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("codec-reported incomplete input should fail");
 
-    assert_eq!(TranscodeError::incomplete_input(0, 2, 1), error,);
+    assert_eq!(TranscodeDecodeError::incomplete_input(0, 2, 1), error,);
 }
 
 #[test]
@@ -686,7 +686,7 @@ fn test_codec_value_decoder_rejects_trailing_input() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
         .expect_err("trailing input should fail");
 
-    assert_eq!(TranscodeError::trailing_input(1, 1), error,);
+    assert_eq!(TranscodeDecodeError::trailing_input(1, 1), error,);
 }
 
 #[test]
@@ -698,7 +698,7 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
         .expect_err("0xff should fail");
 
     assert_eq!(
-        TranscodeError::domain_main_with_consumed(
+        TranscodeDecodeError::domain_main_with_consumed(
             TestDecodeError::Invalid { consumed: 1 },
             0,
             Some(qubit_io::nz!(1)),
@@ -716,7 +716,7 @@ fn test_codec_value_decoder_wraps_decode_reset_error() {
         .expect_err("decode reset failure should be wrapped");
 
     assert_eq!(
-        TranscodeError::domain_reset(TestDecodeError::ResetFailed),
+        TranscodeDecodeError::domain_reset(TestDecodeError::ResetFailed),
         error,
     );
 }
@@ -760,7 +760,7 @@ fn test_codec_value_decoder_wraps_stateless_decode_finish_error() {
         .expect_err("stateless finish failure should be wrapped");
 
     assert_eq!(
-        TranscodeError::domain_finish(TestDecodeError::FinishFailed),
+        TranscodeDecodeError::domain_finish(TestDecodeError::FinishFailed),
         error,
     );
 }
@@ -775,7 +775,7 @@ fn test_codec_value_decoder_wraps_stateful_decode_finish_error() {
         .expect_err("stateful finish failure should be wrapped");
 
     assert_eq!(
-        TranscodeError::domain_finish(TestDecodeError::FinishFailed),
+        TranscodeDecodeError::domain_finish(TestDecodeError::FinishFailed),
         error,
     );
 }

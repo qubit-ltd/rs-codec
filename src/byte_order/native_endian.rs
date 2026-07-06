@@ -6,17 +6,16 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    BigEndian,
+use super::{
     ByteOrder,
     ByteOrderSpec,
-    LittleEndian,
-    NativeEndian,
 };
 
-#[test]
-fn test_byte_order_spec_exposes_runtime_order() {
-    assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
-    assert_eq!(ByteOrder::LittleEndian, LittleEndian::ORDER);
-    assert_eq!(ByteOrder::NativeEndian, NativeEndian::ORDER);
+/// Type-level marker for native-endian byte order.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct NativeEndian;
+
+impl ByteOrderSpec for NativeEndian {
+    /// The native-endian byte order.
+    const ORDER: ByteOrder = ByteOrder::NativeEndian;
 }

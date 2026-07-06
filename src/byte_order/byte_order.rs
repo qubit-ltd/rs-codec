@@ -14,4 +14,7 @@ pub enum ByteOrder {
 
     /// Little-endian byte order.
     LittleEndian,
+
+    /// Native-endian byte order.
+    NativeEndian,
 }

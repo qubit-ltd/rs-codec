@@ -31,7 +31,6 @@ use qubit_io::{
 use crate::{
     Codec,
     DecodeFailure,
-    TranscodeErrorOf,
     TranscodeStatus,
     Transcoder,
 };
@@ -467,7 +466,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<Input = I::Item, Output = Value>,
-        M: FnMut(TranscodeErrorOf<D>) -> Error,
+        M: FnMut(D::Error) -> Error,
     {
         let output_end = UncheckedSlice::checked_range_end(
             output.len(),
@@ -504,12 +503,6 @@ where
             written_total += written;
             match progress.status() {
                 TranscodeStatus::Complete => {
-                    if consumed == 0 && available_input != 0 {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "decoder reported Complete without consuming non-empty input",
-                        ));
-                    }
                     if written_total == count {
                         return Ok(written_total);
                     }
@@ -555,7 +548,7 @@ where
     ) -> Result<usize>
     where
         D: Transcoder<Input = I::Item, Output = Value>,
-        M: FnMut(TranscodeErrorOf<D>) -> Error,
+        M: FnMut(D::Error) -> Error,
     {
         let required = decoder
             .max_finish_output_len()

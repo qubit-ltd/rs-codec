@@ -8,7 +8,7 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::TranscodeError;
+use qubit_codec::TranscodeDecodeError;
 use qubit_codec::engine::{
     DecodeContext,
     DecodeInvalidAction,
@@ -66,9 +66,9 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<UnitCodec>,
+        qubit_codec::CodecTranscodeDecodeError<UnitCodec>,
     > {
-        Err(TranscodeError::domain_main(*error, 0))
+        Err(TranscodeDecodeError::domain_main(*error, 0))
     }
 }
 

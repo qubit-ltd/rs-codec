@@ -9,8 +9,8 @@
 
 use qubit_codec::{
     CapacityError,
+    TranscodeDecodeError,
     TranscodeDecoder,
-    TranscodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -21,8 +21,7 @@ struct ByteToChar;
 impl Transcoder for ByteToChar {
     type Input = u8;
     type Output = char;
-    type DomainError = core::convert::Infallible;
-    type FailureValue = ();
+    type Error = TranscodeDecodeError<core::convert::Infallible>;
 
     fn max_transcode_output_len(
         &self,
@@ -35,8 +34,8 @@ impl Transcoder for ByteToChar {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
+    ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
+        TranscodeDecodeError::<core::convert::Infallible>::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -49,7 +48,10 @@ impl Transcoder for ByteToChar {
         input_index: usize,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeError<Self::DomainError>> {
+    ) -> Result<
+        TranscodeProgress,
+        TranscodeDecodeError<core::convert::Infallible>,
+    > {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -63,8 +65,8 @@ impl Transcoder for ByteToChar {
         &mut self,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<usize, TranscodeError<Self::DomainError>> {
-        TranscodeError::<Self::DomainError>::ensure_output_index(
+    ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
+        TranscodeDecodeError::<core::convert::Infallible>::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -72,7 +74,9 @@ impl Transcoder for ByteToChar {
     }
 }
 
-impl TranscodeDecoder for ByteToChar {}
+impl TranscodeDecoder for ByteToChar {
+    type DecodeError = core::convert::Infallible;
+}
 
 #[test]
 fn test_transcode_decoder_is_a_semantic_transcoder_bound() {

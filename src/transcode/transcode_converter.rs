@@ -7,7 +7,10 @@
 // =============================================================================
 //! Semantic marker trait for buffered converters.
 
-use super::Transcoder;
+use super::{
+    TranscodeConvertError,
+    Transcoder,
+};
 
 /// Converts encoded units of one representation into encoded units of another.
 ///
@@ -18,6 +21,21 @@ use super::Transcoder;
 /// The trait adds no methods. It exists to make generic bounds distinguish
 /// unit-to-unit conversion from value-to-unit encoding and unit-to-value
 /// decoding.
-pub trait TranscodeConverter: Transcoder {
-    //  empty
+pub trait TranscodeConverter:
+    Transcoder<
+    Error = TranscodeConvertError<
+        Self::DecodeError,
+        Self::EncodeError,
+        Self::Value,
+    >,
+>
+{
+    /// Domain error type produced by source decoding.
+    type DecodeError;
+
+    /// Domain error type produced by target encoding.
+    type EncodeError;
+
+    /// Intermediate logical value type converted between source and target.
+    type Value;
 }

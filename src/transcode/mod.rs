@@ -9,16 +9,17 @@
 
 mod adapter;
 mod capacity_error;
-mod convert_error;
 mod engine;
 mod internal;
 mod io;
 mod transcode_contract_error;
+mod transcode_convert_error;
 mod transcode_converter;
+mod transcode_decode_error;
 mod transcode_decoder;
 mod transcode_domain_error;
+mod transcode_encode_error;
 mod transcode_encoder;
-mod transcode_error;
 mod transcode_failure;
 mod transcode_progress;
 mod transcode_status;
@@ -30,10 +31,6 @@ pub use adapter::{
     CodecTranscodeEncoder,
 };
 pub use capacity_error::CapacityError;
-pub use convert_error::{
-    ConvertError,
-    TranscodeConvertError,
-};
 pub use engine::{
     DecodeContext,
     DecodeInvalidAction,
@@ -52,19 +49,23 @@ pub use io::{
     TranscodeEncodeOutput,
 };
 pub use transcode_contract_error::TranscodeContractError;
+pub use transcode_convert_error::{
+    CodecTranscodeConvertError,
+    TranscodeConvertError,
+};
 pub use transcode_converter::TranscodeConverter;
+pub use transcode_decode_error::{
+    CodecTranscodeDecodeError,
+    TranscodeDecodeError,
+};
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_domain_error::TranscodeDomainError;
-pub use transcode_encoder::TranscodeEncoder;
-pub use transcode_error::{
-    TranscodeDecodeError,
+pub use transcode_encode_error::{
+    CodecTranscodeEncodeError,
     TranscodeEncodeError,
-    TranscodeError,
 };
+pub use transcode_encoder::TranscodeEncoder;
 pub use transcode_failure::TranscodeFailure;
 pub use transcode_progress::TranscodeProgress;
 pub use transcode_status::TranscodeStatus;
-pub use transcoder::{
-    TranscodeErrorOf,
-    Transcoder,
-};
+pub use transcoder::Transcoder;

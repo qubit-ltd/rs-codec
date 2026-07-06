@@ -29,11 +29,13 @@ use qubit_codec::{
     CodecTranscodeEncoder,
     CodecValueDecoder,
     CodecValueEncoder,
-    ConvertError,
+    NativeEndian,
+    TranscodeConvertError,
     TranscodeConverter,
+    TranscodeDecodeError,
     TranscodeDecoder,
+    TranscodeEncodeError,
     TranscodeEncoder,
-    TranscodeError,
     TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
@@ -114,7 +116,7 @@ impl TranscodeDecodeHooks<EchoCodec> for EchoDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<EchoCodec>,
+        qubit_codec::TranscodeDecodeError<core::convert::Infallible>,
     > {
         match *error {}
     }
@@ -129,7 +131,7 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<EchoCodec>,
+        qubit_codec::TranscodeEncodeError<core::convert::Infallible, u8>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -169,6 +171,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     fn _accept_transcode_decode_hooks<T: TranscodeDecodeHooks<EchoCodec>>() {}
     fn _accept_transcode_encode_hooks<T: TranscodeEncodeHooks<EchoCodec>>() {}
     assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
+    assert_eq!(ByteOrder::NativeEndian, NativeEndian::ORDER);
     _accept_codec_value_encoder::<CodecValueEncoder<EchoCodec>>();
     _accept_codec_value_decoder::<CodecValueDecoder<EchoCodec>>();
     _accept_codec_transcode_encoder::<CodecTranscodeEncoder<EchoCodec>>();
@@ -197,44 +200,51 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let progress = TranscodeProgress::complete(1, 2);
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(
-        TranscodeError::<
-            ConvertError<core::convert::Infallible, core::convert::Infallible>,
+        TranscodeConvertError::<
+            core::convert::Infallible,
+            core::convert::Infallible,
+            u8,
         >::invalid_output_index(1, 0),
-        TranscodeError::invalid_output_index(1, 0),
+        TranscodeConvertError::invalid_output_index(1, 0),
     );
 
     let decode_error =
-        TranscodeError::<core::convert::Infallible>::incomplete_input(0, 2, 1);
+        TranscodeDecodeError::<core::convert::Infallible>::incomplete_input(
+            0, 2, 1,
+        );
     assert!(matches!(
         decode_error,
-        TranscodeError::Failure(TranscodeFailure::IncompleteInput {
+        TranscodeDecodeError::Failure(TranscodeFailure::IncompleteInput {
             input_index: 0,
             required: 2,
             available: 1,
         })
     ));
 
+    type ConvertPreludeError =
+        TranscodeConvertError<&'static str, &'static str, u8>;
+
     let convert_error =
-        ConvertError::<&'static str, &'static str>::decode("decode failed");
+        ConvertPreludeError::decode_domain_main("decode failed", 0);
     assert!(matches!(
         convert_error,
-        ConvertError::Decode("decode failed")
+        TranscodeConvertError::DecodeDomain(_)
     ));
 
     let encode_error =
-        TranscodeError::<core::convert::Infallible>::unencodable_value_without_context(2);
-    assert!(matches!(
-        encode_error,
-        TranscodeError::Failure(TranscodeFailure::UnencodableValue {
+        TranscodeEncodeError::<core::convert::Infallible, u8>::unencodable_without_context(2);
+    assert_eq!(
+        TranscodeEncodeError::Unencodable {
             input_index: 2,
             value: None,
-        })
-    ));
+        },
+        encode_error,
+    );
     let convert_error =
-        ConvertError::<&'static str, &'static str>::encode("encode failed");
+        ConvertPreludeError::encode_domain_main("encode failed", 0);
     assert!(matches!(
         convert_error,
-        ConvertError::Encode("encode failed")
+        TranscodeConvertError::EncodeDomain(_)
     ));
 
     let mut output = [0_u8; 1];
