@@ -25,9 +25,9 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeDecodeError,
     DecodeFailure,
     TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
     TranscodeFailure,
     TranscodeProgress,
     Transcoder,
@@ -65,7 +65,7 @@ use crate::{
 /// use core::num::NonZeroUsize;
 /// use qubit_codec::{
 ///     Codec,
-///     CodecTranscodeDecodeError,
+///     TranscodeDecodeErrorOf,
 ///     DecodeFailure,
 ///     TranscodeStatus,
 /// };
@@ -129,7 +129,7 @@ use crate::{
 ///         error: &ByteDecodeError,
 ///         consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<DecodeInvalidAction<u8>, CodecTranscodeDecodeError<ByteCodec>> {
+///     ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<ByteCodec>> {
 ///         match error {
 ///             ByteDecodeError::Malformed { .. } => {
 ///                 Ok(DecodeInvalidAction::Emit {
@@ -381,7 +381,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
         TranscodeFailure::ensure_output_capacity(
@@ -428,7 +428,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, CodecTranscodeDecodeError<C>> {
+    ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_transcode();
         TranscodeFailure::ensure_transcode_indices(
             input.len(),
@@ -502,7 +502,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
         TranscodeFailure::ensure_output_capacity(
@@ -557,7 +557,7 @@ where
         &mut self,
         input: &[C::Unit],
         output: &mut [C::Value],
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         <Self as Transcoder>::transcode_complete_into(self, input, output)
     }
 
@@ -589,7 +589,7 @@ where
         input: &[C::Unit],
         context: DecodeContext,
         consume: F,
-    ) -> Result<(DecodeOutcome, Option<R>), CodecTranscodeDecodeError<C>>
+    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeErrorOf<C>>
     where
         F: FnOnce(C::Value, usize) -> R,
     {
@@ -687,7 +687,7 @@ where
 {
     type Input = C::Unit;
     type Output = C::Value;
-    type Error = CodecTranscodeDecodeError<C>;
+    type Error = TranscodeDecodeErrorOf<C>;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
@@ -718,7 +718,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
@@ -730,7 +730,7 @@ where
         input_index: usize,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<TranscodeProgress, CodecTranscodeDecodeError<C>> {
+    ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::transcode(
             self,
             input,
@@ -746,7 +746,7 @@ where
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
 }

@@ -17,7 +17,7 @@ use super::{
 use crate::Codec;
 
 /// Encode transcode error for a codec-backed encoder.
-pub type CodecTranscodeEncodeError<C> =
+pub type TranscodeEncodeErrorOf<C> =
     TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
 
 /// Error reported by an encode-oriented transcode operation.

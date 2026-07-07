@@ -14,7 +14,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeEncodeError,
+    TranscodeEncodeErrorOf,
 };
 
 /// Policy hooks for [`crate::engine::TranscodeEncodeEngine`].
@@ -47,7 +47,7 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     Codec,
-///     CodecTranscodeEncodeError,
+///     TranscodeEncodeErrorOf,
 ///     DecodeFailure,
 /// };
 /// use qubit_codec::engine::{
@@ -97,7 +97,7 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut C,
 ///         _context: &EncodeContext<'_, C::Value, C::Unit>,
-///     ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>> {
+///     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>> {
 ///         Ok(EncodeUnencodableAction::Reject)
 ///     }
 /// }
@@ -134,7 +134,7 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
     /// be represented as `usize`.
-    #[inline]
+    #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(
         &self,
@@ -195,7 +195,7 @@ where
         &mut self,
         codec: &mut C,
         context: &EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>>;
+    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -241,7 +241,7 @@ where
         _codec: &mut C,
         _output: &mut [C::Unit],
         _output_index: usize,
-    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
+    ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         Ok(0)
     }
 }

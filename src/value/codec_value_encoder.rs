@@ -13,7 +13,7 @@ use super::ValueEncoder;
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeEncodeError,
+    TranscodeEncodeErrorOf,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::{
         complete_encode_len,
@@ -98,7 +98,7 @@ where
         &mut self,
         input: &C::Value,
         output: &mut Vec<C::Unit>,
-    ) -> Result<usize, CodecTranscodeEncodeError<C>>
+    ) -> Result<usize, TranscodeEncodeErrorOf<C>>
     where
         C::Value: Clone,
         C::Unit: Default,
@@ -136,7 +136,7 @@ where
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;
-    type Error = CodecTranscodeEncodeError<C>;
+    type Error = TranscodeEncodeErrorOf<C>;
 
     /// Encodes one borrowed value into owned units.
     ///

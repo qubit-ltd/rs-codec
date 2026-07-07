@@ -99,7 +99,7 @@ where
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<C>,
+        qubit_codec::TranscodeEncodeErrorOf<C>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -115,7 +115,7 @@ impl TranscodeEncodeHooks<WideCodec> for SkippingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Skip)
     }
@@ -131,7 +131,7 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -149,7 +149,7 @@ impl TranscodeEncodeHooks<WideCodec> for ReplacingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::replace(self.replacement))
     }
@@ -211,7 +211,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec>
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ReplacementEncodeFailCodec>,
     > {
         Ok(EncodeUnencodableAction::replace(7))
     }
@@ -227,7 +227,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ReplacementEncodeFailCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -246,7 +246,7 @@ impl TranscodeEncodeHooks<ReplacementEncodeFailCodec> for FailingFinishHooks {
         output_index: usize,
     ) -> Result<
         usize,
-        qubit_codec::CodecTranscodeEncodeError<ReplacementEncodeFailCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ReplacementEncodeFailCodec>,
     > {
         Err(TranscodeEncodeError::domain_finish(EngineError::Rejected {
             input_index: output_index,
@@ -307,7 +307,7 @@ impl TranscodeEncodeHooks<FinishFailingCodec> for FinishFailingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<FinishFailingCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<FinishFailingCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -368,7 +368,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -382,7 +382,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::TranscodeEncodeErrorOf<WideCodec>> {
         if !self.pending_suffix {
             return Ok(0);
         }
@@ -407,7 +407,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -421,7 +421,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::TranscodeEncodeErrorOf<WideCodec>> {
         output[output_index] = 0xee;
         output[output_index + 1] = 0xdd;
         Ok(1)
@@ -438,7 +438,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -452,7 +452,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverreportingFinishHooks {
         _codec: &mut WideCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<WideCodec>> {
+    ) -> Result<usize, qubit_codec::TranscodeEncodeErrorOf<WideCodec>> {
         output[output_index] = 0xee;
         Ok(2)
     }
@@ -970,7 +970,7 @@ impl TranscodeEncodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ResetFailCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ResetFailCodec>,
     > {
         Err(TranscodeEncodeError::domain_main(
             ResetFailError,
@@ -1004,7 +1004,7 @@ impl TranscodeEncodeHooks<ResetEmittingCodec> for ResetPassthroughHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ResetEmittingCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ResetEmittingCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -1157,7 +1157,7 @@ impl TranscodeEncodeHooks<WideCodec> for OverflowPlanningEncodeHooks {
         context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<WideCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<WideCodec>,
     > {
         Err(TranscodeEncodeError::unencodable(
             context.input_index(),

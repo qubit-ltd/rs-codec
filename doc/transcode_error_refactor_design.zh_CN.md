@@ -280,17 +280,23 @@ pub enum TranscodeConvertError<DE, EE, V> {
 engine 的签名保持清楚，提供显式命名的 codec 便利别名：
 
 ```rust
-pub type CodecTranscodeDecodeError<C> =
+pub type TranscodeDecodeErrorOf<C> =
     TranscodeDecodeError<<C as Codec>::DecodeError>;
 
-pub type CodecTranscodeEncodeError<C> =
+pub type TranscodeEncodeErrorOf<C> =
     TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
 
-pub type CodecTranscodeConvertError<D, E> = TranscodeConvertError<
+pub type TranscodeConvertErrorOf<D, E> = TranscodeConvertError<
     <D as Codec>::DecodeError,
     <E as Codec>::EncodeError,
     <D as Codec>::Value,
 >;
+
+pub type DecodeInvalidActionOf<C> =
+    DecodeInvalidAction<<C as Codec>::Value>;
+
+pub type EncodeUnencodableActionOf<C> =
+    EncodeUnencodableAction<<C as Codec>::Value>;
 ```
 
 不要继续使用 `TranscodeDecodeError<C>` 这种“泛型看起来是 codec，实际可能是域
@@ -579,15 +585,15 @@ where
 {
     type Input = C::Unit;
     type Output = C::Value;
-    type Error = CodecTranscodeDecodeError<C>;
+    type Error = TranscodeDecodeErrorOf<C>;
 }
 ```
 
 公开方法返回：
 
 ```rust
-Result<usize, CodecTranscodeDecodeError<C>>
-Result<TranscodeProgress, CodecTranscodeDecodeError<C>>
+Result<usize, TranscodeDecodeErrorOf<C>>
+Result<TranscodeProgress, TranscodeDecodeErrorOf<C>>
 ```
 
 内部把当前 `TranscodeError::domain_*` 调用替换成
@@ -606,7 +612,7 @@ where
 {
     type Input = C::Value;
     type Output = C::Unit;
-    type Error = CodecTranscodeEncodeError<C>;
+    type Error = TranscodeEncodeErrorOf<C>;
 }
 ```
 
@@ -636,7 +642,7 @@ where
 {
     type Input = D::Unit;
     type Output = E::Unit;
-    type Error = CodecTranscodeConvertError<D, E>;
+    type Error = TranscodeConvertErrorOf<D, E>;
 }
 ```
 
@@ -700,14 +706,14 @@ where
         error: &C::DecodeError,
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, CodecTranscodeDecodeError<C>>;
+    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeErrorOf<C>>;
 
     fn finish_hooks(
         &mut self,
         codec: &mut C,
         output: &mut [C::Value],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>>;
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>>;
 }
 
 pub trait TranscodeEncodeHooks<C>
@@ -718,14 +724,14 @@ where
         &mut self,
         codec: &mut C,
         context: &EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>>;
+    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>>;
 
     fn finish_hooks(
         &mut self,
         codec: &mut C,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeEncodeError<C>>;
+    ) -> Result<usize, TranscodeEncodeErrorOf<C>>;
 }
 ```
 
@@ -740,13 +746,13 @@ hook 层不引入新的错误抽象。它只是 engine 策略扩展点，因此�
 CodecValueDecoder<C>::decode(
     &mut self,
     input: &[C::Unit],
-) -> Result<C::Value, CodecTranscodeDecodeError<C>>;
+) -> Result<C::Value, TranscodeDecodeErrorOf<C>>;
 
 CodecValueEncoder<C>::encode_into(
     &mut self,
     input: &C::Value,
     output: &mut Vec<C::Unit>,
-) -> Result<usize, CodecTranscodeEncodeError<C>>;
+) -> Result<usize, TranscodeEncodeErrorOf<C>>;
 ```
 
 内部 helper 对应调整：
@@ -755,7 +761,7 @@ CodecValueEncoder<C>::encode_into(
 complete_encode_len<C>(
     codec: &C,
     value: &C::Value,
-) -> Result<usize, CodecTranscodeEncodeError<C>>
+) -> Result<usize, TranscodeEncodeErrorOf<C>>
 where
     C::Value: Clone;
 
@@ -765,13 +771,13 @@ encode_complete_value_into_reserved<C>(
     output: &mut [C::Unit],
     output_index: usize,
     required: usize,
-) -> Result<usize, CodecTranscodeEncodeError<C>>;
+) -> Result<usize, TranscodeEncodeErrorOf<C>>;
 
 decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
     scratch: &mut [C::Value],
-) -> Result<C::Value, CodecTranscodeDecodeError<C>>;
+) -> Result<C::Value, TranscodeDecodeErrorOf<C>>;
 ```
 
 `complete_encode_len` 遇到不可编码值时返回：
@@ -982,7 +988,7 @@ pub fn transcode(
     input_index: usize,
     output: &mut [C::Value],
     output_index: usize,
-) -> Result<TranscodeProgress, CodecTranscodeDecodeError<C>>;
+) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>>;
 ```
 
 编码：
@@ -994,7 +1000,7 @@ pub fn transcode(
     input_index: usize,
     output: &mut [C::Unit],
     output_index: usize,
-) -> Result<TranscodeProgress, CodecTranscodeEncodeError<C>>;
+) -> Result<TranscodeProgress, TranscodeEncodeErrorOf<C>>;
 ```
 
 转换：
@@ -1006,7 +1012,7 @@ pub fn transcode(
     input_index: usize,
     output: &mut [E::Unit],
     output_index: usize,
-) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>>;
+) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>>;
 ```
 
 泛型 I/O：

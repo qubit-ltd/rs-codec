@@ -19,7 +19,7 @@ use super::{
 use crate::Codec;
 
 /// Convert transcode error for a codec-backed converter.
-pub type CodecTranscodeConvertError<D, E> = TranscodeConvertError<
+pub type TranscodeConvertErrorOf<D, E> = TranscodeConvertError<
     <D as Codec>::DecodeError,
     <E as Codec>::EncodeError,
     <D as Codec>::Value,

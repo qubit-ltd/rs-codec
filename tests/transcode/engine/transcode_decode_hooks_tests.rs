@@ -66,7 +66,7 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<UnitCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<UnitCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }

@@ -14,7 +14,7 @@ use super::super::engine::{
 };
 use crate::{
     Codec,
-    CodecTranscodeEncodeError,
+    TranscodeEncodeErrorOf,
 };
 
 /// Policy hooks for [`crate::CodecTranscodeEncoder`].
@@ -31,7 +31,7 @@ where
         &mut self,
         _codec: &mut C,
         _context: &EncodeContext<'_, C::Value, C::Unit>,
-    ) -> Result<EncodeUnencodableAction<C::Value>, CodecTranscodeEncodeError<C>>
+    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>>
     {
         Ok(EncodeUnencodableAction::Reject)
     }

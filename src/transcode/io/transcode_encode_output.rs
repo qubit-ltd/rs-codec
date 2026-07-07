@@ -31,8 +31,8 @@ use qubit_io::{
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeEncodeError,
     TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
     TranscodeFailure,
     TranscodeStatus,
     Transcoder,
@@ -243,7 +243,7 @@ where
                     0,
                     required,
                 )
-                .map_err(CodecTranscodeEncodeError::<C>::from),
+                .map_err(TranscodeEncodeErrorOf::<C>::from),
                 &mut map_error,
             )?;
             let written = map_encode_value_result(
@@ -281,7 +281,7 @@ where
                 output_index,
                 required,
             )
-            .map_err(CodecTranscodeEncodeError::<C>::from),
+            .map_err(TranscodeEncodeErrorOf::<C>::from),
             &mut map_error,
         )?;
         let written = map_encode_value_result(

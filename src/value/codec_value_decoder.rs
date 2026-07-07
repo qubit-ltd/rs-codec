@@ -12,7 +12,7 @@ use core::fmt;
 use super::ValueDecoder;
 use crate::{
     Codec,
-    CodecTranscodeDecodeError,
+    TranscodeDecodeErrorOf,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
@@ -96,7 +96,7 @@ where
     pub fn decode(
         &mut self,
         input: &[C::Unit],
-    ) -> Result<C::Value, CodecTranscodeDecodeError<C>>
+    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
     where
         C::Value: Default,
     {
@@ -126,7 +126,7 @@ where
     C::Value: Default,
 {
     type Output = C::Value;
-    type Error = CodecTranscodeDecodeError<C>;
+    type Error = TranscodeDecodeErrorOf<C>;
 
     #[inline(always)]
     fn decode(

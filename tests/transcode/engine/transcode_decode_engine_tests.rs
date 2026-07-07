@@ -289,7 +289,7 @@ impl TranscodeDecodeHooks<DropTrackedCodec> for DropTrackedHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<DropTrackedValue>,
-        qubit_codec::CodecTranscodeDecodeError<DropTrackedCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<DropTrackedCodec>,
     > {
         match *error {}
     }
@@ -307,7 +307,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -332,7 +332,7 @@ impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<OverconsumingCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<OverconsumingCodec>,
     > {
         match *error {}
     }
@@ -350,7 +350,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for SkippingHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -374,7 +374,7 @@ impl TranscodeDecodeHooks<HintOnlyCodec> for HintOnlySkippingHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<HintOnlyCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<HintOnlyCodec>,
     > {
         match error {
             HintOnlyDecodeError::Invalid => Ok(DecodeInvalidAction::Skip {
@@ -406,7 +406,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -426,8 +426,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
         _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<PrefixCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>> {
         if !self.pending_suffix {
             return Ok(0);
         }
@@ -458,7 +457,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for InvalidDecodeInvalidActionHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match self.kind {
             InvalidDecodeInvalidActionKind::Skip => {
@@ -488,7 +487,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -508,8 +507,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverwritingFinishHooks {
         _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<PrefixCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>> {
         output[output_index] = 0xee;
         output[output_index + 1] = 0xdd;
         Ok(1)
@@ -528,7 +526,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -548,8 +546,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverreportingFinishHooks {
         _codec: &mut PrefixCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<PrefixCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>> {
         output[output_index] = 0xee;
         Ok(2)
     }
@@ -650,7 +647,7 @@ impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<OverflowFlushCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<OverflowFlushCodec>,
     > {
         match *error {}
     }
@@ -665,7 +662,7 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<MinTwoCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<MinTwoCodec>,
     > {
         match error {
             PrefixDecodeError::Invalid { consumed } => {
@@ -1197,7 +1194,7 @@ impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<FlushFailCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<FlushFailCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(
             *error,
@@ -1220,7 +1217,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(
             *error,
@@ -1295,7 +1292,7 @@ impl TranscodeDecodeHooks<ResetFailCodec> for ResetErrorMappingHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetFailCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetFailCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(
             *error,
@@ -1496,7 +1493,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for InvalidHookErrorHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(
             *error,
@@ -1544,7 +1541,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for OverflowPlanningDecodeHooks {
         context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(
             *error,
@@ -1588,7 +1585,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for RejectingDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<PrefixCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         Ok(DecodeInvalidAction::Reject)
     }
@@ -1603,7 +1600,7 @@ impl TranscodeDecodeHooks<UnknownInvalidCodec> for RejectingDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<UnknownInvalidCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<UnknownInvalidCodec>,
     > {
         assert_eq!(None, consumed);
         Ok(DecodeInvalidAction::Reject)
@@ -1711,7 +1708,7 @@ impl TranscodeDecodeHooks<ResetEmittingDecodeCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetEmittingDecodeCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetEmittingDecodeCodec>,
     > {
         match *error {}
     }

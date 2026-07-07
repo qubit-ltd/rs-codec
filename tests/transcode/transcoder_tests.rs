@@ -556,7 +556,7 @@ fn test_transcoder_error_is_domain_error_type() {
 }
 
 #[test]
-fn test_transcode_error_of_alias_matches_framework_error() {
+fn test_transcoder_error_associated_type_matches_framework_error() {
     type ResetFn<T> = fn(
         &mut T,
         &mut [<T as Transcoder>::Output],

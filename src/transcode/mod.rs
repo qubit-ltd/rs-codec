@@ -34,10 +34,12 @@ pub use capacity_error::CapacityError;
 pub use engine::{
     DecodeContext,
     DecodeInvalidAction,
+    DecodeInvalidActionOf,
     DecodeOutcome,
     EncodeContext,
     EncodeOutcome,
     EncodeUnencodableAction,
+    EncodeUnencodableActionOf,
     TranscodeConvertEngine,
     TranscodeDecodeEngine,
     TranscodeDecodeHooks,
@@ -50,19 +52,19 @@ pub use io::{
 };
 pub use transcode_contract_error::TranscodeContractError;
 pub use transcode_convert_error::{
-    CodecTranscodeConvertError,
     TranscodeConvertError,
+    TranscodeConvertErrorOf,
 };
 pub use transcode_converter::TranscodeConverter;
 pub use transcode_decode_error::{
-    CodecTranscodeDecodeError,
     TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
 };
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_domain_error::TranscodeDomainError;
 pub use transcode_encode_error::{
-    CodecTranscodeEncodeError,
     TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
 };
 pub use transcode_encoder::TranscodeEncoder;
 pub use transcode_failure::TranscodeFailure;

@@ -7,6 +7,12 @@
 // =============================================================================
 //! Unencodable-value actions returned by buffered encoder policy hooks.
 
+use crate::Codec;
+
+/// Unencodable-value action for a codec-backed encode hook.
+pub type EncodeUnencodableActionOf<C> =
+    EncodeUnencodableAction<<C as Codec>::Value>;
+
 /// Action selected after a codec reports an unencodable input value.
 ///
 /// Normal encodable values are handled by the encode engine itself. Hook

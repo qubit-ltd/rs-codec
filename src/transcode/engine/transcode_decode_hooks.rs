@@ -16,7 +16,7 @@ use super::{
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeDecodeError,
+    TranscodeDecodeErrorOf,
 };
 
 /// Policy hooks for [`crate::engine::TranscodeDecodeEngine`].
@@ -154,7 +154,7 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
     /// be represented as `usize`.
-    #[inline]
+    #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(
         &self,
@@ -219,7 +219,7 @@ where
         error: &C::DecodeError,
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, CodecTranscodeDecodeError<C>>;
+    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeErrorOf<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
@@ -265,7 +265,7 @@ where
         _codec: &mut C,
         _output: &mut [C::Value],
         _output_index: usize,
-    ) -> Result<usize, CodecTranscodeDecodeError<C>> {
+    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         Ok(0)
     }
 }

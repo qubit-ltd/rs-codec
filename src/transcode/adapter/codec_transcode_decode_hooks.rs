@@ -16,7 +16,7 @@ use core::num::NonZeroUsize;
 
 use crate::{
     Codec,
-    CodecTranscodeDecodeError,
+    TranscodeDecodeErrorOf,
 };
 
 /// Policy hooks for [`crate::CodecTranscodeDecoder`].
@@ -46,8 +46,7 @@ where
         _error: &C::DecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<C::Value>, CodecTranscodeDecodeError<C>>
-    {
+    ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeErrorOf<C>> {
         Ok(DecodeInvalidAction::Reject)
     }
 }

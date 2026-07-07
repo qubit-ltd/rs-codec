@@ -307,7 +307,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ResetEmittingTargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ResetEmittingTargetCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -325,7 +325,7 @@ impl TranscodeEncodeHooks<FinishOverflowTargetCodec>
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<FinishOverflowTargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<FinishOverflowTargetCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -348,7 +348,7 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<ResetFailTargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<ResetFailTargetCodec>,
     > {
         Err(TranscodeEncodeError::domain_main(
             TargetResetFailError,
@@ -441,7 +441,7 @@ impl TranscodeDecodeHooks<SourceCodec> for StrictDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -463,7 +463,7 @@ impl TranscodeDecodeHooks<ErrorSourceCodec> for ImpossibleFailureDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ErrorSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ErrorSourceCodec>,
     > {
         Err(qubit_codec::TranscodeDecodeError::domain_main(
             EngineError::Decode,
@@ -485,7 +485,7 @@ where
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<C>,
+        qubit_codec::TranscodeEncodeErrorOf<C>,
     > {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -514,7 +514,7 @@ impl TranscodeEncodeHooks<MismatchCapacityTargetCodec>
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<MismatchCapacityTargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<MismatchCapacityTargetCodec>,
     > {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -543,7 +543,7 @@ impl TranscodeDecodeHooks<ErrorSourceCodec> for RepairDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ErrorSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ErrorSourceCodec>,
     > {
         match self.action {
             RepairAction::Emit => Ok(DecodeInvalidAction::Emit {
@@ -581,7 +581,7 @@ impl<const FINISH_BOUND: usize>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<
+        qubit_codec::TranscodeDecodeErrorOf<
             FinishValueSourceCodec<FINISH_BOUND>,
         >,
     > {
@@ -615,7 +615,7 @@ impl<const FINISH_BOUND: usize>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<
+        qubit_codec::TranscodeDecodeErrorOf<
             FinishValueSourceCodec<FINISH_BOUND>,
         >,
     > {
@@ -647,7 +647,7 @@ impl TranscodeDecodeHooks<SourceCodec> for FinishDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -661,8 +661,7 @@ impl TranscodeDecodeHooks<SourceCodec> for FinishDecodeHooks {
         _codec: &mut SourceCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<SourceCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<SourceCodec>> {
         let Some(value) = self.value else {
             return Ok(0);
         };
@@ -711,7 +710,7 @@ impl TranscodeDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -725,8 +724,7 @@ impl TranscodeDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
         _codec: &mut SourceCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<SourceCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<SourceCodec>> {
         if self.remaining == 0 {
             return Ok(0);
         }
@@ -760,7 +758,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
         context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<TargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<TargetCodec>,
     > {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -777,8 +775,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
         _codec: &mut TargetCodec,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<TargetCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         if !self.pending {
             return Ok(0);
         }
@@ -820,7 +817,7 @@ impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -834,8 +831,7 @@ impl TranscodeDecodeHooks<SourceCodec> for ErrorPathDecodeHooks {
         _codec: &mut SourceCodec,
         _output: &mut [u8],
         _output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeDecodeError<SourceCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<SourceCodec>> {
         match self.finish {
             ErrorPathDecodeFinish::Normal => Ok(0),
             ErrorPathDecodeFinish::Error => {
@@ -892,7 +888,7 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<TargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<TargetCodec>,
     > {
         match self.mode {
             ErrorPathEncodeMode::PrepareError => {
@@ -912,8 +908,7 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         _codec: &mut TargetCodec,
         _output: &mut [u8],
         _output_index: usize,
-    ) -> Result<usize, qubit_codec::CodecTranscodeEncodeError<TargetCodec>>
-    {
+    ) -> Result<usize, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         match self.mode {
             ErrorPathEncodeMode::FinishError => {
                 Err(TranscodeEncodeError::domain_finish(EngineError::Encode))
@@ -957,7 +952,7 @@ impl TranscodeDecodeHooks<SourceCodec> for FactoryDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -983,7 +978,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<TargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<TargetCodec>,
     > {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -1833,7 +1828,7 @@ impl TranscodeDecodeHooks<SourceCodec> for ResetObservingDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<SourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<SourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -1951,7 +1946,7 @@ impl TranscodeDecodeHooks<StatelessResetSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<StatelessResetSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<StatelessResetSourceCodec>,
     > {
         match *error {}
     }
@@ -1975,9 +1970,7 @@ impl TranscodeDecodeHooks<StatelessResetFailingSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<
-            StatelessResetFailingSourceCodec,
-        >,
+        qubit_codec::TranscodeDecodeErrorOf<StatelessResetFailingSourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -2089,7 +2082,7 @@ impl TranscodeDecodeHooks<OverflowResetSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<OverflowResetSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<OverflowResetSourceCodec>,
     > {
         match *error {}
     }
@@ -2107,7 +2100,7 @@ impl TranscodeEncodeHooks<OverflowResetTargetCodec>
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<OverflowResetTargetCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<OverflowResetTargetCodec>,
     > {
         unreachable!("overflow reset target codec accepts all u8 values")
     }
@@ -2127,7 +2120,7 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetEmittingSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetEmittingSourceCodec>,
     > {
         match *error {}
     }
@@ -2502,7 +2495,7 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec> for ResetSourceDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetEmittingSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetEmittingSourceCodec>,
     > {
         match *error {}
     }
@@ -2522,7 +2515,7 @@ impl TranscodeDecodeHooks<ResetEncodingFailSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetEncodingFailSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetEncodingFailSourceCodec>,
     > {
         match *error {}
     }
@@ -2587,7 +2580,7 @@ impl TranscodeDecodeHooks<ResetFailingSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<ResetFailingSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<ResetFailingSourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {
@@ -2656,7 +2649,7 @@ impl TranscodeDecodeHooks<FinishFailingSourceCodec>
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::CodecTranscodeDecodeError<FinishFailingSourceCodec>,
+        qubit_codec::TranscodeDecodeErrorOf<FinishFailingSourceCodec>,
     > {
         match error {
             EngineError::Decode | EngineError::Encode => {

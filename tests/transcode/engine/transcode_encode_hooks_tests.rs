@@ -71,7 +71,7 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
         _context: &EncodeContext<'_, u8, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::CodecTranscodeEncodeError<UnitCodec>,
+        qubit_codec::TranscodeEncodeErrorOf<UnitCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }

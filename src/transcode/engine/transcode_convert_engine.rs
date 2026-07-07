@@ -30,8 +30,8 @@ use crate::codec::assert_unit_bounds;
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeConvertError,
     TranscodeConvertError,
+    TranscodeConvertErrorOf,
     TranscodeFailure,
     TranscodeProgress,
     Transcoder,
@@ -78,8 +78,8 @@ use crate::{
 /// };
 /// use qubit_codec::{
 ///     Codec,
-///     CodecTranscodeDecodeError,
-///     CodecTranscodeEncodeError,
+///     TranscodeDecodeErrorOf,
+///     TranscodeEncodeErrorOf,
 ///     DecodeFailure,
 ///     TranscodeStatus,
 /// };
@@ -163,7 +163,7 @@ use crate::{
 ///         error: &Infallible,
 ///         _consumed: Option<NonZeroUsize>,
 ///         _context: DecodeContext,
-///     ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, CodecTranscodeDecodeError<SourceCodec>> {
+///     ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<SourceCodec>> {
 ///         match *error {}
 ///     }
 /// }
@@ -175,7 +175,7 @@ use crate::{
 ///         &mut self,
 ///         _codec: &mut TargetCodec,
 ///         _context: &EncodeContext<'_, u8, u8>,
-///     ) -> Result<EncodeUnencodableAction<u8>, CodecTranscodeEncodeError<TargetCodec>> {
+///     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<TargetCodec>> {
 ///         unreachable!("TargetCodec accepts every u8")
 ///     }
 /// }
@@ -200,7 +200,7 @@ use crate::{
 ///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("input is complete"),
 /// }
-/// # Ok::<(), qubit_codec::CodecTranscodeConvertError<SourceCodec, TargetCodec>>(())
+/// # Ok::<(), qubit_codec::TranscodeConvertErrorOf<SourceCodec, TargetCodec>>(())
 /// ```
 ///
 /// # Type Parameters
@@ -486,7 +486,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
+    ) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -548,7 +548,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
         self.lifecycle.on_transcode();
         TranscodeFailure::ensure_transcode_indices(
             input.len(),
@@ -624,7 +624,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
+    ) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -686,7 +686,7 @@ where
         &mut self,
         input: &[D::Unit],
         output: &mut [E::Unit],
-    ) -> Result<usize, CodecTranscodeConvertError<D, E>>
+    ) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -719,7 +719,7 @@ where
     fn drain_decoder_reset(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), CodecTranscodeConvertError<D, E>>
+    ) -> Result<(), TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -769,8 +769,7 @@ where
     fn convert_next(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
-    {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertErrorOf<D, E>> {
         let (outcome, pending) = self.decode_engine.decode_one(
             state.input(),
             state.decode_context(),
@@ -818,8 +817,7 @@ where
     fn drain_pending(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
-    {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertErrorOf<D, E>> {
         let Some(pending) = self.pending.take() else {
             return Ok(None);
         };
@@ -852,7 +850,7 @@ where
     fn drain_decoder_finish(
         &mut self,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<(), CodecTranscodeConvertError<D, E>>
+    ) -> Result<(), TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -908,8 +906,7 @@ where
         &mut self,
         pending: PendingValue<D::Value>,
         state: &mut ConvertState<'_, D::Unit, E::Unit>,
-    ) -> Result<Option<TranscodeProgress>, CodecTranscodeConvertError<D, E>>
-    {
+    ) -> Result<Option<TranscodeProgress>, TranscodeConvertErrorOf<D, E>> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
         let context = EncodeContext::new(
@@ -962,7 +959,7 @@ where
 {
     type Input = D::Unit;
     type Output = E::Unit;
-    type Error = CodecTranscodeConvertError<D, E>;
+    type Error = TranscodeConvertErrorOf<D, E>;
 
     /// Returns an upper bound for target units produced from `input_len`
     /// units.
@@ -994,7 +991,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
+    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::reset(self, output, output_index)
     }
 
@@ -1006,7 +1003,7 @@ where
         input_index: usize,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, CodecTranscodeConvertError<D, E>> {
+    ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::transcode(
             self,
             input,
@@ -1022,7 +1019,7 @@ where
         &mut self,
         output: &mut [E::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeConvertError<D, E>> {
+    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::finish(self, output, output_index)
     }
 }

@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// Decode transcode error for a codec-backed decoder.
-pub type CodecTranscodeDecodeError<C> =
+pub type TranscodeDecodeErrorOf<C> =
     TranscodeDecodeError<<C as Codec>::DecodeError>;
 
 /// Error reported by a decode-oriented transcode operation.

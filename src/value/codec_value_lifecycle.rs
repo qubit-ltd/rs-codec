@@ -10,10 +10,10 @@
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeDecodeError,
-    CodecTranscodeEncodeError,
     TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
     TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
     TranscodeFailure,
 };
 
@@ -60,7 +60,7 @@ where
 pub(crate) fn complete_encode_len<C>(
     codec: &C,
     value: &C::Value,
-) -> Result<usize, CodecTranscodeEncodeError<C>>
+) -> Result<usize, TranscodeEncodeErrorOf<C>>
 where
     C: Codec,
     C::Value: Clone,
@@ -105,7 +105,7 @@ pub(crate) fn encode_complete_value_into_reserved<C>(
     output: &mut [C::Unit],
     output_index: usize,
     required: usize,
-) -> Result<usize, CodecTranscodeEncodeError<C>>
+) -> Result<usize, TranscodeEncodeErrorOf<C>>
 where
     C: Codec,
 {
@@ -184,7 +184,7 @@ pub(crate) fn decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
     scratch: &mut [C::Value],
-) -> Result<C::Value, CodecTranscodeDecodeError<C>>
+) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
 where
     C: Codec,
 {

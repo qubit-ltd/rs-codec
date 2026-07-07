@@ -9,10 +9,12 @@
 use qubit_codec::engine::{
     DecodeContext,
     DecodeInvalidAction,
+    DecodeInvalidActionOf,
     DecodeOutcome,
     EncodeContext,
     EncodeOutcome,
     EncodeUnencodableAction,
+    EncodeUnencodableActionOf,
     TranscodeConvertEngine,
     TranscodeDecodeEngine,
     TranscodeDecodeHooks,
@@ -31,10 +33,13 @@ use qubit_codec::{
     CodecValueEncoder,
     NativeEndian,
     TranscodeConvertError,
+    TranscodeConvertErrorOf,
     TranscodeConverter,
     TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
     TranscodeDecoder,
     TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
     TranscodeEncoder,
     TranscodeFailure,
     TranscodeProgress,
@@ -199,6 +204,18 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
 
     let progress = TranscodeProgress::complete(1, 2);
     assert_eq!(TranscodeStatus::Complete, progress.status());
+    let _: DecodeInvalidActionOf<EchoCodec> = DecodeInvalidAction::Emit {
+        value: 1,
+        consumed: qubit_io::nz!(1),
+    };
+    let _: EncodeUnencodableActionOf<EchoCodec> =
+        EncodeUnencodableAction::Replace { value: 1 };
+    let _: TranscodeDecodeErrorOf<EchoCodec> =
+        TranscodeDecodeError::incomplete_input(0, 1, 0);
+    let _: TranscodeEncodeErrorOf<EchoCodec> =
+        TranscodeEncodeError::unencodable_without_context(0);
+    let _: TranscodeConvertErrorOf<EchoCodec, EchoCodec> =
+        TranscodeConvertError::invalid_input_index(1, 0);
     assert_eq!(
         TranscodeConvertError::<
             core::convert::Infallible,

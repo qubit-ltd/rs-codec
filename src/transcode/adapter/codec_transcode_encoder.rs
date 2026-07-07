@@ -12,7 +12,7 @@ use super::CodecTranscodeEncodeHooks;
 use crate::{
     CapacityError,
     Codec,
-    CodecTranscodeEncodeError,
+    TranscodeEncodeErrorOf,
     TranscodeEncoder,
     TranscodeProgress,
     Transcoder,
@@ -67,7 +67,7 @@ where
 {
     type Input = C::Value;
     type Output = C::Unit;
-    type Error = CodecTranscodeEncodeError<C>;
+    type Error = TranscodeEncodeErrorOf<C>;
 
     /// Gets the maximum number of output units needed for `input_len`
     /// values.
@@ -113,7 +113,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
+    ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
 
@@ -142,7 +142,7 @@ where
         input_index: usize,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<TranscodeProgress, CodecTranscodeEncodeError<C>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeErrorOf<C>> {
         self.engine
             .transcode(input, input_index, output, output_index)
     }
@@ -166,7 +166,7 @@ where
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
-    ) -> Result<usize, CodecTranscodeEncodeError<C>> {
+    ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }
 }

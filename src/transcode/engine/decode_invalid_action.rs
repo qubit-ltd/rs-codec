@@ -9,6 +9,11 @@
 
 use core::num::NonZeroUsize;
 
+use crate::Codec;
+
+/// Invalid-decode action for a codec-backed decode hook.
+pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
+
 /// Action selected after a codec reports invalid encoded input.
 ///
 /// Incomplete input is not a policy action. Codecs report it with
