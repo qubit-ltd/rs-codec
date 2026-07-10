@@ -28,6 +28,7 @@ use crate::{
     DecodeFailure,
     TranscodeDecodeError,
     TranscodeDecodeErrorOf,
+    TranscodeDecoder,
     TranscodeFailure,
     TranscodeProgress,
     Transcoder,
@@ -749,4 +750,12 @@ where
     ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
+}
+
+impl<C, H> TranscodeDecoder for TranscodeDecodeEngine<C, H>
+where
+    C: Codec,
+    H: TranscodeDecodeHooks<C>,
+{
+    type DecodeError = C::DecodeError;
 }

@@ -32,6 +32,7 @@ use crate::{
     Codec,
     TranscodeConvertError,
     TranscodeConvertErrorOf,
+    TranscodeConverter,
     TranscodeFailure,
     TranscodeProgress,
     Transcoder,
@@ -1022,4 +1023,17 @@ where
     ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::finish(self, output, output_index)
     }
+}
+
+impl<D, E, DH, EH> TranscodeConverter for TranscodeConvertEngine<D, E, DH, EH>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    D::Value: Clone + Default,
+    DH: TranscodeDecodeHooks<D>,
+    EH: TranscodeEncodeHooks<E>,
+{
+    type DecodeError = D::DecodeError;
+    type EncodeError = E::EncodeError;
+    type Value = D::Value;
 }

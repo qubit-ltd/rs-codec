@@ -57,33 +57,6 @@ where
     >,
 }
 
-impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
-where
-    D: Codec,
-    E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >: fmt::Debug,
-{
-    /// Formats the wrapped converter engine for debugging.
-    ///
-    /// # Parameters
-    ///
-    /// - `f`: Destination formatter.
-    ///
-    /// # Returns
-    ///
-    /// Returns `fmt::Result` from the formatter.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CodecTranscodeConverter")
-            .field("engine", &self.engine)
-            .finish()
-    }
-}
-
 impl<D, E> CodecTranscodeConverter<D, E>
 where
     D: Codec,
@@ -384,5 +357,32 @@ where
         Self {
             engine: TranscodeConvertEngine::default(),
         }
+    }
+}
+
+impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
+where
+    D: Codec,
+    E: Codec<Value = D::Value>,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: fmt::Debug,
+{
+    /// Formats the wrapped converter engine for debugging.
+    ///
+    /// # Parameters
+    ///
+    /// - `f`: Destination formatter.
+    ///
+    /// # Returns
+    ///
+    /// Returns `fmt::Result` from the formatter.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CodecTranscodeConverter")
+            .field("engine", &self.engine)
+            .finish()
     }
 }

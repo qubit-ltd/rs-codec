@@ -17,6 +17,7 @@ use qubit_codec::{
     CapacityError,
     Codec,
     TranscodeEncodeError,
+    TranscodeEncoder,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -542,6 +543,9 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
 #[test]
 fn test_buffered_encode_engine_implements_transcoder() {
     type Engine = TranscodeEncodeEngine<WideCodec, ExactWidthHooks>;
+    fn assert_encoder<T: TranscodeEncoder<Input = u8, Output = u8>>() {}
+    assert_encoder::<Engine>();
+
     type EngineResult<T> =
         Result<T, TranscodeEncodeError<core::convert::Infallible, u8>>;
     type TranscodeFn = fn(

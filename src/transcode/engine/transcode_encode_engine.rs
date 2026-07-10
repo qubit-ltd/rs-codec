@@ -25,6 +25,7 @@ use crate::{
     Codec,
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
+    TranscodeEncoder,
     TranscodeFailure,
     TranscodeProgress,
     Transcoder,
@@ -753,4 +754,12 @@ where
     ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         TranscodeEncodeEngine::finish(self, output, output_index)
     }
+}
+
+impl<C, H> TranscodeEncoder for TranscodeEncodeEngine<C, H>
+where
+    C: Codec,
+    H: TranscodeEncodeHooks<C>,
+{
+    type EncodeError = C::EncodeError;
 }

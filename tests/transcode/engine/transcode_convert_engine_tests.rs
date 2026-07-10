@@ -26,6 +26,7 @@ use qubit_codec::{
     CapacityError,
     Codec,
     TranscodeConvertError,
+    TranscodeConverter,
     TranscodeDecodeError,
     TranscodeEncodeError,
     TranscodeProgress,
@@ -1146,6 +1147,9 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
 
 #[test]
 fn test_buffered_convert_engine_implements_transcoder() {
+    fn assert_converter<T: TranscodeConverter<Input = u8, Output = u8>>() {}
+    assert_converter::<CopyConvertEngine>();
+
     type EngineResult<T> =
         Result<T, TranscodeConvertError<EngineError, EngineError, u8>>;
     type TranscodeFn = fn(

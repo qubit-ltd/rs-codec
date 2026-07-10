@@ -23,6 +23,7 @@ use qubit_codec::{
     CapacityError,
     Codec,
     TranscodeDecodeError,
+    TranscodeDecoder,
     TranscodeStatus,
     Transcoder,
 };
@@ -1097,6 +1098,9 @@ fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
 #[test]
 fn test_transcode_decode_engine_implements_buffered_transcoder() {
     type Decoder = TranscodeDecodeEngine<PrefixCodec, ReplacingHooks>;
+    fn assert_decoder<T: TranscodeDecoder<Input = u8, Output = u8>>() {}
+    assert_decoder::<Decoder>();
+
     let mut decoder = Decoder::new(PrefixCodec, ReplacingHooks);
 
     let available = <Decoder as Transcoder>::max_transcode_output_len(
