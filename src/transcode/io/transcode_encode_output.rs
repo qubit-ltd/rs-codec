@@ -434,7 +434,7 @@ where
         let written = encoder
             .finish(units, output_index)
             .map_err(&mut *map_error)?;
-        debug_assert!(written <= required, "finish wrote beyond its bound");
+        assert!(written <= required, "finish wrote beyond its bound");
         // SAFETY: The encoder reported initialized units within the spare
         // range that was reserved above.
         unsafe {

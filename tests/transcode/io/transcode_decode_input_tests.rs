@@ -90,6 +90,89 @@ impl Codec for FixedPairCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+enum DecodeLifecycleMode {
+    #[default]
+    Normal,
+    ResetError,
+    FinishError,
+    ResetOverreport,
+    FinishOverreport,
+}
+
+#[derive(Debug, Default)]
+struct DecodeLifecycleCodec {
+    state: u8,
+    mode: DecodeLifecycleMode,
+}
+
+impl Codec for DecodeLifecycleCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
+
+    unsafe fn decode_reset(
+        &mut self,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        if matches!(self.mode, DecodeLifecycleMode::ResetError) {
+            return Err(PairDecodeError::BadOutputIndex);
+        }
+        assert_eq!(0, self.state, "decode reset must start each lifecycle");
+        output[output_index] = 0xaaaa;
+        self.state = 1;
+        if matches!(self.mode, DecodeLifecycleMode::ResetOverreport) {
+            return Ok(2);
+        }
+        Ok(1)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        assert_eq!(1, self.state, "decode must run after reset");
+        self.state = 2;
+        Ok((u32::from(input[input_index]), crate::nz(1)))
+    }
+
+    unsafe fn decode_finish(
+        &mut self,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
+        if matches!(self.mode, DecodeLifecycleMode::FinishError) {
+            return Err(PairDecodeError::BadInputIndex);
+        }
+        assert_eq!(2, self.state, "decode finish must run after decode");
+        output[output_index] = 0xbbbb;
+        self.state = 0;
+        if matches!(self.mode, DecodeLifecycleMode::FinishOverreport) {
+            return Ok(2);
+        }
+        Ok(1)
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value as u16;
+        Ok(1)
+    }
+}
+
 macro_rules! noop_reset {
     ($output:ty) => {
         fn reset(
@@ -971,6 +1054,82 @@ fn test_buffered_decode_input_reads_one_codec_value() {
         "tail unit should remain readable after one value"
     );
     assert_eq!(&[0x9abc], input.unread());
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_runs_complete_lifecycle() {
+    let input = ChunkedInput::new(vec![vec![0x1234, 0x5678]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 2);
+    let mut codec = DecodeLifecycleCodec::default();
+
+    let first = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("first value should complete its decode lifecycle");
+    let second = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("second value should start a fresh decode lifecycle");
+
+    assert_eq!(0x1234, first);
+    assert_eq!(0x5678, second);
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_runs_complete_lifecycle_via_scratch()
+{
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 0);
+    let mut codec = DecodeLifecycleCodec::default();
+
+    let value = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("scratch decode should complete its lifecycle");
+
+    assert_eq!(0x1234, value);
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_maps_lifecycle_errors() {
+    for (mode, expected) in [
+        (DecodeLifecycleMode::ResetError, "bad output index"),
+        (DecodeLifecycleMode::FinishError, "bad input index"),
+    ] {
+        let input = ChunkedInput::new(vec![vec![0x1234]]);
+        let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+        let mut codec = DecodeLifecycleCodec { state: 0, mode };
+
+        let error = input
+            .read_decoded_with(&mut codec, map_codec_error)
+            .expect_err("configured lifecycle stage should fail");
+
+        assert_eq!(ErrorKind::InvalidData, error.kind());
+        assert_eq!(expected, error.to_string());
+    }
+}
+
+#[test]
+#[should_panic(expected = "Codec::decode_reset wrote beyond its reset bound")]
+fn test_buffered_decode_input_read_decoded_panics_on_reset_overreport() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec {
+        state: 0,
+        mode: DecodeLifecycleMode::ResetOverreport,
+    };
+
+    let _ = input.read_decoded_with(&mut codec, map_codec_error);
+}
+
+#[test]
+#[should_panic(expected = "Codec::decode_finish wrote beyond its finish bound")]
+fn test_buffered_decode_input_read_decoded_panics_on_finish_overreport() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec {
+        state: 0,
+        mode: DecodeLifecycleMode::FinishOverreport,
+    };
+
+    let _ = input.read_decoded_with(&mut codec, map_codec_error);
 }
 
 #[test]

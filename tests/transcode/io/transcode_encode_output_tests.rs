@@ -91,6 +91,66 @@ impl Codec for FixedPairCodec {
     }
 }
 
+#[derive(Debug, Default)]
+struct CompleteEncodeLifecycleCodec {
+    state: u8,
+}
+
+impl Codec for CompleteEncodeLifecycleCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairEncodeError;
+    type EncodeError = PairEncodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
+
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert_eq!(0, self.state, "encode reset must start each lifecycle");
+        output[output_index] = 0xaaaa;
+        self.state = 1;
+        Ok(1)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        Ok((u32::from(input[input_index]), crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert_eq!(1, self.state, "encode must run after reset");
+        output[output_index] = *value as u16;
+        self.state = 2;
+        Ok(1)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert_eq!(2, self.state, "encode finish must run after encode");
+        output[output_index] = 0xbbbb;
+        self.state = 0;
+        Ok(1)
+    }
+}
+
 macro_rules! noop_reset {
     ($output:ty) => {
         fn reset(
@@ -306,6 +366,48 @@ impl Transcoder for TwoUnitFinishEncoder {
     ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         output[output_index] = 0xaaaa;
         output[output_index + 1] = 0xbbbb;
+        Ok(2)
+    }
+}
+
+#[derive(Debug, Default)]
+struct OverreportedFinishEncoder;
+
+impl Transcoder for OverreportedFinishEncoder {
+    type Input = u32;
+    type Output = u16;
+    type Error = TranscodeEncodeError<PairEncodeError, ()>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    noop_reset!(u16);
+
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, ()>>
+    {
+        Ok(TranscodeProgress::complete(input.len() - input_index, 0))
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
+        output[output_index] = 0xaaaa;
         Ok(2)
     }
 }
@@ -1282,6 +1384,18 @@ fn test_buffered_encode_output_finish_writes_and_flushes() {
 }
 
 #[test]
+#[should_panic(expected = "finish wrote beyond its bound")]
+fn test_buffered_encode_output_finish_panics_when_encoder_overreports_bound() {
+    let output = UnitOutput::default();
+    let mut encoder = OverreportedFinishEncoder;
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
+        map_error;
+
+    let _ = output.finish(&mut encoder, &mut mapper);
+}
+
+#[test]
 fn test_buffered_encode_output_maps_finish_capacity_bound_error() {
     let output = UnitOutput::default();
     let mut encoder = CapacityBoundEncoder;
@@ -1580,6 +1694,26 @@ fn test_buffered_encode_output_write_encoded_uses_scratch_when_buffer_is_too_sma
     output.flush().expect("encoded units should flush");
 
     assert_eq!(&[0x0002, 0x0001], output.inner().units.as_slice());
+}
+
+#[test]
+fn test_buffered_encode_output_write_encoded_runs_complete_lifecycle() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 3);
+    let mut codec = CompleteEncodeLifecycleCodec::default();
+
+    output
+        .write_encoded_with(&mut codec, &0x1234, map_codec_error)
+        .expect("first value should complete its encode lifecycle");
+    output
+        .write_encoded_with(&mut codec, &0x5678, map_codec_error)
+        .expect("second value should start a fresh encode lifecycle");
+    output.flush().expect("encoded units should flush");
+
+    assert_eq!(
+        &[0xaaaa, 0x1234, 0xbbbb, 0xaaaa, 0x5678, 0xbbbb],
+        output.inner().units.as_slice(),
+    );
 }
 
 #[test]
