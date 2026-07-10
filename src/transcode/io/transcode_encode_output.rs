@@ -220,7 +220,6 @@ where
     ) -> Result<()>
     where
         C: Codec<Unit = O::Item>,
-        C::Value: Clone,
         M: FnMut(C::EncodeError) -> Error,
     {
         let max_units = match max_complete_encode_units::<C>() {

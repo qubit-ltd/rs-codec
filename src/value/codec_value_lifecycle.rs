@@ -63,10 +63,9 @@ pub(crate) fn complete_encode_len<C>(
 ) -> Result<usize, TranscodeEncodeErrorOf<C>>
 where
     C: Codec,
-    C::Value: Clone,
 {
     if !codec.can_encode_value(value) {
-        return Err(TranscodeEncodeError::unencodable(0, value.clone()));
+        return Err(TranscodeEncodeError::unencodable_without_context(0));
     }
     let units = C::MAX_ENCODE_RESET_UNITS
         .checked_add(codec.encode_len(value))

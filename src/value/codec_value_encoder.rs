@@ -100,7 +100,6 @@ where
         output: &mut Vec<C::Unit>,
     ) -> Result<usize, TranscodeEncodeErrorOf<C>>
     where
-        C::Value: Clone,
         C::Unit: Default,
     {
         let units = complete_encode_len(&self.codec, input)?;
@@ -132,7 +131,6 @@ where
 impl<C> ValueEncoder<C::Value> for CodecValueEncoder<C>
 where
     C: Codec,
-    C::Value: Clone,
     C::Unit: Default,
 {
     type Output = Vec<C::Unit>;

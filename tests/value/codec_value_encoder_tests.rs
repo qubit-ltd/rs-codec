@@ -219,7 +219,7 @@ impl Codec for AppendOverflowCodec {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 struct NonCloneValue {
     value: u8,
 }
@@ -545,7 +545,7 @@ fn test_codec_value_encoder_propagates_encode_error() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("odd value should be rejected");
 
-    assert_eq!(TranscodeEncodeError::unencodable(0, 7), error,);
+    assert_eq!(TranscodeEncodeError::unencodable_without_context(0), error,);
 }
 
 #[test]
