@@ -941,7 +941,7 @@ impl Input for FailingSeekInput {
 }
 
 impl qubit_io::Seekable for FailingSeekInput {
-    type Item = u8;
+    type Unit = u8;
 
     fn seek_to(&mut self, _position: SeekFrom) -> std::io::Result<u64> {
         Err(Error::new(ErrorKind::BrokenPipe, "seek failure"))

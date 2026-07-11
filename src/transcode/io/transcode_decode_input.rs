@@ -619,7 +619,7 @@ where
 
 impl<I> TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seekable<Item = u8>,
+    I: Input<Item = u8> + Seekable<Unit = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     ///
@@ -766,7 +766,7 @@ where
 
 impl<I> Seek for TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seekable<Item = u8>,
+    I: Input<Item = u8> + Seekable<Unit = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {

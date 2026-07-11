@@ -446,7 +446,7 @@ where
 
 impl<O> TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seekable<Item = u8>,
+    O: Output<Item = u8> + Seekable<Unit = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     ///
@@ -500,7 +500,7 @@ where
 
 impl<O> Seek for TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seekable<Item = u8>,
+    O: Output<Item = u8> + Seekable<Unit = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
