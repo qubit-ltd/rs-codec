@@ -178,9 +178,9 @@ where
     ///
     /// # Panics
     ///
-    /// In debug builds, panics when `count` exceeds [`Self::unread_len`].
+    /// Panics when `count` exceeds [`Self::unread_len`].
     pub fn consume(&mut self, count: usize) {
-        debug_assert!(
+        assert!(
             count <= self.unread_len(),
             "cannot consume beyond buffered input",
         );
@@ -572,6 +572,11 @@ where
     ///
     /// Returns invalid output ranges, capacity errors, or transcode
     /// finalization errors mapped to I/O errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the decoder reports writing more values than its
+    /// [`Transcoder::max_finish_output_len`] bound.
     pub fn finish_transcode_into<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -607,7 +612,7 @@ where
         let written = decoder
             .finish(output, output_index)
             .map_err(&mut *map_error)?;
-        debug_assert!(written <= required, "finish wrote beyond its bound");
+        assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }
 }

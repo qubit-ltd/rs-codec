@@ -222,6 +222,18 @@ fn test_transcode_decode_input_exposes_unread_window() {
     assert_eq!(&[3], input.unread());
 }
 
+#[test]
+#[should_panic(expected = "cannot consume beyond buffered input")]
+fn test_transcode_decode_input_consume_panics_beyond_unread_window() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![1_u16]]),
+        1,
+    );
+
+    assert!(input.fill_until(1).expect("fill should succeed"));
+    input.consume(2);
+}
+
 impl Transcoder for PairDecoder {
     type Input = u16;
     type Output = u32;
@@ -349,6 +361,46 @@ fn test_transcode_decode_input_rejects_complete_without_progress() {
 #[derive(Debug, Default)]
 struct FinishDecoder {
     finished: bool,
+}
+
+#[derive(Debug, Default)]
+struct OverreportingFinishDecoder;
+
+impl Transcoder for OverreportingFinishDecoder {
+    type Input = u16;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    noop_reset!(u32);
+
+    fn transcode(
+        &mut self,
+        _input: &[u16],
+        _input_index: usize,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeDecodeError<PairDecodeError>> {
+        Ok(TranscodeProgress::complete(0, 0))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
+        Ok(2)
+    }
 }
 
 impl Transcoder for FinishDecoder {
@@ -1430,6 +1482,17 @@ fn test_buffered_decode_input_finish_rejects_invalid_output_range() {
         "finish output range exceeds destination buffer",
         error.to_string(),
     );
+}
+
+#[test]
+#[should_panic(expected = "finish wrote beyond its bound")]
+fn test_buffered_decode_input_finish_panics_when_decoder_overreports_bound() {
+    let input = ChunkedInput::new(Vec::new());
+    let mut decoder = OverreportingFinishDecoder;
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut output = [0_u32; 1];
+
+    let _ = finish_with(&mut input, &mut decoder, &mut output, 0, 1);
 }
 
 #[test]
