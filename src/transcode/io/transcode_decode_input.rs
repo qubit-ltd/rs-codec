@@ -33,6 +33,7 @@ use crate::{
     DecodeFailure,
     TranscodeStatus,
     Transcoder,
+    codec::decode_lifecycle_scratch_len,
 };
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
@@ -322,11 +323,9 @@ where
 
     /// Decodes one codec value from the buffered unit input.
     ///
-    /// The method runs a complete `decode_reset -> decode -> decode_finish`
-    /// lifecycle. Values emitted by reset and finish are discarded. During the
-    /// decode phase, it refills the internal input buffer until the supplied
-    /// codec can decode one complete value or until the wrapped input reaches
-    /// EOF.
+    /// This convenience method allocates temporary lifecycle scratch storage
+    /// when the codec emits reset or finish values. Repeated callers that own
+    /// reusable storage should prefer [`Self::read_decoded_with_scratch`].
     ///
     /// # Parameters
     ///
@@ -346,25 +345,84 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the codec reports more reset or finish values than its
-    /// declared lifecycle bounds.
+    /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
+    /// codec's reset and finish bounds, or when the codec reports more reset
+    /// or finish values than those bounds.
     pub fn read_decoded_with<C, M>(
         &mut self,
         codec: &mut C,
-        mut map_error: M,
+        map_error: M,
     ) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         C::Value: Default,
         M: FnMut(C::DecodeError) -> Error,
     {
-        let scratch_capacity =
-            C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
+        let scratch_capacity = decode_lifecycle_scratch_len::<C>();
+        if scratch_capacity == 0 {
+            return self.read_decoded_with_scratch(codec, &mut [], map_error);
+        }
         let mut lifecycle_scratch = Vec::new();
         lifecycle_scratch.resize_with(scratch_capacity, C::Value::default);
+        self.read_decoded_with_scratch(codec, &mut lifecycle_scratch, map_error)
+    }
+
+    /// Decodes one codec value by using caller-provided lifecycle scratch.
+    ///
+    /// The method runs a complete `decode_reset -> decode -> decode_finish`
+    /// lifecycle. Values emitted by reset and finish are written into
+    /// `lifecycle_scratch` and then discarded. During the decode phase, it
+    /// refills the internal input buffer until the supplied codec can decode
+    /// one complete value or until the wrapped input reaches EOF.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec used to decode one value.
+    /// - `lifecycle_scratch`: Reusable storage for values emitted by codec
+    ///   reset and finish hooks. Its length must be at least the larger of
+    ///   [`Codec::MAX_DECODE_RESET_VALUES`] and
+    ///   [`Codec::MAX_DECODE_FINISH_VALUES`].
+    /// - `map_error`: Maps codec decode errors to I/O errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns one decoded codec value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorKind::InvalidInput`] when `lifecycle_scratch` is shorter
+    /// than the codec lifecycle bound. Returns I/O errors from the wrapped
+    /// input, `UnexpectedEof` when EOF occurs before a complete value is
+    /// available, `InvalidData` when the codec reports an impossible
+    /// incomplete state, or the error returned by `map_error` for codec reset,
+    /// invalid input, or codec finish failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
+    /// codec's reset and finish bounds, or when the codec reports more reset
+    /// or finish values than those bounds.
+    pub fn read_decoded_with_scratch<C, M>(
+        &mut self,
+        codec: &mut C,
+        lifecycle_scratch: &mut [C::Value],
+        mut map_error: M,
+    ) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        let scratch_capacity = decode_lifecycle_scratch_len::<C>();
+        if lifecycle_scratch.len() < scratch_capacity {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "decode lifecycle scratch is shorter than the codec lifecycle bound",
+            ));
+        }
         let reset_written = unsafe {
-            // SAFETY: The scratch buffer has the codec-declared reset capacity.
-            codec.decode_reset(&mut lifecycle_scratch, 0)
+            // SAFETY: The scratch length check above reserves the codec's
+            // declared decode-reset output bound.
+            codec.decode_reset(lifecycle_scratch, 0)
         }
         .map_err(&mut map_error)?;
         assert!(
@@ -372,94 +430,12 @@ where
             "Codec::decode_reset wrote beyond its reset bound",
         );
 
-        let min_units_per_value = C::MIN_UNITS_PER_VALUE;
-        let max_units_per_value =
-            C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
-        let value = if min_units_per_value > self.capacity() {
-            read_decoded_via_scratch(
-                self,
-                codec,
-                min_units_per_value,
-                &mut map_error,
-            )?
-        } else {
-            loop {
-                let available = self.unread_len();
-                if available < min_units_per_value
-                    && !self.fill_until(min_units_per_value)?
-                {
-                    let available = self.unread_len();
-                    self.consume(available);
-                    return Err(Error::new(
-                        ErrorKind::UnexpectedEof,
-                        "failed to decode complete value",
-                    ));
-                }
-
-                if self.unread_len() < max_units_per_value
-                    && max_units_per_value <= self.capacity()
-                {
-                    let _ = self.fill_until(max_units_per_value)?;
-                }
-
-                let available = self.unread_len();
-                let unit_count = available.min(max_units_per_value);
-                let units = &self.unread()[..unit_count];
-                debug_assert!(units.len() >= min_units_per_value);
-                let decode_result = unsafe {
-                    // SAFETY: `min_units_per_value <= units.len()` guarantees
-                    // `decode` preconditions for this slice.
-                    codec.decode(units, 0)
-                };
-                match decode_result {
-                    Ok((value, consumed)) => {
-                        if consumed.get() > units.len() {
-                            return Err(Error::new(
-                                ErrorKind::InvalidData,
-                                "codec consumed units exceed unread window",
-                            ));
-                        }
-                        self.consume(consumed.get());
-                        break value;
-                    }
-                    Err(DecodeFailure::Incomplete { required_total }) => {
-                        let required_total = required_total.get();
-                        if units.len() >= required_total {
-                            return Err(Error::new(
-                                ErrorKind::InvalidData,
-                                "codec reported incomplete input within available window",
-                            ));
-                        }
-                        if !self.fill_until(required_total)? {
-                            let available = self.unread_len();
-                            self.consume(available);
-                            return Err(Error::new(
-                                ErrorKind::UnexpectedEof,
-                                "failed to decode complete value",
-                            ));
-                        }
-                        // continue to the next loop
-                    }
-                    Err(DecodeFailure::Invalid { source, consumed }) => {
-                        if let Some(consumed) = consumed {
-                            if consumed.get() > units.len() {
-                                return Err(Error::new(
-                                    ErrorKind::InvalidData,
-                                    "decode error consumed units exceed unread window",
-                                ));
-                            }
-                            self.consume(consumed.get());
-                        }
-                        return Err(map_error(source));
-                    }
-                }
-            }
-        };
+        let value = self.read_one_decoded_value(codec, &mut map_error)?;
 
         let finish_written = unsafe {
-            // SAFETY: The scratch buffer has the codec-declared finish
-            // capacity.
-            codec.decode_finish(&mut lifecycle_scratch, 0)
+            // SAFETY: The scratch length check above reserves the codec's
+            // declared decode-finish output bound.
+            codec.decode_finish(lifecycle_scratch, 0)
         }
         .map_err(&mut map_error)?;
         assert!(
@@ -467,6 +443,101 @@ where
             "Codec::decode_finish wrote beyond its finish bound",
         );
         Ok(value)
+    }
+
+    /// Reads one decoded value after the codec lifecycle reset completed.
+    fn read_one_decoded_value<C, M>(
+        &mut self,
+        codec: &mut C,
+        map_error: &mut M,
+    ) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        let min_units_per_value = C::MIN_UNITS_PER_VALUE;
+        let max_units_per_value =
+            C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
+        if min_units_per_value > self.capacity() {
+            return read_decoded_via_scratch(
+                self,
+                codec,
+                min_units_per_value,
+                map_error,
+            );
+        }
+
+        loop {
+            let available = self.unread_len();
+            if available < min_units_per_value
+                && !self.fill_until(min_units_per_value)?
+            {
+                let available = self.unread_len();
+                self.consume(available);
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "failed to decode complete value",
+                ));
+            }
+
+            if self.unread_len() < max_units_per_value
+                && max_units_per_value <= self.capacity()
+            {
+                let _ = self.fill_until(max_units_per_value)?;
+            }
+
+            let available = self.unread_len();
+            let unit_count = available.min(max_units_per_value);
+            let units = &self.unread()[..unit_count];
+            debug_assert!(units.len() >= min_units_per_value);
+            let decode_result = unsafe {
+                // SAFETY: `min_units_per_value <= units.len()` guarantees
+                // `decode` preconditions for this slice.
+                codec.decode(units, 0)
+            };
+            match decode_result {
+                Ok((value, consumed)) => {
+                    if consumed.get() > units.len() {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "codec consumed units exceed unread window",
+                        ));
+                    }
+                    self.consume(consumed.get());
+                    return Ok(value);
+                }
+                Err(DecodeFailure::Incomplete { required_total }) => {
+                    let required_total = required_total.get();
+                    if units.len() >= required_total {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "codec reported incomplete input within available window",
+                        ));
+                    }
+                    if !self.fill_until(required_total)? {
+                        let available = self.unread_len();
+                        self.consume(available);
+                        return Err(Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "failed to decode complete value",
+                        ));
+                    }
+                    // continue to the next loop
+                }
+                Err(DecodeFailure::Invalid { source, consumed }) => {
+                    if let Some(consumed) = consumed {
+                        if consumed.get() > units.len() {
+                            return Err(Error::new(
+                                ErrorKind::InvalidData,
+                                "decode error consumed units exceed unread window",
+                            ));
+                        }
+                        self.consume(consumed.get());
+                    }
+                    return Err(map_error(source));
+                }
+            }
+        }
     }
 
     /// Decodes values into an indexed output range using a streaming

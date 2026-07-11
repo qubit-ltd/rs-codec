@@ -173,6 +173,79 @@ impl Codec for DecodeLifecycleCodec {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct NonDefaultValue(u16);
+
+#[derive(Debug, Default)]
+struct NonDefaultValueCodec;
+
+impl Codec for NonDefaultValueCodec {
+    type Value = NonDefaultValue;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<
+        (Self::Value, core::num::NonZeroUsize),
+        DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((NonDefaultValue(input[input_index]), crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &Self::Value,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = value.0;
+        Ok(1)
+    }
+}
+
+#[derive(Debug, Default)]
+struct InconsistentLifecycleBoundCodec;
+
+impl Codec for InconsistentLifecycleBoundCodec {
+    type Value = u16;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+    const MAX_DECODE_LIFECYCLE_VALUES: usize = 0;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<
+        (Self::Value, core::num::NonZeroUsize),
+        DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &Self::Value,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
 macro_rules! noop_reset {
     ($output:ty) => {
         fn reset(
@@ -1137,6 +1210,94 @@ fn test_buffered_decode_input_read_decoded_runs_complete_lifecycle_via_scratch()
         .expect("scratch decode should complete its lifecycle");
 
     assert_eq!(0x1234, value);
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_with_scratch_reuses_lifecycle_storage()
+ {
+    let input = ChunkedInput::new(vec![vec![0x1234, 0x5678]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 2);
+    let mut codec = DecodeLifecycleCodec::default();
+    let mut lifecycle_scratch = [0_u32; 1];
+
+    let first = input
+        .read_decoded_with_scratch(
+            &mut codec,
+            &mut lifecycle_scratch,
+            map_codec_error,
+        )
+        .expect("first value should use caller-provided lifecycle storage");
+    let second = input
+        .read_decoded_with_scratch(
+            &mut codec,
+            &mut lifecycle_scratch,
+            map_codec_error,
+        )
+        .expect("second value should reuse caller-provided lifecycle storage");
+
+    assert_eq!(0x1234, first);
+    assert_eq!(0x5678, second);
+    assert_eq!([0xbbbb], lifecycle_scratch);
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_with_scratch_rejects_short_storage()
+{
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec::default();
+    let mut lifecycle_scratch = [];
+
+    let error = input
+        .read_decoded_with_scratch(
+            &mut codec,
+            &mut lifecycle_scratch,
+            map_codec_error,
+        )
+        .expect_err("short lifecycle scratch must be rejected");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(
+        "decode lifecycle scratch is shorter than the codec lifecycle bound",
+        error.to_string(),
+    );
+}
+
+#[test]
+fn test_buffered_decode_input_read_decoded_with_scratch_accepts_non_default_values()
+ {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = NonDefaultValueCodec;
+    let mut lifecycle_scratch = [];
+
+    let value = input
+        .read_decoded_with_scratch(
+            &mut codec,
+            &mut lifecycle_scratch,
+            map_codec_error,
+        )
+        .expect("stateless codecs should not require default values");
+
+    assert_eq!(NonDefaultValue(0x1234), value);
+}
+
+#[test]
+#[should_panic(
+    expected = "Codec::MAX_DECODE_LIFECYCLE_VALUES must match its lifecycle bounds"
+)]
+fn test_buffered_decode_input_read_decoded_with_scratch_rejects_inconsistent_lifecycle_bound()
+ {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = InconsistentLifecycleBoundCodec;
+    let mut lifecycle_scratch = [];
+
+    let _ = input.read_decoded_with_scratch(
+        &mut codec,
+        &mut lifecycle_scratch,
+        map_codec_error,
+    );
 }
 
 #[test]

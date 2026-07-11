@@ -71,6 +71,8 @@ impl Codec for StatefulLifecycleCodec {
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
+    const MAX_DECODE_RESET_VALUES: usize = 2;
+
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -150,6 +152,10 @@ fn test_codec_trait_default_lifecycle_methods_are_noop() {
     assert_eq!(1, codec.encode_len(&41));
     assert_eq!(0, <ByteIncrementCodec as Codec>::MAX_ENCODE_RESET_UNITS);
     assert_eq!(0, <ByteIncrementCodec as Codec>::MAX_DECODE_FINISH_VALUES);
+    assert_eq!(
+        0,
+        <ByteIncrementCodec as Codec>::MAX_DECODE_LIFECYCLE_VALUES,
+    );
     assert_eq!(0, reset_written);
     assert_eq!(0, flushed);
     assert_eq!([0], reset_output);
@@ -183,6 +189,10 @@ fn test_codec_trait_exposes_stateful_lifecycle_methods() {
     assert_eq!(1, flushed_len);
     assert_eq!([1], flushed);
     assert_eq!(0, codec.decode_state);
+    assert_eq!(
+        2,
+        <StatefulLifecycleCodec as Codec>::MAX_DECODE_LIFECYCLE_VALUES,
+    );
 }
 
 #[derive(Default)]

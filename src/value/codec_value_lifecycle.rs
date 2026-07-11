@@ -15,6 +15,7 @@ use crate::{
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
     TranscodeFailure,
+    codec::decode_lifecycle_scratch_len,
 };
 
 /// Returns the conservative maximum unit count for a complete encode lifecycle.
@@ -175,10 +176,10 @@ where
 ///
 /// # Panics
 ///
-/// Panics when the caller did not reserve scratch for the larger of the
-/// decode reset and finish bounds, when the codec consumes beyond available
-/// input, or when the codec writes more reset or finish values than its
-/// declared bounds.
+/// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the reset
+/// and finish bounds, when the caller did not reserve enough lifecycle
+/// scratch, when the codec consumes beyond available input, or when the codec
+/// writes more reset or finish values than its declared bounds.
 pub(crate) fn decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
@@ -189,8 +190,7 @@ where
 {
     TranscodeFailure::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
 
-    let scratch_cap =
-        C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
+    let scratch_cap = decode_lifecycle_scratch_len::<C>();
     assert!(
         scratch.len() >= scratch_cap,
         "complete decode scratch output was not reserved",

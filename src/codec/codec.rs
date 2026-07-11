@@ -135,6 +135,21 @@ pub trait Codec {
     /// finish output. Stateless codecs should use the default `0`.
     const MAX_DECODE_FINISH_VALUES: usize = 0;
 
+    /// The maximum value count needed for reusable decode lifecycle storage.
+    ///
+    /// A complete single-value decode runs reset and finish sequentially, so
+    /// both phases can reuse the same storage. This derived bound is therefore
+    /// the larger of [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES)
+    /// and
+    /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES), rather
+    /// than their sum. Implementations should not override this constant.
+    const MAX_DECODE_LIFECYCLE_VALUES: usize =
+        if Self::MAX_DECODE_RESET_VALUES > Self::MAX_DECODE_FINISH_VALUES {
+            Self::MAX_DECODE_RESET_VALUES
+        } else {
+            Self::MAX_DECODE_FINISH_VALUES
+        };
+
     /// Returns whether `value` is in this codec's encodable value domain.
     ///
     /// The default implementation returns `true`, which is correct for codecs
@@ -476,4 +491,33 @@ where
             "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
         );
     }
+}
+
+/// Returns the validated scratch length for a complete decode lifecycle.
+///
+/// # Type Parameters
+///
+/// - `C`: Codec whose decode lifecycle bounds are validated.
+///
+/// # Returns
+///
+/// Returns [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] after verifying that it is
+/// the larger of the codec's reset and finish output bounds.
+///
+/// # Panics
+///
+/// Panics when the codec overrides the derived lifecycle bound with a value
+/// that does not match its reset and finish bounds.
+#[inline(always)]
+pub(crate) fn decode_lifecycle_scratch_len<C>() -> usize
+where
+    C: Codec,
+{
+    let expected = C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
+    assert_eq!(
+        C::MAX_DECODE_LIFECYCLE_VALUES,
+        expected,
+        "Codec::MAX_DECODE_LIFECYCLE_VALUES must match its lifecycle bounds",
+    );
+    expected
 }

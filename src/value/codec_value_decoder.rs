@@ -13,7 +13,10 @@ use super::ValueDecoder;
 use crate::{
     Codec,
     TranscodeDecodeErrorOf,
-    codec::assert_unit_bounds,
+    codec::{
+        assert_unit_bounds,
+        decode_lifecycle_scratch_len,
+    },
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
 
@@ -90,8 +93,9 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the wrapped codec reports a consumed unit count larger than
-    /// the input slice length, or when finish output exceeds
+    /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
+    /// reset and finish bounds, when the wrapped codec reports a consumed unit
+    /// count larger than the input slice length, or when finish output exceeds
     /// [`Codec::MAX_DECODE_FINISH_VALUES`].
     pub fn decode(
         &mut self,
@@ -100,8 +104,7 @@ where
     where
         C::Value: Default,
     {
-        let scratch_cap =
-            C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
+        let scratch_cap = decode_lifecycle_scratch_len::<C>();
         let value = if scratch_cap == 0 {
             decode_exact_complete_value(&mut self.codec, input, &mut [])?
         } else {
