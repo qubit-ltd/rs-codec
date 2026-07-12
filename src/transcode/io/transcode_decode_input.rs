@@ -468,27 +468,11 @@ where
         }
 
         loop {
-            let available = self.unread_len();
-            if available < min_units_per_value
-                && !self.fill_until(min_units_per_value)?
-            {
-                let available = self.unread_len();
-                self.consume(available);
-                return Err(Error::new(
-                    ErrorKind::UnexpectedEof,
-                    "failed to decode complete value",
-                ));
-            }
-
-            if self.unread_len() < max_units_per_value
-                && max_units_per_value <= self.capacity()
-            {
-                let _ = self.fill_until(max_units_per_value)?;
-            }
-
-            let available = self.unread_len();
-            let unit_count = available.min(max_units_per_value);
-            let units = &self.unread()[..unit_count];
+            let available = self.prepare_buffered_decode_window(
+                min_units_per_value,
+                max_units_per_value,
+            )?;
+            let units = &self.unread()[..available];
             debug_assert!(units.len() >= min_units_per_value);
             let decode_result = unsafe {
                 // SAFETY: `min_units_per_value <= units.len()` guarantees
@@ -497,47 +481,129 @@ where
             };
             match decode_result {
                 Ok((value, consumed)) => {
-                    if consumed.get() > units.len() {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "codec consumed units exceed unread window",
-                        ));
-                    }
-                    self.consume(consumed.get());
-                    return Ok(value);
+                    return self.accept_buffered_decoded_value(
+                        value, consumed, available,
+                    );
                 }
                 Err(DecodeFailure::Incomplete { required_total }) => {
-                    let required_total = required_total.get();
-                    if units.len() >= required_total {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "codec reported incomplete input within available window",
-                        ));
-                    }
-                    if !self.fill_until(required_total)? {
-                        let available = self.unread_len();
-                        self.consume(available);
-                        return Err(Error::new(
-                            ErrorKind::UnexpectedEof,
-                            "failed to decode complete value",
-                        ));
-                    }
-                    // continue to the next loop
+                    self.refill_after_incomplete(required_total, available)?;
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
-                    if let Some(consumed) = consumed {
-                        if consumed.get() > units.len() {
-                            return Err(Error::new(
-                                ErrorKind::InvalidData,
-                                "decode error consumed units exceed unread window",
-                            ));
-                        }
-                        self.consume(consumed.get());
-                    }
-                    return Err(map_error(source));
+                    return self.reject_buffered_invalid::<C, M>(
+                        source, consumed, available, map_error,
+                    );
                 }
             }
         }
+    }
+
+    /// Prepares the visible buffered window for one codec decode attempt.
+    ///
+    /// Returns the number of units visible to the codec after ensuring the
+    /// minimum width and best-effort refilling toward the maximum width.
+    /// Returns input errors while refilling, or [`ErrorKind::UnexpectedEof`]
+    /// after consuming a tail shorter than `min_units_per_value`.
+    fn prepare_buffered_decode_window(
+        &mut self,
+        min_units_per_value: usize,
+        max_units_per_value: usize,
+    ) -> Result<usize> {
+        let available = self.unread_len();
+        if available < min_units_per_value
+            && !self.fill_until(min_units_per_value)?
+        {
+            let available = self.unread_len();
+            self.consume(available);
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "failed to decode complete value",
+            ));
+        }
+
+        if self.unread_len() < max_units_per_value
+            && max_units_per_value <= self.capacity()
+        {
+            let _ = self.fill_until(max_units_per_value)?;
+        }
+        Ok(self.unread_len().min(max_units_per_value))
+    }
+
+    /// Accepts a successfully decoded value and consumes its source units.
+    ///
+    /// Returns `value` after consuming `consumed` units. Returns
+    /// [`ErrorKind::InvalidData`] when the codec reports consuming beyond the
+    /// visible `available` window.
+    fn accept_buffered_decoded_value<Value>(
+        &mut self,
+        value: Value,
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> Result<Value> {
+        if consumed.get() > available {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "codec consumed units exceed unread window",
+            ));
+        }
+        self.consume(consumed.get());
+        Ok(value)
+    }
+
+    /// Refills the buffered input after the codec reports incomplete input.
+    ///
+    /// Returns `Ok(())` when `required_total` units become available. Returns
+    /// [`ErrorKind::InvalidData`] when the requirement was already satisfied,
+    /// [`ErrorKind::UnexpectedEof`] after consuming an incomplete EOF tail, or
+    /// an input error while refilling.
+    fn refill_after_incomplete(
+        &mut self,
+        required_total: NonZeroUsize,
+        available: usize,
+    ) -> Result<()> {
+        let required_total = required_total.get();
+        if available >= required_total {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "codec reported incomplete input within available window",
+            ));
+        }
+        if !self.fill_until(required_total)? {
+            let available = self.unread_len();
+            self.consume(available);
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "failed to decode complete value",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Rejects invalid codec input and applies its optional consumption hint.
+    ///
+    /// Returns [`ErrorKind::InvalidData`] when the consumption hint exceeds
+    /// `available`; otherwise consumes the hinted units and returns the codec
+    /// error converted by `map_error`.
+    fn reject_buffered_invalid<C, M>(
+        &mut self,
+        source: C::DecodeError,
+        consumed: Option<NonZeroUsize>,
+        available: usize,
+        map_error: &mut M,
+    ) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        if let Some(consumed) = consumed {
+            if consumed.get() > available {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "decode error consumed units exceed unread window",
+                ));
+            }
+            self.consume(consumed.get());
+        }
+        Err(map_error(source))
     }
 
     /// Decodes values into an indexed output range using a streaming
