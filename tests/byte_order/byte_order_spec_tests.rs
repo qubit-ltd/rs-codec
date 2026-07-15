@@ -6,13 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    BigEndian,
-    ByteOrder,
-    ByteOrderSpec,
-    LittleEndian,
-    NativeEndian,
-};
+use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian, NativeEndian};
 
 #[test]
 fn test_byte_order_spec_exposes_runtime_order() {

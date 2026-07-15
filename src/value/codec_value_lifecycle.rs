@@ -8,14 +8,8 @@
 //! Internal helpers for complete single-value codec lifecycles.
 
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeFailure,
-    codec::decode_lifecycle_scratch_len,
+    CapacityError, Codec, TranscodeDecodeError, TranscodeDecodeErrorOf, TranscodeEncodeError,
+    TranscodeEncodeErrorOf, TranscodeFailure, codec::decode_lifecycle_scratch_len,
 };
 
 /// Returns the conservative maximum unit count for a complete encode lifecycle.
@@ -111,11 +105,7 @@ where
         .checked_add(C::MAX_ENCODE_FINISH_UNITS)
         .ok_or(CapacityError::OutputLengthOverflow)?;
     let value_index = output_index + reset_written;
-    TranscodeFailure::ensure_output_capacity(
-        output.len(),
-        value_index,
-        value_and_finish,
-    )?;
+    TranscodeFailure::ensure_output_capacity(output.len(), value_index, value_and_finish)?;
     let value_written = unsafe {
         // SAFETY: The capacity check above leaves the reset-state exact value
         // width writable after reset output, and the reset-state domain check
@@ -199,9 +189,7 @@ where
         // required by `Codec::decode` at index 0.
         codec.decode(input, 0)
     }
-    .map_err(|failure| {
-        TranscodeDecodeError::from_decode_failure(failure, 0, input.len())
-    })?;
+    .map_err(|failure| TranscodeDecodeError::from_decode_failure(failure, 0, input.len()))?;
     assert!(
         consumed.get() <= input.len(),
         "Codec::decode consumed beyond available input",

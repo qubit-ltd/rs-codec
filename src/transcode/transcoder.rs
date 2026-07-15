@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError,
-    transcode_failure::TranscodeFailure,
-    transcode_progress::TranscodeProgress,
-    transcode_status::TranscodeStatus,
+    capacity_error::CapacityError, transcode_failure::TranscodeFailure,
+    transcode_progress::TranscodeProgress, transcode_status::TranscodeStatus,
 };
 
 /// Validates one-shot transcode progress and returns completed output length.
@@ -64,10 +62,7 @@ fn complete_progress_written(
 }
 
 /// Adds two independent output-capacity bounds.
-fn add_output_bounds(
-    first: usize,
-    second: usize,
-) -> Result<usize, CapacityError> {
+fn add_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
     first
         .checked_add(second)
         .ok_or(CapacityError::OutputLengthOverflow)
@@ -317,10 +312,7 @@ pub trait Transcoder {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -342,10 +334,7 @@ pub trait Transcoder {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -604,22 +593,13 @@ pub trait Transcoder {
         let finish_required = self
             .max_finish_output_len()
             .map_err(TranscodeFailure::from)?;
-        let remaining_required =
-            add_output_bounds(transcode_required, finish_required)
-                .map_err(TranscodeFailure::from)?;
-        TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            output_cursor,
-            remaining_required,
-        )?;
+        let remaining_required = add_output_bounds(transcode_required, finish_required)
+            .map_err(TranscodeFailure::from)?;
+        TranscodeFailure::ensure_output_capacity(output.len(), output_cursor, remaining_required)?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
-        output_cursor += complete_progress_written(
-            progress,
-            input.len(),
-            output_cursor,
-            output.len(),
-        )?;
+        output_cursor +=
+            complete_progress_written(progress, input.len(), output_cursor, output.len())?;
         output_cursor += self.finish(output, output_cursor)?;
         Ok(output_cursor)
     }

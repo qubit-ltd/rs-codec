@@ -9,26 +9,13 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    encode_state::EncodeState,
-    lifecycle::LifecycleGuard,
-};
+use super::super::internal::{encode_state::EncodeState, lifecycle::LifecycleGuard};
 use super::encode_context::EncodeContext;
-use super::{
-    EncodeOutcome,
-    EncodeUnencodableAction,
-    TranscodeEncodeHooks,
-};
+use super::{EncodeOutcome, EncodeUnencodableAction, TranscodeEncodeHooks};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeFailure,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, TranscodeEncodeError, TranscodeEncodeErrorOf, TranscodeEncoder,
+    TranscodeFailure, TranscodeProgress, Transcoder,
 };
 
 /// Reusable buffered encoding engine for codec-backed encoders.
@@ -256,10 +243,7 @@ where
     /// arithmetic overflow.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
@@ -314,10 +298,7 @@ where
     /// arithmetic overflow.
     #[inline(never)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -350,11 +331,7 @@ where
     ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
-        TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -405,8 +382,7 @@ where
             output.len(),
             output_index,
         )?;
-        let mut state =
-            EncodeState::new(input, input_index, output, output_index);
+        let mut state = EncodeState::new(input, input_index, output, output_index);
 
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
@@ -457,11 +433,7 @@ where
     ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.lifecycle.on_finish_attempt();
         let required = self.max_finish_output_len()?;
-        TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         let finished = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // finish-output bound at `output_index`.
@@ -472,11 +444,9 @@ where
             finished <= C::MAX_ENCODE_FINISH_UNITS,
             "Codec::encode_finish wrote beyond its finish bound",
         );
-        let written = self.hooks.finish_hooks(
-            &mut self.codec,
-            output,
-            output_index + finished,
-        )?;
+        let written = self
+            .hooks
+            .finish_hooks(&mut self.codec, output, output_index + finished)?;
         assert!(
             finished + written <= required,
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
@@ -565,9 +535,8 @@ where
         let required = self.codec.encode_len(context.input_value());
         if context.available_output() < required {
             return Ok(EncodeOutcome::need_output(
-                NonZeroUsize::new(required).expect(
-                    "required output is non-zero when capacity is insufficient",
-                ),
+                NonZeroUsize::new(required)
+                    .expect("required output is non-zero when capacity is insufficient"),
             ));
         }
         let (value, input_index, output, output_index) = context.into_parts();
@@ -575,9 +544,7 @@ where
             // SAFETY: The capacity check above reserves the exact value width.
             self.codec.encode(value, output, output_index)
         }
-        .map_err(|error| {
-            TranscodeEncodeError::domain_main(error, input_index)
-        })?;
+        .map_err(|error| TranscodeEncodeError::domain_main(error, input_index))?;
         assert!(
             written == required,
             "Codec::encode wrote a different length than Codec::encode_len",
@@ -652,9 +619,8 @@ where
         let required = self.codec.encode_len(&value);
         if context.available_output() < required {
             return Ok(EncodeOutcome::need_output(
-                NonZeroUsize::new(required).expect(
-                    "required output is non-zero when capacity is insufficient",
-                ),
+                NonZeroUsize::new(required)
+                    .expect("required output is non-zero when capacity is insufficient"),
             ));
         }
         let (_, input_index, output, output_index) = context.into_parts();
@@ -663,9 +629,7 @@ where
             // value width, and the hook contract requires encodability.
             self.codec.encode(&value, output, output_index)
         }
-        .map_err(|error| {
-            TranscodeEncodeError::domain_main(error, input_index)
-        })?;
+        .map_err(|error| TranscodeEncodeError::domain_main(error, input_index))?;
         assert!(
             written == required,
             "Codec::encode wrote a different length than Codec::encode_len",
@@ -701,10 +665,7 @@ where
 
     /// Returns an upper bound for units produced from `input_len` values.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeEncodeEngine::max_transcode_output_len(self, input_len)
     }
 
@@ -739,13 +700,7 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeEncodeErrorOf<C>> {
-        TranscodeEncodeEngine::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+        TranscodeEncodeEngine::transcode(self, input, input_index, output, output_index)
     }
 
     /// Finishes hook-owned encoder state.

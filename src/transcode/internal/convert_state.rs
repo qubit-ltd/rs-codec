@@ -10,11 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{
-        DecodeContext,
-        DecodeOutcome,
-        EncodeOutcome,
-    },
+    engine::{DecodeContext, DecodeOutcome, EncodeOutcome},
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -52,12 +48,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(
-                input,
-                input_index,
-                output,
-                output_index,
-            ),
+            state: TranscodeState::new(input, input_index, output, output_index),
         }
     }
 
