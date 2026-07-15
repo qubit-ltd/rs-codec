@@ -28,7 +28,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeInvalidAction` 和
   `DecodeContext`。
 - 用于组合 decode side 与 encode side 的带策略 unit-to-unit 转换管线的
-  `TranscodeConvertEngine`、`TranscodeConvertError` 和 `ConvertError`。
+  `TranscodeConvertEngine` 和 `TranscodeConvertError`。
 - 用于完整值便捷转换的 `ValueEncoder` 和 `ValueDecoder` trait。
 - 用于调用方管理逻辑流缓冲区转换的 `Transcoder`、`TranscodeProgress`
   和 `TranscodeStatus`。
@@ -55,10 +55,13 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`Codec`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
 - **`DecodeFailure`**：区分 `Codec::decode` 返回的 incomplete-prefix 流程控制
   与 codec-domain invalid input。
-- **`TranscodeError<E>`**：表达非法下标、输出不足、长度溢出、不完整输入
-  以及 codec-domain failure 等中间错误。
-- **`CodecValueEncodeError<E>` / `CodecValueDecodeError<E>`**：codec-backed
-  whole-value adapter 对外暴露的最终错误类型。
+- **`TranscodeFailure`**：表达非法下标、输出不足、长度溢出、不完整输入和
+  trailing input 等 framework failure。
+- **`TranscodeDomainError<E>`**：为 codec 与策略错误附加 reset、main 或
+  finish 阶段上下文。
+- **`TranscodeEncodeError<E, V>` / `TranscodeDecodeError<E>` /
+  `TranscodeConvertError<DE, EE, V>`**：组合 framework 与 domain failure 的
+  方向性公开错误。
 - **`ValueEncoder<Input>`**：把借用输入编码为自有输出。
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
@@ -106,7 +109,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
-- **`TranscodeError` / `CapacityError` / `TranscodeContractError`**：把
+- **`TranscodeFailure` / `CapacityError` / `TranscodeContractError`**：把
   framework 层的缓冲区、容量规划和错误进度契约失败，与 codec 或策略
   domain error 分开表达。
 
@@ -239,10 +242,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `DecodeFailure<E>` | 底层 decode 结果，表示可见输入是 incomplete prefix，或 codec-domain invalid input |
-| `TranscodeError<E>` | streaming framework error，表示非法下标、输出不足、输出长度溢出或 domain error |
-| `ConvertError<D, E>` | converter domain error，保留失败来自 decode side 还是 encode side |
-| `CodecValueEncodeError<E>` | whole-value encode 最终错误，包装 `TranscodeError<E>` |
-| `CodecValueDecodeError<E>` | whole-value decode 最终错误，包装 `TranscodeError<E>` 或 exact-decode trailing input |
+| `TranscodeFailure` | framework failure，表示非法下标、输出不足、输出长度溢出、不完整输入或 trailing input |
+| `TranscodeDomainError<E>` | 带 reset、main 或 finish 阶段上下文的 codec 或策略错误 |
+| `TranscodeEncodeError<E, V>` | 组合 framework、不可编码值与 domain failure 的 encode-side 错误 |
+| `TranscodeDecodeError<E>` | 组合 framework 与 domain failure 的 decode-side 错误 |
+| `TranscodeConvertError<DE, EE, V>` | 保留 decode side、encode side、不可编码值与 framework failure 的 converter 错误 |
 | `CapacityError` | 在分配或写入输出前返回的容量规划错误 |
 | `TranscodeContractError` | 自定义 `Transcoder` 返回不一致进度时报告的错误 |
 
@@ -269,7 +273,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
 | `TranscodeEncodeHooks<C>` | 编码单个 value、reset 前清理并完成 encoded output 收尾的 hook 契约 |
-| `TranscodeEncodeError<C>` | `TranscodeError<C::EncodeError>` 的方向性别名 |
+| `TranscodeEncodeError<E, V>` / `TranscodeEncodeErrorOf<C>` | encode-side 错误及其 codec 派生别名 |
 | `EncodeOutcome` | 单值 hook 结果：已消费并写出 output，或需要更多 output 且不消费 |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
@@ -279,7 +283,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|------|
 | `TranscodeDecodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered decoder engine |
 | `TranscodeDecodeHooks<C>` | invalid-input decode 策略 hook 契约 |
-| `TranscodeDecodeError<C>` | `TranscodeError<C::DecodeError>` 的方向性别名 |
+| `TranscodeDecodeError<E>` / `TranscodeDecodeErrorOf<C>` | decode-side 错误及其 codec 派生别名 |
 | `DecodeContext` | 传递给 decode policy hook 的上下文 |
 | `DecodeInvalidAction<Value>` | 非法输入策略动作：跳过输入或输出替换值 |
 
@@ -288,20 +292,20 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `TranscodeConvertEngine<D, E, DH, EH>` | 可复用 unit-to-unit converter，用 `D` 解码、用 `E` 编码，并应用 decode/encode hooks |
-| `TranscodeConvertError<D, E>` | `TranscodeError<ConvertError<D::DecodeError, E::EncodeError>>` 的别名 |
+| `TranscodeConvertError<DE, EE, V>` / `TranscodeConvertErrorOf<D, E>` | converter 错误及其 codec 派生别名 |
 
 ### `Transcoder` 操作
 
 | 方法 | 描述 |
 |------|------|
-| `max_transcode_output_len(input_len)` | 在可确定时返回 streaming 阶段输出长度上界 |
+| `max_transcode_output_len(input_len)` | 返回对所有可达瞬态都成立的 streaming 阶段输出长度上界 |
 | `max_total_output_len(input_len)` | 返回完整 `reset -> transcode -> finish` 流程的输出长度上界 |
-| `max_reset_output_len()` | 在可确定时返回 reset 输出长度上界 |
-| `max_finish_output_len()` | 在可确定时返回 finish 收尾输出长度上界 |
+| `max_reset_output_len()` | 返回对所有可达瞬态都成立的 reset 输出长度上界 |
+| `max_finish_output_len()` | 返回对所有可达瞬态都成立的 finish 收尾输出长度上界 |
 | `reset()` | 保留配置并重置逻辑流状态 |
 | `transcode(input, input_index, output, output_index)` | 把输入单元转换为输出单元 |
 | `transcode_complete_into(input, output)` | 从传入 slice 起点运行一次完整 `reset -> transcode -> finish` 流程 |
-| `finish(output, output_index)` | 完成内部收尾输出，例如 reset bytes、digest 或 trailer |
+| `finish(output, output_index)` | 完成内部收尾输出，例如 digest 或 trailer |
 
 ### `TranscodeStatus` 取值
 
@@ -323,8 +327,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - 需要处理状态化自有单值转换时，应使用 `CodecValueEncoder<C>` 和
   `CodecValueDecoder<C>`。需要调用方提供缓冲区时，应使用 streaming
   transcoder adapter，确保 reset、主值与 finish 生命周期处理集中在 adapter 层。
-- `TranscodeError<E>` 是 engine 与 adapter 内部共享的中间错误。默认 streaming
-  adapter 直接暴露它，value adapter 和下游 facade adapter 则把它映射成自己的最终错误类型。
+- 方向性 adapter 暴露 `TranscodeEncodeError`、`TranscodeDecodeError` 或
+  `TranscodeConvertError`；它们把 framework failure 与带阶段上下文的 codec、
+  policy domain error 分开表达。
 - `NeedInput` 表示被报告的不完整尾部未被消费，调用方重试时必须保留这段输入。
   它是 streaming 边界信号，不是 EOF 错误；`finish` 不会接收这段 source tail。
   调用方必须在 finalization 前自己应用 EOF 策略。

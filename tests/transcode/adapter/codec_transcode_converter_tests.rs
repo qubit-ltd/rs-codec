@@ -422,8 +422,8 @@ fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_ap
         CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(2), converter.max_transcode_output_len(2));
-    assert_eq!(Ok(0), converter.max_finish_output_len());
+    assert_eq!(Ok(3), converter.max_transcode_output_len(2));
+    assert_eq!(Ok(1), converter.max_finish_output_len());
 
     let progress = converter
         .transcode(&[3, 4], 0, &mut output, 0)
@@ -447,11 +447,11 @@ fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
     let mut output = [0_u8; 2];
 
     assert_eq!(
-        Ok(2),
+        Ok(4),
         <Converter as Transcoder>::max_transcode_output_len(&converter, 1)
     );
     assert_eq!(
-        Ok(0),
+        Ok(2),
         <Converter as Transcoder>::max_finish_output_len(&converter),
     );
 
@@ -521,8 +521,8 @@ fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
     >::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(6), converter.max_transcode_output_len(3));
-    assert_eq!(Ok(0), converter.max_finish_output_len());
+    assert_eq!(Ok(8), converter.max_transcode_output_len(3));
+    assert_eq!(Ok(2), converter.max_finish_output_len());
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         converter.max_transcode_output_len(usize::MAX),
@@ -543,7 +543,7 @@ fn test_codec_transcode_converter_finish_encodes_decode_finish_values() {
     >::new(FlushValueDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
-    assert_eq!(Ok(2), converter.max_finish_output_len());
+    assert_eq!(Ok(4), converter.max_finish_output_len());
 
     let written = converter
         .finish(&mut output, 0)

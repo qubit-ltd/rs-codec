@@ -184,6 +184,26 @@ enum AppliedDecodeInvalidAction<Value> {
     },
 }
 
+/// Adds two independent decoded-value capacity bounds.
+fn add_decode_output_bounds(
+    first: usize,
+    second: usize,
+) -> Result<usize, CapacityError> {
+    first
+        .checked_add(second)
+        .ok_or(CapacityError::OutputLengthOverflow)
+}
+
+/// Adds reset, transcode, and finish decoded-value capacity bounds.
+fn sum_decode_output_bounds(
+    reset: usize,
+    transcode: usize,
+    finish: usize,
+) -> Result<usize, CapacityError> {
+    let before_finish = add_decode_output_bounds(reset, transcode)?;
+    add_decode_output_bounds(before_finish, finish)
+}
+
 impl<C, H> TranscodeDecodeEngine<C, H>
 where
     C: Codec,
@@ -279,8 +299,9 @@ where
     ///
     /// This bound covers only the streaming decode phase. It is delegated to
     /// [`TranscodeDecodeHooks::max_transcode_output_len`], so it includes hook
-    /// policy. Downstream decoders must use this engine-level API for capacity
-    /// planning instead of recomputing the bound from [`Codec`] constants.
+    /// policy and is valid for every reachable transient codec and hook state.
+    /// Downstream decoders must use this engine-level API for capacity planning
+    /// instead of recomputing the bound from [`Codec`] constants.
     ///
     /// # Parameters
     ///
@@ -299,7 +320,7 @@ where
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
-    /// Returns the maximum values emitted by finishing codec state and
+    /// Returns the global maximum values emitted by finishing codec state and
     /// finishing hook-owned state.
     ///
     /// # Returns
@@ -308,16 +329,18 @@ where
     /// hook-provided final-output bound. The codec finish portion covers values
     /// written by [`Codec::decode_finish`]; hook implementations must not
     /// include that portion in
-    /// [`TranscodeDecodeHooks::max_finish_output_len`].
+    /// [`TranscodeDecodeHooks::max_finish_output_len`]. Both component bounds
+    /// cover every reachable transient state.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        C::MAX_DECODE_FINISH_VALUES
-            .checked_add(self.hooks.max_finish_output_len(&self.codec))
-            .ok_or(CapacityError::OutputLengthOverflow)
+        add_decode_output_bounds(
+            C::MAX_DECODE_FINISH_VALUES,
+            self.hooks.max_finish_output_len(&self.codec),
+        )
     }
 
-    /// Returns the maximum values emitted when resetting stream state.
+    /// Returns the global maximum values emitted when resetting stream state.
     ///
     /// Returns [`Codec::MAX_DECODE_RESET_VALUES`] for the wrapped codec.
     /// Stateless decoders always return `0`.
@@ -330,10 +353,10 @@ where
     /// Returns the maximum values needed by a complete one-shot decode stream.
     ///
     /// The returned bound covers reset output, the streaming decode phase for
-    /// `input_len` units, and finish output. Higher-level complete decode
-    /// helpers should use this engine-level bound instead of recomputing
-    /// capacity from [`Codec`] constants, because hook policy may change
-    /// streaming or finish output.
+    /// `input_len` units, and finish output. Its components are global across
+    /// transient state. Higher-level complete decode helpers should use this
+    /// engine-level bound instead of recomputing capacity from [`Codec`]
+    /// constants, because hook policy may change streaming or finish output.
     ///
     /// # Parameters
     ///
@@ -351,10 +374,7 @@ where
     ) -> Result<usize, CapacityError> {
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
-        C::MAX_DECODE_RESET_VALUES
-            .checked_add(transcode)
-            .and_then(|len| len.checked_add(finish))
-            .ok_or(CapacityError::OutputLengthOverflow)
+        sum_decode_output_bounds(C::MAX_DECODE_RESET_VALUES, transcode, finish)
     }
 
     /// Resets codec decode state, runs reset hooks, and emits stream-start

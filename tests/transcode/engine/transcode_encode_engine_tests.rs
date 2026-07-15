@@ -375,7 +375,7 @@ impl TranscodeEncodeHooks<WideCodec> for FinishHooks {
     }
 
     fn max_finish_output_len(&self, _codec: &WideCodec) -> usize {
-        usize::from(self.pending_suffix)
+        1
     }
 
     fn finish_hooks(
@@ -532,12 +532,12 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
         .expect("hook should write final output");
     assert_eq!(1, written);
     assert_eq!([0xee], output);
-    assert_eq!(Ok(0), encoder.max_finish_output_len());
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let mut encoder =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, FinishHooks::default());
     encoder.reset(&mut [], 0).expect("reset");
-    assert_eq!(Ok(0), encoder.max_finish_output_len());
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
 }
 
 #[test]

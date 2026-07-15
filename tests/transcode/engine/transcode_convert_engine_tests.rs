@@ -144,6 +144,11 @@ impl Codec for TargetCodec {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetEmittingTargetCodec;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ResetDependentTargetCodec {
+    reset: bool,
+}
+
 impl Codec for ResetEmittingTargetCodec {
     type Value = u8;
     type Unit = u8;
@@ -181,6 +186,57 @@ impl Codec for ResetEmittingTargetCodec {
         output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
         output[output_index] = 0xaa;
+        Ok(1)
+    }
+}
+
+impl Codec for ResetDependentTargetCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = EngineError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+
+    fn can_encode_value(&self, _value: &u8) -> bool {
+        self.reset
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
+        // SAFETY: The caller proved that one input unit is readable.
+        unsafe { Ok((*input.get_unchecked(input_index), NonZeroUsize::MIN)) }
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        // SAFETY: The caller proved that one output unit is writable.
+        unsafe {
+            *output.get_unchecked_mut(output_index) = *value;
+        }
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = true;
+        // SAFETY: The caller proved that one output unit is writable.
+        unsafe {
+            *output.get_unchecked_mut(output_index) = 0xaa;
+        }
         Ok(1)
     }
 }
@@ -274,8 +330,8 @@ impl Codec for MismatchCapacityTargetCodec {
     type DecodeError = core::convert::Infallible;
     type EncodeError = EngineError;
 
-    const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MIN_UNITS_PER_VALUE: usize = 3;
+    const MAX_UNITS_PER_VALUE: usize = 3;
 
     unsafe fn decode(
         &mut self,
@@ -294,7 +350,8 @@ impl Codec for MismatchCapacityTargetCodec {
     ) -> Result<usize, Self::EncodeError> {
         output[output_index] = *value;
         output[output_index + 1] = value.wrapping_add(1);
-        Ok(2)
+        output[output_index + 2] = value.wrapping_add(2);
+        Ok(3)
     }
 }
 
@@ -496,6 +553,39 @@ where
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct PerBatchOverheadEncodeHooks;
+
+impl TranscodeEncodeHooks<TargetCodec> for PerBatchOverheadEncodeHooks {
+    fn max_transcode_output_len(
+        &self,
+        _codec: &TargetCodec,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        if input_len == 0 {
+            Ok(0)
+        } else {
+            input_len
+                .checked_add(1)
+                .ok_or(CapacityError::OutputLengthOverflow)
+        }
+    }
+
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut TargetCodec,
+        context: &EncodeContext<'_, u8, u8>,
+    ) -> Result<
+        EncodeUnencodableAction<u8>,
+        qubit_codec::TranscodeEncodeErrorOf<TargetCodec>,
+    > {
+        Err(TranscodeEncodeError::domain_main(
+            EngineError::Encode,
+            context.input_index(),
+        ))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct MismatchCapacityEncodeHooks;
 
 impl TranscodeEncodeHooks<MismatchCapacityTargetCodec>
@@ -627,17 +717,23 @@ impl<const FINISH_BOUND: usize>
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct FinishDecodeHooks {
     value: Option<u8>,
+    finish_bound: usize,
+    fail: bool,
 }
 
 impl Default for FinishDecodeHooks {
     fn default() -> Self {
-        Self { value: Some(40) }
+        Self {
+            value: Some(40),
+            finish_bound: 1,
+            fail: false,
+        }
     }
 }
 
 impl TranscodeDecodeHooks<SourceCodec> for FinishDecodeHooks {
     fn max_finish_output_len(&self, _codec: &SourceCodec) -> usize {
-        usize::from(self.value.is_some())
+        self.finish_bound
     }
 
     fn handle_invalid_decode(
@@ -663,6 +759,11 @@ impl TranscodeDecodeHooks<SourceCodec> for FinishDecodeHooks {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, qubit_codec::TranscodeDecodeErrorOf<SourceCodec>> {
+        if self.fail {
+            return Err(TranscodeDecodeError::domain_finish(
+                EngineError::Decode,
+            ));
+        }
         let Some(value) = self.value else {
             return Ok(0);
         };
@@ -700,7 +801,7 @@ impl Default for BatchFinishDecodeHooks {
 
 impl TranscodeDecodeHooks<SourceCodec> for BatchFinishDecodeHooks {
     fn max_finish_output_len(&self, _codec: &SourceCodec) -> usize {
-        self.remaining as usize
+        2
     }
 
     fn handle_invalid_decode(
@@ -768,7 +869,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
     }
 
     fn max_finish_output_len(&self, _codec: &TargetCodec) -> usize {
-        usize::from(self.pending)
+        1
     }
 
     fn finish_hooks(
@@ -861,6 +962,7 @@ enum ErrorPathEncodeMode {
 struct ErrorPathEncodeHooks {
     finish_len: usize,
     max_output_error: bool,
+    max_output_error_for_len: Option<usize>,
     mode: ErrorPathEncodeMode,
 }
 
@@ -870,7 +972,9 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
         _codec: &TargetCodec,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        if self.max_output_error {
+        if self.max_output_error
+            || self.max_output_error_for_len == Some(input_len)
+        {
             Err(CapacityError::OutputLengthOverflow)
         } else {
             input_len
@@ -928,6 +1032,7 @@ struct ErrorPathHooks {
     decode_max_output_error: bool,
     encode_finish_len: usize,
     encode_max_output_error: bool,
+    encode_max_output_error_for_len: Option<usize>,
     encode_mode: ErrorPathEncodeMode,
 }
 
@@ -1041,6 +1146,7 @@ fn new_error_path_engine(
     let encode_hooks = ErrorPathEncodeHooks {
         finish_len: hooks.encode_finish_len,
         max_output_error: hooks.encode_max_output_error,
+        max_output_error_for_len: hooks.encode_max_output_error_for_len,
         mode: hooks.encode_mode,
     };
     TranscodeConvertEngine::new(
@@ -1064,6 +1170,8 @@ fn new_finish_engine(
         TargetCodec,
         FinishDecodeHooks {
             value: Some(hooks.value),
+            finish_bound: 1,
+            fail: false,
         },
         StrictEncodeHooks,
     )
@@ -1130,19 +1238,41 @@ fn test_buffered_convert_engine_reports_bounds_and_resets() {
     let transcode_complete_into: TranscodeCompleteIntoFn =
         CopyConvertEngine::transcode_complete_into;
 
-    assert_eq!(Ok(3), engine.max_transcode_output_len(3));
-    assert_eq!(Ok(3), max_total_output_len(&engine, 3));
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(4), engine.max_transcode_output_len(3));
+    assert_eq!(Ok(5), max_total_output_len(&engine, 3));
+    assert_eq!(Ok(1), engine.max_finish_output_len());
     assert_eq!(Ok(0), engine.max_reset_output_len());
 
-    let mut output = [0_u8; 3];
+    let mut output = [0_u8; 5];
     let written = transcode_complete_into(&mut engine, &[1, 2, 3], &mut output)
         .expect("complete conversion should fit the planned output");
     assert_eq!(3, written);
     assert_eq!(&[2, 3, 4], &output[..written]);
 
     engine.reset(&mut [], 0).expect("reset");
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(1), engine.max_finish_output_len());
+}
+
+/// Verifies that converter bounds include every reachable pending state.
+#[test]
+fn test_buffered_convert_engine_bounds_include_possible_pending_value() {
+    let engine = new_copy_engine();
+
+    assert_eq!(Ok(1), engine.max_transcode_output_len(0));
+    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_total_output_len(0));
+}
+
+#[test]
+fn test_buffered_convert_engine_finish_bound_sums_separate_encode_batches() {
+    let engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        TargetCodec,
+        FinishDecodeHooks::default(),
+        PerBatchOverheadEncodeHooks,
+    );
+
+    assert_eq!(Ok(4), engine.max_finish_output_len());
 }
 
 #[test]
@@ -1187,8 +1317,8 @@ fn test_buffered_convert_engine_implements_transcoder() {
     let finish: OutputFn =
         std::hint::black_box(<CopyConvertEngine as Transcoder>::finish);
 
-    assert_eq!(Ok(2), max_transcode_output_len(&engine, 2));
-    assert_eq!(Ok(0), max_finish_output_len(&engine));
+    assert_eq!(Ok(3), max_transcode_output_len(&engine, 2));
+    assert_eq!(Ok(1), max_finish_output_len(&engine));
     assert_eq!(Ok(0), max_reset_output_len(&engine));
     let progress = transcode(&mut engine, &[3, 4], 0, &mut output, 0)
         .expect("engine should convert through the trait");
@@ -1256,7 +1386,7 @@ fn test_buffered_convert_engine_new_uses_supplied_policy_hooks() {
         FactoryEncodeHooks { offset: 7 },
     );
 
-    assert_eq!(Ok(11), engine.max_transcode_output_len(1));
+    assert_eq!(Ok(12), engine.max_transcode_output_len(1));
 
     let mut output = [0_u8; 1];
     let progress = engine
@@ -1299,7 +1429,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!((1, 2), (progress.read(), progress.written()));
     assert_eq!([2, 10], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(1), engine.max_finish_output_len());
 }
 
 #[test]
@@ -1390,6 +1520,27 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
 }
 
 #[test]
+fn test_buffered_convert_engine_error_path_fixture_supports_successful_lifecycle()
+ {
+    let mut engine = new_error_path_engine(ErrorPathHooks::default());
+
+    assert_eq!(Ok(2), engine.max_transcode_output_len(1));
+    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!(Ok(3), engine.max_total_output_len(1));
+    assert_eq!(0, engine.reset(&mut [], 0).expect("reset should succeed"));
+
+    let mut output = [0_u8; 1];
+    let progress = engine
+        .transcode(&[1], 0, &mut output, 0)
+        .expect("conversion should succeed");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!((1, 1), (progress.read(), progress.written()));
+    assert_eq!([2], output);
+
+    assert_eq!(0, engine.finish(&mut [], 0).expect("finish should succeed"));
+}
+
+#[test]
 fn test_buffered_convert_engine_reports_capacity_errors() {
     let engine = new_error_path_engine(ErrorPathHooks {
         decode_max_output_error: true,
@@ -1403,6 +1554,35 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
         Err(CapacityError::OutputLengthOverflow),
         engine.max_total_output_len(1)
     );
+
+    let engine = new_error_path_engine(ErrorPathHooks {
+        encode_max_output_error_for_len: Some(2),
+        ..ErrorPathHooks::default()
+    });
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_transcode_output_len(2)
+    );
+
+    let engine = new_error_path_engine(ErrorPathHooks {
+        decode_finish_len: 2,
+        encode_max_output_error_for_len: Some(2),
+        ..ErrorPathHooks::default()
+    });
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_finish_output_len()
+    );
+
+    let mut engine = new_error_path_engine(ErrorPathHooks {
+        decode_finish_len: 2,
+        encode_max_output_error_for_len: Some(2),
+        ..ErrorPathHooks::default()
+    });
+    let error = engine.finish(&mut [], 0).expect_err(
+        "encoding decoder finish values should report bound overflow",
+    );
+    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
 
     let engine = new_error_path_engine(ErrorPathHooks {
         decode_finish_len: 1,
@@ -1460,6 +1640,10 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
         Err(CapacityError::OutputLengthOverflow),
         engine.max_finish_output_len()
     );
+    let error = engine
+        .finish(&mut empty_output, 0)
+        .expect_err("pending output bound overflow should be mapped by finish");
+    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
 
     let mut engine = new_error_path_engine(ErrorPathHooks {
         decode_finish_len: usize::MAX,
@@ -1512,6 +1696,11 @@ fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow
         StrictEncodeHooks,
     );
     let mut output = [];
+
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_finish_output_len(),
+    );
 
     let error = engine
         .finish(&mut output, 0)
@@ -1600,6 +1789,50 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
         ),
     ));
     assert_eq!([0], output);
+}
+
+#[test]
+fn test_buffered_convert_engine_finish_runs_zero_bound_decoder_teardown() {
+    let mut engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        TargetCodec,
+        FinishDecodeHooks {
+            value: None,
+            finish_bound: 0,
+            fail: false,
+        },
+        StrictEncodeHooks,
+    );
+
+    assert_eq!(0, engine.finish(&mut [], 0).expect("finish should succeed"));
+}
+
+#[test]
+fn test_buffered_convert_engine_finish_maps_configured_decoder_teardown_error()
+{
+    let mut engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        TargetCodec,
+        FinishDecodeHooks {
+            value: None,
+            finish_bound: 0,
+            fail: true,
+        },
+        StrictEncodeHooks,
+    );
+
+    let error = engine
+        .finish(&mut [], 0)
+        .expect_err("decoder teardown errors should be mapped");
+
+    assert!(matches!(
+        error,
+        TranscodeConvertError::DecodeDomain(
+            qubit_codec::TranscodeDomainError::Finish {
+                source: EngineError::Decode,
+            }
+        ),
+    ));
 }
 
 #[test]
@@ -1735,14 +1968,14 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
 #[test]
 fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
     let mut engine = new_finish_engine(FinishHooks::default());
-    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
     let error = engine.finish(&mut empty_output, 0).expect_err(
         "finish should reject insufficient output before decoder finish",
     );
     assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error,);
-    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
     let written = engine
@@ -1750,13 +1983,13 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
         .expect("finish should encode decoder finish value");
     assert_eq!(1, written);
     assert_eq!([40], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 }
 
 #[test]
 fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
     let mut engine = new_batch_finish_engine();
-    assert_eq!(Ok(2), engine.max_finish_output_len());
+    assert_eq!(Ok(3), engine.max_finish_output_len());
 
     let mut output = [0_u8; 2];
     let written = engine
@@ -1765,7 +1998,7 @@ fn test_buffered_convert_engine_finish_drains_decoder_finish_batches() {
 
     assert_eq!(2, written);
     assert_eq!([50, 51], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(3), engine.max_finish_output_len());
 }
 
 #[test]
@@ -1801,7 +2034,7 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
 #[test]
 fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     let mut engine = new_finish_encode_engine();
-    assert_eq!(Ok(1), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut empty_output = [0_u8; 0];
     let error = engine.finish(&mut empty_output, 0).expect_err(
@@ -1815,7 +2048,7 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
         .expect("target finish hook should write final output");
     assert_eq!(1, written);
     assert_eq!([0xee], output);
-    assert_eq!(Ok(0), engine.max_finish_output_len());
+    assert_eq!(Ok(2), engine.max_finish_output_len());
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2150,7 +2383,7 @@ fn test_buffered_convert_engine_reset_emits_target_reset_output() {
 }
 
 #[test]
-fn test_buffered_convert_engine_reset_calls_decode_before_reset() {
+fn test_buffered_convert_engine_reset_calls_decode_reset_hooks() {
     let called = std::rc::Rc::new(Cell::new(false));
     let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
@@ -2710,6 +2943,25 @@ fn test_buffered_convert_engine_reset_pipes_decode_reset_values_into_encoder() {
 }
 
 #[test]
+fn test_buffered_convert_engine_resets_target_before_encoding_source_reset_values()
+ {
+    let mut engine = TranscodeConvertEngine::new(
+        ResetEmittingSourceCodec,
+        ResetDependentTargetCodec::default(),
+        ResetSourceDecodeHooks,
+        StrictEncodeHooks,
+    );
+    let mut output = [0_u8; 2];
+
+    let written = engine
+        .reset(&mut output, 0)
+        .expect("target reset must run before source-reset values are encoded");
+
+    assert_eq!(2, written);
+    assert_eq!([0xaa, SOURCE_RESET_SENTINEL], output);
+}
+
+#[test]
 fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
     let mut engine = TranscodeConvertEngine::new(
         ResetEncodingFailSourceCodec,
@@ -2839,5 +3091,5 @@ fn test_buffered_convert_engine_lifecycle_allows_reuse_after_reset() {
 fn test_buffered_convert_engine_reports_complete_stream_bound() {
     let engine = new_copy_engine();
 
-    assert_eq!(Ok(2), engine.max_total_output_len(2));
+    assert_eq!(Ok(4), engine.max_total_output_len(2));
 }

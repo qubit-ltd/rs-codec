@@ -32,7 +32,11 @@ impl<Value> PendingValueSlot<Value> {
         Self { value: None }
     }
 
-    /// Returns the target-output bound for the retained value.
+    /// Returns the current target-output bound for the retained value.
+    ///
+    /// Unlike public transcoder capacity methods, this helper intentionally
+    /// examines transient state so a concrete finish call can accept the
+    /// capacity required by its current pending value.
     ///
     /// # Type Parameters
     ///
@@ -41,14 +45,15 @@ impl<Value> PendingValueSlot<Value> {
     ///
     /// # Parameters
     ///
-    /// - `engine`: Target encode engine for one-value output bound query.
+    /// - `engine`: Target encode engine for one-value output planning.
     ///
     /// # Returns
     ///
-    /// Returns the output unit bound contributed by the retained value.
+    /// Returns the current pending-value output bound, or a capacity error
+    /// when encoder planning overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    pub(in crate::transcode) fn max_transcode_output_len<E, H>(
+    pub(in crate::transcode) fn current_output_len<E, H>(
         &self,
         engine: &TranscodeEncodeEngine<E, H>,
     ) -> Result<usize, CapacityError>

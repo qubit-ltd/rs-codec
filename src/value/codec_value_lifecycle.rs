@@ -43,38 +43,6 @@ where
         .ok_or(CapacityError::OutputLengthOverflow)
 }
 
-/// Returns the exact unit count needed for a complete encode lifecycle.
-///
-/// # Parameters
-///
-/// - `codec`: Codec used to validate and size the value.
-/// - `value`: Value that will be encoded.
-///
-/// # Returns
-///
-/// Returns the checked reset, exact value, and finish output length.
-///
-/// # Errors
-///
-/// Returns [`TranscodeEncodeError`] when `value` is outside the codec domain or
-/// when output length arithmetic overflows.
-pub(crate) fn complete_encode_len<C>(
-    codec: &C,
-    value: &C::Value,
-) -> Result<usize, TranscodeEncodeErrorOf<C>>
-where
-    C: Codec,
-{
-    if !codec.can_encode_value(value) {
-        return Err(TranscodeEncodeError::unencodable_without_context(0));
-    }
-    let units = C::MAX_ENCODE_RESET_UNITS
-        .checked_add(codec.encode_len(value))
-        .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))
-        .ok_or(CapacityError::OutputLengthOverflow)?;
-    Ok(units)
-}
-
 /// Encodes one value through reset, encode, and finish into reserved output.
 ///
 /// # Parameters
@@ -83,8 +51,8 @@ where
 /// - `value`: Value to encode.
 /// - `output`: Destination unit buffer.
 /// - `output_index`: Start index in `output`.
-/// - `required`: Exact complete output length previously returned by
-///   [`complete_encode_len`].
+/// - `reserved`: Conservative complete output length returned by
+///   [`max_complete_encode_units`].
 ///
 /// # Returns
 ///
@@ -92,19 +60,22 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeEncodeError`] when a codec reset, encode, or finish hook
-/// reports a domain error.
+/// Returns [`TranscodeEncodeError`] when the reset-state codec domain rejects
+/// `value`, output length arithmetic overflows, reserved output is
+/// insufficient for a codec-reported exact width, or a codec reset, encode, or
+/// finish hook reports a domain error.
 ///
 /// # Panics
 ///
-/// Panics when the caller did not reserve `required` units at `output_index`,
-/// or when the codec violates its reset, value, or finish length contract.
+/// Panics when the caller did not reserve `reserved` units at `output_index`,
+/// or when the codec violates its reset, encoded-value, or finish write-count
+/// contract.
 pub(crate) fn encode_complete_value_into_reserved<C>(
     codec: &mut C,
     value: &C::Value,
     output: &mut [C::Unit],
     output_index: usize,
-    required: usize,
+    reserved: usize,
 ) -> Result<usize, TranscodeEncodeErrorOf<C>>
 where
     C: Codec,
@@ -113,12 +84,12 @@ where
         output
             .len()
             .checked_sub(output_index)
-            .is_some_and(|available| available >= required),
+            .is_some_and(|available| available >= reserved),
         "complete encode output was not reserved",
     );
 
     let reset_written = unsafe {
-        // SAFETY: The caller reserved `required` units, which includes the
+        // SAFETY: The caller reserved `reserved` units, which includes the
         // codec-declared reset bound at `output_index`.
         codec.encode_reset(output, output_index)
     }
@@ -128,11 +99,28 @@ where
         "Codec::encode_reset wrote beyond its reset bound",
     );
 
+    if !codec.can_encode_value(value) {
+        return Err(TranscodeEncodeError::unencodable_without_context(0));
+    }
     let value_units = codec.encode_len(value);
+    assert!(
+        value_units <= C::MAX_UNITS_PER_VALUE,
+        "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE",
+    );
+    let value_and_finish = value_units
+        .checked_add(C::MAX_ENCODE_FINISH_UNITS)
+        .ok_or(CapacityError::OutputLengthOverflow)?;
+    let value_index = output_index + reset_written;
+    TranscodeFailure::ensure_output_capacity(
+        output.len(),
+        value_index,
+        value_and_finish,
+    )?;
     let value_written = unsafe {
-        // SAFETY: The reserved complete lifecycle output leaves the exact
-        // value width writable after reset output.
-        codec.encode(value, output, output_index + reset_written)
+        // SAFETY: The capacity check above leaves the reset-state exact value
+        // width writable after reset output, and the reset-state domain check
+        // establishes the codec's value precondition.
+        codec.encode(value, output, value_index)
     }
     .map_err(|error| TranscodeEncodeError::domain_main(error, 0))?;
     assert!(
@@ -140,7 +128,7 @@ where
         "Codec::encode wrote a different length than Codec::encode_len",
     );
 
-    let finish_index = output_index + reset_written + value_written;
+    let finish_index = value_index + value_written;
     let finish_written = unsafe {
         // SAFETY: The reserved complete lifecycle output includes the
         // codec-declared finish bound after reset and value output.

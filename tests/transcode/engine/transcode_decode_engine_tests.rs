@@ -388,12 +388,14 @@ impl TranscodeDecodeHooks<HintOnlyCodec> for HintOnlySkippingHooks {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct FinishHooks {
     pending_suffix: bool,
+    finish_bound: usize,
 }
 
 impl Default for FinishHooks {
     fn default() -> Self {
         Self {
             pending_suffix: true,
+            finish_bound: 1,
         }
     }
 }
@@ -419,7 +421,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for FinishHooks {
     }
 
     fn max_finish_output_len(&self, _codec: &PrefixCodec) -> usize {
-        usize::from(self.pending_suffix)
+        self.finish_bound
     }
 
     fn finish_hooks(
@@ -797,7 +799,7 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
         .expect("hook should write final output");
     assert_eq!(1, written);
     assert_eq!([0xee], output);
-    assert_eq!(Ok(0), decoder.max_finish_output_len());
+    assert_eq!(Ok(1), decoder.max_finish_output_len());
 }
 
 #[test]
@@ -1234,8 +1236,16 @@ impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
-struct ResetFailCodec;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ResetFailCodec {
+    fail_reset: bool,
+}
+
+impl Default for ResetFailCodec {
+    fn default() -> Self {
+        Self { fail_reset: true }
+    }
+}
 
 impl Codec for ResetFailCodec {
     type Value = u8;
@@ -1277,10 +1287,14 @@ impl Codec for ResetFailCodec {
 
     unsafe fn decode_reset(
         &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
+        output: &mut [u8],
+        output_index: usize,
     ) -> Result<usize, Self::DecodeError> {
-        Err(PrefixDecodeError::Invalid { consumed: 1 })
+        if self.fail_reset {
+            return Err(PrefixDecodeError::Invalid { consumed: 1 });
+        }
+        output[output_index] = 0xaa;
+        Ok(1)
     }
 }
 
@@ -1359,7 +1373,7 @@ fn test_transcode_decode_engine_finish_converts_decode_finish_errors() {
 #[test]
 fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(
-        ResetFailCodec,
+        ResetFailCodec::default(),
         ResetErrorMappingHooks,
     );
     let mut output = [0_u8; 1];
@@ -1374,6 +1388,27 @@ fn test_transcode_decode_engine_reset_converts_decode_reset_errors() {
         }),
         error,
     );
+}
+
+#[test]
+fn test_transcode_decode_engine_configurable_reset_supports_success_and_capacity_errors()
+ {
+    let mut decoder = TranscodeDecodeEngine::<_, _>::new(
+        ResetFailCodec { fail_reset: false },
+        ResetErrorMappingHooks,
+    );
+    let mut output = [0_u8; 1];
+
+    assert_eq!(
+        1,
+        decoder.reset(&mut output, 0).expect("reset should succeed")
+    );
+    assert_eq!([0xaa], output);
+
+    let error = decoder
+        .reset(&mut [], 0)
+        .expect_err("reset should enforce its declared output bound");
+    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error);
 }
 
 // ============================================================================
@@ -1391,6 +1426,7 @@ fn new_stateless_finish_engine()
         PrefixCodec,
         FinishHooks {
             pending_suffix: false,
+            finish_bound: 0,
         },
     )
 }

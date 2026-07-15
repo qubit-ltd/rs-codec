@@ -27,9 +27,8 @@ This crate provides:
 - `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
   `DecodeContext` for reusing the common buffered decoding loop in policy-aware
   downstream decoders.
-- `TranscodeConvertEngine`, `TranscodeConvertError`, and `ConvertError` for
-  policy-aware unit-to-unit conversion pipelines built from a decode side and an
-  encode side.
+- `TranscodeConvertEngine` and `TranscodeConvertError` for policy-aware
+  unit-to-unit conversion pipelines built from a decode side and an encode side.
 - `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
 - `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for
   caller-managed logical-stream conversion.
@@ -62,10 +61,13 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   against a caller-managed unit buffer.
 - **`DecodeFailure`**: separates incomplete-prefix flow control from
   codec-domain invalid input returned by `Codec::decode`.
-- **`TranscodeError<E>`**: carries framework failures such as invalid indices,
-  insufficient output, overflow, incomplete input, and codec-domain failures.
-- **`CodecValueEncodeError<E>` / `CodecValueDecodeError<E>`**: final errors for
-  codec-backed whole-value adapters.
+- **`TranscodeFailure`**: carries framework failures such as invalid indices,
+  insufficient output, overflow, incomplete input, and trailing input.
+- **`TranscodeDomainError<E>`**: attaches reset, main, or finish phase context
+  to codec and policy errors.
+- **`TranscodeEncodeError<E, V>` / `TranscodeDecodeError<E>` /
+  `TranscodeConvertError<DE, EE, V>`**: directional public errors that combine
+  framework and domain failures.
 - **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
 - **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
   output type.
@@ -121,7 +123,7 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
   `NeedOutput` stops.
-- **`TranscodeError` / `CapacityError` / `TranscodeContractError`**: report
+- **`TranscodeFailure` / `CapacityError` / `TranscodeContractError`**: report
   framework-level buffer, capacity-planning, and broken-progress contract
   failures separately from codec or policy domain errors.
 
@@ -257,10 +259,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `DecodeFailure<E>` | Low-level decode result for incomplete visible prefixes or invalid codec-domain input |
-| `TranscodeError<E>` | Streaming framework error for invalid indices, insufficient output, output-length overflow, or a domain error |
-| `ConvertError<D, E>` | Converter domain error that preserves whether a failure came from decode side or encode side |
-| `CodecValueEncodeError<E>` | Final whole-value encode error wrapping `TranscodeError<E>` |
-| `CodecValueDecodeError<E>` | Final whole-value decode error wrapping `TranscodeError<E>` or exact-decode trailing input |
+| `TranscodeFailure` | Framework failure for invalid indices, insufficient output, output-length overflow, incomplete input, or trailing input |
+| `TranscodeDomainError<E>` | Codec or policy error tagged with reset, main, or finish phase context |
+| `TranscodeEncodeError<E, V>` | Encode-side error combining framework, unencodable-value, and domain failures |
+| `TranscodeDecodeError<E>` | Decode-side error combining framework and domain failures |
+| `TranscodeConvertError<DE, EE, V>` | Converter error preserving decode-side, encode-side, unencodable-value, and framework failures |
 | `CapacityError` | Capacity-planning error returned before allocating or writing output |
 | `TranscodeContractError` | Error reported when a custom `Transcoder` returns inconsistent progress |
 
@@ -287,7 +290,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeEncodeHooks<C>` | Hook contract for unencodable-value policy, preparing for reset, and finalizing encoded output |
-| `TranscodeEncodeError<C>` | Directional alias for `TranscodeError<C::EncodeError>` |
+| `TranscodeEncodeError<E, V>` / `TranscodeEncodeErrorOf<C>` | Encode-side error and its codec-derived alias |
 | `EncodeUnencodableAction<Value>` | Policy action returned for values outside the codec's encodable domain |
 | `EncodeOutcome` | Per-value engine outcome: consumed with written output, or needs more output without consuming |
 | `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor used by encode engine helpers |
@@ -298,7 +301,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|---------|
 | `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
 | `TranscodeDecodeHooks<C>` | Hook contract for invalid-input decode policy |
-| `TranscodeDecodeError<C>` | Directional alias for `TranscodeError<C::DecodeError>` |
+| `TranscodeDecodeError<E>` / `TranscodeDecodeErrorOf<C>` | Decode-side error and its codec-derived alias |
 | `DecodeContext` | Context passed to decode policy hooks |
 | `DecodeInvalidAction<Value>` | Invalid-input policy action: skip input or emit a replacement value |
 
@@ -307,20 +310,20 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `TranscodeConvertEngine<D, E, DH, EH>` | Reusable unit-to-unit converter that decodes with `D`, encodes with `E`, and applies decode/encode hooks |
-| `TranscodeConvertError<D, E>` | Alias for `TranscodeError<ConvertError<D::DecodeError, E::EncodeError>>` |
+| `TranscodeConvertError<DE, EE, V>` / `TranscodeConvertErrorOf<D, E>` | Converter error and its codec-derived alias |
 
 ### `Transcoder` Operations
 
 | Method | Description |
 |--------|-------------|
-| `max_transcode_output_len(input_len)` | Return a finite streaming-phase output upper bound when known |
+| `max_transcode_output_len(input_len)` | Return a streaming-phase upper bound valid for every reachable transient state |
 | `max_total_output_len(input_len)` | Return the full `reset -> transcode -> finish` output upper bound |
-| `max_reset_output_len()` | Return a finite reset-output upper bound when known |
-| `max_finish_output_len()` | Return a finite final-output upper bound when known |
+| `max_reset_output_len()` | Return a reset-output upper bound valid for every reachable transient state |
+| `max_finish_output_len()` | Return a finish-output upper bound valid for every reachable transient state |
 | `reset()` | Reset retained stream state while keeping configuration |
 | `transcode(input, input_index, output, output_index)` | Convert input units into output units |
 | `transcode_complete_into(input, output)` | Run one complete `reset -> transcode -> finish` stream from the start of the supplied slices |
-| `finish(output, output_index)` | Finish internally retained output such as reset bytes, digests, or trailers |
+| `finish(output, output_index)` | Finish internally retained output such as digests or trailers |
 
 ### `TranscodeStatus` Values
 
@@ -345,9 +348,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   `CodecValueDecoder<C>`. Callers that need caller-provided buffers should use
   the streaming transcoder adapters so reset, main value, and finish lifecycle
   handling stays centralized.
-- `TranscodeError<E>` is the shared intermediate error for engine and adapter
-  internals. Default streaming adapters expose it directly, while value and
-  downstream facade adapters map it into their own final error types.
+- Directional adapters expose `TranscodeEncodeError`, `TranscodeDecodeError`,
+  or `TranscodeConvertError`. Each keeps framework failures separate from
+  phase-tagged codec and policy domain errors.
 - `NeedInput` means the reported tail was not consumed and must remain available
   when the caller retries with more input. It is a streaming boundary signal,
   not an EOF error; `finish` does not receive that source tail. Callers must

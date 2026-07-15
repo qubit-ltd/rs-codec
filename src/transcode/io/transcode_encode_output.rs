@@ -33,11 +33,9 @@ use crate::{
     Codec,
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
-    TranscodeFailure,
     TranscodeStatus,
     Transcoder,
     value::codec_value_lifecycle::{
-        complete_encode_len,
         encode_complete_value_into_reserved,
         max_complete_encode_units,
     },
@@ -210,8 +208,14 @@ where
     ///
     /// Returns I/O errors from the wrapped output, `InvalidInput` when the
     /// codec output bound overflows or the value is outside the codec domain,
-    /// `InvalidData` for framework-level codec adapter failures, or the error
-    /// returned by `map_error` for codec encode, reset, and finish failures.
+    /// or the error returned by `map_error` for codec encode, reset, and finish
+    /// failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the codec violates its declared reset, value-width, or
+    /// finish bounds, or when `encode` writes a length different from
+    /// `encode_len` in the same reset state.
     pub fn write_encoded_with<C, M>(
         &mut self,
         codec: &mut C,
@@ -222,41 +226,30 @@ where
         C: Codec<Unit = O::Item>,
         M: FnMut(C::EncodeError) -> Error,
     {
-        let max_units = match max_complete_encode_units::<C>() {
-            Ok(max_units) => max_units,
-            Err(error) => return Err(codec_bound_overflow(error)),
-        };
+        let max_units = map_encode_value_result(
+            max_complete_encode_units::<C>()
+                .map_err(TranscodeEncodeErrorOf::<C>::from),
+            &mut map_error,
+        )?;
         if let Err(error) = self.output.ensure_spare_capacity(max_units) {
             if error.kind() != ErrorKind::InvalidInput {
                 return Err(error);
             }
             self.output.flush()?;
             let mut scratch = vec![O::Item::default(); max_units];
-            let required = map_encode_value_result(
-                complete_encode_len(codec, value),
-                &mut map_error,
-            )?;
-            map_encode_value_result(
-                TranscodeFailure::ensure_output_capacity(
-                    scratch.len(),
-                    0,
-                    required,
-                )
-                .map_err(TranscodeEncodeErrorOf::<C>::from),
-                &mut map_error,
-            )?;
             let written = map_encode_value_result(
                 encode_complete_value_into_reserved(
                     codec,
                     value,
                     &mut scratch,
                     0,
-                    required,
+                    max_units,
                 ),
                 &mut map_error,
             )?;
-            // SAFETY: `scratch` has enough elements for the exact complete
-            // encode length, and the helper writes no more than that length.
+            // SAFETY: `scratch` has the conservative complete lifecycle
+            // capacity, and the helper reports how many initialized units it
+            // actually wrote.
             unsafe {
                 self.output
                     .inner_mut()
@@ -270,31 +263,19 @@ where
             available >= max_units,
             "reserved spare buffer is smaller than codec upper bound",
         );
-        let required = map_encode_value_result(
-            complete_encode_len(codec, value),
-            &mut map_error,
-        )?;
-        map_encode_value_result(
-            TranscodeFailure::ensure_output_capacity(
-                units.len(),
-                output_index,
-                required,
-            )
-            .map_err(TranscodeEncodeErrorOf::<C>::from),
-            &mut map_error,
-        )?;
         let written = map_encode_value_result(
             encode_complete_value_into_reserved(
                 codec,
                 value,
                 units,
                 output_index,
-                required,
+                max_units,
             ),
             &mut map_error,
         )?;
-        // SAFETY: The spare buffer has enough slots for the exact complete
-        // encode length, and the helper writes no more than that length.
+        // SAFETY: The spare buffer has the conservative complete lifecycle
+        // capacity, and the helper reports how many initialized units it
+        // actually wrote.
         unsafe {
             self.output.advance(written);
         }
@@ -523,24 +504,16 @@ where
     }
 }
 
-/// Maps a codec-declared output bound overflow into an I/O error.
-fn codec_bound_overflow(_error: CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidInput, "codec output bound overflow")
-}
-
 /// Maps a streaming capacity error into an I/O error.
 fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
 /// Maps a one-value codec result into the I/O surface used by this adapter.
-fn map_encode_value_result<T, E, Value, M>(
+fn map_encode_value_result<T, E, Value>(
     result: core::result::Result<T, TranscodeEncodeError<E, Value>>,
-    map_error: &mut M,
-) -> Result<T>
-where
-    M: FnMut(E) -> Error,
-{
+    map_error: &mut dyn FnMut(E) -> Error,
+) -> Result<T> {
     match result {
         Ok(value) => Ok(value),
         Err(error) => Err(map_encode_value_error(error, map_error)),
@@ -550,20 +523,17 @@ where
 /// Maps one-value codec encode errors into the I/O surface used by this
 /// adapter.
 #[inline(never)]
-fn map_encode_value_error<E, Value, M>(
+fn map_encode_value_error<E, Value>(
     error: TranscodeEncodeError<E, Value>,
-    map_error: &mut M,
-) -> Error
-where
-    M: FnMut(E) -> Error,
-{
+    map_error: &mut dyn FnMut(E) -> Error,
+) -> Error {
     match error {
         TranscodeEncodeError::Domain(error) => map_error(error.into_source()),
         TranscodeEncodeError::Unencodable { .. } => {
             Error::new(ErrorKind::InvalidInput, "codec cannot encode value")
         }
-        TranscodeEncodeError::Failure(failure) => {
-            Error::new(ErrorKind::InvalidData, failure.to_string())
+        TranscodeEncodeError::Failure(_) => {
+            Error::new(ErrorKind::InvalidInput, "codec output bound overflow")
         }
     }
 }

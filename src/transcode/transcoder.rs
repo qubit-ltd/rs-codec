@@ -12,6 +12,77 @@ use super::{
     transcode_status::TranscodeStatus,
 };
 
+/// Validates one-shot transcode progress and returns completed output length.
+///
+/// Keeping progress classification independent of the concrete transcoder
+/// ensures every implementation receives identical trailing-input and
+/// streaming-stop handling.
+fn complete_progress_written(
+    progress: TranscodeProgress,
+    input_len: usize,
+    output_index: usize,
+    output_len: usize,
+) -> Result<usize, TranscodeFailure> {
+    if progress.is_complete() && progress.read() < input_len {
+        return Err(TranscodeFailure::trailing_input(
+            progress.read(),
+            input_len - progress.read(),
+        ));
+    }
+    debug_assert!(
+        progress
+            .validate(
+                0,
+                input_len,
+                output_index,
+                output_len.saturating_sub(output_index),
+            )
+            .is_ok(),
+        "Transcoder::transcode returned invalid progress",
+    );
+    match progress.status() {
+        TranscodeStatus::Complete => Ok(progress.written()),
+        TranscodeStatus::NeedOutput {
+            output_index,
+            required,
+            available,
+        } => Err(TranscodeFailure::insufficient_output(
+            output_index,
+            required.get(),
+            available,
+        )),
+        TranscodeStatus::NeedInput {
+            input_index,
+            required,
+            available,
+        } => Err(TranscodeFailure::incomplete_input(
+            input_index,
+            required.get(),
+            available,
+        )),
+    }
+}
+
+/// Adds two independent output-capacity bounds.
+fn add_output_bounds(
+    first: usize,
+    second: usize,
+) -> Result<usize, CapacityError> {
+    first
+        .checked_add(second)
+        .ok_or(CapacityError::OutputLengthOverflow)
+}
+
+/// Adds the reset, transcode, and finish output-capacity bounds.
+fn sum_output_bounds(
+    reset: usize,
+    transcode: usize,
+    finish: usize,
+) -> Result<usize, CapacityError> {
+    let before_finish = add_output_bounds(reset, transcode)?;
+    add_output_bounds(before_finish, finish)
+}
+
 /// Converts one logical stream of input units into one logical stream of output
 /// units.
 ///
@@ -206,6 +277,11 @@ pub trait Transcoder {
     /// order mark, before the first encoded value. Callers use this bound to
     /// size the output buffer passed to [`Transcoder::reset`].
     ///
+    /// The bound may depend on immutable transcoder configuration, but it must
+    /// cover reset output from every reachable transient stream state. It must
+    /// not shrink merely because the current stream has already been reset or
+    /// finished.
+    ///
     /// # Returns
     ///
     /// Returns `Ok(bound)` when the upper bound can be represented as `usize`.
@@ -225,10 +301,11 @@ pub trait Transcoder {
     /// [`Transcoder::finish`]. Callers that need a complete one-shot stream
     /// bound should use [`Transcoder::max_total_output_len`].
     ///
-    /// For stateful transcoders, this bound is evaluated against the current
-    /// instance state and must include any already-retained output that may be
-    /// emitted before or alongside output derived from the supplied input
-    /// during this phase.
+    /// The bound may depend on immutable transcoder configuration and
+    /// `input_len`, but it must cover the streaming output reachable from every
+    /// transient stream state. In particular, it must include the maximum
+    /// retained output that may be emitted before or alongside output derived
+    /// from the supplied input, even when no output is currently retained.
     ///
     /// # Parameters
     ///
@@ -250,9 +327,9 @@ pub trait Transcoder {
     ///
     /// This is a convenience sum of [`Transcoder::max_reset_output_len`],
     /// [`Transcoder::max_transcode_output_len`], and
-    /// [`Transcoder::max_finish_output_len`]. It is intended for callers that
-    /// are about to run a full one-shot stream on an instance that is ready
-    /// to start a new logical stream.
+    /// [`Transcoder::max_finish_output_len`]. Each component is independent of
+    /// transient stream state, so the sum is valid before a full one-shot
+    /// stream regardless of how the previous logical stream ended.
     ///
     /// # Parameters
     ///
@@ -272,19 +349,17 @@ pub trait Transcoder {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
-        reset
-            .checked_add(transcode)
-            .and_then(|len| len.checked_add(finish))
-            .ok_or(CapacityError::OutputLengthOverflow)
+        sum_output_bounds(reset, transcode, finish)
     }
 
     /// Returns an upper bound for output units produced by stream finalization.
     ///
-    /// This bound is evaluated against the transcoder's current state. It does
-    /// not include output that may be produced by future
-    /// [`Transcoder::transcode`] calls. Use it before
-    /// [`Transcoder::finish`] when the caller wants to size a final
-    /// output buffer for the already supplied input.
+    /// The bound may depend on immutable transcoder configuration, but it must
+    /// cover final output from every reachable transient stream state. For
+    /// example, an encoder that can emit one checksum byte must return at least
+    /// `1` before input, while accumulating the checksum, and after finishing a
+    /// previous stream. It must not shrink merely because no finish output is
+    /// currently pending.
     ///
     /// # Returns
     ///
@@ -513,10 +588,10 @@ pub trait Transcoder {
     ///
     /// Returns framework errors when the output buffer is too small, when
     /// capacity arithmetic overflows, or when the complete input ends with
-    /// an incomplete value. The method resets the stream before estimating
-    /// the streaming and finish output, so stale pending output from a
-    /// previous logical stream does not affect one-shot capacity checks.
-    /// Returns domain errors from reset, transcode, or finish.
+    /// an incomplete value. The method resets the stream before processing
+    /// input and uses state-independent streaming and finish bounds for the
+    /// remaining capacity check. Returns domain errors from reset, transcode,
+    /// or finish.
     fn transcode_complete_into(
         &mut self,
         input: &[Self::Input],
@@ -529,9 +604,9 @@ pub trait Transcoder {
         let finish_required = self
             .max_finish_output_len()
             .map_err(TranscodeFailure::from)?;
-        let remaining_required = transcode_required
-            .checked_add(finish_required)
-            .ok_or_else(TranscodeFailure::output_length_overflow)?;
+        let remaining_required =
+            add_output_bounds(transcode_required, finish_required)
+                .map_err(TranscodeFailure::from)?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_cursor,
@@ -539,52 +614,12 @@ pub trait Transcoder {
         )?;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
-        if progress.is_complete() && progress.read() < input.len() {
-            let error = TranscodeFailure::trailing_input(
-                progress.read(),
-                input.len() - progress.read(),
-            );
-            return Err(error.into());
-        }
-        debug_assert!(
-            progress
-                .validate(
-                    0,
-                    input.len(),
-                    output_cursor,
-                    output.len().saturating_sub(output_cursor),
-                )
-                .is_ok(),
-            "Transcoder::transcode returned invalid progress",
-        );
-        output_cursor += progress.written();
-        match progress.status() {
-            TranscodeStatus::Complete => {}
-            TranscodeStatus::NeedOutput {
-                output_index,
-                required,
-                available,
-            } => {
-                let error = TranscodeFailure::insufficient_output(
-                    output_index,
-                    required.get(),
-                    available,
-                );
-                return Err(error.into());
-            }
-            TranscodeStatus::NeedInput {
-                input_index,
-                required,
-                available,
-            } => {
-                let error = TranscodeFailure::incomplete_input(
-                    input_index,
-                    required.get(),
-                    available,
-                );
-                return Err(error.into());
-            }
-        }
+        output_cursor += complete_progress_written(
+            progress,
+            input.len(),
+            output_cursor,
+            output.len(),
+        )?;
         output_cursor += self.finish(output, output_cursor)?;
         Ok(output_cursor)
     }

@@ -26,9 +26,11 @@ use super::decode_failure::DecodeFailure;
 /// EOF tail. For decoding, this minimum is the smallest safety precondition
 /// checked callers must satisfy before entering
 /// [`decode`](Self::decode). The maximum is a value-independent upper bound
-/// callers can use for coarse capacity planning. For encoding a known value,
-/// checked callers should reserve the exact [`encode_len`](Self::encode_len)
-/// instead of pessimistically reserving the maximum width.
+/// callers can use for coarse capacity planning. Once encode state is
+/// initialized, checked callers should reserve the exact
+/// [`encode_len`](Self::encode_len) for a known value. Complete-lifecycle
+/// adapters that still need to run [`encode_reset`](Self::encode_reset) must
+/// reserve the maximum first because reset may change the exact width.
 ///
 /// A codec may keep decode-side and encode-side stream state. That state is an
 /// implementation detail owned by the codec. Callers do not snapshot or restore
@@ -106,33 +108,39 @@ pub trait Codec {
     ///
     /// This bound covers only output written by
     /// [`encode_reset`](Self::encode_reset). It does not include hook-owned
-    /// reset output or any ordinary encoded input values. Stateless codecs
-    /// should use the default `0`.
+    /// reset output or any ordinary encoded input values. It must cover every
+    /// reachable pre-reset encode state. Stateless codecs should use the
+    /// default `0`.
     const MAX_ENCODE_RESET_UNITS: usize = 0;
 
     /// The maximum unit count emitted when finishing encode state at EOF.
     ///
     /// This bound covers only output written by
     /// [`encode_finish`](Self::encode_finish). It does not include hook-owned
-    /// finish output. Stateless codecs should use the default `0`. Codecs
-    /// that emit a stream trailer (padding, checksum, or end-of-stream marker)
-    /// should override this with the exact maximum unit count.
+    /// finish output and must cover every reachable encode state, even when the
+    /// current stream has no pending finish output. Stateless codecs should use
+    /// the default `0`. Codecs that emit a stream trailer (padding, checksum,
+    /// or end-of-stream marker) should override this with the exact maximum
+    /// unit count.
     const MAX_ENCODE_FINISH_UNITS: usize = 0;
 
     /// The maximum value count emitted when resetting decode state.
     ///
     /// This bound covers only values written by
     /// [`decode_reset`](Self::decode_reset). It does not include hook-owned
-    /// reset output or values decoded from source units. Stateless codecs
-    /// should use the default `0`. Codecs that emit a stream-start sentinel or
-    /// BOM on reset should override this.
+    /// reset output or values decoded from source units. It must cover every
+    /// reachable pre-reset decode state. Stateless codecs should use the
+    /// default `0`. Codecs that emit a stream-start sentinel or BOM on reset
+    /// should override this.
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     /// The maximum value count emitted when finishing decode state.
     ///
     /// This bound covers only values written by
     /// [`decode_finish`](Self::decode_finish). It does not include hook-owned
-    /// finish output. Stateless codecs should use the default `0`.
+    /// finish output and must cover every reachable decode state, even when the
+    /// current stream has no pending finish output. Stateless codecs should use
+    /// the default `0`.
     const MAX_DECODE_FINISH_VALUES: usize = 0;
 
     /// The maximum value count needed for reusable decode lifecycle storage.
@@ -158,9 +166,11 @@ pub trait Codec {
     /// domain, such as an ASCII codec with `Value = char`, must override this
     /// method.
     ///
-    /// Checked encoder adapters call this method before querying
-    /// [`encode_len`](Self::encode_len) or entering the unsafe
-    /// [`encode`](Self::encode) method. Direct unsafe callers must do the same.
+    /// Checked encoder adapters call this method in the same codec state used
+    /// to query [`encode_len`](Self::encode_len) and enter the unsafe
+    /// [`encode`](Self::encode) method. Complete-lifecycle adapters do so after
+    /// [`encode_reset`](Self::encode_reset). Direct unsafe callers must uphold
+    /// the same ordering.
     ///
     /// # Parameters
     ///

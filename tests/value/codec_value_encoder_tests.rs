@@ -174,11 +174,16 @@ impl Codec for FailingEncodeCodec {
 
     unsafe fn encode(
         &mut self,
-        _value: &u8,
-        _output: &mut [u8],
-        _output_index: usize,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        Err("encode failed")
+        if *value == 7 {
+            Err("encode failed")
+        } else {
+            output[output_index] = *value;
+            Ok(1)
+        }
     }
 }
 
@@ -269,14 +274,18 @@ impl Codec for NonCloneValueCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct ResetFailLifecycleCodec;
+struct ResetFailLifecycleCodec {
+    fail_reset: bool,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("reset failed")]
 struct ResetFailError;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-struct FinishFailLifecycleCodec;
+struct FinishFailLifecycleCodec {
+    fail_finish: bool,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("finish failed")]
@@ -317,10 +326,15 @@ impl Codec for ResetFailLifecycleCodec {
 
     unsafe fn encode_reset(
         &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
+        output: &mut [u8],
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        Err(ResetFailError)
+        if self.fail_reset {
+            Err(ResetFailError)
+        } else {
+            output[output_index] = 0xfe;
+            Ok(1)
+        }
     }
 }
 
@@ -359,10 +373,15 @@ impl Codec for FinishFailLifecycleCodec {
 
     unsafe fn encode_finish(
         &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
+        output: &mut [u8],
+        output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        Err(FinishFailError)
+        if self.fail_finish {
+            Err(FinishFailError)
+        } else {
+            output[output_index] = 0xff;
+            Ok(1)
+        }
     }
 }
 
@@ -400,6 +419,169 @@ impl Codec for OverflowEncodeBoundCodec {
     ) -> Result<usize, Self::EncodeError> {
         output[output_index] = *value;
         Ok(1)
+    }
+}
+
+#[derive(Debug, Default)]
+struct ResetWidthCodec {
+    reset: bool,
+}
+
+impl Codec for ResetWidthCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_UNITS_PER_VALUE: usize = 2;
+
+    fn encode_len(&self, _value: &u8) -> usize {
+        if self.reset { 2 } else { 1 }
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert!(self.reset, "encode must observe reset state");
+        output[output_index] = *value;
+        output[output_index + 1] = value.wrapping_add(1);
+        Ok(2)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = true;
+        Ok(0)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = false;
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct OversizedResetWidthCodec;
+
+impl Codec for OversizedResetWidthCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+
+    fn encode_len(&self, _value: &u8) -> usize {
+        2
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        output[output_index + 1] = value.wrapping_add(1);
+        Ok(2)
+    }
+}
+
+#[derive(Debug, Default)]
+struct ResetDomainCodec {
+    reset: bool,
+}
+
+impl Codec for ResetDomainCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_UNITS_PER_VALUE: usize = 1;
+
+    fn can_encode_value(&self, _value: &u8) -> bool {
+        self.reset
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert!(self.reset, "encode must observe reset domain");
+        output[output_index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = true;
+        Ok(0)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = false;
+        Ok(0)
     }
 }
 
@@ -492,6 +674,43 @@ fn test_codec_value_encoder_resets_stream_state_on_each_call() {
     assert_eq!(vec![0xfe, 42, 2], second);
 }
 
+/// Verifies that complete encoding sizes the value in reset state.
+#[test]
+fn test_codec_value_encoder_queries_width_after_reset() {
+    let mut encoder =
+        CodecValueEncoder::<ResetWidthCodec>::new(ResetWidthCodec::default());
+
+    let output = ValueEncoder::<u8>::encode(&mut encoder, &41)
+        .expect("reset-state width should be reserved");
+
+    assert_eq!(vec![41, 42], output);
+}
+
+/// Verifies that unused reset capacity cannot hide an invalid value bound.
+#[test]
+#[should_panic(
+    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+)]
+fn test_codec_value_encoder_rejects_reset_state_width_beyond_maximum() {
+    let mut encoder = CodecValueEncoder::<OversizedResetWidthCodec>::new(
+        OversizedResetWidthCodec,
+    );
+
+    let _ = ValueEncoder::<u8>::encode(&mut encoder, &41);
+}
+
+/// Verifies that complete encoding checks the value domain after reset.
+#[test]
+fn test_codec_value_encoder_checks_domain_after_reset() {
+    let mut encoder =
+        CodecValueEncoder::<ResetDomainCodec>::new(ResetDomainCodec::default());
+
+    let output = ValueEncoder::<u8>::encode(&mut encoder, &41)
+        .expect("reset-state domain should accept the value");
+
+    assert_eq!(vec![41], output);
+}
+
 #[test]
 fn test_codec_value_encoder_default_and_debug() {
     let encoder = CodecValueEncoder::<PairByteCodec>::default();
@@ -542,6 +761,10 @@ fn test_codec_value_encoder_accepts_non_clone_values() {
 fn test_codec_value_encoder_propagates_encode_error() {
     let mut encoder = CodecValueEncoder::<RejectOddCodec>::new(RejectOddCodec);
 
+    let output = ValueEncoder::<u8>::encode(&mut encoder, &8)
+        .expect("even value should be encoded");
+    assert_eq!(vec![8], output);
+
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("odd value should be rejected");
 
@@ -567,6 +790,12 @@ fn test_codec_value_encoder_truncates_output_after_encode_error() {
         })
     ),);
     assert_eq!(vec![0xaa], output);
+
+    let written = encoder
+        .encode_into(&8, &mut output)
+        .expect("non-failing value should be appended");
+    assert_eq!(1, written);
+    assert_eq!(vec![0xaa, 8], output);
 }
 
 #[test]
@@ -625,23 +854,37 @@ fn test_codec_value_encoder_panics_when_codec_reports_wrong_value_width() {
 #[test]
 fn test_codec_value_encoder_propagates_encode_reset_error() {
     let mut encoder = CodecValueEncoder::<ResetFailLifecycleCodec>::new(
-        ResetFailLifecycleCodec,
+        ResetFailLifecycleCodec { fail_reset: true },
     );
 
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("encode reset failure should propagate");
 
     assert_eq!(TranscodeEncodeError::domain_reset(ResetFailError), error,);
+
+    let mut encoder = CodecValueEncoder::<ResetFailLifecycleCodec>::new(
+        ResetFailLifecycleCodec { fail_reset: false },
+    );
+    let output = ValueEncoder::<u8>::encode(&mut encoder, &7)
+        .expect("successful reset mode should encode");
+    assert_eq!(vec![0xfe, 7], output);
 }
 
 #[test]
 fn test_codec_value_encoder_propagates_encode_finish_error() {
     let mut encoder = CodecValueEncoder::<FinishFailLifecycleCodec>::new(
-        FinishFailLifecycleCodec,
+        FinishFailLifecycleCodec { fail_finish: true },
     );
 
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("encode finish failure should propagate");
 
     assert_eq!(TranscodeEncodeError::domain_finish(FinishFailError), error,);
+
+    let mut encoder = CodecValueEncoder::<FinishFailLifecycleCodec>::new(
+        FinishFailLifecycleCodec { fail_finish: false },
+    );
+    let output = ValueEncoder::<u8>::encode(&mut encoder, &7)
+        .expect("successful finish mode should encode");
+    assert_eq!(vec![7, 0xff], output);
 }

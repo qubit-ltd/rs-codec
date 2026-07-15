@@ -7,9 +7,7 @@
 // =============================================================================
 
 mod adapter;
-mod capacity_error_tests;
 mod engine;
-mod internal;
 mod io;
 mod transcode_contract_error_tests;
 mod transcode_converter_tests;

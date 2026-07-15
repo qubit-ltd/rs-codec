@@ -92,7 +92,7 @@ where
         self.engine.max_transcode_output_len(input_len)
     }
 
-    /// Returns the maximum values emitted by finishing internal state.
+    /// Returns the global maximum values emitted by finishing internal state.
     ///
     /// # Returns
     ///
@@ -103,7 +103,7 @@ where
         self.engine.max_finish_output_len()
     }
 
-    /// Returns the maximum values emitted when resetting internal state.
+    /// Returns the global maximum values emitted when resetting internal state.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_reset_output_len()

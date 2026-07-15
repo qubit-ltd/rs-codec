@@ -38,6 +38,34 @@ use crate::{
     Transcoder,
 };
 
+/// Adds two independent target-output capacity bounds.
+fn add_convert_output_bounds(
+    first: usize,
+    second: usize,
+) -> Result<usize, CapacityError> {
+    first
+        .checked_add(second)
+        .ok_or(CapacityError::OutputLengthOverflow)
+}
+
+/// Adds three independent target-output capacity bounds.
+fn sum_convert_output_bounds(
+    first: usize,
+    second: usize,
+    third: usize,
+) -> Result<usize, CapacityError> {
+    let partial = add_convert_output_bounds(first, second)?;
+    add_convert_output_bounds(partial, third)
+}
+
+/// Asserts that a pre-reserved conversion phase did not need more output.
+fn assert_reserved_output_drained(
+    progress: Option<TranscodeProgress>,
+    message: &'static str,
+) {
+    assert!(progress.is_none(), "{message}");
+}
+
 /// Reusable buffered conversion engine for codec-backed converters.
 ///
 /// The engine owns reusable buffered decode and encode engines. It keeps
@@ -345,10 +373,11 @@ where
 
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
-    /// The bound sums three parts: any retained pending value, the maximum
-    /// decoded values from the source side, and the maximum target units for
-    /// those values on the encode side. It covers only the streaming convert
-    /// phase. Downstream converters must use this engine-level API for capacity
+    /// The bound sums three parts: one possible retained pending value, the
+    /// maximum decoded values from the source side, and the maximum target
+    /// units for those values on the encode side. It covers only the streaming
+    /// convert phase and remains valid even when no value is currently pending.
+    /// Downstream converters must use this engine-level API for capacity
     /// planning instead of recomputing the bound from the source or target
     /// [`Codec`] constants.
     ///
@@ -365,18 +394,17 @@ where
         &self,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        let pending_units = self.pending_output_len()?;
+        let pending_units = self.encode_engine.max_transcode_output_len(1)?;
         let decoded_values =
             self.decode_engine.max_transcode_output_len(input_len)?;
         let converted_units = self
             .encode_engine
             .max_transcode_output_len(decoded_values)?;
-        converted_units
-            .checked_add(pending_units)
-            .ok_or(CapacityError::OutputLengthOverflow)
+        add_convert_output_bounds(converted_units, pending_units)
     }
 
-    /// Returns the maximum target units emitted when resetting stream state.
+    /// Returns the global maximum target units emitted when resetting stream
+    /// state.
     ///
     /// Covers decode-side reset values (encoded to target units) plus
     /// encode-side reset units. Most codecs are stateless and return `0`
@@ -393,15 +421,15 @@ where
             .encode_engine
             .max_transcode_output_len(D::MAX_DECODE_RESET_VALUES)?;
         let encode_reset_units = E::MAX_ENCODE_RESET_UNITS;
-        decode_reset_units
-            .checked_add(encode_reset_units)
-            .ok_or(CapacityError::OutputLengthOverflow)
+        add_convert_output_bounds(decode_reset_units, encode_reset_units)
     }
 
     /// Returns the maximum target units emitted by finishing retained state.
     ///
-    /// The bound covers a retained pending value, decode-side finish values
-    /// (encoded to target units), and encode-side finish units.
+    /// The bound covers one possible retained pending value, the global
+    /// decode-side finish-value bound (encoded to target units), and the
+    /// global encode-side finish-unit bound. It is independent of whether a
+    /// pending value currently exists.
     ///
     /// # Returns
     ///
@@ -409,7 +437,7 @@ where
     /// bound, or a capacity error on arithmetic overflow.
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        let pending_units = self.pending_output_len()?;
+        let pending_units = self.encode_engine.max_transcode_output_len(1)?;
         let decoder_finish_values =
             self.decode_engine.max_finish_output_len()?;
         let decoder_finish_units = self
@@ -417,23 +445,51 @@ where
             .max_transcode_output_len(decoder_finish_values)?;
         let encoder_finish_units =
             self.encode_engine.max_finish_output_len()?;
-        let pending_and_decoder = pending_units
-            .checked_add(decoder_finish_units)
-            .ok_or(CapacityError::OutputLengthOverflow)?;
-        pending_and_decoder
-            .checked_add(encoder_finish_units)
-            .ok_or(CapacityError::OutputLengthOverflow)
+        sum_convert_output_bounds(
+            pending_units,
+            decoder_finish_units,
+            encoder_finish_units,
+        )
+    }
+
+    /// Returns the finish-output bound for the converter's current pending
+    /// state.
+    ///
+    /// Public capacity methods expose global bounds across every transient
+    /// state. A concrete finish call can use this narrower checked bound while
+    /// still relying on global component bounds for decoder and encoder
+    /// finalization.
+    ///
+    /// # Returns
+    ///
+    /// Returns the current finish-output bound, or a capacity error on
+    /// arithmetic overflow.
+    fn current_finish_output_len(&self) -> Result<usize, CapacityError> {
+        let pending_units =
+            self.pending.current_output_len(&self.encode_engine)?;
+        let decoder_finish_values =
+            self.decode_engine.max_finish_output_len()?;
+        let decoder_finish_units = self
+            .encode_engine
+            .max_transcode_output_len(decoder_finish_values)?;
+        let encoder_finish_units =
+            self.encode_engine.max_finish_output_len()?;
+        sum_convert_output_bounds(
+            pending_units,
+            decoder_finish_units,
+            encoder_finish_units,
+        )
     }
 
     /// Returns the maximum target units needed by a complete one-shot
     /// conversion.
     ///
     /// The returned bound covers conversion reset output, the streaming convert
-    /// phase for `input_len` source units, and finish output. Higher-level
-    /// complete conversion helpers should use this engine-level bound instead
-    /// of recomputing capacity from the source or target codec constants,
-    /// because decode and encode hooks may change streaming or finish
-    /// output.
+    /// phase for `input_len` source units, and finish output. Its components
+    /// are global across transient state. Higher-level complete conversion
+    /// helpers should use this engine-level bound instead of recomputing
+    /// capacity from the source or target codec constants, because decode
+    /// and encode hooks may change streaming or finish output.
     ///
     /// # Parameters
     ///
@@ -451,18 +507,15 @@ where
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
-        reset
-            .checked_add(transcode)
-            .and_then(|len| len.checked_add(finish))
-            .ok_or(CapacityError::OutputLengthOverflow)
+        sum_convert_output_bounds(reset, transcode, finish)
     }
 
     /// Clears retained conversion state, runs before-reset hooks, and emits
     /// stream-start encode output.
     ///
-    /// Reset clears any retained pending value, drains decode-side reset
-    /// values through the target encoder, then emits encode-side reset units.
-    /// The caller must provide enough output capacity for
+    /// Reset clears any retained pending value, resets the target encoder, then
+    /// drains decode-side reset values through that reset encoder state. The
+    /// caller must provide enough output capacity for
     /// [`Self::max_reset_output_len`].
     ///
     /// # Parameters
@@ -481,8 +534,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics in debug builds when decode-reset values cannot be encoded
-    /// within the capacity reserved by [`Self::max_reset_output_len`].
+    /// Panics when decode-reset values cannot be encoded within the capacity
+    /// reserved by [`Self::max_reset_output_len`].
     pub fn reset(
         &mut self,
         output: &mut [E::Unit],
@@ -501,20 +554,18 @@ where
 
         self.pending.clear();
 
-        // Source-side reset may emit stream-start values (such as a BOM) that
-        // must be piped through the target encoder before any encoder-owned
-        // reset output. `max_reset_output_len` already reserves space for both
-        // halves of the pipeline, so encode_pending should never report
-        // `NeedOutput` here.
+        // Reset the target first because source-side reset values must be
+        // encoded under the target's new-stream state. The reset bound reserves
+        // space for both target-owned output and the encoded source-reset
+        // values, so encode_pending should never report `NeedOutput` here.
         let empty_input: &[D::Unit] = &[];
         let mut state = ConvertState::new(empty_input, 0, output, output_index);
-        self.drain_decoder_reset(&mut state)?;
-
         let output_cursor = state.output_cursor();
         let encoder_written = self
             .encode_engine
             .reset(state.output_mut(), output_cursor)?;
         state.advance_output(encoder_written);
+        self.drain_decoder_reset(&mut state)?;
         Ok(state.written())
     }
 
@@ -618,9 +669,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics in debug builds when a retained pending value or decode-finish
-    /// value cannot be encoded within the capacity reserved by
-    /// [`Self::max_finish_output_len`].
+    /// Panics when a retained pending value or decode-finish value cannot be
+    /// encoded within the planned finish capacity.
     pub fn finish(
         &mut self,
         output: &mut [E::Unit],
@@ -630,7 +680,7 @@ where
         D::Value: Default,
     {
         self.lifecycle.on_finish_attempt();
-        let required = self.max_finish_output_len()?;
+        let required = self.current_finish_output_len()?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
@@ -641,11 +691,11 @@ where
         let mut state = ConvertState::new(empty_input, 0, output, output_index);
         // Finish keeps the same priority as transcode: output any retained
         // decoded value before asking source-side hooks for final values.
-        if self.drain_pending(&mut state)?.is_some() {
-            unreachable!(
-                "converter finish bound must reserve space for pending values"
-            );
-        }
+        let progress = self.drain_pending(&mut state)?;
+        assert_reserved_output_drained(
+            progress,
+            "converter finish bound must reserve space for pending values",
+        );
 
         // Source-side finish may emit one or more final values. Drain them into
         // the target encoder before finishing target-side hook state.
@@ -740,11 +790,11 @@ where
         let written = self.decode_engine.reset(&mut reset_values, 0)?;
         for value in reset_values.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
-            if self.encode_pending(pending, state)?.is_some() {
-                unreachable!(
-                    "converter reset bound must reserve space for decode reset values"
-                );
-            }
+            let progress = self.encode_pending(pending, state)?;
+            assert_reserved_output_drained(
+                progress,
+                "converter reset bound must reserve space for decode reset values",
+            );
         }
         Ok(())
     }
@@ -786,18 +836,6 @@ where
             return Ok(None);
         };
         self.encode_pending(pending, state)
-    }
-
-    /// Returns the output bound for the retained pending value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the maximum target units needed to encode the pending value,
-    /// or `0` when no value is retained. Returns a capacity error when hook
-    /// planning overflows.
-    #[inline(always)]
-    fn pending_output_len(&self) -> Result<usize, CapacityError> {
-        self.pending.max_transcode_output_len(&self.encode_engine)
     }
 
     /// Writes a retained decoded value before new input is consumed.
@@ -875,11 +913,11 @@ where
         let written = self.decode_engine.finish(&mut decoded, 0)?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
-            if self.encode_pending(pending, state)?.is_some() {
-                unreachable!(
-                    "converter finish bound must reserve space for decode finish values"
-                );
-            }
+            let progress = self.encode_pending(pending, state)?;
+            assert_reserved_output_drained(
+                progress,
+                "converter finish bound must reserve space for decode finish values",
+            );
         }
         Ok(())
     }

@@ -16,7 +16,6 @@ use crate::{
     TranscodeEncodeErrorOf,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::{
-        complete_encode_len,
         encode_complete_value_into_reserved,
         max_complete_encode_units,
     },
@@ -92,8 +91,9 @@ where
     /// # Panics
     ///
     /// Panics when the wrapped codec reports more reset or finish output than
-    /// its declared bounds, or a value width different from
-    /// [`Codec::encode_len`].
+    /// its declared bounds, when [`Codec::encode_len`] exceeds
+    /// [`Codec::MAX_UNITS_PER_VALUE`], or when encoding writes a different
+    /// value width than [`Codec::encode_len`].
     pub fn encode_into(
         &mut self,
         input: &C::Value,
@@ -102,7 +102,7 @@ where
     where
         C::Unit: Default,
     {
-        let units = complete_encode_len(&self.codec, input)?;
+        let units = max_complete_encode_units::<C>()?;
         let original_len = output.len();
         let target_len = original_len
             .checked_add(units)

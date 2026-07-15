@@ -242,8 +242,9 @@ where
     ///
     /// This bound covers only the streaming encode phase. It is delegated to
     /// [`TranscodeEncodeHooks::max_transcode_output_len`], so it includes hook
-    /// policy. Downstream encoders must use this engine-level API for capacity
-    /// planning instead of recomputing the bound from [`Codec`] constants.
+    /// policy and is valid for every reachable transient codec and hook state.
+    /// Downstream encoders must use this engine-level API for capacity planning
+    /// instead of recomputing the bound from [`Codec`] constants.
     ///
     /// # Parameters
     ///
@@ -262,7 +263,7 @@ where
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
-    /// Gets the maximum output units emitted by stream reset.
+    /// Gets the global maximum output units emitted by stream reset.
     ///
     /// # Returns
     ///
@@ -273,13 +274,15 @@ where
         Ok(C::MAX_ENCODE_RESET_UNITS)
     }
 
-    /// Gets the maximum output units emitted by finishing codec and hook state.
+    /// Gets the global maximum output units emitted by finishing codec and hook
+    /// state.
     ///
     /// Returns the sum of [`Codec::MAX_ENCODE_FINISH_UNITS`] and the
     /// hook-provided final-output bound. The codec finish portion covers units
     /// written by [`Codec::encode_finish`]; hook implementations must not
     /// include that portion in
-    /// [`TranscodeEncodeHooks::max_finish_output_len`].
+    /// [`TranscodeEncodeHooks::max_finish_output_len`]. Both component bounds
+    /// cover every reachable transient state.
     ///
     /// # Returns
     ///
@@ -296,10 +299,10 @@ where
     /// stream.
     ///
     /// The returned bound covers reset output, the streaming encode phase for
-    /// `input_len` values, and finish output. Higher-level complete encode
-    /// helpers should use this engine-level bound instead of recomputing
-    /// capacity from [`Codec`] constants, because hook policy may change
-    /// streaming or finish output.
+    /// `input_len` values, and finish output. Its components are global across
+    /// transient state. Higher-level complete encode helpers should use this
+    /// engine-level bound instead of recomputing capacity from [`Codec`]
+    /// constants, because hook policy may change streaming or finish output.
     ///
     /// # Parameters
     ///

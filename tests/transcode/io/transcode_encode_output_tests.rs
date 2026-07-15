@@ -53,45 +53,6 @@ fn domain<Value>(
 }
 
 #[derive(Debug, Default)]
-struct FixedPairCodec;
-
-impl Codec for FixedPairCodec {
-    type Value = u32;
-    type Unit = u16;
-    type DecodeError = PairEncodeError;
-    type EncodeError = PairEncodeError;
-
-    const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u16],
-        input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
-        let available = input.len().saturating_sub(input_index);
-        if available < 2 {
-            return Err(DecodeFailure::incomplete(crate::nz(2)));
-        }
-        let high = input[input_index] as u32;
-        let low = input[input_index + 1] as u32;
-        Ok(((high << 16) | low, crate::nz(2)))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        value: &u32,
-        output: &mut [u16],
-        output_index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        output[output_index] = (value >> 16) as u16;
-        output[output_index + 1] = *value as u16;
-        Ok(2)
-    }
-}
-
-#[derive(Debug, Default)]
 struct CompleteEncodeLifecycleCodec {
     state: u8,
 }
@@ -148,6 +109,70 @@ impl Codec for CompleteEncodeLifecycleCodec {
         output[output_index] = 0xbbbb;
         self.state = 0;
         Ok(1)
+    }
+}
+
+#[derive(Debug, Default)]
+struct ResetWidthCodec {
+    pre_reset_queries: core::cell::Cell<usize>,
+    reset: bool,
+}
+
+impl Codec for ResetWidthCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairEncodeError;
+    type EncodeError = PairEncodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_UNITS_PER_VALUE: usize = 2;
+
+    fn encode_len(&self, _value: &u32) -> usize {
+        if self.reset {
+            2
+        } else {
+            self.pre_reset_queries.set(self.pre_reset_queries.get() + 1);
+            1
+        }
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        Ok((u32::from(input[input_index]), crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u32,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        assert!(self.reset, "encode must observe reset state");
+        output[output_index] = *value as u16;
+        output[output_index + 1] = (*value >> 16) as u16;
+        Ok(2)
+    }
+
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = true;
+        Ok(0)
+    }
+
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.reset = false;
+        Ok(0)
     }
 }
 
@@ -253,6 +278,7 @@ impl Transcoder for PairEncoder {
 #[derive(Debug, Default)]
 struct FinishEncoder {
     finished: bool,
+    fail_finish: bool,
 }
 
 impl Transcoder for FinishEncoder {
@@ -268,7 +294,7 @@ impl Transcoder for FinishEncoder {
     }
 
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(usize::from(!self.finished))
+        Ok(1)
     }
 
     noop_reset!(u16);
@@ -308,6 +334,9 @@ impl Transcoder for FinishEncoder {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
+        if self.fail_finish {
+            return Err(domain(PairEncodeError::CapacityOverflow));
+        }
         if self.finished {
             return Ok(0);
         }
@@ -463,6 +492,8 @@ impl Transcoder for ZeroWidthFailingFinishEncoder {
 struct UnitOutput {
     units: Vec<u16>,
     flushed: bool,
+    fail_write: bool,
+    fail_flush: bool,
 }
 
 impl Output for UnitOutput {
@@ -474,11 +505,23 @@ impl Output for UnitOutput {
         index: usize,
         count: usize,
     ) -> std::io::Result<usize> {
+        if self.fail_write {
+            return Err(Error::new(
+                ErrorKind::BrokenPipe,
+                "output write failure",
+            ));
+        }
         self.units.extend_from_slice(&input[index..index + count]);
         Ok(count)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
+        if self.fail_flush {
+            return Err(Error::new(
+                ErrorKind::BrokenPipe,
+                "output flush failure",
+            ));
+        }
         self.flushed = true;
         Ok(())
     }
@@ -524,7 +567,6 @@ impl Transcoder for CapacityBoundEncoder {
 
 #[derive(Clone, Copy, Debug)]
 enum FinishFailure {
-    Capacity,
     InvalidIndex,
     InsufficientOutput,
 }
@@ -572,9 +614,6 @@ impl Transcoder for FailingFinishEncoder {
         _output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<PairEncodeError, ()>> {
         match self.failure {
-            FinishFailure::Capacity => {
-                Err(domain(PairEncodeError::CapacityOverflow))
-            }
             FinishFailure::InvalidIndex => {
                 Err(domain(PairEncodeError::InvalidOutputIndex {
                     index: 4,
@@ -1371,11 +1410,13 @@ fn test_buffered_encode_output_finish_writes_and_flushes() {
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
 
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
     finish_with(&mut output, &mut encoder)
         .expect("finish should write trailer and flush");
 
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
     assert!(output.inner().flushed);
+    assert_eq!(Ok(1), encoder.max_finish_output_len());
     output.inner_mut().flushed = false;
     output
         .flush()
@@ -1410,8 +1451,17 @@ fn test_buffered_encode_output_maps_finish_capacity_bound_error() {
 
 #[test]
 fn test_buffered_encode_output_maps_finish_failure_variants() {
+    let output = UnitOutput::default();
+    let mut encoder = FinishEncoder {
+        fail_finish: true,
+        ..FinishEncoder::default()
+    };
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
+    let error = finish_with(&mut output, &mut encoder)
+        .expect_err("finish capacity failure should be mapped to I/O");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+
     for failure in [
-        FinishFailure::Capacity,
         FinishFailure::InvalidIndex,
         FinishFailure::InsufficientOutput,
     ] {
@@ -1580,7 +1630,6 @@ enum ScriptedEncodeMode {
     Reject,
     EncodeError,
     FinishError,
-    LenOverflow,
     ExactLenExceedsBound,
 }
 
@@ -1612,7 +1661,6 @@ impl Codec for ScriptedEncodeCodec {
 
     fn encode_len(&self, _value: &u32) -> usize {
         match self.mode {
-            ScriptedEncodeMode::LenOverflow => usize::MAX,
             ScriptedEncodeMode::ExactLenExceedsBound => 4,
             _ => 2,
         }
@@ -1716,6 +1764,22 @@ fn test_buffered_encode_output_write_encoded_runs_complete_lifecycle() {
     );
 }
 
+/// Verifies that buffered complete encoding sizes values after codec reset.
+#[test]
+fn test_write_encoded_with_queries_width_after_reset() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 2);
+    let mut codec = ResetWidthCodec::default();
+
+    output
+        .write_encoded_with(&mut codec, &0x1234_5678, map_codec_error)
+        .expect("reset-state width should fit the reserved codec bound");
+    output.flush().expect("encoded units should flush");
+
+    assert_eq!(&[0x5678, 0x1234], output.inner().units.as_slice());
+    assert_eq!(0, codec.pre_reset_queries.get());
+}
+
 #[test]
 fn test_buffered_encode_output_write_encoded_maps_domain_error() {
     let mut output =
@@ -1788,46 +1852,6 @@ impl Codec for OverflowEncodeBoundCodec {
 }
 
 #[derive(Debug)]
-struct BrokenPipeOutput;
-
-impl Output for BrokenPipeOutput {
-    type Item = u16;
-
-    unsafe fn write_unchecked(
-        &mut self,
-        _input: &[u16],
-        _index: usize,
-        _count: usize,
-    ) -> std::io::Result<usize> {
-        Err(Error::new(ErrorKind::BrokenPipe, "output failure"))
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Err(Error::new(ErrorKind::BrokenPipe, "output flush failure"))
-    }
-}
-
-#[derive(Debug)]
-struct WriteErrorOutput;
-
-impl Output for WriteErrorOutput {
-    type Item = u16;
-
-    unsafe fn write_unchecked(
-        &mut self,
-        _input: &[u16],
-        _index: usize,
-        _count: usize,
-    ) -> std::io::Result<usize> {
-        Err(Error::new(ErrorKind::BrokenPipe, "output write failure"))
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
 struct BrokenPipeByteOutput;
 
 impl Output for BrokenPipeByteOutput {
@@ -1865,56 +1889,43 @@ fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_maps_framework_error_locally() {
-    let mut output =
-        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
-    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::LenOverflow);
-
-    let error = output
-        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
-        .expect_err("encode length overflow should be mapped locally");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("output length arithmetic overflow", error.to_string());
-}
-
-#[test]
-fn test_buffered_encode_output_write_encoded_rechecks_spare_capacity() {
+#[should_panic(
+    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+)]
+fn test_buffered_encode_output_write_encoded_rejects_width_beyond_bound() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
     let mut codec =
         ScriptedEncodeCodec::new(ScriptedEncodeMode::ExactLenExceedsBound);
 
-    let error = output
-        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
-        .expect_err("spare capacity mismatch should be mapped locally");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!(
-        "insufficient output at index 0: required 6 units, available 4",
-        error.to_string(),
-    );
+    let _ =
+        output.write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error);
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_maps_scratch_framework_error_locally()
+#[should_panic(
+    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+)]
+fn test_buffered_encode_output_write_encoded_rejects_width_beyond_bound_via_scratch()
  {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
-    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::LenOverflow);
+    let mut codec =
+        ScriptedEncodeCodec::new(ScriptedEncodeMode::ExactLenExceedsBound);
 
-    let error = output
-        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
-        .expect_err("scratch encode length overflow should be mapped locally");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("output length arithmetic overflow", error.to_string());
+    let _ =
+        output.write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error);
 }
 
 #[test]
 fn test_buffered_encode_output_write_encoded_propagates_non_capacity_spare_errors()
  {
-    let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeOutput, 0);
+    let inner = UnitOutput {
+        fail_write: true,
+        fail_flush: true,
+        ..UnitOutput::default()
+    };
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 0);
     let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
@@ -1926,7 +1937,11 @@ fn test_buffered_encode_output_write_encoded_propagates_non_capacity_spare_error
 
 #[test]
 fn test_buffered_encode_output_write_encoded_scratch_propagates_flush_errors() {
-    let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeOutput, 0);
+    let inner = UnitOutput {
+        fail_flush: true,
+        ..UnitOutput::default()
+    };
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 0);
     let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
@@ -1938,7 +1953,11 @@ fn test_buffered_encode_output_write_encoded_scratch_propagates_flush_errors() {
 
 #[test]
 fn test_buffered_encode_output_write_encoded_scratch_propagates_write_errors() {
-    let mut output = TranscodeEncodeOutput::with_capacity(WriteErrorOutput, 0);
+    let inner = UnitOutput {
+        fail_write: true,
+        ..UnitOutput::default()
+    };
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 0);
     let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     let error = output
@@ -1977,24 +1996,6 @@ fn test_buffered_encode_output_write_encoded_maps_finish_error_via_scratch() {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_rechecks_scratch_capacity() {
-    let mut output =
-        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
-    let mut codec =
-        ScriptedEncodeCodec::new(ScriptedEncodeMode::ExactLenExceedsBound);
-
-    let error = output
-        .write_encoded_with(&mut codec, &0x0001_0002, panic_codec_error)
-        .expect_err("scratch capacity mismatch should be mapped locally");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!(
-        "insufficient output at index 0: required 6 units, available 4",
-        error.to_string(),
-    );
-}
-
-#[test]
 fn test_buffered_encode_output_write_all_propagates_write_errors() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(BrokenPipeByteOutput, 1);
@@ -2008,13 +2009,18 @@ fn test_buffered_encode_output_write_all_propagates_write_errors() {
 #[test]
 fn test_buffered_encode_output_write_encoded_propagates_ensure_spare_flush_errors()
  {
-    let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeOutput, 2);
-    let mut codec = FixedPairCodec;
+    let inner = UnitOutput {
+        fail_write: true,
+        fail_flush: true,
+        ..UnitOutput::default()
+    };
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 4);
+    let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
 
     output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
-        .expect("first value should fill the spare buffer");
-    assert_eq!(0, output.spare_capacity());
+        .expect("first value should leave less than one complete bound");
+    assert_eq!(2, output.spare_capacity());
 
     let error = output
         .write_encoded_with(&mut codec, &0x0003_0004, map_codec_error)

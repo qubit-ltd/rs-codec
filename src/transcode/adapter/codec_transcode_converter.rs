@@ -107,11 +107,13 @@ where
         self.engine.max_transcode_output_len(input_len)
     }
 
-    /// Returns the maximum target units emitted by finishing internal state.
+    /// Returns the global maximum target units emitted by finishing internal
+    /// state.
     ///
     /// # Returns
     ///
-    /// Returns a conservative upper bound for remaining converter-final output.
+    /// Returns a conservative upper bound valid for every reachable converter
+    /// state.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
@@ -125,8 +127,8 @@ where
         self.engine.max_reset_output_len()
     }
 
-    /// Clears retained pending output and hook state and emits stream-start
-    /// encode output.
+    /// Clears retained pending output, resets target state, and then encodes
+    /// source-side reset values.
     ///
     /// `D::Value: Default` is required so the engine can allocate scratch
     /// storage for any stream-start values the source decoder emits through
@@ -242,7 +244,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns a conservative upper bound for remaining converter-final output.
+    /// Returns a conservative upper bound valid for every reachable converter
+    /// state.
     #[inline(always)]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_finish_output_len(self)

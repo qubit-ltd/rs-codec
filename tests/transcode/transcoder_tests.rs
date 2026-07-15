@@ -159,7 +159,7 @@ impl Transcoder for FinishingTranscoder {
     }
 
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(2 - self.suffix_index)
+        Ok(2)
     }
 
     fn reset(
@@ -462,6 +462,7 @@ enum FailurePoint {
     ResetBound,
     TranscodeBound,
     FinishBound,
+    SumBound,
     Reset,
     Transcode,
     Finish,
@@ -479,6 +480,8 @@ impl Transcoder for FailingTranscoder {
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         if matches!(self.failure, FailurePoint::ResetBound) {
             Err(CapacityError::OutputLengthOverflow)
+        } else if matches!(self.failure, FailurePoint::SumBound) {
+            Ok(usize::MAX)
         } else {
             Ok(0)
         }
@@ -609,12 +612,30 @@ fn test_transcoder_total_output_len_sums_reset_transcode_and_finish() {
     assert_eq!(Ok(5), transcoder.max_total_output_len(3));
 }
 
+/// Verifies that capacity bounds do not shrink with transient stream state.
+#[test]
+fn test_transcoder_capacity_bounds_are_global() {
+    let mut transcoder = FinishingTranscoder::default();
+    let mut output = [0_u8; 2];
+
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
+    assert_eq!(
+        2,
+        transcoder
+            .finish(&mut output, 0)
+            .expect("finish should fit")
+    );
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
+    assert_eq!(Ok(5), transcoder.max_total_output_len(3));
+}
+
 #[test]
 fn test_transcoder_total_output_len_reports_component_errors() {
     for failure in [
         FailurePoint::ResetBound,
         FailurePoint::TranscodeBound,
         FailurePoint::FinishBound,
+        FailurePoint::SumBound,
     ] {
         let transcoder = FailingTranscoder { failure };
 
@@ -636,7 +657,7 @@ fn test_transcoder_transcode_complete_into_runs_reset_transcode_and_finish() {
 
     assert_eq!(5, written);
     assert_eq!(b"abc!\n", &output);
-    assert_eq!(Ok(0), transcoder.max_finish_output_len());
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
 }
 
 #[test]
@@ -725,6 +746,11 @@ fn test_transcoder_transcode_complete_into_reports_remaining_bound_overflow() {
     let mut transcoder = OverflowBoundTranscoder;
     let mut output = [];
 
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        transcoder.max_total_output_len(0),
+    );
+
     let error = transcoder
         .transcode_complete_into(b"", &mut output)
         .expect_err("transcode plus finish bound overflows");
@@ -778,7 +804,7 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
 
     assert_eq!(2, written);
     assert_eq!(*b"!\n", output);
-    assert_eq!(Ok(0), transcoder.max_finish_output_len());
+    assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
     transcoder
         .reset(&mut output, 0)

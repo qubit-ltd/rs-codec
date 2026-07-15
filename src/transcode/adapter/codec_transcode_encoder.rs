@@ -87,7 +87,7 @@ where
         self.engine.max_transcode_output_len(input_len)
     }
 
-    /// Gets the maximum units emitted when resetting internal state.
+    /// Gets the global maximum units emitted when resetting internal state.
     ///
     /// # Returns
     ///
@@ -97,7 +97,7 @@ where
         self.engine.max_reset_output_len()
     }
 
-    /// Gets the maximum units emitted by finishing internal state.
+    /// Gets the global maximum units emitted by finishing internal state.
     ///
     /// # Returns
     ///

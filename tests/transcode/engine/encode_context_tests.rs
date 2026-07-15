@@ -38,6 +38,3 @@ fn test_encode_context_getters_and_parts() {
     assert_eq!(1, context_output_index);
     assert_eq!([1, 2, 3], context_output);
 }
-
-#[test]
-fn test_module_compiles() {}

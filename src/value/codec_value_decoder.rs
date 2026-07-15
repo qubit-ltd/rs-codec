@@ -105,21 +105,15 @@ where
         C::Value: Default,
     {
         let scratch_cap = decode_lifecycle_scratch_len::<C>();
-        let value = if scratch_cap == 0 {
-            decode_exact_complete_value(&mut self.codec, input, &mut [])?
-        } else {
-            if self.decode_lifecycle_scratch.len() < scratch_cap {
-                self.decode_lifecycle_scratch
-                    .resize_with(scratch_cap, C::Value::default);
-            }
-            decode_exact_complete_value(
-                &mut self.codec,
-                input,
-                &mut self.decode_lifecycle_scratch,
-            )?
-        };
-
-        Ok(value)
+        if self.decode_lifecycle_scratch.len() < scratch_cap {
+            self.decode_lifecycle_scratch
+                .resize_with(scratch_cap, C::Value::default);
+        }
+        decode_exact_complete_value(
+            &mut self.codec,
+            input,
+            &mut self.decode_lifecycle_scratch,
+        )
     }
 }
 

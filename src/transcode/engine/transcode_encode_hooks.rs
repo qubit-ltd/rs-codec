@@ -115,6 +115,9 @@ where
     /// This bound covers only the streaming encode phase driven by
     /// [`crate::engine::TranscodeEncodeEngine::transcode`]. It must not include
     /// codec reset output, codec finish output, or hook finish output.
+    /// It may depend on immutable hook and codec configuration, but it must
+    /// cover every reachable transient hook and codec state, including the
+    /// maximum hook-owned pending output that may be drained during transcode.
     ///
     /// The default implementation multiplies `input_len` by
     /// [`Codec::MAX_UNITS_PER_VALUE`]. This bound is valid for direct encoding,
@@ -148,9 +151,10 @@ where
 
     /// Returns an upper bound for units emitted by finishing hook-owned state.
     ///
-    /// `finish` never receives more input values. Implementations must only
-    /// report output derived from hook-owned state that remains after the
-    /// caller has supplied all input.
+    /// `finish` never receives more input values. Implementations must report
+    /// the maximum output that could be derived from hook-owned state in any
+    /// reachable transient stream state, not only what happens to remain when
+    /// this method is called.
     ///
     /// The default implementation returns `0`. Override it when
     /// [`finish_hooks`](Self::finish_hooks) can write trailers, checksums,
@@ -164,7 +168,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the finite final-output upper bound.
+    /// Returns the finite, transient-state-independent final-output upper
+    /// bound.
     #[inline(always)]
     #[must_use]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
