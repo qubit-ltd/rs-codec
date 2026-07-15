@@ -243,11 +243,8 @@ impl TranscodeFailure {
         required: usize,
     ) -> Result<(), Self> {
         Self::ensure_output_index(output_len, output_index)?;
-        if !qubit_io::UncheckedSlice::range_fits(
-            output_len,
-            output_index,
-            range_len,
-        ) {
+        let available = output_len - output_index;
+        if range_len > available {
             return Err(Self::invalid_output_index(output_index, output_len));
         }
         if range_len < required {

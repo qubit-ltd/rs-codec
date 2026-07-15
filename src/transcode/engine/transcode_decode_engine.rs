@@ -9,8 +9,6 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_io::UncheckedSlice;
-
 use super::super::internal::{
     decode_state::DecodeState,
     lifecycle::LifecycleGuard,
@@ -479,7 +477,7 @@ where
                     // SAFETY: `needs_output()` returned false, so the output
                     // cursor points at a writable initialized slot.
                     unsafe {
-                        UncheckedSlice::write(output, output_index, value);
+                        *output.get_unchecked_mut(output_index) = value;
                     }
                 })?;
             if let Some(progress) = state.apply_decode_outcome(outcome) {

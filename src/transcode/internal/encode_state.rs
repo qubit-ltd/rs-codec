@@ -9,8 +9,6 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_io::UncheckedSlice;
-
 use super::super::engine::{
     EncodeContext,
     EncodeOutcome,
@@ -78,7 +76,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         let output_index = self.state.output_cursor();
         let (input, output) = self.state.input_output_mut();
         // SAFETY: Guaranteed by the caller.
-        let value = unsafe { UncheckedSlice::get(input, input_index) };
+        let value = unsafe { input.get_unchecked(input_index) };
         EncodeContext::new(value, input_index, output, output_index)
     }
 
