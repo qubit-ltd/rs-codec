@@ -364,11 +364,9 @@ impl Transcoder for PartialCompleteTranscoder {
     }
 }
 
-#[cfg(debug_assertions)]
 #[derive(Default)]
 struct OverreportingCompleteTranscoder;
 
-#[cfg(debug_assertions)]
 impl Transcoder for OverreportingCompleteTranscoder {
     type Input = u8;
     type Output = u8;
@@ -731,10 +729,9 @@ fn test_transcoder_transcode_complete_into_reports_trailing_input() {
     assert_eq!(TranscodeDecodeError::trailing_input(1, 1), error,);
 }
 
-#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "Transcoder::transcode returned invalid progress")]
-fn test_transcoder_transcode_complete_into_validates_progress_in_debug() {
+fn test_transcoder_transcode_complete_into_validates_progress() {
     let mut transcoder = OverreportingCompleteTranscoder;
     let mut output = [];
 

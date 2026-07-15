@@ -29,7 +29,7 @@ fn complete_progress_written(
             input_len - progress.read(),
         ));
     }
-    debug_assert!(
+    assert!(
         progress
             .validate(
                 0,
@@ -197,7 +197,7 @@ fn sum_output_bounds(
 ///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
 ///                 input_index: input_index + read,
-///                 required: qubit_io::nz!(2),
+///                 required: NonZeroUsize::new(2).expect("two is non-zero"),
 ///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
@@ -234,7 +234,7 @@ fn sum_output_bounds(
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedInput {
 ///     input_index: 2,
-///     required: qubit_io::nz!(2),
+///     required: NonZeroUsize::new(2).expect("two is non-zero"),
 ///     available: 1,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
