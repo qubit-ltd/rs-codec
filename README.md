@@ -55,6 +55,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 
 ## Features
 
+### Cargo Features
+
+The default feature set is empty. Enable the `io` feature to use the
+`qubit-io` bridge, including `TranscodeDecodeInput` and
+`TranscodeEncodeOutput`.
+
 ### Core Conversion Traits
 
 - **`Codec`**: encodes and decodes one value or codec quantum
@@ -113,12 +119,12 @@ Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 - **`TranscodeConvertEngine<D, E, DH, EH>`**: reusable unit-to-unit converter
   engine that composes decode hooks, encode hooks, and the common buffered
   conversion loop.
-- **`TranscodeDecodeInput<I>`**: owns a unit-level `BufferedInput` and drives
-  caller-provided streaming decoders through `transcode_into` /
-  `finish_transcode_into`.
-- **`TranscodeEncodeOutput<O>`**: owns a unit-level `BufferedOutput`; ordinary
-  `flush` drains buffered units. Stateful streaming encoders use `transcode_from`
-  and `finish`.
+- **`TranscodeDecodeInput<I>`** *(requires the `io` feature)*: owns a
+  unit-level `BufferedInput` and drives caller-provided streaming decoders
+  through `transcode_into` / `finish_transcode_into`.
+- **`TranscodeEncodeOutput<O>`** *(requires the `io` feature)*: owns a
+  unit-level `BufferedOutput`; ordinary `flush` drains buffered units. Stateful
+  streaming encoders use `transcode_from` and `finish`.
 - **`TranscodeProgress`**: reports relative input units read and output units
   written.
 - **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
@@ -186,7 +192,7 @@ decode codec + an encode codec:
 ┌────────────────────────────────────────────────────────────────┐
 │  qubit-io-binary / qubit-io-text             (concrete I/O)    │
 ├────────────────────────────────────────────────────────────────┤
-│  TranscodeDecodeInput / TranscodeEncodeOutput  (I/O bridges)   │
+│  TranscodeDecodeInput / TranscodeEncodeOutput  (I/O bridges; requires io) │
 ├────────────────────────────────────────────────────────────────┤
 │  TranscodeXxxEngine + TranscodeXxxHooks       (policy + loop)  │
 │  CodecTranscodeDecoder / Encoder / Converter  (strict bridges) │
@@ -281,8 +287,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `TranscodeDecodeInput<I>` | Decode units from a `qubit_io::Input` by passing a caller-owned streaming decoder to `transcode_into` and `finish_transcode_into` |
-| `TranscodeEncodeOutput<O>` | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
+| `TranscodeDecodeInput<I>` *(requires `io`)* | Decode units from a `qubit_io::Input` by passing a caller-owned streaming decoder to `transcode_into` and `finish_transcode_into` |
+| `TranscodeEncodeOutput<O>` *(requires `io`)* | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
 
@@ -375,11 +381,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 ## Crate Boundary
 
 `qubit-codec` does not contain concrete binary formats, character sets, or
-percent/Base64/hex codecs. Its I/O-facing surface is limited to low-level
-`qubit_io::Input` / `qubit_io::Output` bridge types used by downstream stream
-crates. Keep `std::io::Read` / `std::io::Write` extension traits and concrete
-reader/writer adapters in domain crates so downstream users can depend on only
-the layers they need.
+percent/Base64/hex codecs. When the `io` feature is enabled, its I/O-facing
+surface is limited to low-level `qubit_io::Input` / `qubit_io::Output` bridge
+types used by downstream stream crates. Keep `std::io::Read` /
+`std::io::Write` extension traits and concrete reader/writer adapters in domain
+crates so downstream users can depend on only the layers they need.
 
 ## Performance Considerations
 
@@ -418,7 +424,8 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 Runtime dependencies are intentionally small:
 
 - `thiserror` provides public error type implementations.
-- `qubit-io` provides `BufferedInput` and `BufferedOutput` used by `TranscodeDecodeInput` and `TranscodeEncodeOutput`.
+- With the `io` feature, `qubit-io` provides `BufferedInput` and
+  `BufferedOutput` used by `TranscodeDecodeInput` and `TranscodeEncodeOutput`.
 
 ## License
 

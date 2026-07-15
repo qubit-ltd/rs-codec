@@ -50,6 +50,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 
 ## 特性
 
+### Cargo 特性
+
+默认特性集为空。启用 `io` 特性可使用 `qubit-io` bridge，其中包括
+`TranscodeDecodeInput` 和 `TranscodeEncodeOutput`。
+
 ### 核心转换 Trait
 
 - **`Codec`**：在调用方管理的 unit 缓冲区中编码和解码一个值或 codec quantum。
@@ -101,12 +106,12 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`TranscodeConvertEngine<D, E, DH, EH>`**：组合 decode hooks、
   encode hooks 与公共 buffered conversion 循环的可复用 unit-to-unit
   converter engine。
-- **`TranscodeDecodeInput<I>`**：持有底层 unit `BufferedInput`，并通过
-  `transcode_into` / `finish_transcode_into` 驱动调用方传入的 streaming
-  decoder。
-- **`TranscodeEncodeOutput<O>`**：持有底层 unit `BufferedOutput`；普通
-  `flush` 只排空 unit buffer。状态化 streaming encoder 使用 `transcode_from`
-  和 `finish`。
+- **`TranscodeDecodeInput<I>`**（需要 `io` 特性）：持有底层 unit
+  `BufferedInput`，并通过 `transcode_into` / `finish_transcode_into` 驱动
+  调用方传入的 streaming decoder。
+- **`TranscodeEncodeOutput<O>`**（需要 `io` 特性）：持有底层 unit
+  `BufferedOutput`；普通 `flush` 只排空 unit buffer。状态化 streaming
+  encoder 使用 `transcode_from` 和 `finish`。
 - **`TranscodeProgress`**：报告相对读取和写入的单元数量。
 - **`TranscodeStatus`**：区分转换完成、需要更多输入和需要更多输出空间。
 - **`TranscodeFailure` / `CapacityError` / `TranscodeContractError`**：把
@@ -170,7 +175,7 @@ unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一
 ┌────────────────────────────────────────────────────────────────┐
 │  qubit-io-binary / qubit-io-text             （具体 I/O）       │
 ├────────────────────────────────────────────────────────────────┤
-│  TranscodeDecodeInput / TranscodeEncodeOutput  （I/O bridge）   │
+│  TranscodeDecodeInput / TranscodeEncodeOutput（I/O bridge；需要 io）│
 ├────────────────────────────────────────────────────────────────┤
 │  TranscodeXxxEngine + TranscodeXxxHooks       （策略 + 循环）   │
 │  CodecTranscodeDecoder / Encoder / Converter  （严格 bridge）   │
@@ -264,8 +269,8 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `TranscodeDecodeInput<I>` | 持有 `qubit_io::Input`，调用时传入 caller-owned streaming decoder，并通过 `transcode_into` 和 `finish_transcode_into` 解码 unit |
-| `TranscodeEncodeOutput<O>` | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
+| `TranscodeDecodeInput<I>`（需要 `io`） | 持有 `qubit_io::Input`，调用时传入 caller-owned streaming decoder，并通过 `transcode_into` 和 `finish_transcode_into` 解码 unit |
+| `TranscodeEncodeOutput<O>`（需要 `io`） | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
 
@@ -350,7 +355,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 ## 库边界
 
 `qubit-codec` 不包含具体 binary 格式、字符集或 percent/Base64/hex codec。
-它面向 I/O 的公开面只保留供下游 stream crate 复用的低层
+启用 `io` 特性后，它面向 I/O 的公开面只保留供下游 stream crate 复用的低层
 `qubit_io::Input` / `qubit_io::Output` bridge 类型。`std::io::Read` /
 `std::io::Write` extension trait 和具体 reader/writer adapter 应放在领域
 crate 中，让下游只依赖自己需要的层。
@@ -390,7 +395,8 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 运行时依赖保持很少：
 
 - `thiserror` 提供公共错误类型实现。
-- `qubit-io` 提供 `TranscodeDecodeInput` 和 `TranscodeEncodeOutput` 使用的 `BufferedInput` 与 `BufferedOutput`。
+- 启用 `io` 特性后，`qubit-io` 提供 `TranscodeDecodeInput` 和
+  `TranscodeEncodeOutput` 使用的 `BufferedInput` 与 `BufferedOutput`。
 
 ## 许可证
 

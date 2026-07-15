@@ -13,20 +13,18 @@ use qubit_codec::engine::DecodeOutcome;
 fn test_emitted_creates_emitted_outcome() {
     assert_eq!(
         DecodeOutcome::Emitted {
-            read: qubit_io::nz!(2),
-            emitted: qubit_io::nz!(1),
+            read: crate::nz(2),
+            emitted: crate::nz(1),
         },
-        DecodeOutcome::emitted(qubit_io::nz!(2), qubit_io::nz!(1)),
+        DecodeOutcome::emitted(crate::nz(2), crate::nz(1)),
     );
 }
 
 #[test]
 fn test_skipped_creates_skipped_outcome() {
     assert_eq!(
-        DecodeOutcome::Skipped {
-            read: qubit_io::nz!(3),
-        },
-        DecodeOutcome::skipped(qubit_io::nz!(3)),
+        DecodeOutcome::Skipped { read: crate::nz(3) },
+        DecodeOutcome::skipped(crate::nz(3)),
     );
 }
 
@@ -34,8 +32,8 @@ fn test_skipped_creates_skipped_outcome() {
 fn test_need_input_creates_need_input_outcome() {
     assert_eq!(
         DecodeOutcome::NeedInput {
-            required: qubit_io::nz!(4),
+            required: crate::nz(4),
         },
-        DecodeOutcome::need_input(qubit_io::nz!(4)),
+        DecodeOutcome::need_input(crate::nz(4)),
     );
 }

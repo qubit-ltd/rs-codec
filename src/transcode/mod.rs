@@ -11,6 +11,7 @@ mod adapter;
 mod capacity_error;
 mod engine;
 mod internal;
+#[cfg(feature = "io")]
 mod io;
 mod transcode_contract_error;
 mod transcode_convert_error;
@@ -46,6 +47,7 @@ pub use engine::{
     TranscodeEncodeEngine,
     TranscodeEncodeHooks,
 };
+#[cfg(feature = "io")]
 pub use io::{
     TranscodeDecodeInput,
     TranscodeEncodeOutput,

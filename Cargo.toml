@@ -27,10 +27,14 @@ include = [
     "/tests/**",
 ]
 
+[features]
+default = []
+io = ["dep:qubit-io"]
+
 [dependencies]
 thiserror = "2.0"
 
-qubit-io = "0.13"
+qubit-io = { version = "0.13", optional = true }
 
 [[test]]
 name = "tests"

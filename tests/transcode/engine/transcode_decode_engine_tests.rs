@@ -65,12 +65,12 @@ impl Codec for PrefixCodec {
         let first = unsafe { *input.as_ptr().add(input_index) };
         match first {
             0xfe if input.len() - input_index < 2 => {
-                Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(2)))
+                Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
             }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(input_index + 1) };
-                Ok((value, qubit_io::nz!(2)))
+                Ok((value, crate::nz(2)))
             }
             0xff => Err(qubit_codec::DecodeFailure::invalid(
                 PrefixDecodeError::Invalid { consumed: 1 },
@@ -160,7 +160,7 @@ impl Codec for HintOnlyCodec {
         match input[input_index] {
             0xaa => Err(qubit_codec::DecodeFailure::invalid(
                 HintOnlyDecodeError::Invalid,
-                qubit_io::nz!(2),
+                crate::nz(2),
             )),
             value => Ok((value, NonZeroUsize::MIN)),
         }
@@ -1662,7 +1662,7 @@ fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
         TranscodeDecodeError::domain_main_with_consumed(
             PrefixDecodeError::Invalid { consumed: 1 },
             0,
-            Some(qubit_io::nz!(1)),
+            Some(crate::nz(1)),
         ),
         error,
     );

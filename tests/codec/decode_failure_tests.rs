@@ -56,7 +56,7 @@ impl Codec for PlainCodec {
 
 #[test]
 fn test_decode_failure_reports_incomplete_control_flow() {
-    let required_total = qubit_io::nz!(3);
+    let required_total = crate::nz(3);
     let failure =
         DecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
@@ -68,7 +68,7 @@ fn test_decode_failure_reports_incomplete_control_flow() {
 
 #[test]
 fn test_decode_failure_reports_invalid_domain_error() {
-    let consumed = qubit_io::nz!(2);
+    let consumed = crate::nz(2);
     let failure = DecodeFailure::invalid(DomainDecodeError, consumed);
 
     assert_eq!(

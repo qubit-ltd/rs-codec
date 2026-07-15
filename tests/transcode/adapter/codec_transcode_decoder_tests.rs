@@ -43,7 +43,7 @@ impl Codec for VariableByteCodec {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(DecodeFailure::incomplete(qubit_io::nz!(2)))
+                    Err(DecodeFailure::incomplete(crate::nz(2)))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
@@ -99,7 +99,7 @@ impl Codec for FixedPairCodec {
 
         Ok((
             input[input_index].wrapping_add(input[input_index + 1]),
-            qubit_io::nz!(2),
+            crate::nz(2),
         ))
     }
 
@@ -365,7 +365,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         TranscodeDecodeError::domain_main_with_consumed(
             TestDecodeError::Invalid,
             0,
-            Some(qubit_io::nz!(1)),
+            Some(crate::nz(1)),
         ),
         error,
     );

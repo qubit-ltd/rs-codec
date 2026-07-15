@@ -16,8 +16,8 @@ fn test_encode_outcome_constructors_match_variants() {
     );
     assert_eq!(
         EncodeOutcome::NeedOutput {
-            required: qubit_io::nz!(3),
+            required: crate::nz(3),
         },
-        EncodeOutcome::need_output(qubit_io::nz!(3)),
+        EncodeOutcome::need_output(crate::nz(3)),
     );
 }

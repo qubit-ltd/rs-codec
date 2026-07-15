@@ -8,6 +8,7 @@
 
 mod adapter;
 mod engine;
+#[cfg(feature = "io")]
 mod io;
 mod transcode_contract_error_tests;
 mod transcode_converter_tests;

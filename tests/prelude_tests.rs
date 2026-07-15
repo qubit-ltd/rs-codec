@@ -206,7 +206,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(TranscodeStatus::Complete, progress.status());
     let _: DecodeInvalidActionOf<EchoCodec> = DecodeInvalidAction::Emit {
         value: 1,
-        consumed: qubit_io::nz!(1),
+        consumed: crate::nz(1),
     };
     let _: EncodeUnencodableActionOf<EchoCodec> =
         EncodeUnencodableAction::Replace { value: 1 };
@@ -270,10 +270,10 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(1, context.available_output());
 
     assert_eq!(
-        DecodeOutcome::emitted(qubit_io::nz!(3), qubit_io::nz!(1)),
+        DecodeOutcome::emitted(crate::nz(3), crate::nz(1)),
         DecodeOutcome::Emitted {
-            read: qubit_io::nz!(3),
-            emitted: qubit_io::nz!(1),
+            read: crate::nz(3),
+            emitted: crate::nz(1),
         },
     );
     assert_eq!(
@@ -281,9 +281,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         EncodeOutcome::Consumed { written: 3 }
     );
     assert_eq!(
-        EncodeOutcome::need_output(qubit_io::nz!(4)),
+        EncodeOutcome::need_output(crate::nz(4)),
         EncodeOutcome::NeedOutput {
-            required: qubit_io::nz!(4),
+            required: crate::nz(4),
         },
     );
 

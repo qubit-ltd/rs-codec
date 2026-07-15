@@ -45,9 +45,7 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(
-                        2
-                    )))
+                    Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
@@ -708,7 +706,7 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         TranscodeConvertError::decode_domain_main_with_consumed(
             TestDecodeError::Invalid { consumed: 1 },
             0,
-            Some(qubit_io::nz!(1)),
+            Some(crate::nz(1)),
         ),
         error,
     );

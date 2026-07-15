@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "core-only",
+      "defaultFeatures": false,
+      "commands": ["test", "doc", "clippy"]
+    },
+    {
+      "name": "io",
+      "defaultFeatures": false,
+      "features": ["io"],
+      "commands": ["test", "doc", "clippy"]
+    }
+  ]
+}

@@ -76,7 +76,7 @@
 //! ```text
 //! concrete I/O crates
 //!   |
-//! TranscodeDecodeInput / TranscodeEncodeOutput
+//! TranscodeDecodeInput / TranscodeEncodeOutput  [feature = "io"]
 //!   |
 //! Transcode*Engine + Transcode*Hooks
 //! CodecTranscodeDecoder / Encoder / Converter
@@ -141,17 +141,20 @@ pub use transcode::{
     TranscodeConverter,
     TranscodeDecodeError,
     TranscodeDecodeErrorOf,
-    TranscodeDecodeInput,
     TranscodeDecoder,
     TranscodeDomainError,
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
-    TranscodeEncodeOutput,
     TranscodeEncoder,
     TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
+};
+#[cfg(feature = "io")]
+pub use transcode::{
+    TranscodeDecodeInput,
+    TranscodeEncodeOutput,
 };
 pub use value::{
     CodecValueDecoder,

@@ -135,7 +135,7 @@ impl Codec for OverconsumingCodec {
     > {
         debug_assert!(input_index < input.len());
 
-        Ok((input[input_index], qubit_io::nz!(2)))
+        Ok((input[input_index], crate::nz(2)))
     }
 
     unsafe fn encode(
@@ -316,7 +316,7 @@ impl Codec for IncompleteDecodeCodec {
         (u8, core::num::NonZeroUsize),
         qubit_codec::DecodeFailure<Self::DecodeError>,
     > {
-        Err(qubit_codec::DecodeFailure::incomplete(qubit_io::nz!(2)))
+        Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
     }
 
     unsafe fn encode(
@@ -719,7 +719,7 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
         TranscodeDecodeError::domain_main_with_consumed(
             TestDecodeError::Invalid { consumed: 1 },
             0,
-            Some(qubit_io::nz!(1)),
+            Some(crate::nz(1)),
         ),
         error,
     );
