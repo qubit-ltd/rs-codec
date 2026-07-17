@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/qubit-codec.svg?color=blue)](https://crates.io/crates/qubit-codec)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Chinese Document](https://img.shields.io/badge/Document-Chinese-blue.svg)](README.zh_CN.md)
+[![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
 Core codec traits and buffer conversion primitives for Rust.
 
@@ -389,35 +389,12 @@ crates so downstream users can depend on only the layers they need.
 
 ## Performance Considerations
 
-Core traits and buffered adapters do not require heap allocation. `BigEndian`
-and `LittleEndian` are zero-sized, and `ByteOrder` is a small copyable enum.
-`CodecValueEncoder` allocates owned `Vec<Unit>` output because that is the
-`ValueEncoder` contract; concrete downstream codecs may have their own
-allocation behavior.
-
-## Testing & Code Coverage
-
-This project keeps the core trait contracts covered by integration tests under
-`tests/`.
-
-### Running Tests
-
-```bash
-# Run all tests
-cargo test
-
-# Run with coverage report
-./coverage.sh
-
-# Generate text format report
-./coverage.sh text
-
-# Align code with CI requirements
-./align-ci.sh
-
-# Run CI checks (format, clippy, test, coverage, audit)
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
-```
+The streaming traits and engine main loops operate on caller-provided buffers.
+`BigEndian` and `LittleEndian` are zero-sized, and `ByteOrder` is a small
+copyable enum. Owned value adapters such as `CodecValueEncoder` allocate their
+`Vec<Unit>` result, and codec lifecycle output or an I/O decode window that
+outgrows the base buffer may use temporary scratch storage. Concrete downstream
+codecs may have additional allocation behavior.
 
 ## Dependencies
 
@@ -426,39 +403,6 @@ Runtime dependencies are intentionally small:
 - `thiserror` provides public error type implementations.
 - With the `io` feature, `qubit-io` provides `BufferedInput` and
   `BufferedOutput` used by `TranscodeDecodeInput` and `TranscodeEncodeOutput`.
-
-## License
-
-Copyright (c) 2026. Haixing Hu.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-See [LICENSE](LICENSE) for the full license text.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Guidelines
-
-- Keep this crate free of concrete format implementations.
-- Document public traits and marker types with examples.
-- Keep tests comprehensive and deterministic.
-- Ensure all checks pass before submitting a PR.
-
-## Author
-
-**Haixing Hu**
 
 ## Related Projects
 
@@ -472,6 +416,37 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - More Rust libraries from Qubit are available under the
   [qubit-ltd](https://github.com/qubit-ltd) GitHub organization.
 
----
+## Testing
+
+```bash
+# Core API with the default empty feature set
+cargo test --no-default-features
+
+# Core API plus regex validation
+cargo test --all-features
+
+# Project CI checks
+./ci-check.sh
+
+# Check code coverage
+./coverage.sh
+```
+
+## License
+
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full license text.
+
+## Contributing
+
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
+
+## Author
+
+**Haixing Hu** - *Qubit Co. Ltd.*
 
 Repository: [https://github.com/qubit-ltd/rs-codec](https://github.com/qubit-ltd/rs-codec)

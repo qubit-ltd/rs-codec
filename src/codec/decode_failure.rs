@@ -25,7 +25,11 @@ use core::num::NonZeroUsize;
 pub enum DecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
     Incomplete {
-        /// Non-zero total units required from the current value start.
+        /// Current non-zero minimum total units required before retrying from
+        /// the value start.
+        ///
+        /// A later retry may raise this lower bound after the codec sees a
+        /// longer prefix.
         required_total: NonZeroUsize,
     },
 
@@ -44,8 +48,9 @@ impl<E> DecodeFailure<E> {
     ///
     /// # Parameters
     ///
-    /// - `required_total`: Non-zero total units required from the current value
-    ///   start.
+    /// - `required_total`: Current non-zero minimum total units required before
+    ///   retrying from the value start. A later retry may raise this lower
+    ///   bound.
     ///
     /// # Returns
     ///
@@ -93,11 +98,13 @@ impl<E> DecodeFailure<E> {
         }
     }
 
-    /// Returns the total input units required for an incomplete prefix.
+    /// Returns the current minimum input length required before retrying an
+    /// incomplete prefix.
     ///
     /// # Returns
     ///
-    /// Returns `Some(required_total)` for incomplete failures, or `None` for
+    /// Returns `Some(required_total)` for incomplete failures, where the value
+    /// is a lower bound that a later retry may raise, or `None` for
     /// invalid-input failures.
     #[inline(always)]
     #[must_use]

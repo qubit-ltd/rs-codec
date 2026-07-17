@@ -7,7 +7,10 @@
 // =============================================================================
 use core::num::NonZeroUsize;
 
-use super::{TranscodeContractError, TranscodeStatus};
+use super::{
+    TranscodeContractError,
+    TranscodeStatus,
+};
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
@@ -36,7 +39,11 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[inline(always)]
     #[must_use]
-    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
+    pub const fn new(
+        status: TranscodeStatus,
+        read: usize,
+        written: usize,
+    ) -> Self {
         Self {
             status,
             read,
@@ -65,8 +72,9 @@ impl TranscodeProgress {
     /// # Parameters
     ///
     /// - `input_index`: Absolute input boundary where conversion stopped.
-    /// - `required`: Total input units required from the current input
-    ///   position.
+    /// - `required`: Current minimum total input units required before retrying
+    ///   from the current input position. A later retry may raise this lower
+    ///   bound.
     /// - `available`: Input units currently available at the boundary.
     /// - `read`: Number of consumed input units.
     /// - `written`: Number of produced output units.
@@ -201,12 +209,12 @@ impl TranscodeProgress {
     /// `NeedInput` / `NeedOutput` requirements, and the `Complete` invariant
     /// that all visible input was consumed.
     ///
-    /// This is a contract checker, not a semantic recovery policy. Drivers
-    /// that advance unsafe cursors may run it in release builds and convert
-    /// failures into their own error type. Convenience helpers that already
-    /// work with caller-owned slices may use it only in debug assertions, so
-    /// custom [`crate::Transcoder`] implementations must still return progress
-    /// that satisfies the documented contract in release builds.
+    /// This is a contract checker, not a semantic recovery policy. It performs
+    /// the same validation in every build profile. Drivers that advance unsafe
+    /// cursors may convert failures into their own error type, while
+    /// convenience helpers may assert that validation succeeds. Custom
+    /// [`crate::Transcoder`] implementations must therefore return progress
+    /// that satisfies the documented contract in all builds.
     ///
     /// # Parameters
     ///
@@ -252,22 +260,24 @@ impl TranscodeProgress {
                 advanced: self.read,
             },
         )?;
-        let expected_output_index = output_index.checked_add(self.written).ok_or(
-            TranscodeContractError::ProgressIndexOverflow {
+        let expected_output_index = output_index
+            .checked_add(self.written)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
                 index: output_index,
                 advanced: self.written,
-            },
-        )?;
+            })?;
         let expected_input_available = available_input - self.read;
         let expected_output_available = available_output - self.written;
 
         match self.status {
             TranscodeStatus::Complete => {
                 if self.read != available_input {
-                    return Err(TranscodeContractError::CompleteWithRemainingInput {
-                        read: self.read,
-                        available: available_input,
-                    });
+                    return Err(
+                        TranscodeContractError::CompleteWithRemainingInput {
+                            read: self.read,
+                            available: available_input,
+                        },
+                    );
                 }
                 Ok(())
             }
@@ -283,10 +293,12 @@ impl TranscodeProgress {
                     });
                 }
                 if available != expected_input_available {
-                    return Err(TranscodeContractError::StatusAvailableMismatch {
-                        reported: available,
-                        expected: expected_input_available,
-                    });
+                    return Err(
+                        TranscodeContractError::StatusAvailableMismatch {
+                            reported: available,
+                            expected: expected_input_available,
+                        },
+                    );
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {
@@ -308,10 +320,12 @@ impl TranscodeProgress {
                     });
                 }
                 if available != expected_output_available {
-                    return Err(TranscodeContractError::StatusAvailableMismatch {
-                        reported: available,
-                        expected: expected_output_available,
-                    });
+                    return Err(
+                        TranscodeContractError::StatusAvailableMismatch {
+                            reported: available,
+                            expected: expected_output_available,
+                        },
+                    );
                 }
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {

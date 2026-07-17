@@ -10,7 +10,11 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{DecodeContext, DecodeOutcome, EncodeOutcome},
+    engine::{
+        DecodeContext,
+        DecodeOutcome,
+        EncodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -48,7 +52,12 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -204,8 +213,9 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// # Parameters
     ///
-    /// - `required`: Total input units required from the current input
-    ///   position.
+    /// - `required`: Current minimum total input units required before retrying
+    ///   from the current input position. A later retry may raise this lower
+    ///   bound.
     /// - `available`: Input units currently available at the stop boundary.
     ///
     /// # Returns

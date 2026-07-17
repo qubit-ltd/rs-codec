@@ -10,10 +10,16 @@
 use core::fmt;
 
 use super::{
-    super::engine::TranscodeConvertEngine, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks,
+    super::engine::TranscodeConvertEngine,
+    CodecTranscodeDecodeHooks,
+    CodecTranscodeEncodeHooks,
 };
 use crate::{
-    CapacityError, Codec, TranscodeConvertErrorOf, TranscodeConverter, TranscodeProgress,
+    CapacityError,
+    Codec,
+    TranscodeConvertErrorOf,
+    TranscodeConverter,
+    TranscodeProgress,
     Transcoder,
 };
 
@@ -43,7 +49,12 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>,
+    engine: TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >,
 }
 
 impl<D, E> CodecTranscodeConverter<D, E>
@@ -89,7 +100,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -107,6 +121,16 @@ where
     }
 
     /// Returns the maximum target units emitted when resetting stream state.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound valid for every reachable converter
+    /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
@@ -123,6 +147,21 @@ where
     /// allocating path; the bound is consulted only when
     /// [`Codec::MAX_DECODE_RESET_VALUES`](crate::Codec::MAX_DECODE_RESET_VALUES)
     /// is non-zero.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Target unit slice for stream-start output.
+    /// - `output_index`: Absolute target output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of target units written while resetting component
+    /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when the output range is invalid or too
+    /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
     pub fn reset(
         &mut self,
@@ -219,7 +258,10 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
@@ -235,6 +277,16 @@ where
     }
 
     /// Returns the maximum target units emitted when resetting stream state.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound valid for every reachable converter
+    /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
     #[inline(always)]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_reset_output_len(self)
@@ -242,6 +294,21 @@ where
 
     /// Clears retained pending output, resets component state, and emits
     /// stream-start encode output.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Target unit slice for stream-start output.
+    /// - `output_index`: Absolute target output index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of target units written while resetting component
+    /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error when the output range is invalid or too
+    /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
     fn reset(
         &mut self,
@@ -277,7 +344,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -320,7 +393,12 @@ where
     D: Codec,
     E: Codec<Value = D::Value>,
     D::Value: Clone,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: Default,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///
@@ -339,7 +417,12 @@ impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: fmt::Debug,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///

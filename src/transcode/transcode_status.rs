@@ -28,14 +28,16 @@ pub enum TranscodeStatus {
     /// this tail back to the transcoder.
     ///
     /// - `input_index`: Absolute input index where input ended while decoding.
-    /// - `required`: Total input units required from the current input
-    ///   position.
+    /// - `required`: Current minimum total input units required before retrying
+    ///   from the current input position. A later retry may raise this lower
+    ///   bound.
     /// - `available`: Number of input units currently available from the
     ///   current input position.
     NeedInput {
         /// Absolute input index where input ended.
         input_index: usize,
-        /// Total input units required from the current input position.
+        /// Current minimum total input units required before retrying from the
+        /// current input position. A later retry may raise this lower bound.
         required: NonZeroUsize,
         /// Number of input units currently available.
         available: usize,
@@ -65,8 +67,9 @@ impl TranscodeStatus {
     /// # Parameters
     ///
     /// - `input_index`: Absolute input boundary where conversion stopped.
-    /// - `required`: Total input units required from the current input
-    ///   position.
+    /// - `required`: Current minimum total input units required before retrying
+    ///   from the current input position. A later retry may raise this lower
+    ///   bound.
     /// - `available`: Input units currently available at the boundary.
     ///
     /// # Returns
@@ -74,7 +77,11 @@ impl TranscodeStatus {
     /// Returns a [`TranscodeStatus::NeedInput`] value.
     #[inline(always)]
     #[must_use]
-    pub const fn need_input(input_index: usize, required: NonZeroUsize, available: usize) -> Self {
+    pub const fn need_input(
+        input_index: usize,
+        required: NonZeroUsize,
+        available: usize,
+    ) -> Self {
         Self::NeedInput {
             input_index,
             required,

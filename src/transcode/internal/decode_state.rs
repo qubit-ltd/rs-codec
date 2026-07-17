@@ -10,7 +10,10 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{DecodeContext, DecodeOutcome},
+    engine::{
+        DecodeContext,
+        DecodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -43,7 +46,12 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -113,11 +121,12 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// # Parameters
     ///
-    /// - `consumed`: Input units consumed by the current operation.
+    /// - `read`: Non-zero input units consumed by the current operation.
     ///
-    /// # Returns
+    /// # Panics
     ///
-    /// Returns unit `()`.
+    /// Panics when `read` exceeds the input units available at the current
+    /// cursor.
     #[inline(always)]
     pub(in crate::transcode) fn skip(&mut self, read: NonZeroUsize) {
         let read = read.get();
@@ -135,9 +144,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// - `read`: Input units consumed by this decode outcome.
     /// - `emitted`: Logical output values emitted by this decode outcome.
     ///
-    /// # Returns
+    /// # Panics
     ///
-    /// Returns unit `()`.
+    /// Panics when `read` exceeds available input or `emitted` exceeds
+    /// available output.
     #[inline(always)]
     pub(in crate::transcode) fn accept_emitted(
         &mut self,
@@ -173,7 +183,9 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
-    pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(
+        &self,
+    ) -> TranscodeProgress {
         self.state.need_output_progress(NonZeroUsize::MIN, 0)
     }
 
@@ -181,8 +193,9 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// # Parameters
     ///
-    /// - `required`: Total source units required from the current input
-    ///   position.
+    /// - `required`: Current minimum total source units required before
+    ///   retrying from the current input position. A later retry may raise this
+    ///   lower bound.
     /// - `available`: Source units visible at the stop boundary.
     ///
     /// # Returns
@@ -207,6 +220,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns optional [`TranscodeProgress`] when decoding must stop in this
     /// call.
+    ///
+    /// # Panics
+    ///
+    /// Panics when an emitted or skipped outcome exceeds the input or output
+    /// units available at the current cursors.
     #[inline]
     #[must_use]
     pub(in crate::transcode) fn apply_decode_outcome(

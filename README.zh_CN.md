@@ -362,33 +362,11 @@ crate 中，让下游只依赖自己需要的层。
 
 ## 性能考虑
 
-核心 trait 和 buffered adapter 不要求堆分配。`BigEndian` 和 `LittleEndian`
-是零大小类型，`ByteOrder` 是小型可复制枚举。`CodecValueEncoder` 会分配自有
-`Vec<Unit>` 输出，因为这是 `ValueEncoder` 契约；下游具体 codec 仍可能有自己的
-分配行为。
-
-## 测试与代码覆盖率
-
-本项目通过 `tests/` 下的集成测试覆盖核心 trait 契约。
-
-### 运行测试
-
-```bash
-# 运行所有测试
-cargo test
-
-# 运行覆盖率报告
-./coverage.sh
-
-# 生成文本格式报告
-./coverage.sh text
-
-# 对齐 CI 要求
-./align-ci.sh
-
-# 运行 CI 检查（格式化、clippy、测试、覆盖率、安全审计）
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
-```
+流式 trait 与 engine 主循环使用调用方提供的缓冲区。`BigEndian` 和
+`LittleEndian` 是零大小类型，`ByteOrder` 是小型可复制枚举。
+`CodecValueEncoder` 等 owned value adapter 会为 `Vec<Unit>` 结果分配内存；
+codec lifecycle 输出或超过基础缓冲容量的 I/O 解码窗口也可能使用临时 scratch
+存储。下游具体 codec 仍可能有额外分配行为。
 
 ## 依赖项
 
@@ -397,37 +375,6 @@ RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 - `thiserror` 提供公共错误类型实现。
 - 启用 `io` 特性后，`qubit-io` 提供 `TranscodeDecodeInput` 和
   `TranscodeEncodeOutput` 使用的 `BufferedInput` 与 `BufferedOutput`。
-
-## 许可证
-
-Copyright (c) 2026. Haixing Hu.
-
-根据 Apache 许可证 2.0 版（"许可证"）授权；
-除非遵守许可证，否则您不得使用此文件。
-您可以在以下位置获取许可证副本：
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-除非适用法律要求或书面同意，否则根据许可证分发的软件
-按"原样"分发，不附带任何明示或暗示的担保或条件。
-有关许可证下的特定语言管理权限和限制，请参阅许可证。
-
-完整的许可证文本请参阅 [LICENSE](LICENSE)。
-
-## 贡献
-
-欢迎贡献！请随时提交 Pull Request。
-
-### 开发指南
-
-- 保持本 crate 不包含具体格式实现。
-- 为公开 trait 和标记类型编写文档和示例。
-- 保持测试全面且稳定。
-- 提交 PR 前确保所有检查通过。
-
-## 作者
-
-**胡海星**
 
 ## 相关项目
 
@@ -438,6 +385,36 @@ Copyright (c) 2026. Haixing Hu.
 - Qubit 旗下的更多 Rust 库发布在 GitHub 组织
   [qubit-ltd](https://github.com/qubit-ltd)。
 
----
+## 测试
+
+```bash
+# 使用默认的空 feature 集测试核心 API
+cargo test --no-default-features
+
+# 测试核心 API 和正则校验
+cargo test --all-features
+
+# 运行项目 CI 检查
+./ci-check.sh
+
+# 检查代码覆盖率
+./coverage.sh
+```
+
+## 许可证
+
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+
+本项目基于 Apache License 2.0 授权。完整许可证文本请参阅
+[LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
+
+## 作者
+
+**Haixing Hu** - *Qubit Co. Ltd.*
 
 仓库地址：[https://github.com/qubit-ltd/rs-codec](https://github.com/qubit-ltd/rs-codec)
