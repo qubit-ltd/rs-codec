@@ -6,8 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use super::{
-    capacity_error::CapacityError, transcode_failure::TranscodeFailure,
-    transcode_progress::TranscodeProgress, transcode_status::TranscodeStatus,
+    capacity_error::CapacityError,
+    transcode_failure::TranscodeFailure,
+    transcode_progress::TranscodeProgress,
+    transcode_status::TranscodeStatus,
 };
 
 /// Validates one-shot transcode progress and returns completed output length.
@@ -15,6 +17,27 @@ use super::{
 /// Keeping progress classification independent of the concrete transcoder
 /// ensures every implementation receives identical trailing-input and
 /// streaming-stop handling.
+///
+/// # Parameters
+///
+/// - `progress`: Progress returned by the streaming transcode phase.
+/// - `input_len`: Total complete-input length supplied to the one-shot call.
+/// - `output_index`: Absolute output index used for the transcode phase.
+/// - `output_len`: Total output slice length.
+///
+/// # Returns
+///
+/// Returns the number of output units written when progress is complete.
+///
+/// # Errors
+///
+/// Returns a trailing-input, incomplete-input, or insufficient-output failure
+/// when progress reports a non-complete one-shot result.
+///
+/// # Panics
+///
+/// Panics when the transcoder reports progress inconsistent with the supplied
+/// input and output bounds.
 fn complete_progress_written(
     progress: TranscodeProgress,
     input_len: usize,
@@ -62,13 +85,44 @@ fn complete_progress_written(
 }
 
 /// Adds two independent output-capacity bounds.
-fn add_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
+///
+/// # Parameters
+///
+/// - `first`: First output-capacity bound.
+/// - `second`: Second output-capacity bound.
+///
+/// # Returns
+///
+/// Returns the sum of both bounds.
+///
+/// # Errors
+///
+/// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
+fn add_output_bounds(
+    first: usize,
+    second: usize,
+) -> Result<usize, CapacityError> {
     first
         .checked_add(second)
         .ok_or(CapacityError::OutputLengthOverflow)
 }
 
 /// Adds the reset, transcode, and finish output-capacity bounds.
+///
+/// # Parameters
+///
+/// - `reset`: Reset-phase output-capacity bound.
+/// - `transcode`: Streaming transcode-phase output-capacity bound.
+/// - `finish`: Finish-phase output-capacity bound.
+///
+/// # Returns
+///
+/// Returns the complete lifecycle output-capacity bound.
+///
+/// # Errors
+///
+/// Returns [`CapacityError::OutputLengthOverflow`] when either addition
+/// overflows.
 fn sum_output_bounds(
     reset: usize,
     transcode: usize,
@@ -312,7 +366,10 @@ pub trait Transcoder {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -334,7 +391,10 @@ pub trait Transcoder {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -377,7 +437,9 @@ pub trait Transcoder {
     /// # Returns
     ///
     /// Returns the number of units written while resetting stream state.
-    /// Stateless transcoders return `0`.
+    /// Stateless transcoders return `0`. Implementations must not return a
+    /// count greater than [`Transcoder::max_reset_output_len`] or the output
+    /// units available from `output_index`.
     ///
     /// # Errors
     ///
@@ -419,9 +481,9 @@ pub trait Transcoder {
     /// counters and status fields consistent with the supplied input and
     /// output ranges. For `Complete`, `read` must equal `input.len() -
     /// input_index`. The default one-shot helper rejects incomplete `Complete`
-    /// progress in all builds and checks the remaining progress contract with a
-    /// debug assertion; streaming I/O drivers may validate progress in release
-    /// builds before advancing unsafe cursors.
+    /// progress and asserts the remaining progress contract in all builds;
+    /// streaming I/O drivers may convert validation failures before advancing
+    /// unsafe cursors.
     ///
     /// # Errors
     ///
@@ -543,7 +605,9 @@ pub trait Transcoder {
     /// # Returns
     ///
     /// Returns the number of units written during finalization. Stateless
-    /// transcoders return `0`.
+    /// transcoders return `0`. Implementations must not return a count greater
+    /// than [`Transcoder::max_finish_output_len`] or the output units available
+    /// from `output_index`.
     ///
     /// # Errors
     ///
@@ -590,6 +654,13 @@ pub trait Transcoder {
     /// backpressure caused by an invalid bound implementation, or contract
     /// violations may leave partial output and advanced state; this method
     /// does not provide general transactional rollback.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `reset` or `finish` reports writing beyond its declared
+    /// bound or the available output, when `transcode` returns invalid
+    /// progress, or when a returned write count cannot be added to the output
+    /// cursor.
     fn transcode_complete_into(
         &mut self,
         input: &[Self::Input],
@@ -604,19 +675,53 @@ pub trait Transcoder {
         let finish_required = self
             .max_finish_output_len()
             .map_err(TranscodeFailure::from)?;
-        let total_required = sum_output_bounds(reset_required, transcode_required, finish_required)
-            .map_err(TranscodeFailure::from)?;
-        TranscodeFailure::ensure_output_capacity(output.len(), 0, total_required)?;
+        let total_required = sum_output_bounds(
+            reset_required,
+            transcode_required,
+            finish_required,
+        )
+        .map_err(TranscodeFailure::from)?;
+        TranscodeFailure::ensure_output_capacity(
+            output.len(),
+            0,
+            total_required,
+        )?;
 
-        let mut output_cursor = self.reset(output, 0)?;
-        let remaining_required = add_output_bounds(transcode_required, finish_required)
-            .map_err(TranscodeFailure::from)?;
-        TranscodeFailure::ensure_output_capacity(output.len(), output_cursor, remaining_required)?;
+        let reset_written = self.reset(output, 0)?;
+        assert!(
+            reset_written <= reset_required,
+            "Transcoder::reset wrote beyond its bound",
+        );
+        assert!(
+            reset_written <= output.len(),
+            "Transcoder::reset wrote beyond available output",
+        );
+        let mut output_cursor = reset_written;
 
         let progress = self.transcode(input, 0, output, output_cursor)?;
-        output_cursor +=
-            complete_progress_written(progress, input.len(), output_cursor, output.len())?;
-        output_cursor += self.finish(output, output_cursor)?;
+        let transcode_written = complete_progress_written(
+            progress,
+            input.len(),
+            output_cursor,
+            output.len(),
+        )?;
+        output_cursor = output_cursor.checked_add(transcode_written).expect(
+            "Transcoder::transcode write count overflowed the output cursor",
+        );
+
+        let finish_available = output.len() - output_cursor;
+        let finish_written = self.finish(output, output_cursor)?;
+        assert!(
+            finish_written <= finish_required,
+            "Transcoder::finish wrote beyond its bound",
+        );
+        assert!(
+            finish_written <= finish_available,
+            "Transcoder::finish wrote beyond available output",
+        );
+        output_cursor = output_cursor.checked_add(finish_written).expect(
+            "Transcoder::finish write count overflowed the output cursor",
+        );
         Ok(output_cursor)
     }
 }

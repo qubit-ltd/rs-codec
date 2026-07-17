@@ -5,9 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Debug-only lifecycle guard for transcode engines.
-//
-// qubit-style: allow multiple-public-types
+//! Debug-only lifecycle guard shared by transcode engines.
 //!
 //! [`Transcoder`](crate::Transcoder) documents a lifecycle of
 //! `reset → transcode* → finish` and then `reset` again before reusing the
@@ -18,25 +16,8 @@
 //! while collapsing to a zero-sized type in release builds so hot paths pay
 //! no extra cost.
 
-/// Internal lifecycle phases tracked by [`LifecycleGuard`] in debug builds.
-///
-/// The variant ordering mirrors the documented call sequence:
-///
-/// 1. `Fresh` — newly constructed, or just reset; first input may be supplied.
-/// 2. `Streaming` — at least one `transcode` call has been observed.
-/// 3. `Finished` — `finish` has been called; the only legal next step is
-///    `reset` (which returns to `Fresh`).
 #[cfg(debug_assertions)]
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub(crate) enum LifecyclePhase {
-    /// Fresh or just-reset engine ready to accept the next logical stream.
-    #[default]
-    Fresh,
-    /// At least one `transcode` call has been observed since the last reset.
-    Streaming,
-    /// `finish` has been called and the logical stream is closed.
-    Finished,
-}
+use super::lifecycle_phase::LifecyclePhase;
 
 /// Debug-only lifecycle guard for transcode engines.
 ///
@@ -55,15 +36,12 @@ pub(crate) enum LifecyclePhase {
 /// `Fresh → finish` is intentionally allowed: stateless transcoders may
 /// finalize an empty stream, and forcing a synthetic `transcode(&[])` call
 /// just to satisfy the guard would be noise.
-#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 pub(crate) struct LifecycleGuard {
+    /// Current debug-only lifecycle phase.
+    #[cfg(debug_assertions)]
     phase: LifecyclePhase,
 }
-
-#[cfg(not(debug_assertions))]
-#[derive(Debug, Default)]
-pub(crate) struct LifecycleGuard;
 
 impl LifecycleGuard {
     /// Creates a guard in the [`LifecyclePhase::Fresh`] phase.
@@ -74,15 +52,9 @@ impl LifecycleGuard {
     #[inline(always)]
     #[must_use]
     pub(crate) const fn new() -> Self {
-        #[cfg(debug_assertions)]
-        {
-            Self {
-                phase: LifecyclePhase::Fresh,
-            }
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            Self
+        Self {
+            #[cfg(debug_assertions)]
+            phase: LifecyclePhase::Fresh,
         }
     }
 
