@@ -162,6 +162,52 @@ impl Transcoder for FinishingTranscoder {
 }
 
 #[derive(Default)]
+struct PreflightTranscoder {
+    reset_calls: usize,
+    reset_bound_fails: bool,
+}
+
+impl Transcoder for PreflightTranscoder {
+    type Input = u8;
+    type Output = u8;
+    infallible_transcoder_error!();
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        if self.reset_bound_fails {
+            Err(CapacityError::OutputLengthOverflow)
+        } else {
+            Ok(1)
+        }
+    }
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_capacity(output.len(), output_index, 1)?;
+        self.reset_calls += 1;
+        output[output_index] = b'^';
+        Ok(1)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        CopyTranscoder.transcode(input, input_index, output, output_index)
+    }
+
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        Self::Error::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+}
+
+#[derive(Default)]
 struct PairTranscoder;
 
 impl Transcoder for PairTranscoder {
@@ -532,6 +578,57 @@ fn test_transcoder_total_output_len_reports_component_errors() {
             transcoder.max_total_output_len(1),
         );
     }
+}
+
+/// Verifies that full-stream capacity is rejected before reset mutates state
+/// or output.
+#[test]
+fn test_transcoder_transcode_complete_into_preflights_total_capacity_before_reset() {
+    let mut transcoder = PreflightTranscoder::default();
+    let original = [0xaa_u8; 3];
+    let mut output = original;
+
+    let error = transcoder
+        .transcode_complete_into(b"abc", &mut output)
+        .expect_err("complete output bound is four units");
+
+    assert_eq!(0, transcoder.reset_calls);
+    assert_eq!(original, output);
+    assert_eq!(TranscodeDecodeError::insufficient_output(0, 4, 3), error,);
+}
+
+/// Verifies that reset-bound overflow is reported before reset is called.
+#[test]
+fn test_transcoder_transcode_complete_into_checks_reset_bound_before_reset() {
+    let mut transcoder = PreflightTranscoder {
+        reset_bound_fails: true,
+        ..PreflightTranscoder::default()
+    };
+    let original = [0xaa_u8; 1];
+    let mut output = original;
+
+    let error = transcoder
+        .transcode_complete_into(b"", &mut output)
+        .expect_err("reset bound overflow should fail preflight");
+
+    assert_eq!(0, transcoder.reset_calls);
+    assert_eq!(original, output);
+    assert_eq!(TranscodeDecodeError::output_length_overflow(), error);
+}
+
+/// Verifies that the exact complete-stream bound admits the full lifecycle.
+#[test]
+fn test_transcoder_transcode_complete_into_accepts_exact_total_capacity() {
+    let mut transcoder = PreflightTranscoder::default();
+    let mut output = [0_u8; 4];
+
+    let written = transcoder
+        .transcode_complete_into(b"abc", &mut output)
+        .expect("exact complete output bound should fit");
+
+    assert_eq!(1, transcoder.reset_calls);
+    assert_eq!(4, written);
+    assert_eq!(b"^abc", &output);
 }
 
 #[test]

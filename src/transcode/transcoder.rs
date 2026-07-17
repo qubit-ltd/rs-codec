@@ -563,6 +563,11 @@ pub trait Transcoder {
     /// a range inside a larger buffer should slice the input or output
     /// before calling this method.
     ///
+    /// Before invoking any lifecycle method, this method queries the
+    /// state-independent reset, transcode, and finish bounds and requires
+    /// `output` to provide at least the complete upper bound returned by
+    /// [`Transcoder::max_total_output_len`] for `input.len()` units.
+    ///
     /// # Parameters
     ///
     /// - `input`: Complete input unit slice.
@@ -577,22 +582,33 @@ pub trait Transcoder {
     ///
     /// Returns framework errors when the output buffer is too small, when
     /// capacity arithmetic overflows, or when the complete input ends with
-    /// an incomplete value. The method resets the stream before processing
-    /// input and uses state-independent streaming and finish bounds for the
-    /// remaining capacity check. Returns domain errors from reset, transcode,
-    /// or finish.
+    /// an incomplete value. Capacity-bound overflow and insufficient
+    /// complete-stream capacity are reported before `reset`, `transcode`, or
+    /// `finish` is called, so those preflight failures do not write to
+    /// `output` or advance transient stream state through lifecycle methods.
+    /// Once reset begins, domain errors, incomplete input, runtime
+    /// backpressure caused by an invalid bound implementation, or contract
+    /// violations may leave partial output and advanced state; this method
+    /// does not provide general transactional rollback.
     fn transcode_complete_into(
         &mut self,
         input: &[Self::Input],
         output: &mut [Self::Output],
     ) -> Result<usize, Self::Error> {
-        let mut output_cursor = self.reset(output, 0)?;
+        let reset_required = self
+            .max_reset_output_len()
+            .map_err(TranscodeFailure::from)?;
         let transcode_required = self
             .max_transcode_output_len(input.len())
             .map_err(TranscodeFailure::from)?;
         let finish_required = self
             .max_finish_output_len()
             .map_err(TranscodeFailure::from)?;
+        let total_required = sum_output_bounds(reset_required, transcode_required, finish_required)
+            .map_err(TranscodeFailure::from)?;
+        TranscodeFailure::ensure_output_capacity(output.len(), 0, total_required)?;
+
+        let mut output_cursor = self.reset(output, 0)?;
         let remaining_required = add_output_bounds(transcode_required, finish_required)
             .map_err(TranscodeFailure::from)?;
         TranscodeFailure::ensure_output_capacity(output.len(), output_cursor, remaining_required)?;
