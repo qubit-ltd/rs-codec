@@ -1,13 +1,16 @@
 // =============================================================================
-//    Copyright (c) 2026 Haixing Hu.
+//    Copyright (c) 2025 - 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod big_endian_tests;
-mod byte_order_spec_tests;
-mod byte_order_tests;
-mod little_endian_tests;
-mod native_endian_tests;
+use qubit_codec::NativeEndian;
+
+#[test]
+fn test_native_endian_is_copyable_default_marker() {
+    let marker = NativeEndian;
+
+    assert_eq!(marker, NativeEndian);
+}
