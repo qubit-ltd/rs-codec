@@ -28,7 +28,10 @@ impl<Value> PendingValue<Value> {
     ///
     /// Returns pending-value state owned by the converter engine.
     #[inline(always)]
-    pub(in crate::transcode) const fn new(value: Value, input_index: usize) -> Self {
+    pub(in crate::transcode) const fn new(
+        value: Value,
+        input_index: usize,
+    ) -> Self {
         Self { value, input_index }
     }
 

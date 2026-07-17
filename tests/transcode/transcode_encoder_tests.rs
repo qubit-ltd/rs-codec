@@ -8,7 +8,11 @@
 //! Tests for the semantic transcode encoder marker trait.
 
 use qubit_codec::{
-    CapacityError, TranscodeEncodeError, TranscodeEncoder, TranscodeProgress, Transcoder,
+    CapacityError,
+    TranscodeEncodeError,
+    TranscodeEncoder,
+    TranscodeProgress,
+    Transcoder,
 };
 
 #[derive(Default)]
@@ -19,7 +23,10 @@ impl Transcoder for CharToByte {
     type Output = u8;
     type Error = TranscodeEncodeError<core::convert::Infallible, char>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -27,7 +34,8 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>>
+    {
         TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
             output.len(),
             output_index,
@@ -41,7 +49,10 @@ impl Transcoder for CharToByte {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<
+        TranscodeProgress,
+        TranscodeEncodeError<core::convert::Infallible, char>,
+    > {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -55,7 +66,8 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>>
+    {
         TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
             output.len(),
             output_index,

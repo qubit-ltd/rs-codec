@@ -8,8 +8,13 @@
 //! Tests for the codec-backed buffered decoder adapter.
 
 use qubit_codec::{
-    Codec, CodecTranscodeDecoder, DecodeFailure, TranscodeDecodeError, TranscodeDecoder,
-    TranscodeStatus, Transcoder,
+    Codec,
+    CodecTranscodeDecoder,
+    DecodeFailure,
+    TranscodeDecodeError,
+    TranscodeDecoder,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -29,7 +34,8 @@ impl Codec for VariableByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -87,7 +93,8 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((
@@ -126,7 +133,8 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -166,7 +174,8 @@ impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -191,7 +200,10 @@ impl Codec for ResetFailCodec {
 
 #[test]
 fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
-    fn assert_transcode_decoder<T: TranscodeDecoder<Input = u8, Output = u8>>() {}
+    fn assert_transcode_decoder<
+        T: TranscodeDecoder<Input = u8, Output = u8>,
+    >() {
+    }
 
     assert_transcode_decoder::<CodecTranscodeDecoder<VariableByteCodec>>();
 

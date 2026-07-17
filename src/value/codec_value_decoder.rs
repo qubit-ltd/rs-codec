@@ -11,8 +11,12 @@ use core::fmt;
 
 use super::ValueDecoder;
 use crate::{
-    Codec, TranscodeDecodeErrorOf,
-    codec::{assert_unit_bounds, decode_lifecycle_scratch_len},
+    Codec,
+    TranscodeDecodeErrorOf,
+    codec::{
+        assert_unit_bounds,
+        decode_lifecycle_scratch_len,
+    },
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
 
@@ -93,7 +97,10 @@ where
     /// reset and finish bounds, when the wrapped codec reports a consumed unit
     /// count larger than the input slice length, or when finish output exceeds
     /// [`Codec::MAX_DECODE_FINISH_VALUES`].
-    pub fn decode(&mut self, input: &[C::Unit]) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
+    pub fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
     where
         C::Value: Default,
     {
@@ -102,7 +109,11 @@ where
             self.decode_lifecycle_scratch
                 .resize_with(scratch_cap, C::Value::default);
         }
-        decode_exact_complete_value(&mut self.codec, input, &mut self.decode_lifecycle_scratch)
+        decode_exact_complete_value(
+            &mut self.codec,
+            input,
+            &mut self.decode_lifecycle_scratch,
+        )
     }
 }
 
@@ -115,7 +126,10 @@ where
     type Error = TranscodeDecodeErrorOf<C>;
 
     #[inline(always)]
-    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
         self.decode(input)
     }
 }

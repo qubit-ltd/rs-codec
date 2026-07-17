@@ -7,7 +7,10 @@
 // =============================================================================
 //! Semantic marker trait for buffered encoders.
 
-use super::{TranscodeEncodeError, Transcoder};
+use super::{
+    TranscodeEncodeError,
+    Transcoder,
+};
 
 /// Encodes logical values into encoded units over caller-provided buffers.
 ///
@@ -19,7 +22,12 @@ use super::{TranscodeEncodeError, Transcoder};
 /// The word "buffered" describes the caller-managed buffer and progress model.
 /// It does not require the implementor to own an internal buffer.
 pub trait TranscodeEncoder:
-    Transcoder<Error = TranscodeEncodeError<Self::EncodeError, <Self as Transcoder>::Input>>
+    Transcoder<
+    Error = TranscodeEncodeError<
+        Self::EncodeError,
+        <Self as Transcoder>::Input,
+    >,
+>
 {
     /// Domain error type produced by encode internals.
     type EncodeError;

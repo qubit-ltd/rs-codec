@@ -103,21 +103,62 @@ mod value;
 /// Policy-aware transcode engines, hooks, contexts, and per-step outcomes.
 pub mod engine {
     pub use crate::transcode::{
-        DecodeContext, DecodeInvalidAction, DecodeInvalidActionOf, DecodeOutcome, EncodeContext,
-        EncodeOutcome, EncodeUnencodableAction, EncodeUnencodableActionOf, TranscodeConvertEngine,
-        TranscodeDecodeEngine, TranscodeDecodeHooks, TranscodeEncodeEngine, TranscodeEncodeHooks,
+        DecodeContext,
+        DecodeInvalidAction,
+        DecodeInvalidActionOf,
+        DecodeOutcome,
+        EncodeContext,
+        EncodeOutcome,
+        EncodeUnencodableAction,
+        EncodeUnencodableActionOf,
+        TranscodeConvertEngine,
+        TranscodeDecodeEngine,
+        TranscodeDecodeHooks,
+        TranscodeEncodeEngine,
+        TranscodeEncodeHooks,
     };
 }
 
-pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian, NativeEndian};
-pub use codec::{Codec, DecodeFailure};
+pub use byte_order::{
+    BigEndian,
+    ByteOrder,
+    ByteOrderSpec,
+    LittleEndian,
+    NativeEndian,
+};
+pub use codec::{
+    Codec,
+    DecodeFailure,
+};
 pub use transcode::{
-    CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
-    TranscodeContractError, TranscodeConvertError, TranscodeConvertErrorOf, TranscodeConverter,
-    TranscodeDecodeError, TranscodeDecodeErrorOf, TranscodeDecoder, TranscodeDomainError,
-    TranscodeEncodeError, TranscodeEncodeErrorOf, TranscodeEncoder, TranscodeFailure,
-    TranscodeProgress, TranscodeStatus, Transcoder,
+    CapacityError,
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+    TranscodeContractError,
+    TranscodeConvertError,
+    TranscodeConvertErrorOf,
+    TranscodeConverter,
+    TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
+    TranscodeDecoder,
+    TranscodeDomainError,
+    TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
+    TranscodeEncoder,
+    TranscodeFailure,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
 };
 #[cfg(feature = "io")]
-pub use transcode::{TranscodeDecodeInput, TranscodeEncodeOutput};
-pub use value::{CodecValueDecoder, CodecValueEncoder, ValueDecoder, ValueEncoder};
+pub use transcode::{
+    TranscodeDecodeInput,
+    TranscodeEncodeOutput,
+};
+pub use value::{
+    CodecValueDecoder,
+    CodecValueEncoder,
+    ValueDecoder,
+    ValueEncoder,
+};
