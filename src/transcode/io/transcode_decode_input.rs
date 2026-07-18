@@ -52,8 +52,6 @@ where
     I::Item: Copy + Default,
 {
     input: BufferedInput<I>,
-    scratch_unread: Vec<I::Item>,
-    scratch_position: usize,
 }
 
 impl<I> TranscodeDecodeInput<I>
@@ -74,8 +72,6 @@ where
     pub fn new(inner: I) -> Self {
         Self {
             input: BufferedInput::new(inner),
-            scratch_unread: Vec::new(),
-            scratch_position: 0,
         }
     }
 
@@ -93,8 +89,6 @@ where
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
-            scratch_unread: Vec::new(),
-            scratch_position: 0,
         }
     }
 
@@ -124,9 +118,6 @@ where
     /// The number of unread units in the internal buffer.
     #[must_use]
     pub fn unread_len(&self) -> usize {
-        if self.has_scratch_unread() {
-            return self.scratch_unread_len();
-        }
         self.input.unread_len()
     }
 
@@ -138,9 +129,6 @@ where
     /// buffer. The slice is valid until this adapter is mutated.
     #[must_use]
     pub fn unread(&self) -> &[I::Item] {
-        if self.has_scratch_unread() {
-            return self.scratch_unread();
-        }
         self.input.unread()
     }
 
@@ -163,10 +151,13 @@ where
     ///
     /// # Errors
     ///
-    /// Returns I/O errors from the wrapped input while refilling.
+    /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
+    /// errors from the wrapped input while refilling.
     pub fn fill_until(&mut self, count: usize) -> std::io::Result<bool> {
-        if self.has_scratch_unread() {
-            return self.fill_scratch_until(count);
+        if count > self.input.capacity() {
+            self.input
+                .try_reserve_capacity(count)
+                .map_err(allocation_to_io_error)?;
         }
         self.input.fill_until(count)
     }
@@ -185,10 +176,6 @@ where
             count <= self.unread_len(),
             "cannot consume beyond buffered input",
         );
-        if self.has_scratch_unread() {
-            self.consume_scratch(count);
-            return;
-        }
         // SAFETY: The caller-provided count is within the unread window.
         unsafe {
             self.input.consume(count);
@@ -244,23 +231,7 @@ where
     /// The wrapped input and the buffer holding unread units.
     #[must_use]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
-        let scratch_position = self.scratch_position;
-        let scratch_unread = self.scratch_unread;
-        let (inner, input_buffer) = self.input.into_parts();
-        let scratch = &scratch_unread[scratch_position..];
-        if scratch.is_empty() {
-            return (inner, input_buffer);
-        }
-        let input_unread = input_buffer.readable();
-        let mut buffer =
-            Buffer::with_capacity(scratch.len() + input_unread.len());
-        unsafe {
-            // SAFETY: The destination buffer was sized to hold both readable
-            // ranges, and the source slices are external to `buffer`.
-            buffer.copy_from(scratch, 0, scratch.len());
-            buffer.copy_from(input_unread, 0, input_unread.len());
-        }
-        (inner, buffer)
+        self.input.into_parts()
     }
 
     /// Reads buffered units into an indexed output range.
@@ -297,28 +268,8 @@ where
         if count == 0 {
             return Ok(0);
         }
-        let mut total = 0;
-        if self.has_scratch_unread() {
-            let read = count.min(self.scratch_unread_len());
-            let scratch = self.scratch_unread();
-            output[output_index..output_index + read]
-                .copy_from_slice(&scratch[..read]);
-            self.consume_scratch(read);
-            total = read;
-            if total == count {
-                return Ok(total);
-            }
-        }
-        // SAFETY: The caller guarantees the original destination range is
-        // valid; `total < count`, so this suffix is still in range.
-        let read = unsafe {
-            self.input.read_unchecked(
-                output,
-                output_index + total,
-                count - total,
-            )
-        }?;
-        Ok(total + read)
+        // SAFETY: The caller guarantees the destination range is valid.
+        unsafe { self.input.read_unchecked(output, output_index, count) }
     }
 
     /// Decodes one codec value from the buffered unit input.
@@ -478,14 +429,9 @@ where
         let min_units_per_value = C::MIN_UNITS_PER_VALUE;
         let max_units_per_value =
             C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
-        if min_units_per_value > self.capacity() {
-            return read_decoded_via_scratch(
-                self,
-                codec,
-                min_units_per_value,
-                map_error,
-            );
-        }
+        self.input
+            .try_reserve_capacity(min_units_per_value)
+            .map_err(allocation_to_io_error)?;
 
         loop {
             let available = self.prepare_buffered_decode_window(
@@ -510,14 +456,6 @@ where
                         required_total.get() <= C::MAX_UNITS_PER_VALUE,
                         "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE",
                     );
-                    if required_total.get() > self.capacity() {
-                        return read_decoded_via_scratch(
-                            self,
-                            codec,
-                            required_total.get(),
-                            map_error,
-                        );
-                    }
                     self.refill_after_incomplete(required_total, available)?;
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
@@ -804,10 +742,7 @@ where
     ///
     /// Returns seek errors from the wrapped input.
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        let position = self.adjust_seek_for_scratch(position)?;
-        let new_position = self.input.seek_to(position)?;
-        self.clear_scratch_unread();
-        Ok(new_position)
+        self.input.seek_to(position)
     }
 }
 
@@ -816,109 +751,9 @@ where
     I: Input,
     I::Item: Copy + Default,
 {
-    /// Returns whether scratch-owned unread units exist.
-    #[inline(always)]
-    fn has_scratch_unread(&self) -> bool {
-        self.scratch_position < self.scratch_unread.len()
-    }
-
-    /// Returns scratch-owned unread units.
-    #[inline(always)]
-    fn scratch_unread(&self) -> &[I::Item] {
-        &self.scratch_unread[self.scratch_position..]
-    }
-
-    /// Returns the number of scratch-owned unread units.
-    #[inline(always)]
-    fn scratch_unread_len(&self) -> usize {
-        self.scratch_unread.len() - self.scratch_position
-    }
-
-    /// Clears scratch-owned unread units.
-    #[inline(always)]
-    fn clear_scratch_unread(&mut self) {
-        self.scratch_unread.clear();
-        self.scratch_position = 0;
-    }
-
-    /// Consumes units from the scratch-owned unread window.
-    #[inline(always)]
-    fn consume_scratch(&mut self, count: usize) {
-        debug_assert!(
-            count <= self.scratch_unread_len(),
-            "cannot consume beyond scratch unread input",
-        );
-        self.scratch_position += count;
-        if self.scratch_position == self.scratch_unread.len() {
-            self.clear_scratch_unread();
-        }
-    }
-
-    /// Appends wrapped input units to the scratch-owned unread window.
-    fn fill_scratch_until(&mut self, count: usize) -> Result<bool> {
-        while self.scratch_unread_len() < count {
-            let missing = count - self.scratch_unread_len();
-            let start = self.scratch_unread.len();
-            self.scratch_unread
-                .resize(start + missing, I::Item::default());
-            let read_result = unsafe {
-                // SAFETY: The scratch vector was resized to provide the
-                // destination range being filled.
-                self.input.read_unchecked(
-                    &mut self.scratch_unread,
-                    start,
-                    missing,
-                )
-            };
-            let read = match read_result {
-                Ok(read) => read,
-                Err(error) => {
-                    self.scratch_unread.truncate(start);
-                    return Err(error);
-                }
-            };
-            if read == 0 {
-                self.scratch_unread.truncate(start);
-                return Ok(false);
-            }
-            self.scratch_unread.truncate(start + read);
-        }
-        Ok(true)
-    }
-
     /// Refills the underlying buffer.
     fn fill_more(&mut self) -> Result<bool> {
-        debug_assert!(
-            !self.has_scratch_unread(),
-            "scratch unread units must be consumed before refilling input",
-        );
         self.input.fill_more()
-    }
-
-    /// Stores unconsumed scratch units as the next unread window.
-    fn store_scratch_tail(&mut self, units: &[I::Item], start: usize) {
-        if start >= units.len() {
-            self.clear_scratch_unread();
-            return;
-        }
-        self.scratch_unread.clear();
-        self.scratch_unread.extend_from_slice(&units[start..]);
-        self.scratch_position = 0;
-    }
-
-    /// Adjusts relative seeks for scratch-owned unread units.
-    fn adjust_seek_for_scratch(&self, position: SeekFrom) -> Result<SeekFrom> {
-        let SeekFrom::Current(offset) = position else {
-            return Ok(position);
-        };
-        let scratch = self.scratch_unread_len().min(i64::MAX as usize) as i64;
-        let adjusted = offset.checked_sub(scratch).ok_or_else(|| {
-            Error::new(
-                ErrorKind::InvalidInput,
-                "current seek offset underflows after scratch adjustment",
-            )
-        })?;
-        Ok(SeekFrom::Current(adjusted))
     }
 }
 
@@ -963,108 +798,7 @@ fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
-/// Decodes one value through caller-owned scratch storage.
-///
-/// # Parameters
-///
-/// - `input`: Buffered source from which units are loaded.
-/// - `codec`: Codec used to decode one value.
-/// - `required_total`: Minimum total units required for the first attempt.
-/// - `map_error`: Converts codec domain errors into I/O errors.
-///
-/// # Returns
-///
-/// The decoded value. Units loaded beyond the decoded value remain buffered.
-///
-/// # Errors
-///
-/// Returns an I/O error when input cannot be read, the input ends before one
-/// complete value is available, or the codec reports invalid progress. Codec
-/// domain errors are converted through `map_error`.
-///
-/// # Panics
-///
-/// Panics when an incomplete-input requirement exceeds
-/// [`Codec::MAX_UNITS_PER_VALUE`].
-fn read_decoded_via_scratch<I, C, M>(
-    input: &mut TranscodeDecodeInput<I>,
-    codec: &mut C,
-    mut required_total: usize,
-    map_error: &mut M,
-) -> Result<C::Value>
-where
-    I: Input,
-    I::Item: Copy + Default,
-    C: Codec<Unit = I::Item>,
-    M: FnMut(C::DecodeError) -> Error,
-{
-    assert!(
-        required_total <= C::MAX_UNITS_PER_VALUE,
-        "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE",
-    );
-    let mut units = vec![I::Item::default(); required_total];
-    let mut loaded = 0;
-    loop {
-        while loaded < required_total {
-            let remaining = required_total - loaded;
-            let read = unsafe {
-                // SAFETY: `units` was resized to at least `required_total`, so
-                // `loaded..loaded + remaining` is a valid destination range.
-                input.read_unchecked(&mut units, loaded, remaining)
-            }?;
-            if read == 0 {
-                return Err(Error::new(
-                    ErrorKind::UnexpectedEof,
-                    "failed to decode complete value",
-                ));
-            }
-            loaded += read;
-        }
-        let decode_result = unsafe {
-            // SAFETY: `loaded >= required_total >= min_units_per_value`, so the
-            // scratch buffer contains the required prefix for decoding.
-            codec.decode(&units, 0)
-        };
-        match decode_result {
-            Ok((value, consumed)) => {
-                let consumed = consumed.get();
-                if consumed > loaded {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "codec consumed units exceed loaded scratch window",
-                    ));
-                }
-                input.store_scratch_tail(&units[..loaded], consumed);
-                return Ok(value);
-            }
-            Err(DecodeFailure::Incomplete {
-                required_total: next_required_total,
-            }) => {
-                let next_required_total = next_required_total.get();
-                assert!(
-                    next_required_total <= C::MAX_UNITS_PER_VALUE,
-                    "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE",
-                );
-                if next_required_total <= loaded {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "codec reported incomplete input within loaded scratch window",
-                    ));
-                }
-                units.resize(next_required_total, I::Item::default());
-                required_total = next_required_total;
-            }
-            Err(DecodeFailure::Invalid { source, consumed }) => {
-                let consumed = consumed.map(NonZeroUsize::get).unwrap_or(0);
-                if consumed > loaded {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "decode error consumed units exceed loaded scratch window",
-                    ));
-                }
-                input.store_scratch_tail(&units[..loaded], consumed);
-                return Err(map_error(source));
-            }
-        }
-    }
+/// Converts an allocation failure into an I/O boundary error.
+fn allocation_to_io_error(error: std::collections::TryReserveError) -> Error {
+    Error::new(ErrorKind::OutOfMemory, error)
 }

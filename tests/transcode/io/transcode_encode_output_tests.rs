@@ -1259,7 +1259,7 @@ fn test_buffered_encode_output_flushes_full_buffer_before_next_write() {
 }
 
 #[test]
-fn test_buffered_encode_output_transcode_from_reports_entry_flush_error() {
+fn test_buffered_encode_output_defers_entry_flush_error_until_flush() {
     let output = FixedCapacityOutput::new(0);
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
@@ -1272,24 +1272,25 @@ fn test_buffered_encode_output_transcode_from_reports_entry_flush_error() {
     assert_eq!(1, written);
     assert_eq!(0, output.spare_capacity());
 
-    let error = output
+    let written = output
         .transcode_from(&mut encoder, &mut mapper, &[0x5678], 0, 1)
-        .expect_err("entry spare-capacity reservation should flush and fail");
+        .expect("persistent buffer should grow without an entry flush");
+    assert_eq!(1, written);
 
+    let error = output.flush().expect_err("explicit flush should fail");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert!(error.to_string().contains("fixed output capacity exceeded"));
 }
 
 #[test]
-fn test_buffered_encode_output_reports_no_progress_need_output_capacity() {
+fn test_buffered_encode_output_grows_for_no_progress_need_output() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
-    let error = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
-        .expect_err("insufficient fixed buffer capacity should be reported");
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect("persistent buffer should grow for the required output");
 
-    assert_eq!(ErrorKind::InvalidInput, error.kind());
-    assert!(error.to_string().contains("spare capacity"));
+    assert_eq!(1, written);
 }
 
 #[cfg(debug_assertions)]
@@ -1562,18 +1563,18 @@ fn test_buffered_encode_output_flushes_after_partial_need_output_progress() {
 }
 
 #[test]
-fn test_buffered_encode_output_reports_post_read_need_output_capacity() {
+fn test_buffered_encode_output_grows_for_post_read_need_output() {
     let output = FixedCapacityOutput::new(1);
     let mut encoder = NeedOutputAfterReadPastCapacityEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
     let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
         map_error;
 
-    let error = output
+    let written = output
         .transcode_from(&mut encoder, &mut mapper, &[0x1234], 0, 1)
-        .expect_err("post-read NeedOutput beyond capacity should fail");
+        .expect("post-read NeedOutput should grow the persistent buffer");
 
-    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(1, written);
 }
 
 #[test]
@@ -1582,10 +1583,10 @@ fn test_buffered_encode_output_retries_after_need_output_without_reading() {
     let mut encoder = PrefixBeforeReadEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
     let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-        .expect("encoder should flush prefix then encode the input value");
+        .expect("encoder should grow and retain the prefix with the value");
 
     assert_eq!(1, written);
-    assert_eq!(&[0xaaaa], output.inner().units.as_slice());
+    assert!(output.inner().units.is_empty());
 
     output
         .flush()
@@ -1609,19 +1610,18 @@ fn test_buffered_encode_output_finish_reports_spare_capacity_error() {
 }
 
 #[test]
-fn test_buffered_encode_output_finish_reports_required_spare_capacity_error() {
+fn test_buffered_encode_output_finish_grows_for_required_spare_capacity() {
     let output = UnitOutput::default();
     let mut encoder = TwoUnitFinishEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
     let mut mapper: fn(TranscodeEncodeError<PairEncodeError, ()>) -> Error =
         map_error;
 
-    let error = output
+    output
         .finish(&mut encoder, &mut mapper)
-        .expect_err("finish should reserve its full bound before writing");
+        .expect("finish should grow and reserve its full bound before writing");
 
-    assert_eq!(ErrorKind::InvalidInput, error.kind());
-    assert!(error.to_string().contains("spare capacity"));
+    assert_eq!(2, output.inner().units.len());
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1730,7 +1730,7 @@ impl Output for ZeroWriteOutput {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_uses_scratch_when_buffer_is_too_small()
+fn test_buffered_encode_output_write_encoded_grows_persistent_buffer()
  {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
@@ -1738,10 +1738,11 @@ fn test_buffered_encode_output_write_encoded_uses_scratch_when_buffer_is_too_sma
 
     output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
-        .expect("large value should encode through scratch storage");
+        .expect("large value should grow the persistent buffer");
     output.flush().expect("encoded units should flush");
 
     assert_eq!(&[0x0002, 0x0001], output.inner().units.as_slice());
+    assert!(output.spare_capacity() >= 2);
 }
 
 #[test]
@@ -1930,7 +1931,8 @@ fn test_buffered_encode_output_write_encoded_propagates_non_capacity_spare_error
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
-        .expect_err("non-capacity spare errors should propagate");
+        .and_then(|()| output.flush())
+        .expect_err("buffer flush errors should propagate");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
@@ -1946,7 +1948,8 @@ fn test_buffered_encode_output_write_encoded_scratch_propagates_flush_errors() {
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
-        .expect_err("scratch encoding should propagate flush failures");
+        .and_then(|()| output.flush())
+        .expect_err("persistent-buffer flush should propagate flush failures");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
@@ -1962,7 +1965,8 @@ fn test_buffered_encode_output_write_encoded_scratch_propagates_write_errors() {
 
     let error = output
         .write_encoded_with(&mut codec, &0x0001_0002, map_codec_error)
-        .expect_err("scratch encoding should propagate direct write failures");
+        .and_then(|()| output.flush())
+        .expect_err("persistent-buffer flush should propagate write failures");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
@@ -2007,7 +2011,7 @@ fn test_buffered_encode_output_write_all_propagates_write_errors() {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_propagates_ensure_spare_flush_errors()
+fn test_buffered_encode_output_write_encoded_defers_flush_errors()
  {
     let inner = UnitOutput {
         fail_write: true,
@@ -2022,10 +2026,11 @@ fn test_buffered_encode_output_write_encoded_propagates_ensure_spare_flush_error
         .expect("first value should leave less than one complete bound");
     assert_eq!(2, output.spare_capacity());
 
-    let error = output
+    output
         .write_encoded_with(&mut codec, &0x0003_0004, map_codec_error)
-        .expect_err("ensure_spare flush failures should propagate");
+        .expect("persistent buffer growth should not flush");
 
+    let error = output.flush().expect_err("explicit flush should fail");
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }
 

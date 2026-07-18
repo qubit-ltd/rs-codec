@@ -198,7 +198,7 @@ unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一
 
 ```toml
 [dependencies]
-qubit-codec = "0.10"
+qubit-codec = "0.11"
 ```
 
 ## 快速开始

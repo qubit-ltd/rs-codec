@@ -1,6 +1,6 @@
 [package]
 name = "qubit-codec"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 rust-version = "1.94"
 autotests = false
@@ -34,7 +34,7 @@ io = ["dep:qubit-io"]
 [dependencies]
 thiserror = "2.0"
 
-qubit-io = { version = "0.13", optional = true }
+qubit-io = { version = "0.14", path = "../rs-io", optional = true }
 
 [[test]]
 name = "tests"

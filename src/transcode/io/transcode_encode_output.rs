@@ -160,8 +160,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns I/O errors from the wrapped output while flushing pending units.
+    /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
+    /// errors from the wrapped output while flushing pending units.
     pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
+        let pending = self.output.capacity() - self.output.spare_capacity();
+        let required_capacity = pending.saturating_add(count);
+        self.output
+            .try_reserve_capacity(required_capacity)
+            .map_err(allocation_to_io_error)?;
         self.output.ensure_spare_capacity(count)
     }
 
@@ -169,7 +175,7 @@ where
         &mut self,
         required: NonZeroUsize,
     ) -> Result<()> {
-        self.output.ensure_spare_capacity(required.get())
+        self.ensure_spare_capacity(required.get())
     }
 
     /// Consumes this adapter and returns its parts.
@@ -193,10 +199,8 @@ where
 
     /// Encodes one codec value into this buffered unit output.
     ///
-    /// The method writes into the internal spare buffer when the encoded value
-    /// fits there. If one complete value can exceed the buffer capacity, it
-    /// flushes pending units and encodes through a temporary scratch buffer
-    /// before writing the scratch contents to the wrapped output.
+    /// The method grows the persistent internal buffer when necessary, then
+    /// writes the complete encoded value into its spare window.
     ///
     /// # Parameters
     ///
@@ -231,32 +235,7 @@ where
                 .map_err(TranscodeEncodeErrorOf::<C>::from),
             &mut map_error,
         )?;
-        if let Err(error) = self.output.ensure_spare_capacity(max_units) {
-            if error.kind() != ErrorKind::InvalidInput {
-                return Err(error);
-            }
-            self.output.flush()?;
-            let mut scratch = vec![O::Item::default(); max_units];
-            let written = map_encode_value_result(
-                encode_complete_value_into_reserved(
-                    codec,
-                    value,
-                    &mut scratch,
-                    0,
-                    max_units,
-                ),
-                &mut map_error,
-            )?;
-            // SAFETY: `scratch` has the conservative complete lifecycle
-            // capacity, and the helper reports how many initialized units it
-            // actually wrote.
-            unsafe {
-                self.output
-                    .inner_mut()
-                    .write_fully_unchecked(&scratch, 0, written)?;
-            }
-            return Ok(());
-        }
+        self.ensure_spare_capacity(max_units)?;
         let (units, output_index, available) =
             self.output.spare_raw_parts_mut();
         debug_assert!(
@@ -285,10 +264,9 @@ where
     /// Encodes values from an indexed input range using a streaming
     /// [`Transcoder`].
     ///
-    /// Unlike [`Self::write_encoded_with`], this streaming path writes
-    /// directly into the internal spare buffer and does not allocate scratch
-    /// storage for one oversized output step. The buffer capacity must be
-    /// large enough for any `NeedOutput.required` value reported by `encoder`.
+    /// This streaming path writes directly into the internal spare buffer and
+    /// grows it for any larger `NeedOutput.required` value reported by
+    /// `encoder`.
     ///
     /// # Parameters
     ///
@@ -378,10 +356,9 @@ where
 
     /// Finishes the encoder and flushes the wrapped unit output.
     ///
-    /// This method writes final units directly into the internal spare buffer.
-    /// It does not allocate scratch storage when
-    /// [`Transcoder::max_finish_output_len`] exceeds the buffer capacity; in
-    /// that case the spare-capacity error is returned to the caller.
+    /// This method writes final units directly into the internal spare buffer,
+    /// growing it when [`Transcoder::max_finish_output_len`] exceeds the
+    /// current capacity.
     ///
     /// # Parameters
     ///
@@ -405,7 +382,7 @@ where
             Ok(required) => required,
             Err(error) => return Err(capacity_error_to_invalid_data(error)),
         };
-        self.output.ensure_spare_capacity(required)?;
+        self.ensure_spare_capacity(required)?;
         let (units, output_index, available) =
             self.output.spare_raw_parts_mut();
         debug_assert!(
@@ -502,6 +479,11 @@ where
             .field("output", &self.output)
             .finish()
     }
+}
+
+/// Converts an allocation failure into an I/O boundary error.
+fn allocation_to_io_error(error: std::collections::TryReserveError) -> Error {
+    Error::new(ErrorKind::OutOfMemory, error)
 }
 
 /// Maps a streaming capacity error into an I/O error.

@@ -1929,7 +1929,7 @@ fn test_buffered_decode_input_read_decoded_maps_invalid_input() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_uses_scratch_when_value_exceeds_capacity()
+fn test_buffered_decode_input_read_decoded_grows_when_value_exceeds_capacity()
  {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
@@ -1937,9 +1937,10 @@ fn test_buffered_decode_input_read_decoded_uses_scratch_when_value_exceeds_capac
 
     let value = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect("scratch decode should succeed across refills");
+        .expect("decode should grow its persistent buffer across refills");
 
     assert_eq!(0x0001_0002, value);
+    assert!(input.capacity() >= 2);
 }
 
 #[test]
@@ -2431,8 +2432,8 @@ fn test_buffered_decode_input_configurable_codec_validates_scratch_decode_contra
     let error =
         result.expect_err("a satisfied scratch hint should be rejected");
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("loaded scratch window"));
-    assert!(input.unread().is_empty());
+    assert!(error.to_string().contains("available window"));
+    assert_eq!(&[0x0001, 0x0002], input.unread());
 
     let (result, input) = read_with_scratch_mode(
         ChunkedInput::new(vec![vec![0x0001, 0x0002]]),
@@ -2442,8 +2443,8 @@ fn test_buffered_decode_input_configurable_codec_validates_scratch_decode_contra
     let error = result
         .expect_err("successful scratch decode cannot over-consume input");
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("loaded scratch window"));
-    assert!(input.unread().is_empty());
+    assert!(error.to_string().contains("unread window"));
+    assert_eq!(&[0x0001, 0x0002], input.unread());
 
     let (result, input) = read_with_scratch_mode(
         ChunkedInput::new(vec![vec![0x0001, 0x0002]]),
@@ -2466,8 +2467,8 @@ fn test_buffered_decode_input_configurable_codec_validates_scratch_decode_contra
     let error =
         result.expect_err("scratch invalid hints cannot over-consume input");
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("loaded scratch window"));
-    assert!(input.unread().is_empty());
+    assert!(error.to_string().contains("unread window"));
+    assert_eq!(&[0x0001, 0x0002], input.unread());
 
     let (result, input) = read_with_scratch_mode(
         ChunkedInput::new(vec![vec![0x0001, 0x0002]]),
@@ -2824,7 +2825,7 @@ fn test_buffered_decode_input_read_decoded_scratch_rejects_impossible_incomplete
         );
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("loaded scratch window"));
+    assert!(error.to_string().contains("available window"));
 }
 
 #[test]
@@ -2842,7 +2843,7 @@ fn test_buffered_decode_input_read_decoded_scratch_rejects_overconsuming_codec()
     assert!(
         error
             .to_string()
-            .contains("codec consumed units exceed loaded scratch window")
+            .contains("codec consumed units exceed unread window")
     );
 }
 
@@ -2860,7 +2861,7 @@ fn test_buffered_decode_input_read_decoded_scratch_rejects_invalid_consumed_hint
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
         error.to_string().contains(
-            "decode error consumed units exceed loaded scratch window"
+            "decode error consumed units exceed unread window"
         )
     );
 }
