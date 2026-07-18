@@ -34,8 +34,8 @@ This crate provides:
   caller-managed logical-stream conversion.
 - `TranscodeEncoder`, `TranscodeDecoder`, and `TranscodeConverter` marker traits
   for semantic transcoder direction.
-- `ByteOrder`, `ByteOrderSpec`, `BigEndian`, and `LittleEndian` for byte-order
-  metadata shared by binary and text codecs.
+- `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and
+  `NativeEndian` for byte-order metadata shared by binary and text codecs.
 
 Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 `qubit-codec-text`, and `qubit-codec-misc`.
@@ -377,6 +377,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `ByteOrderSpec` | Type-level byte-order abstraction |
 | `BigEndian` | Big-endian type marker |
 | `LittleEndian` | Little-endian type marker |
+| `NativeEndian` | Native-endian type marker |
 
 ## Crate Boundary
 
@@ -419,10 +420,10 @@ Runtime dependencies are intentionally small:
 ## Testing
 
 ```bash
-# Core API with the default empty feature set
-cargo test --no-default-features
+# Run tests with the default empty feature set
+cargo test
 
-# Core API plus regex validation
+# Run tests with the optional I/O bridge enabled
 cargo test --all-features
 
 # Project CI checks

@@ -28,6 +28,12 @@ use crate::{
 /// successful decode, the adapter calls [`Codec::decode_finish`] to reset
 /// decode-side stream state for the next call.
 ///
+/// Values emitted by [`Codec::decode_reset`] and [`Codec::decode_finish`] are
+/// written into reusable lifecycle scratch storage and discarded. The adapter
+/// returns only the value produced by [`Codec::decode`]. Callers for which
+/// reset or finish values are semantically observable should use a streaming
+/// decoder adapter instead.
+///
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
@@ -79,6 +85,9 @@ where
     /// # Returns
     ///
     /// Returns the decoded value.
+    ///
+    /// Values emitted by decode reset or finish are discarded; this method
+    /// returns only the main value decoded from `input`.
     ///
     /// # Errors
     ///
