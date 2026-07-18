@@ -59,7 +59,6 @@ impl<Value> PendingValueSlot<Value> {
     ) -> Result<usize, CapacityError>
     where
         E: Codec<Value = Value>,
-        Value: Clone,
         H: TranscodeEncodeHooks<E>,
     {
         if self.value.is_some() {

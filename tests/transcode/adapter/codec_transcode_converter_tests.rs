@@ -306,7 +306,7 @@ impl Codec for FlushValueDecoder {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 struct NonDefaultValue(u8);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -364,6 +364,10 @@ impl Codec for NonDefaultEncoder {
 
     const MAX_UNITS_PER_VALUE: usize = 1;
 
+    fn can_encode_value(&self, value: &NonDefaultValue) -> bool {
+        value.0 != 13
+    }
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -404,7 +408,7 @@ fn test_codec_transcode_converter_supports_debug_and_default() {
 }
 
 #[test]
-fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_api()
+fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api()
  {
     type Converter =
         CodecTranscodeConverter<NonDefaultDecoder, NonDefaultEncoder>;
@@ -425,7 +429,7 @@ fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_ap
 
     let progress = converter
         .transcode(&[3, 4], 0, &mut output, 0)
-        .expect("non-default values should transcode through inherent API");
+        .expect("non-clone values should transcode through inherent API");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(2, progress.read());
@@ -434,6 +438,17 @@ fn test_codec_transcode_converter_transcodes_non_default_values_with_inherent_ap
 
     converter.reset(&mut [], 0).expect("reset");
     assert_eq!(Ok(0), converter.finish(&mut output, 0));
+    converter
+        .reset(&mut [], 0)
+        .expect("reset should start the unencodable-value stream");
+
+    let error = converter
+        .transcode(&[13], 0, &mut output, 0)
+        .expect_err("unencodable non-clone value should retain owned context");
+    assert_eq!(
+        TranscodeConvertError::unencodable(0, NonDefaultValue(13)),
+        error,
+    );
 }
 
 #[test]

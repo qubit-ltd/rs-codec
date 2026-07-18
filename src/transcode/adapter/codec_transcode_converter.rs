@@ -61,7 +61,6 @@ impl<D, E> CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone,
 {
     /// Creates a buffered converter backed by decoder and encoder codecs.
     ///
@@ -242,7 +241,7 @@ impl<D, E> Transcoder for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone + Default,
+    D::Value: Default,
 {
     type Input = D::Unit;
     type Output = E::Unit;
@@ -381,7 +380,7 @@ impl<D, E> TranscodeConverter for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone + Default,
+    D::Value: Default,
 {
     type DecodeError = D::DecodeError;
     type EncodeError = E::EncodeError;
@@ -392,7 +391,6 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone,
     TranscodeConvertEngine<
         D,
         E,

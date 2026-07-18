@@ -57,4 +57,14 @@ impl<Value> PendingValue<Value> {
     pub(in crate::transcode) const fn value(&self) -> &Value {
         &self.value
     }
+
+    /// Consumes the pending state and returns the decoded value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the owned decoded value.
+    #[inline(always)]
+    pub(in crate::transcode) fn into_value(self) -> Value {
+        self.value
+    }
 }

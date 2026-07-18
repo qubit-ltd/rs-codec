@@ -263,7 +263,6 @@ impl<D, E, DH, EH> TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
 {
@@ -954,13 +953,17 @@ where
             state.output_mut(),
             output_index,
         );
-        let outcome =
-            self.encode_engine.encode_one(context).map_err(|error| {
-                TranscodeConvertError::from_encode_error_with_value(
-                    error,
-                    pending.value().clone(),
-                )
-            })?;
+        let outcome = match self.encode_engine.encode_one(context) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return Err(
+                    TranscodeConvertError::from_encode_error_with_value(
+                        error,
+                        pending.into_value(),
+                    ),
+                );
+            }
+        };
         let progress = state.apply_encode_outcome(outcome);
         if progress.is_some() {
             self.pending.put(pending);
@@ -973,7 +976,6 @@ impl<D, E, DH, EH> Default for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec + Default,
     E: Codec<Value = D::Value> + Default,
-    D::Value: Clone,
     DH: TranscodeDecodeHooks<D> + Default,
     EH: TranscodeEncodeHooks<E> + Default,
 {
@@ -992,7 +994,7 @@ impl<D, E, DH, EH> Transcoder for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone + Default,
+    D::Value: Default,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
 {
@@ -1067,7 +1069,7 @@ impl<D, E, DH, EH> TranscodeConverter for TranscodeConvertEngine<D, E, DH, EH>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    D::Value: Clone + Default,
+    D::Value: Default,
     DH: TranscodeDecodeHooks<D>,
     EH: TranscodeEncodeHooks<E>,
 {
