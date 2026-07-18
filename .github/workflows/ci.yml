@@ -17,3 +17,17 @@ jobs:
   rust-ci:
     uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
     secrets: inherit
+
+  miri:
+    name: Miri
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Miri
+        run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+      - name: Test core API with Miri
+        run: cargo miri test --no-default-features
