@@ -1730,8 +1730,7 @@ impl Output for ZeroWriteOutput {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_grows_persistent_buffer()
- {
+fn test_buffered_encode_output_write_encoded_grows_persistent_buffer() {
     let mut output =
         TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 0);
     let mut codec = ScriptedEncodeCodec::new(ScriptedEncodeMode::Success);
@@ -2011,8 +2010,7 @@ fn test_buffered_encode_output_write_all_propagates_write_errors() {
 }
 
 #[test]
-fn test_buffered_encode_output_write_encoded_defers_flush_errors()
- {
+fn test_buffered_encode_output_write_encoded_defers_flush_errors() {
     let inner = UnitOutput {
         fail_write: true,
         fail_flush: true,

@@ -1929,8 +1929,7 @@ fn test_buffered_decode_input_read_decoded_maps_invalid_input() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_grows_when_value_exceeds_capacity()
- {
+fn test_buffered_decode_input_read_decoded_grows_when_value_exceeds_capacity() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = FixedPairCodec;
@@ -2860,9 +2859,9 @@ fn test_buffered_decode_input_read_decoded_scratch_rejects_invalid_consumed_hint
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(
-        error.to_string().contains(
-            "decode error consumed units exceed unread window"
-        )
+        error
+            .to_string()
+            .contains("decode error consumed units exceed unread window")
     );
 }
 
