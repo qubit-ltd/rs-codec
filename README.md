@@ -36,6 +36,7 @@ This crate provides:
   for semantic transcoder direction.
 - `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and
   `NativeEndian` for byte-order metadata shared by binary and text codecs.
+- `nz`, `nz_const`, and `nz!` for checked `NonZeroUsize` construction.
 
 Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 `qubit-codec-text`, and `qubit-codec-misc`.
@@ -375,6 +376,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|----------|
 | `ByteOrder` | Runtime byte-order selection in public APIs |
 | `ByteOrderSpec` | Type-level byte-order abstraction |
+| `nz`, `nz!` | Checked `NonZeroUsize` construction |
 | `BigEndian` | Big-endian type marker |
 | `LittleEndian` | Little-endian type marker |
 | `NativeEndian` | Native-endian type marker |
@@ -420,10 +422,10 @@ Runtime dependencies are intentionally small:
 ## Testing
 
 ```bash
-# Run tests with the default empty feature set
+# Run tests with the default feature set
 cargo test
 
-# Run tests with the optional I/O bridge enabled
+# Run tests with all declared features
 cargo test --all-features
 
 # Project CI checks

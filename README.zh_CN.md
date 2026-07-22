@@ -36,6 +36,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `TranscodeConverter` marker trait。
 - 供 binary 与 text codec 共享的 `ByteOrder`、`ByteOrderSpec`、
   `BigEndian`、`LittleEndian` 和 `NativeEndian`。
+- 用于安全构造 `NonZeroUsize` 的 `nz`、`nz_const` 和 `nz!`。
 
 具体 codec 位于相邻 crate，例如 `qubit-codec-binary`、
 `qubit-codec-text` 和 `qubit-codec-misc`。
@@ -349,6 +350,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 |------|----------|
 | `ByteOrder` | 公共 API 中运行时选择字节序 |
 | `ByteOrderSpec` | 类型级字节序抽象 |
+| `nz`、`nz!` | 安全构造 `NonZeroUsize` |
 | `BigEndian` | 大端类型标记 |
 | `LittleEndian` | 小端类型标记 |
 | `NativeEndian` | 本机字节序类型标记 |
@@ -389,10 +391,10 @@ codec lifecycle 输出或超过基础缓冲容量的 I/O 解码窗口也可能�
 ## 测试
 
 ```bash
-# 使用默认的空 feature 集运行测试
+# 使用默认 feature 集运行测试
 cargo test
 
-# 启用可选 I/O bridge 运行测试
+# 使用项目声明的全部 feature 运行测试
 cargo test --all-features
 
 # 运行项目 CI 检查

@@ -32,6 +32,8 @@
 //! - [`ValueEncoder`] and [`ValueDecoder`] for whole-value convenience APIs.
 //! - [`ByteOrder`], [`ByteOrderSpec`], [`BigEndian`], [`LittleEndian`], and
 //!   [`NativeEndian`] for shared byte-order metadata.
+//! - [`nz()`] and [`nz!`] for checked `NonZeroUsize` construction shared by
+//!   codec implementations.
 //!
 //! Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 //! `qubit-codec-text`, and `qubit-codec-misc`.
@@ -97,6 +99,7 @@
 
 mod byte_order;
 mod codec;
+mod nz;
 mod transcode;
 mod value;
 
@@ -129,6 +132,10 @@ pub use byte_order::{
 pub use codec::{
     Codec,
     DecodeFailure,
+};
+pub use nz::{
+    nz,
+    nz_const,
 };
 pub use transcode::{
     CapacityError,
