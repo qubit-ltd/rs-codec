@@ -5,27 +5,22 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Debug-only lifecycle guard shared by transcode engines.
+//! Lifecycle guard shared by transcode engines.
 //!
 //! [`Transcoder`](crate::Transcoder) documents a lifecycle of
 //! `reset → transcode* → finish` and then `reset` again before reusing the
 //! instance for another logical stream. The trait itself does not enforce
 //! this; engines historically rely on caller discipline. `LifecycleGuard`
-//! catches common misuse (calling `transcode` after `finish` without an
-//! intervening `reset`, or calling `finish` twice in a row) in debug builds
-//! while collapsing to a zero-sized type in release builds so hot paths pay
-//! no extra cost.
+//! rejects common misuse (calling `transcode` after `finish` without an
+//! intervening `reset`, or calling `finish` twice in a row) in every build
+//! profile.
 
-#[cfg(debug_assertions)]
 use super::lifecycle_phase::LifecyclePhase;
+use crate::TranscodeFailure;
 
-/// Debug-only lifecycle guard for transcode engines.
+/// Lifecycle guard for transcode engines.
 ///
-/// The guard tracks the current [`LifecyclePhase`] in debug builds and runs
-/// `debug_assert!` checks on every public entry point. In release builds it
-/// is an empty type, so engines pay no runtime cost.
-///
-/// Lifecycle rules enforced in debug builds:
+/// Lifecycle rules:
 ///
 /// - `transcode` is rejected when the engine is `Finished`. Callers must
 ///   `reset` before starting another logical stream.
@@ -38,8 +33,7 @@ use super::lifecycle_phase::LifecyclePhase;
 /// just to satisfy the guard would be noise.
 #[derive(Debug, Default)]
 pub(crate) struct LifecycleGuard {
-    /// Current debug-only lifecycle phase.
-    #[cfg(debug_assertions)]
+    /// Current lifecycle phase.
     phase: LifecyclePhase,
 }
 
@@ -53,7 +47,6 @@ impl LifecycleGuard {
     #[must_use]
     pub(crate) const fn new() -> Self {
         Self {
-            #[cfg(debug_assertions)]
             phase: LifecyclePhase::Fresh,
         }
     }
@@ -62,65 +55,47 @@ impl LifecycleGuard {
     /// [`LifecyclePhase::Fresh`].
     #[inline(always)]
     pub(crate) fn on_reset(&mut self) {
-        #[cfg(debug_assertions)]
-        {
-            self.phase = LifecyclePhase::Fresh;
-        }
+        self.phase = LifecyclePhase::Fresh;
     }
 
-    /// Records a `transcode` entry. In debug builds, asserts the guard is
-    /// not in [`LifecyclePhase::Finished`].
+    /// Records a `transcode` entry.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// In debug builds, panics when `transcode` is called after `finish`
-    /// without an intervening `reset`.
+    /// Returns [`TranscodeFailure::TranscodeAfterFinish`] when `transcode` is
+    /// called after `finish` without an intervening `reset`.
     #[inline(always)]
-    pub(crate) fn on_transcode(&mut self) {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert_ne!(
-                LifecyclePhase::Finished,
-                self.phase,
-                "Transcoder::transcode called after finish without an \
-                 intervening reset; call reset() to start a new logical \
-                 stream",
-            );
-            if self.phase == LifecyclePhase::Fresh {
-                self.phase = LifecyclePhase::Streaming;
-            }
+    pub(crate) fn on_transcode(&mut self) -> Result<(), TranscodeFailure> {
+        if self.phase == LifecyclePhase::Finished {
+            return Err(TranscodeFailure::TranscodeAfterFinish);
         }
+        if self.phase == LifecyclePhase::Fresh {
+            self.phase = LifecyclePhase::Streaming;
+        }
+        Ok(())
     }
 
-    /// Asserts the guard is allowed to enter `finish`. Does not change
+    /// Validates that the guard may enter `finish`. Does not change
     /// state, so callers that fail before completing finish (for example,
     /// capacity checks rejecting the supplied output) can retry without
     /// being marked closed.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// In debug builds, panics when `finish` is called twice without an
-    /// intervening `reset`.
+    /// Returns [`TranscodeFailure::FinishAfterFinish`] when `finish` is called
+    /// twice without an intervening `reset`.
     #[inline(always)]
-    pub(crate) fn on_finish_attempt(&self) {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert_ne!(
-                LifecyclePhase::Finished,
-                self.phase,
-                "Transcoder::finish called twice without an intervening \
-                 reset; the logical stream is already closed",
-            );
+    pub(crate) fn on_finish_attempt(&self) -> Result<(), TranscodeFailure> {
+        if self.phase == LifecyclePhase::Finished {
+            return Err(TranscodeFailure::FinishAfterFinish);
         }
+        Ok(())
     }
 
     /// Commits the `Finished` state after `finish` actually completed. Call
     /// only on the success path.
     #[inline(always)]
     pub(crate) fn on_finish_success(&mut self) {
-        #[cfg(debug_assertions)]
-        {
-            self.phase = LifecyclePhase::Finished;
-        }
+        self.phase = LifecyclePhase::Finished;
     }
 }

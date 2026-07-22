@@ -15,7 +15,10 @@ use crate::{
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
     TranscodeFailure,
-    codec::decode_lifecycle_scratch_len,
+    codec::{
+        assert_unit_bounds,
+        decode_lifecycle_scratch_len,
+    },
 };
 
 /// Returns the conservative maximum unit count for a complete encode lifecycle.
@@ -37,6 +40,7 @@ pub(crate) fn max_complete_encode_units<C>() -> Result<usize, CapacityError>
 where
     C: Codec,
 {
+    assert_unit_bounds::<C>();
     C::MAX_ENCODE_RESET_UNITS
         .checked_add(C::MAX_UNITS_PER_VALUE)
         .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))

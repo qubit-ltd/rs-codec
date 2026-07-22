@@ -523,6 +523,7 @@ pub(crate) fn decode_lifecycle_scratch_len<C>() -> usize
 where
     C: Codec,
 {
+    assert_unit_bounds::<C>();
     let expected = C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
     assert_eq!(
         C::MAX_DECODE_LIFECYCLE_VALUES,

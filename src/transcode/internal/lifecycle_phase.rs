@@ -5,9 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Debug-only lifecycle phase for transcode engines.
+//! Lifecycle phase for transcode engines.
 
-/// Internal lifecycle phase tracked by the debug-only lifecycle guard.
+/// Internal lifecycle phase tracked by the lifecycle guard.
 ///
 /// The variant ordering mirrors the documented call sequence:
 ///

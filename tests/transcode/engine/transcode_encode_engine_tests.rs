@@ -18,6 +18,7 @@ use qubit_codec::{
     Codec,
     TranscodeEncodeError,
     TranscodeEncoder,
+    TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -1179,11 +1180,7 @@ fn test_buffered_encode_engine_reset_converts_codec_reset_errors() {
 // Lifecycle guard wiring
 // ============================================================================
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::finish called twice without an intervening reset"
-)]
 fn test_buffered_encode_engine_lifecycle_rejects_double_finish() {
     let mut engine =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
@@ -1191,15 +1188,15 @@ fn test_buffered_encode_engine_lifecycle_rejects_double_finish() {
     engine
         .finish(&mut output, 0)
         .expect("first finish should succeed for a stateless encoder");
-    let _ = engine.finish(&mut output, 0);
+    assert_eq!(
+        Err(TranscodeEncodeError::Failure(
+            TranscodeFailure::FinishAfterFinish,
+        )),
+        engine.finish(&mut output, 0),
+    );
 }
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::transcode called after finish without an \
-                intervening reset"
-)]
 fn test_buffered_encode_engine_lifecycle_rejects_transcode_after_finish() {
     let mut engine =
         TranscodeEncodeEngine::<_, _>::new(WideCodec, ExactWidthHooks);
@@ -1207,7 +1204,12 @@ fn test_buffered_encode_engine_lifecycle_rejects_transcode_after_finish() {
     engine
         .finish(&mut output, 0)
         .expect("finish closes the logical stream");
-    let _ = engine.transcode(&[1_u8], 0, &mut output, 0);
+    assert_eq!(
+        Err(TranscodeEncodeError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
 }
 
 #[test]

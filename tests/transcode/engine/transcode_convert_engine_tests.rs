@@ -29,6 +29,7 @@ use qubit_codec::{
     TranscodeConverter,
     TranscodeDecodeError,
     TranscodeEncodeError,
+    TranscodeFailure,
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
@@ -3039,33 +3040,34 @@ fn test_buffered_convert_engine_finish_maps_decoder_finish_error() {
 // Lifecycle guard wiring
 // ============================================================================
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::finish called twice without an intervening reset"
-)]
 fn test_buffered_convert_engine_lifecycle_rejects_double_finish() {
     let mut engine = new_copy_engine();
     let mut output = [0_u8; 0];
     engine
         .finish(&mut output, 0)
         .expect("first finish should succeed for a stateless converter");
-    let _ = engine.finish(&mut output, 0);
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::FinishAfterFinish,
+        )),
+        engine.finish(&mut output, 0),
+    );
 }
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::transcode called after finish without an \
-                intervening reset"
-)]
 fn test_buffered_convert_engine_lifecycle_rejects_transcode_after_finish() {
     let mut engine = new_copy_engine();
     let mut output = [0_u8; 1];
     engine
         .finish(&mut output, 0)
         .expect("finish closes the logical stream");
-    let _ = engine.transcode(&[1_u8], 0, &mut output, 0);
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
 }
 
 #[test]

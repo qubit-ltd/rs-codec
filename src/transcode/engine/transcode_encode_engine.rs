@@ -390,7 +390,9 @@ where
     ///
     /// Returns hook errors when `input_index` is outside `input`, when
     /// `output_index` is outside `output`, or when hook planning or writing
-    /// rejects a value.
+    /// rejects a value. Returns
+    /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
+    /// already finished and has not been reset.
     pub fn transcode(
         &mut self,
         input: &[C::Value],
@@ -398,7 +400,7 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeEncodeErrorOf<C>> {
-        self.lifecycle.on_transcode();
+        self.lifecycle.on_transcode()?;
         TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
@@ -442,7 +444,9 @@ where
     ///
     /// Returns framework errors when the caller provides invalid or
     /// insufficient output capacity. Returns domain errors when codec finish or
-    /// hook finalization fails.
+    /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
+    /// already finished and has not been reset.
     ///
     /// # Panics
     ///
@@ -455,7 +459,7 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
-        self.lifecycle.on_finish_attempt();
+        self.lifecycle.on_finish_attempt()?;
         let required = self.max_finish_output_len()?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),

@@ -19,8 +19,9 @@ fn test_transcode_failure_output_range_validation() {
         TranscodeFailure::ensure_output_range(4, 5, 0, 0),
     );
     assert_eq!(
-        Err(TranscodeFailure::InvalidOutputIndex {
-            index: 3,
+        Err(TranscodeFailure::InvalidOutputRange {
+            output_index: 3,
+            range_len: 2,
             output_len: 4,
         }),
         TranscodeFailure::ensure_output_range(4, 3, 2, 1),

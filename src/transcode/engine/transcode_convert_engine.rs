@@ -592,7 +592,8 @@ where
     ///
     /// Returns hook errors when indices are invalid or concrete conversion
     /// fails. Invalid output indices are reported through the encode-side
-    /// error path.
+    /// error path. Returns [`TranscodeFailure::TranscodeAfterFinish`] when the
+    /// logical stream was already finished and has not been reset.
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -600,7 +601,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        self.lifecycle.on_transcode();
+        self.lifecycle.on_transcode()?;
         TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
@@ -664,7 +665,9 @@ where
     /// # Errors
     ///
     /// Returns a converter error when output capacity checks fail or when
-    /// hook finalization fails.
+    /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
+    /// already finished and has not been reset.
     ///
     /// # Panics
     ///
@@ -678,7 +681,7 @@ where
     where
         D::Value: Default,
     {
-        self.lifecycle.on_finish_attempt();
+        self.lifecycle.on_finish_attempt()?;
         let required = self.current_finish_output_len()?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),

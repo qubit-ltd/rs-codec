@@ -64,12 +64,22 @@ pub trait Transcoder {
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum TranscodeFailure {
     #[error("invalid input index {index} for input length {input_len}")]
     InvalidInputIndex { index: usize, input_len: usize },
 
     #[error("invalid output index {index} for output length {output_len}")]
     InvalidOutputIndex { index: usize, output_len: usize },
+
+    #[error(
+        "invalid output range at index {output_index} with length {range_len} for output length {output_len}"
+    )]
+    InvalidOutputRange {
+        output_index: usize,
+        range_len: usize,
+        output_len: usize,
+    },
 
     #[error(
         "insufficient output at index {output_index}: required {required} units, available {available}"
@@ -94,8 +104,18 @@ pub enum TranscodeFailure {
 
     #[error("trailing input after value: consumed {consumed} units, remaining {remaining}")]
     TrailingInput { consumed: usize, remaining: usize },
+
+    #[error("transcode called after finish without an intervening reset")]
+    TranscodeAfterFinish,
+
+    #[error("finish called twice without an intervening reset")]
+    FinishAfterFinish,
 }
 ```
+
+`TranscodeFailure` 是允许继续增加框架失败类别的开放错误集合，因此使用
+`#[non_exhaustive]`。三个方向错误包装仍是封闭分类；新增框架失败继续通过其
+`Failure` 变体承载，不需要同步扩张包装枚举。
 
 所有索引、容量、完整输入检查都归到这个类型上：
 

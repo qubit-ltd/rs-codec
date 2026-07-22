@@ -12,7 +12,6 @@ pub(in crate::transcode) mod convert_state;
 pub(in crate::transcode) mod decode_state;
 pub(in crate::transcode) mod encode_state;
 pub(in crate::transcode) mod lifecycle_guard;
-#[cfg(debug_assertions)]
 pub(in crate::transcode) mod lifecycle_phase;
 pub(in crate::transcode) mod pending_value;
 pub(in crate::transcode) mod pending_value_slot;

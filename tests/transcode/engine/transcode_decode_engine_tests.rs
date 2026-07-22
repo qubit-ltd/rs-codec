@@ -24,6 +24,7 @@ use qubit_codec::{
     Codec,
     TranscodeDecodeError,
     TranscodeDecoder,
+    TranscodeFailure,
     TranscodeStatus,
     Transcoder,
 };
@@ -1480,10 +1481,8 @@ fn test_transcode_decode_engine_configurable_reset_supports_success_and_capacity
 // ============================================================================
 // Lifecycle guard wiring
 //
-// The guard is a debug-only check that the documented `reset → transcode* →
-// finish` lifecycle is respected. `#[should_panic]` tests are gated behind
-// `cfg(debug_assertions)` because the guard collapses to a ZST in release
-// builds, so panic-shape tests would not fire there.
+// The guard enforces the documented `reset → transcode* → finish` lifecycle
+// in every build profile.
 // ============================================================================
 
 fn new_stateless_finish_engine()
@@ -1497,26 +1496,22 @@ fn new_stateless_finish_engine()
     )
 }
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::finish called twice without an intervening reset"
-)]
 fn test_transcode_decode_engine_lifecycle_rejects_double_finish() {
     let mut engine = new_stateless_finish_engine();
     let mut output = [0_u8; 0];
     engine
         .finish(&mut output, 0)
         .expect("first finish should succeed on a stateless decoder");
-    let _ = engine.finish(&mut output, 0);
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::FinishAfterFinish,
+        )),
+        engine.finish(&mut output, 0),
+    );
 }
 
-#[cfg(debug_assertions)]
 #[test]
-#[should_panic(
-    expected = "Transcoder::transcode called after finish without an \
-                intervening reset"
-)]
 fn test_transcode_decode_engine_lifecycle_rejects_transcode_after_finish() {
     let mut engine = new_stateless_finish_engine();
     let mut output = [0_u8; 0];
@@ -1524,7 +1519,12 @@ fn test_transcode_decode_engine_lifecycle_rejects_transcode_after_finish() {
         .finish(&mut output, 0)
         .expect("finish closes the logical stream");
     let mut grown = [0_u8; 1];
-    let _ = engine.transcode(&[0x10], 0, &mut grown, 0);
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[0x10], 0, &mut grown, 0),
+    );
 }
 
 #[test]

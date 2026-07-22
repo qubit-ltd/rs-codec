@@ -14,10 +14,11 @@ use super::capacity_error::CapacityError;
 /// Framework-level failure reported by a transcode operation.
 ///
 /// These failures are part of the safe public transcode API. They describe
-/// caller-supplied buffer ranges, capacity planning, and complete-input shape
-/// that the transcode layer can detect without interpreting a concrete codec
-/// error.
+/// caller-supplied buffer ranges, capacity planning, complete-input shape, and
+/// stream lifecycle misuse that the transcode layer can detect without
+/// interpreting a concrete codec error.
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[non_exhaustive]
 pub enum TranscodeFailure {
     /// The caller supplied an input index outside the input slice.
     #[error("invalid input index {index} for input length {input_len}")]
@@ -33,6 +34,19 @@ pub enum TranscodeFailure {
     InvalidOutputIndex {
         /// Invalid output index supplied by the caller.
         index: usize,
+        /// Length of the output slice.
+        output_len: usize,
+    },
+
+    /// The caller supplied an output range extending beyond the output slice.
+    #[error(
+        "invalid output range at index {output_index} with length {range_len} for output length {output_len}"
+    )]
+    InvalidOutputRange {
+        /// Absolute output index where the range starts.
+        output_index: usize,
+        /// Length of the caller-supplied output range.
+        range_len: usize,
         /// Length of the output slice.
         output_len: usize,
     },
@@ -78,6 +92,14 @@ pub enum TranscodeFailure {
         /// Extra units left after the decoded value.
         remaining: usize,
     },
+
+    /// `transcode` was called after the logical stream was finished.
+    #[error("transcode called after finish without an intervening reset")]
+    TranscodeAfterFinish,
+
+    /// `finish` was called after the logical stream was already finished.
+    #[error("finish called twice without an intervening reset")]
+    FinishAfterFinish,
 }
 
 impl TranscodeFailure {
@@ -98,6 +120,21 @@ impl TranscodeFailure {
         Self::InvalidOutputIndex {
             index,
             output_len: len,
+        }
+    }
+
+    /// Creates an invalid-output-range error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn invalid_output_range(
+        output_index: usize,
+        range_len: usize,
+        output_len: usize,
+    ) -> Self {
+        Self::InvalidOutputRange {
+            output_index,
+            range_len,
+            output_len,
         }
     }
 
@@ -262,7 +299,11 @@ impl TranscodeFailure {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if range_len > available {
-            return Err(Self::invalid_output_index(output_index, output_len));
+            return Err(Self::invalid_output_range(
+                output_index,
+                range_len,
+                output_len,
+            ));
         }
         if range_len < required {
             return Err(Self::insufficient_output(

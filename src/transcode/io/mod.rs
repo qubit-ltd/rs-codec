@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+mod codec_decode_driver;
 mod transcode_decode_input;
 mod transcode_encode_output;
 
