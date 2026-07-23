@@ -9,6 +9,7 @@
 mod adapter;
 mod capacity_error_tests;
 mod engine;
+mod internal;
 #[cfg(feature = "io")]
 mod io;
 mod transcode_contract_error_tests;

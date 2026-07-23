@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+mod identity_codec;
 mod nz;
 
+pub(crate) use identity_codec::IdentityCodec;
 pub(crate) use nz::nz;

@@ -6,8 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod codec_value_decoder_tests;
-mod codec_value_encoder_tests;
-mod codec_value_lifecycle_tests;
-mod value_decoder_tests;
-mod value_encoder_tests;
+mod applied_decode_invalid_action_tests;
+mod convert_state_tests;
+mod decode_state_tests;
+mod encode_state_tests;
+mod lifecycle_guard_tests;
+mod lifecycle_phase_tests;
+mod pending_value_slot_tests;
+mod pending_value_tests;
+mod transcode_state_tests;
