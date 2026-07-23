@@ -182,9 +182,8 @@ where
 {
     TranscodeFailure::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
 
-    let scratch_cap = decode_lifecycle_scratch_len::<C>();
     assert!(
-        scratch.len() >= scratch_cap,
+        scratch.len() >= decode_lifecycle_scratch_len::<C>(),
         "complete decode scratch output was not reserved",
     );
     let reset_written = unsafe {
