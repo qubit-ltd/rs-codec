@@ -13,7 +13,7 @@ mod decode_failure;
 
 pub use codec::Codec;
 pub(crate) use codec::{
+    assert_decode_lifecycle_bounds,
     assert_unit_bounds,
-    decode_lifecycle_scratch_len,
 };
 pub use decode_failure::DecodeFailure;

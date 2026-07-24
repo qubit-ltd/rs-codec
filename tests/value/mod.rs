@@ -9,5 +9,7 @@
 mod codec_value_decoder_tests;
 mod codec_value_encoder_tests;
 mod codec_value_lifecycle_tests;
+mod decode_lifecycle_output_tests;
+mod decode_lifecycle_progress_tests;
 mod value_decoder_tests;
 mod value_encoder_tests;

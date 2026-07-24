@@ -9,6 +9,11 @@
 
 use thiserror::Error;
 
+use crate::{
+    Codec,
+    codec::assert_decode_lifecycle_bounds,
+};
+
 use super::capacity_error::CapacityError;
 
 /// Framework-level failure reported by a transcode operation.
@@ -91,6 +96,17 @@ pub enum TranscodeFailure {
         consumed: usize,
         /// Extra units left after the decoded value.
         remaining: usize,
+    },
+
+    /// A strict single-value decoder cannot expose codec lifecycle output.
+    #[error(
+        "strict single-value decoding does not support lifecycle output: reset bound {reset_bound}, finish bound {finish_bound}"
+    )]
+    UnsupportedDecodeLifecycleOutput {
+        /// Maximum values the codec may emit while resetting decode state.
+        reset_bound: usize,
+        /// Maximum values the codec may emit while finishing decode state.
+        finish_bound: usize,
     },
 
     /// `transcode` was called after the logical stream was finished.
@@ -183,6 +199,48 @@ impl TranscodeFailure {
             consumed,
             remaining,
         }
+    }
+
+    /// Creates an unsupported decode-lifecycle-output error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn unsupported_decode_lifecycle_output(
+        reset_bound: usize,
+        finish_bound: usize,
+    ) -> Self {
+        Self::UnsupportedDecodeLifecycleOutput {
+            reset_bound,
+            finish_bound,
+        }
+    }
+
+    /// Rejects lifecycle output for a strict single-value decode.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec whose decode lifecycle bounds are checked.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when both decode lifecycle output bounds are zero.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Self::UnsupportedDecodeLifecycleOutput`] when reset or finish
+    /// may emit values.
+    #[inline(always)]
+    pub(crate) fn ensure_no_decode_lifecycle_output<C>() -> Result<(), Self>
+    where
+        C: Codec,
+    {
+        assert_decode_lifecycle_bounds::<C>();
+        if C::MAX_DECODE_RESET_VALUES != 0 || C::MAX_DECODE_FINISH_VALUES != 0 {
+            return Err(Self::unsupported_decode_lifecycle_output(
+                C::MAX_DECODE_RESET_VALUES,
+                C::MAX_DECODE_FINISH_VALUES,
+            ));
+        }
+        Ok(())
     }
 
     /// Validates that `input_index` is within an input slice.

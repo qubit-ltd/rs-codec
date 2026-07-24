@@ -1199,126 +1199,209 @@ fn test_buffered_decode_input_reads_one_codec_value() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_runs_complete_lifecycle() {
+fn test_buffered_decode_input_strict_decode_accepts_non_default_values() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = NonDefaultValueCodec;
+
+    let value = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect("strict decoding should not require default values");
+
+    assert_eq!(NonDefaultValue(0x1234), value);
+}
+
+#[test]
+fn test_buffered_decode_input_owned_decode_runs_complete_lifecycle() {
     let input = ChunkedInput::new(vec![vec![0x1234, 0x5678]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 2);
     let mut codec = DecodeLifecycleCodec::default();
 
     let first = input
-        .read_decoded_with(&mut codec, map_codec_error)
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
         .expect("first value should complete its decode lifecycle");
     let second = input
-        .read_decoded_with(&mut codec, map_codec_error)
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
         .expect("second value should start a fresh decode lifecycle");
 
-    assert_eq!(0x1234, first);
-    assert_eq!(0x5678, second);
+    assert_eq!(&0x1234, first.value());
+    assert_eq!(&0x5678, second.value());
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_runs_complete_lifecycle_via_scratch()
-{
+fn test_buffered_decode_input_rejects_lifecycle_output_before_reading() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec::default();
+
+    let error = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect_err("strict decoding must reject lifecycle output");
+
+    assert_eq!(ErrorKind::Unsupported, error.kind());
+    assert_eq!(0, input.inner().reads);
+    assert_eq!(0, codec.state);
+
+    let output = input
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
+        .expect("lifecycle decoding should remain retryable");
+    assert_eq!(&0x1234, output.value());
+}
+
+#[test]
+fn test_buffered_decode_input_preserves_owned_decode_lifecycle_output() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec::default();
+
+    let output = input
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
+        .expect("complete lifecycle output should be preserved");
+
+    assert_eq!(&[0xaaaa], output.reset());
+    assert_eq!(&0x1234, output.value());
+    assert_eq!(&[0xbbbb], output.finish());
+    assert_eq!((vec![0xaaaa], 0x1234, vec![0xbbbb]), output.into_parts(),);
+}
+
+#[test]
+fn test_buffered_decode_input_owned_lifecycle_uses_input_scratch() {
     let input = ChunkedInput::new(vec![vec![0x1234]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 0);
     let mut codec = DecodeLifecycleCodec::default();
 
-    let value = input
-        .read_decoded_with(&mut codec, map_codec_error)
+    let output = input
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
         .expect("scratch decode should complete its lifecycle");
 
-    assert_eq!(0x1234, value);
+    assert_eq!(&0x1234, output.value());
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_with_scratch_reuses_lifecycle_storage()
+fn test_buffered_decode_input_writes_decode_lifecycle_output_to_separate_scratch()
  {
     let input = ChunkedInput::new(vec![vec![0x1234, 0x5678]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 2);
     let mut codec = DecodeLifecycleCodec::default();
-    let mut lifecycle_scratch = [0_u32; 1];
+    let mut reset_output = [0_u32; 1];
+    let mut finish_output = [0_u32; 1];
 
     let first = input
-        .read_decoded_with_scratch(
+        .read_decoded_lifecycle_with_scratch(
             &mut codec,
-            &mut lifecycle_scratch,
+            &mut reset_output,
+            &mut finish_output,
             map_codec_error,
         )
         .expect("first value should use caller-provided lifecycle storage");
     let second = input
-        .read_decoded_with_scratch(
+        .read_decoded_lifecycle_with_scratch(
             &mut codec,
-            &mut lifecycle_scratch,
+            &mut reset_output,
+            &mut finish_output,
             map_codec_error,
         )
         .expect("second value should reuse caller-provided lifecycle storage");
 
-    assert_eq!(0x1234, first);
-    assert_eq!(0x5678, second);
-    assert_eq!([0xbbbb], lifecycle_scratch);
+    assert_eq!((0x1234, 1, 1), first.into_parts());
+    assert_eq!((0x5678, 1, 1), second.into_parts());
+    assert_eq!([0xaaaa], reset_output);
+    assert_eq!([0xbbbb], finish_output);
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_with_scratch_rejects_short_storage()
-{
+fn test_buffered_decode_input_lifecycle_rejects_short_reset_storage() {
     let input = ChunkedInput::new(vec![vec![0x1234]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = DecodeLifecycleCodec::default();
-    let mut lifecycle_scratch = [];
+    let mut reset_output = [];
+    let mut finish_output = [0_u32; 1];
 
     let error = input
-        .read_decoded_with_scratch(
+        .read_decoded_lifecycle_with_scratch(
             &mut codec,
-            &mut lifecycle_scratch,
+            &mut reset_output,
+            &mut finish_output,
             map_codec_error,
         )
-        .expect_err("short lifecycle scratch must be rejected");
+        .expect_err("short reset output must be rejected");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
     assert_eq!(
-        "decode lifecycle scratch is shorter than the codec lifecycle bound",
+        "decode reset output is shorter than the codec reset bound",
         error.to_string(),
     );
+    assert_eq!(0, input.inner().reads);
+    assert_eq!(0, codec.state);
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_with_scratch_accepts_non_default_values()
- {
+fn test_buffered_decode_input_lifecycle_rejects_short_finish_storage() {
+    let input = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = DecodeLifecycleCodec::default();
+    let mut reset_output = [0_u32; 1];
+    let mut finish_output = [];
+
+    let error = input
+        .read_decoded_lifecycle_with_scratch(
+            &mut codec,
+            &mut reset_output,
+            &mut finish_output,
+            map_codec_error,
+        )
+        .expect_err("short finish output must be rejected");
+
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+    assert_eq!(
+        "decode finish output is shorter than the codec finish bound",
+        error.to_string(),
+    );
+    assert_eq!(0, input.inner().reads);
+    assert_eq!(0, codec.state);
+}
+
+#[test]
+fn test_buffered_decode_input_lifecycle_scratch_accepts_non_default_values() {
     let input = ChunkedInput::new(vec![vec![0x1234]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = NonDefaultValueCodec;
-    let mut lifecycle_scratch = [];
+    let mut reset_output = [];
+    let mut finish_output = [];
 
-    let value = input
-        .read_decoded_with_scratch(
+    let progress = input
+        .read_decoded_lifecycle_with_scratch(
             &mut codec,
-            &mut lifecycle_scratch,
+            &mut reset_output,
+            &mut finish_output,
             map_codec_error,
         )
         .expect("stateless codecs should not require default values");
 
-    assert_eq!(NonDefaultValue(0x1234), value);
+    assert_eq!(&NonDefaultValue(0x1234), progress.value());
 }
 
 #[test]
 #[should_panic(
     expected = "Codec::MAX_DECODE_LIFECYCLE_VALUES must match its lifecycle bounds"
 )]
-fn test_buffered_decode_input_read_decoded_with_scratch_rejects_inconsistent_lifecycle_bound()
- {
+fn test_buffered_decode_input_lifecycle_rejects_inconsistent_lifecycle_bound() {
     let input = ChunkedInput::new(vec![vec![0x1234]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 1);
     let mut codec = InconsistentLifecycleBoundCodec;
-    let mut lifecycle_scratch = [];
+    let mut reset_output = [0_u16; 1];
+    let mut finish_output = [];
 
-    let _ = input.read_decoded_with_scratch(
+    let _ = input.read_decoded_lifecycle_with_scratch(
         &mut codec,
-        &mut lifecycle_scratch,
+        &mut reset_output,
+        &mut finish_output,
         map_codec_error,
     );
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_maps_lifecycle_errors() {
+fn test_buffered_decode_input_lifecycle_maps_lifecycle_errors() {
     for (mode, expected) in [
         (DecodeLifecycleMode::ResetError, "bad output index"),
         (DecodeLifecycleMode::FinishError, "bad input index"),
@@ -1328,7 +1411,7 @@ fn test_buffered_decode_input_read_decoded_maps_lifecycle_errors() {
         let mut codec = DecodeLifecycleCodec { state: 0, mode };
 
         let error = input
-            .read_decoded_with(&mut codec, map_codec_error)
+            .read_decoded_lifecycle_with(&mut codec, map_codec_error)
             .expect_err("configured lifecycle stage should fail");
 
         assert_eq!(ErrorKind::InvalidData, error.kind());
@@ -1346,7 +1429,7 @@ fn test_buffered_decode_input_read_decoded_panics_on_reset_overreport() {
         mode: DecodeLifecycleMode::ResetOverreport,
     };
 
-    let _ = input.read_decoded_with(&mut codec, map_codec_error);
+    let _ = input.read_decoded_lifecycle_with(&mut codec, map_codec_error);
 }
 
 #[test]
@@ -1359,7 +1442,7 @@ fn test_buffered_decode_input_read_decoded_panics_on_finish_overreport() {
         mode: DecodeLifecycleMode::FinishOverreport,
     };
 
-    let _ = input.read_decoded_with(&mut codec, map_codec_error);
+    let _ = input.read_decoded_lifecycle_with(&mut codec, map_codec_error);
 }
 
 #[test]

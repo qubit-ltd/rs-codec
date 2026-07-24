@@ -143,14 +143,14 @@ pub trait Codec {
     /// the default `0`.
     const MAX_DECODE_FINISH_VALUES: usize = 0;
 
-    /// The maximum value count needed for reusable decode lifecycle storage.
+    /// The aggregate maximum output count of either decode lifecycle phase.
     ///
-    /// A complete single-value decode runs reset and finish sequentially, so
-    /// both phases can reuse the same storage. This derived bound is therefore
-    /// the larger of [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES)
-    /// and
-    /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES), rather
-    /// than their sum. Implementations should not override this constant.
+    /// This derived bound is the larger of
+    /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) and
+    /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES). It does
+    /// not describe storage that preserves both phases simultaneously;
+    /// lifecycle-aware APIs use separate reset and finish buffers.
+    /// Implementations should not override this constant.
     const MAX_DECODE_LIFECYCLE_VALUES: usize =
         if Self::MAX_DECODE_RESET_VALUES > Self::MAX_DECODE_FINISH_VALUES {
             Self::MAX_DECODE_RESET_VALUES
@@ -503,7 +503,7 @@ where
     }
 }
 
-/// Returns the validated scratch length for a complete decode lifecycle.
+/// Validates the declared bounds for a complete decode lifecycle.
 ///
 /// # Type Parameters
 ///
@@ -511,7 +511,7 @@ where
 ///
 /// # Returns
 ///
-/// Returns [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] after verifying that it is
+/// Returns unit after verifying that [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] is
 /// the larger of the codec's reset and finish output bounds.
 ///
 /// # Panics
@@ -519,7 +519,7 @@ where
 /// Panics when the codec overrides the derived lifecycle bound with a value
 /// that does not match its reset and finish bounds.
 #[inline(always)]
-pub(crate) fn decode_lifecycle_scratch_len<C>() -> usize
+pub(crate) fn assert_decode_lifecycle_bounds<C>()
 where
     C: Codec,
 {
@@ -530,5 +530,4 @@ where
         expected,
         "Codec::MAX_DECODE_LIFECYCLE_VALUES must match its lifecycle bounds",
     );
-    expected
 }

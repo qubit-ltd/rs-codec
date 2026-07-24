@@ -91,8 +91,8 @@
 //!
 //! Implementing further up the stack does not require rewriting the lower
 //! layers. The adapter types turn any suitable [`Codec`] into owned-value or
-//! streaming APIs. Drop down to the engine and hook layer only when the codec
-//! needs policy decisions or retained finish output.
+//! streaming APIs. Drop down to the engine and hook layer when the codec needs
+//! continuous-stream semantics or policy decisions.
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -103,15 +103,13 @@ mod nz;
 mod transcode;
 mod value;
 
-/// Policy-aware transcode engines, hooks, contexts, and per-step outcomes.
+/// Policy-aware transcode engines, hooks, contexts, and policy actions.
 pub mod engine {
     pub use crate::transcode::{
         DecodeContext,
         DecodeInvalidAction,
         DecodeInvalidActionOf,
-        DecodeOutcome,
         EncodeContext,
-        EncodeOutcome,
         EncodeUnencodableAction,
         EncodeUnencodableActionOf,
         TranscodeConvertEngine,
@@ -166,6 +164,8 @@ pub use transcode::{
 pub use value::{
     CodecValueDecoder,
     CodecValueEncoder,
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
     ValueDecoder,
     ValueEncoder,
 };

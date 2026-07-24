@@ -27,9 +27,12 @@ use qubit_io::{
 
 use crate::{
     Codec,
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
+    TranscodeFailure,
     TranscodeStatus,
     Transcoder,
-    codec::decode_lifecycle_scratch_len,
+    codec::assert_decode_lifecycle_bounds,
 };
 
 use super::codec_decode_driver::CodecDecodeDriver;
@@ -272,9 +275,9 @@ where
 
     /// Decodes one codec value from the buffered unit input.
     ///
-    /// This convenience method allocates temporary lifecycle scratch storage
-    /// when the codec emits reset or finish values. Repeated callers that own
-    /// reusable storage should prefer [`Self::read_decoded_with_scratch`].
+    /// This strict convenience method supports codecs whose decode reset and
+    /// finish phases do not emit values. Use
+    /// [`Self::read_decoded_lifecycle_with`] when those phases have output.
     ///
     /// # Parameters
     ///
@@ -287,10 +290,12 @@ where
     ///
     /// # Errors
     ///
-    /// Returns I/O errors from the wrapped input, `UnexpectedEof` when EOF
-    /// occurs before a complete value is available, `InvalidData` when the
-    /// codec reports an impossible incomplete state, or the error returned
-    /// by `map_error` for codec reset, invalid input, or codec finish failures.
+    /// Returns [`ErrorKind::Unsupported`] before invoking the codec or reading
+    /// input when reset or finish may emit values. Otherwise, returns I/O
+    /// errors from the wrapped input, `UnexpectedEof` when EOF occurs before a
+    /// complete value is available, `InvalidData` when the codec reports an
+    /// impossible incomplete state, or the error returned by `map_error` for
+    /// codec reset, invalid input, or codec finish failures.
     ///
     /// # Panics
     ///
@@ -304,43 +309,101 @@ where
     ) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
-        C::Value: Default,
         M: FnMut(C::DecodeError) -> Error,
     {
-        let scratch_capacity = decode_lifecycle_scratch_len::<C>();
-        if scratch_capacity == 0 {
-            return self.read_decoded_with_scratch(codec, &mut [], map_error);
-        }
-        let mut lifecycle_scratch = Vec::new();
-        lifecycle_scratch.resize_with(scratch_capacity, C::Value::default);
-        self.read_decoded_with_scratch(codec, &mut lifecycle_scratch, map_error)
+        TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()
+            .map_err(|error| Error::new(ErrorKind::Unsupported, error))?;
+        let progress = self.read_decoded_lifecycle_with_scratch_impl(
+            codec,
+            &mut [],
+            &mut [],
+            map_error,
+        )?;
+        let (value, reset_written, finish_written) = progress.into_parts();
+        debug_assert_eq!(0, reset_written);
+        debug_assert_eq!(0, finish_written);
+        Ok(value)
     }
 
-    /// Decodes one codec value by using caller-provided lifecycle scratch.
+    /// Decodes one complete codec lifecycle and preserves every output phase.
     ///
-    /// The method runs a complete `decode_reset -> decode -> decode_finish`
-    /// lifecycle. Values emitted by reset and finish are written into
-    /// `lifecycle_scratch` and then discarded. During the decode phase, it
-    /// refills the internal input buffer until the supplied codec can decode
-    /// one complete value or until the wrapped input reaches EOF.
+    /// The method allocates independent storage for values emitted by
+    /// `decode_reset` and `decode_finish`, so neither phase can overwrite the
+    /// other.
     ///
     /// # Parameters
     ///
-    /// - `codec`: Codec used to decode one value.
-    /// - `lifecycle_scratch`: Reusable storage for values emitted by codec
-    ///   reset and finish hooks. Its length must be at least the larger of
-    ///   [`Codec::MAX_DECODE_RESET_VALUES`] and
-    ///   [`Codec::MAX_DECODE_FINISH_VALUES`].
+    /// - `codec`: Codec used to decode one complete lifecycle.
     /// - `map_error`: Maps codec decode errors to I/O errors.
     ///
     /// # Returns
     ///
-    /// Returns one decoded codec value.
+    /// Returns reset output, the main decoded value, and finish output.
     ///
     /// # Errors
     ///
-    /// Returns [`ErrorKind::InvalidInput`] when `lifecycle_scratch` is shorter
-    /// than the codec lifecycle bound. Returns I/O errors from the wrapped
+    /// Returns I/O errors from the wrapped input, `UnexpectedEof` when EOF
+    /// occurs before a complete value is available, `InvalidData` when the
+    /// codec reports an impossible incomplete state, or the error returned
+    /// by `map_error` for codec reset, invalid input, or codec finish failures.
+    ///
+    /// # Panics
+    ///
+    /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
+    /// codec's reset and finish bounds, or when the codec reports more reset
+    /// or finish values than those bounds.
+    pub fn read_decoded_lifecycle_with<C, M>(
+        &mut self,
+        codec: &mut C,
+        map_error: M,
+    ) -> Result<DecodeLifecycleOutput<C::Value>>
+    where
+        C: Codec<Unit = I::Item>,
+        C::Value: Default,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        assert_decode_lifecycle_bounds::<C>();
+        let mut reset_output = Vec::new();
+        reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
+        let mut finish_output = Vec::new();
+        finish_output
+            .resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
+        let progress = self.read_decoded_lifecycle_with_scratch_impl(
+            codec,
+            &mut reset_output,
+            &mut finish_output,
+            map_error,
+        )?;
+        let (value, reset_written, finish_written) = progress.into_parts();
+        reset_output.truncate(reset_written);
+        finish_output.truncate(finish_written);
+        Ok(DecodeLifecycleOutput::new(
+            reset_output,
+            value,
+            finish_output,
+        ))
+    }
+
+    /// Decodes one complete codec lifecycle into separate caller storage.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec used to decode one complete lifecycle.
+    /// - `reset_output`: Reusable storage for values emitted by
+    ///   [`Codec::decode_reset`].
+    /// - `finish_output`: Reusable storage for values emitted by
+    ///   [`Codec::decode_finish`].
+    /// - `map_error`: Maps codec decode errors to I/O errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns the main decoded value and the initialized lengths of both
+    /// lifecycle output buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorKind::InvalidInput`] when either output buffer is shorter
+    /// than the corresponding codec bound. Returns I/O errors from the wrapped
     /// input, `UnexpectedEof` when EOF occurs before a complete value is
     /// available, `InvalidData` when the codec reports an impossible
     /// incomplete state, or the error returned by `map_error` for codec reset,
@@ -351,27 +414,53 @@ where
     /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
     /// codec's reset and finish bounds, or when the codec reports more reset
     /// or finish values than those bounds.
-    pub fn read_decoded_with_scratch<C, M>(
+    pub fn read_decoded_lifecycle_with_scratch<C, M>(
         &mut self,
         codec: &mut C,
-        lifecycle_scratch: &mut [C::Value],
-        mut map_error: M,
-    ) -> Result<C::Value>
+        reset_output: &mut [C::Value],
+        finish_output: &mut [C::Value],
+        map_error: M,
+    ) -> Result<DecodeLifecycleProgress<C::Value>>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
-        let scratch_capacity = decode_lifecycle_scratch_len::<C>();
-        if lifecycle_scratch.len() < scratch_capacity {
+        self.read_decoded_lifecycle_with_scratch_impl(
+            codec,
+            reset_output,
+            finish_output,
+            map_error,
+        )
+    }
+
+    fn read_decoded_lifecycle_with_scratch_impl<C, M>(
+        &mut self,
+        codec: &mut C,
+        reset_output: &mut [C::Value],
+        finish_output: &mut [C::Value],
+        mut map_error: M,
+    ) -> Result<DecodeLifecycleProgress<C::Value>>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        assert_decode_lifecycle_bounds::<C>();
+        if reset_output.len() < C::MAX_DECODE_RESET_VALUES {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "decode lifecycle scratch is shorter than the codec lifecycle bound",
+                "decode reset output is shorter than the codec reset bound",
+            ));
+        }
+        if finish_output.len() < C::MAX_DECODE_FINISH_VALUES {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "decode finish output is shorter than the codec finish bound",
             ));
         }
         let reset_written = unsafe {
-            // SAFETY: The scratch length check above reserves the codec's
+            // SAFETY: The reset output length check above reserves the codec's
             // declared decode-reset output bound.
-            codec.decode_reset(lifecycle_scratch, 0)
+            codec.decode_reset(reset_output, 0)
         }
         .map_err(&mut map_error)?;
         assert!(
@@ -383,16 +472,20 @@ where
             .read_one(codec, &mut map_error)?;
 
         let finish_written = unsafe {
-            // SAFETY: The scratch length check above reserves the codec's
-            // declared decode-finish output bound.
-            codec.decode_finish(lifecycle_scratch, 0)
+            // SAFETY: The finish output length check above reserves the
+            // codec's declared decode-finish output bound.
+            codec.decode_finish(finish_output, 0)
         }
         .map_err(&mut map_error)?;
         assert!(
             finish_written <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
         );
-        Ok(value)
+        Ok(DecodeLifecycleProgress::new(
+            value,
+            reset_written,
+            finish_written,
+        ))
     }
 
     /// Decodes values into an indexed output range using a streaming

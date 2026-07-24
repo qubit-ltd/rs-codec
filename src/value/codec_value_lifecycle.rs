@@ -16,8 +16,8 @@ use crate::{
     TranscodeEncodeErrorOf,
     TranscodeFailure,
     codec::{
+        assert_decode_lifecycle_bounds,
         assert_unit_bounds,
-        decode_lifecycle_scratch_len,
     },
 };
 
@@ -148,48 +148,55 @@ where
 
 /// Decodes exactly one value through reset, decode, and finish.
 ///
-/// Reset and finish output values are written into `scratch` and discarded by
-/// value-level adapters; the returned value is the main decoded value.
+/// Reset and finish output values are written into separate caller-provided
+/// buffers so both phases remain observable.
 ///
 /// # Parameters
 ///
 /// - `codec`: Codec used for the complete decode lifecycle.
 /// - `input`: Source units for exactly one encoded value.
-/// - `scratch`: Scratch destination for reset and finish output.
+/// - `reset_output`: Destination for reset output values.
+/// - `finish_output`: Destination for finish output values.
 ///
 /// # Returns
 ///
-/// Returns the main decoded value.
+/// Returns the main decoded value and the actual reset and finish output
+/// lengths.
 ///
 /// # Errors
 ///
-/// Returns [`TranscodeDecodeError`] when decoding fails, when trailing input
-/// remains, or when reset or finish fails.
+/// Returns [`TranscodeDecodeError`] when either lifecycle output buffer is
+/// shorter than its declared bound, decoding fails, trailing input remains, or
+/// reset or finish fails.
 ///
 /// # Panics
 ///
-/// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the reset
-/// and finish bounds, when the caller did not reserve enough lifecycle
-/// scratch, when the codec consumes beyond available input, or when the codec
-/// writes more reset or finish values than its declared bounds.
+/// Panics when the codec consumes beyond available input, or writes more reset
+/// or finish values than its declared bounds.
 pub(crate) fn decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
-    scratch: &mut [C::Value],
-) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
+    reset_output: &mut [C::Value],
+    finish_output: &mut [C::Value],
+) -> Result<(C::Value, usize, usize), TranscodeDecodeErrorOf<C>>
 where
     C: Codec,
 {
-    TranscodeFailure::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
-
-    assert!(
-        scratch.len() >= decode_lifecycle_scratch_len::<C>(),
-        "complete decode scratch output was not reserved",
-    );
+    assert_decode_lifecycle_bounds::<C>();
+    TranscodeFailure::ensure_output_capacity(
+        reset_output.len(),
+        0,
+        C::MAX_DECODE_RESET_VALUES,
+    )?;
+    TranscodeFailure::ensure_output_capacity(
+        finish_output.len(),
+        0,
+        C::MAX_DECODE_FINISH_VALUES,
+    )?;
     let reset_written = unsafe {
-        // SAFETY: The scratch capacity check above reserves the codec's
-        // declared decode-reset output bound.
-        codec.decode_reset(scratch, 0)
+        // SAFETY: The capacity check above reserves the codec's declared
+        // decode-reset output bound.
+        codec.decode_reset(reset_output, 0)
     }
     .map_err(TranscodeDecodeError::domain_reset)?;
     assert!(
@@ -197,6 +204,7 @@ where
         "Codec::decode_reset wrote beyond its reset bound",
     );
 
+    TranscodeFailure::ensure_min_input(input.len(), 0, C::MIN_UNITS_PER_VALUE)?;
     let (value, consumed) = unsafe {
         // SAFETY: The input check above guarantees the minimum readable units
         // required by `Codec::decode` at index 0.
@@ -212,14 +220,14 @@ where
     TranscodeFailure::ensure_no_trailing_input(consumed.get(), input.len())?;
 
     let finish_written = unsafe {
-        // SAFETY: The scratch capacity check above reserves the codec's
-        // declared decode-finish output bound.
-        codec.decode_finish(scratch, 0)
+        // SAFETY: The capacity check above reserves the codec's declared
+        // decode-finish output bound.
+        codec.decode_finish(finish_output, 0)
     }
     .map_err(TranscodeDecodeError::domain_finish)?;
     assert!(
         finish_written <= C::MAX_DECODE_FINISH_VALUES,
         "Codec::decode_finish wrote beyond its finish bound",
     );
-    Ok(value)
+    Ok((value, reset_written, finish_written))
 }

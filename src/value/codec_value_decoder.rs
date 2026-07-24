@@ -9,14 +9,16 @@
 
 use core::fmt;
 
-use super::ValueDecoder;
+use super::{
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
+    ValueDecoder,
+};
 use crate::{
     Codec,
     TranscodeDecodeErrorOf,
-    codec::{
-        assert_unit_bounds,
-        decode_lifecycle_scratch_len,
-    },
+    TranscodeFailure,
+    codec::assert_decode_lifecycle_bounds,
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
 
@@ -28,12 +30,6 @@ use crate::{
 /// successful decode, the adapter calls [`Codec::decode_finish`] to reset
 /// decode-side stream state for the next call.
 ///
-/// Values emitted by [`Codec::decode_reset`] and [`Codec::decode_finish`] are
-/// written into reusable lifecycle scratch storage and discarded. The adapter
-/// returns only the value produced by [`Codec::decode`]. Callers for which
-/// reset or finish values are semantically observable should use a streaming
-/// decoder adapter instead.
-///
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
@@ -43,8 +39,6 @@ where
 {
     /// Low-level codec used for one-value decoding.
     codec: C,
-    /// Reusable storage for values emitted by decode reset and finish hooks.
-    decode_lifecycle_scratch: Vec<C::Value>,
 }
 
 impl<C> CodecValueDecoder<C>
@@ -61,19 +55,15 @@ where
     ///
     /// Returns a value decoder adapter for the supplied codec.
     ///
-    /// # Compile-Time Checks
+    /// # Panics
     ///
-    /// Fails to compile when the supplied codec declares zero unit bounds or
-    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Panics when the supplied codec declares invalid unit bounds or an
+    /// inconsistent decode lifecycle bound.
     #[inline]
     #[must_use]
     pub fn new(codec: C) -> Self {
-        assert_unit_bounds::<C>();
-        Self {
-            codec,
-            decode_lifecycle_scratch: Vec::new(),
-        }
+        assert_decode_lifecycle_bounds::<C>();
+        Self { codec }
     }
 
     /// Decodes exactly one encoded value from `input`.
@@ -86,12 +76,15 @@ where
     ///
     /// Returns the decoded value.
     ///
-    /// Values emitted by decode reset or finish are discarded; this method
-    /// returns only the main value decoded from `input`.
+    /// Codecs that may emit decode reset or finish values must use
+    /// [`Self::decode_lifecycle`] or [`Self::decode_lifecycle_with_scratch`].
     ///
     /// # Errors
     ///
-    /// Returns [`crate::TranscodeFailure::IncompleteInput`] when fewer than
+    /// Returns [`crate::TranscodeFailure::UnsupportedDecodeLifecycleOutput`]
+    /// before inspecting `input` or running codec hooks when reset or finish
+    /// may emit values. Returns
+    /// [`crate::TranscodeFailure::IncompleteInput`] when fewer than
     /// [`Codec::MIN_UNITS_PER_VALUE`] units are available or when
     /// [`crate::DecodeFailure::Incomplete`] is reported by the codec. In this
     /// one-shot API, incomplete input is a terminal error rather than a
@@ -102,34 +95,113 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
-    /// reset and finish bounds, when the wrapped codec reports a consumed unit
-    /// count larger than the input slice length, or when finish output exceeds
-    /// [`Codec::MAX_DECODE_FINISH_VALUES`].
+    /// Panics when the wrapped codec reports a consumed unit count larger than
+    /// the input slice length.
     pub fn decode(
         &mut self,
         input: &[C::Unit],
-    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>>
+    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>> {
+        TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()?;
+        let (value, reset_written, finish_written) =
+            decode_exact_complete_value(
+                &mut self.codec,
+                input,
+                &mut [],
+                &mut [],
+            )?;
+        debug_assert_eq!(0, reset_written);
+        debug_assert_eq!(0, finish_written);
+        Ok(value)
+    }
+
+    /// Decodes exactly one value and preserves all lifecycle output.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Encoded units for exactly one value.
+    ///
+    /// # Returns
+    ///
+    /// Returns reset values, the main decoded value, and finish values in
+    /// separate owned buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns a framework error when input is incomplete or has trailing
+    /// units. Returns a phase-aware domain error when reset, decode, or finish
+    /// fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the wrapped codec violates its declared reset, decode, or
+    /// finish bounds.
+    pub fn decode_lifecycle(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<DecodeLifecycleOutput<C::Value>, TranscodeDecodeErrorOf<C>>
     where
         C::Value: Default,
     {
-        let scratch_cap = decode_lifecycle_scratch_len::<C>();
-        if self.decode_lifecycle_scratch.len() < scratch_cap {
-            self.decode_lifecycle_scratch
-                .resize_with(scratch_cap, C::Value::default);
-        }
-        decode_exact_complete_value(
-            &mut self.codec,
-            input,
-            &mut self.decode_lifecycle_scratch,
-        )
+        let mut reset = Vec::new();
+        reset.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
+        let mut finish = Vec::new();
+        finish.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
+        let (value, reset_written, finish_written) = self
+            .decode_lifecycle_with_scratch(input, &mut reset, &mut finish)?
+            .into_parts();
+        reset.truncate(reset_written);
+        finish.truncate(finish_written);
+        Ok(DecodeLifecycleOutput::new(reset, value, finish))
+    }
+
+    /// Decodes exactly one value into separate lifecycle output buffers.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Encoded units for exactly one value.
+    /// - `reset_output`: Destination for values emitted by decode reset.
+    /// - `finish_output`: Destination for values emitted by decode finish.
+    ///
+    /// # Returns
+    ///
+    /// Returns the main decoded value and the initialized lengths of both
+    /// lifecycle output buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns a framework error before running any lifecycle hook when either
+    /// output buffer is shorter than its corresponding codec bound. Also
+    /// returns incomplete-input, trailing-input, or phase-aware domain errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the wrapped codec violates its declared reset, decode, or
+    /// finish bounds.
+    pub fn decode_lifecycle_with_scratch(
+        &mut self,
+        input: &[C::Unit],
+        reset_output: &mut [C::Value],
+        finish_output: &mut [C::Value],
+    ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>>
+    {
+        let (value, reset_written, finish_written) =
+            decode_exact_complete_value(
+                &mut self.codec,
+                input,
+                reset_output,
+                finish_output,
+            )?;
+        Ok(DecodeLifecycleProgress::new(
+            value,
+            reset_written,
+            finish_written,
+        ))
     }
 }
 
 impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
 where
     C: Codec,
-    C::Value: Default,
 {
     type Output = C::Value;
     type Error = TranscodeDecodeErrorOf<C>;
@@ -152,14 +224,6 @@ where
         formatter
             .debug_struct("CodecValueDecoder")
             .field("codec", &self.codec)
-            .field(
-                "decode_lifecycle_scratch_len",
-                &self.decode_lifecycle_scratch.len(),
-            )
-            .field(
-                "decode_lifecycle_scratch_capacity",
-                &self.decode_lifecycle_scratch.capacity(),
-            )
             .finish()
     }
 }
