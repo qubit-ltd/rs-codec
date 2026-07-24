@@ -23,9 +23,9 @@ pub use decode_invalid_action::{
     DecodeInvalidAction,
     DecodeInvalidActionOf,
 };
-pub use decode_outcome::DecodeOutcome;
+pub(crate) use decode_outcome::DecodeOutcome;
 pub use encode_context::EncodeContext;
-pub use encode_outcome::EncodeOutcome;
+pub(crate) use encode_outcome::EncodeOutcome;
 pub use encode_unencodable_action::{
     EncodeUnencodableAction,
     EncodeUnencodableActionOf,

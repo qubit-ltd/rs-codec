@@ -5,19 +5,32 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Tests encode outcomes through the public encoder-engine boundary.
 
-use qubit_codec::engine::EncodeOutcome;
+use qubit_codec::{
+    CodecTranscodeEncoder,
+    TranscodeStatus,
+    Transcoder,
+};
+
+use crate::common::IdentityCodec;
 
 #[test]
-fn test_encode_outcome_constructors_match_variants() {
+fn test_encode_outcome_reports_output_pressure_through_progress() {
+    let mut encoder = CodecTranscodeEncoder::new(IdentityCodec);
+    let mut output = [];
+
+    let progress = encoder
+        .transcode(&[7], 0, &mut output, 0)
+        .expect("output pressure should not be a domain error");
+
     assert_eq!(
-        EncodeOutcome::Consumed { written: 2 },
-        EncodeOutcome::consumed(2),
-    );
-    assert_eq!(
-        EncodeOutcome::NeedOutput {
-            required: crate::nz(3),
+        TranscodeStatus::NeedOutput {
+            output_index: 0,
+            required: crate::nz(1),
+            available: 0,
         },
-        EncodeOutcome::need_output(crate::nz(3)),
+        progress.status(),
     );
+    assert_eq!((0, 0), (progress.read(), progress.written()));
 }

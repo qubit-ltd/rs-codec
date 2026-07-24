@@ -10,9 +10,7 @@ use qubit_codec::engine::{
     DecodeContext,
     DecodeInvalidAction,
     DecodeInvalidActionOf,
-    DecodeOutcome,
     EncodeContext,
-    EncodeOutcome,
     EncodeUnencodableAction,
     EncodeUnencodableActionOf,
     TranscodeConvertEngine,
@@ -268,24 +266,6 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let context = EncodeContext::new(&1_u8, 0, &mut output, 0);
     assert_eq!(0, context.input_index());
     assert_eq!(1, context.available_output());
-
-    assert_eq!(
-        DecodeOutcome::emitted(crate::nz(3), crate::nz(1)),
-        DecodeOutcome::Emitted {
-            read: crate::nz(3),
-            emitted: crate::nz(1),
-        },
-    );
-    assert_eq!(
-        EncodeOutcome::consumed(3),
-        EncodeOutcome::Consumed { written: 3 }
-    );
-    assert_eq!(
-        EncodeOutcome::need_output(crate::nz(4)),
-        EncodeOutcome::NeedOutput {
-            required: crate::nz(4),
-        },
-    );
 
     let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[1], 0) }
         .expect("decode should be infallible");

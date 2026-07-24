@@ -22,8 +22,7 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   `CodecTranscodeDecoder` 和
   `CodecTranscodeConverter` adapter。
 - 用于下游带策略 encoder 复用公共 buffered encode 循环的
-  `TranscodeEncodeEngine`、`TranscodeEncodeHooks`、`EncodeOutcome` 和
-  `EncodeContext`。
+  `TranscodeEncodeEngine`、`TranscodeEncodeHooks` 和 `EncodeContext`。
 - 用于下游带策略 decoder 复用公共 buffered decode 循环的
   `TranscodeDecodeEngine`、`TranscodeDecodeHooks`、`DecodeInvalidAction` 和
   `DecodeContext`。
@@ -72,8 +71,11 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
 - **`ValueDecoder<Input>`**：把借用的编码输入解码为自有输出。
 - **`CodecValueEncoder<C>`**：把 `Codec` 包装为
   返回自有 `Vec<C::Unit>` 的 `ValueEncoder<C::Value>`。
-- **`CodecValueDecoder<C>`**：把 `Codec` 包装为
-  接收恰好一个完整编码值的 `ValueDecoder<[C::Unit]>`。
+- **`CodecValueDecoder<C>`**：把 `Codec` 包装为严格
+  `ValueDecoder<[C::Unit]>`；decode reset 和 finish 不产生值时接收恰好一个
+  完整编码值，lifecycle-aware 方法则分别保留 reset、主体和 finish 输出。
+- **`DecodeLifecycleOutput<Value>` / `DecodeLifecycleProgress<Value>`**：
+  分别表示完整 decode 生命周期的自有结果与调用方 scratch 结果。
 
 ### 缓冲区转换原语
 
@@ -90,8 +92,6 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   buffered encode 循环的可复用 engine。
 - **`TranscodeEncodeHooks<C>`**：供带策略 codec-backed encoder
   共享公共循环时实现的 transcode/finalization 策略 hook trait。
-- **`EncodeOutcome`**：encode hook 处理单个 value 后返回的结果：
-  已消费并写出若干 unit，或因输出空间不足而未消费。
 - **`EncodeContext<'a, Value, Unit>`**：传给 encode hook 的输入值、输入索引、
   输出切片和游标上下文。
 - **`CodecTranscodeDecoder<C>`**：把 `Codec` 包装为无策略的
@@ -108,8 +108,8 @@ text、misc 和 I/O adapter crate 需要共享的小型 trait 与值类型，不
   encode hooks 与公共 buffered conversion 循环的可复用 unit-to-unit
   converter engine。
 - **`TranscodeDecodeInput<I>`**（需要 `io` 特性）：持有底层 unit
-  `BufferedInput`，并通过 `transcode_into` / `finish_transcode_into` 驱动
-  调用方传入的 streaming decoder。
+  `BufferedInput`；既支持严格及 lifecycle-aware 的单值解码，也可以通过
+  `transcode_into` / `finish_transcode_into` 驱动调用方传入的 streaming decoder。
 - **`TranscodeEncodeOutput<O>`**（需要 `io` 特性）：持有底层 unit
   `BufferedOutput`；普通 `flush` 只排空 unit buffer。状态化 streaming
   encoder 使用 `transcode_from` 和 `finish`。
@@ -261,7 +261,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | 类型 | 用途 |
 |------|------|
 | `CodecValueEncoder<C>` | 通过 `C: Codec` 把一个借用 `C::Value` 编码成自有 `Vec<C::Unit>`，不要求 `C::Value: Clone` |
-| `CodecValueDecoder<C>` | 通过 `C: Codec` 把恰好一个借用 `[C::Unit]` slice 解码成 `C::Value` |
+| `CodecValueDecoder<C>` | 严格解码恰好一个借用 `[C::Unit]` slice，或通过 lifecycle-aware 方法保留 reset、主体和 finish 输出 |
+| `DecodeLifecycleOutput<Value>` | 持有一次完整 decode 生命周期的 reset 输出、主体值和 finish 输出 |
+| `DecodeLifecycleProgress<Value>` | 返回主体值，以及分别写入两块调用方缓冲区的 reset/finish 长度 |
 | `CodecTranscodeEncoder<C>` | 通过 `C: Codec` 把 `C::Value` slice 编码进调用方提供的 `C::Unit` 缓冲区 |
 | `CodecTranscodeDecoder<C>` | 通过 `C: Codec` 严格地把 `C::Unit` slice 解码进调用方提供的 `C::Value` 缓冲区 |
 | `CodecTranscodeConverter<D, E>` | 先解码 `D::Unit` source unit，再用满足 `E::Value = D::Value` 的 `E` 编码 `E::Unit` target unit |
@@ -270,7 +272,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | 类型 | 用途 |
 |------|------|
-| `TranscodeDecodeInput<I>`（需要 `io`） | 持有 `qubit_io::Input`，调用时传入 caller-owned streaming decoder，并通过 `transcode_into` 和 `finish_transcode_into` 解码 unit |
+| `TranscodeDecodeInput<I>`（需要 `io`） | 持有 `qubit_io::Input`，可严格解码单值、保留一次完整生命周期，或驱动 caller-owned streaming decoder |
 | `TranscodeEncodeOutput<O>`（需要 `io`） | 持有 `qubit_io::Output`；普通 `flush` 排空缓冲单元；状态化 streaming encoder 使用 `transcode_from` 和 `finish` |
 
 ### Encoder Hooks 和 Engine
@@ -280,7 +282,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `TranscodeEncodeEngine<C, H>` | 基于低层 `Codec` 与策略 hooks 的可复用 buffered encoder engine |
 | `TranscodeEncodeHooks<C>` | 编码单个 value、reset 前清理并完成 encoded output 收尾的 hook 契约 |
 | `TranscodeEncodeError<E, V>` / `TranscodeEncodeErrorOf<C>` | encode-side 错误及其 codec 派生别名 |
-| `EncodeOutcome` | 单值 hook 结果：已消费并写出 output，或需要更多 output 且不消费 |
 | `EncodeContext<'a, Value, Unit>` | 传递给 encode hook 的输入值、输入索引、输出切片和游标 |
 
 ### Decoder Hooks 和 Engine
@@ -330,9 +331,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
   unit，用 `DecodeFailure::Invalid` 表示 codec-domain 的畸形、非规范或其他非法输入。
 - `encode_len(value)` 必须等于同一 value 与 codec 状态下 `Codec::encode`
   实际写入的 unit 数量，并且不能超过 `Codec::MAX_UNITS_PER_VALUE`。
-- 需要处理状态化自有单值转换时，应使用 `CodecValueEncoder<C>` 和
-  `CodecValueDecoder<C>`。需要调用方提供缓冲区时，应使用 streaming
-  transcoder adapter，确保 reset、主值与 finish 生命周期处理集中在 adapter 层。
+- 状态化自有单值编码使用 `CodecValueEncoder<C>`。decode 生命周期会产生输出的
+  codec 应使用 `CodecValueDecoder::decode_lifecycle`；需要复用调用方缓冲区时使用
+  `decode_lifecycle_with_scratch`。连续流应使用 streaming transcoder adapter。
 - 方向性 adapter 暴露 `TranscodeEncodeError`、`TranscodeDecodeError` 或
   `TranscodeConvertError`；它们把 framework failure 与带阶段上下文的 codec、
   policy domain error 分开表达。

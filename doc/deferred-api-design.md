@@ -39,10 +39,10 @@ Open questions for later review:
 
 ### Single-value decode lifecycle output
 
-The silent discard of values emitted by `decode_reset` and `decode_finish` has
-a concrete follow-up design. Strict single-value APIs will reject codecs that
-declare lifecycle output, while lifecycle-aware owned and scratch APIs will
-expose reset, main, and finish results separately. See
+The silent discard of values emitted by `decode_reset` and `decode_finish` is
+resolved. Strict single-value APIs reject codecs that declare lifecycle
+output, while lifecycle-aware owned and scratch APIs expose reset, main, and
+finish results separately. See
 [`decode_lifecycle_output_design.zh_CN.md`](decode_lifecycle_output_design.zh_CN.md).
 
 ### ValueEncoder and ValueDecoder error mapping

@@ -81,7 +81,11 @@ The default feature set is empty. Enable the `io` feature to use the
 - **`CodecValueEncoder<C>`**: wraps a `Codec` as a
   `ValueEncoder<C::Value>` that returns owned `Vec<C::Unit>` output.
 - **`CodecValueDecoder<C>`**: wraps a `Codec` as a
-  `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value.
+  strict `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value when
+  decode reset and finish do not emit values. Its lifecycle-aware methods
+  preserve reset, main, and finish output separately.
+- **`DecodeLifecycleOutput<Value>` / `DecodeLifecycleProgress<Value>`**:
+  owned and caller-scratch results for one complete decode lifecycle.
 
 ### Buffered Transcoder Primitives
 
@@ -103,8 +107,8 @@ The default feature set is empty. Enable the `io` feature to use the
   policy while sharing the common loop.
 - **`EncodeUnencodableAction<Value>`**: action returned by encode hooks for
   unencodable values: skip the value or encode a replacement.
-- **`EncodeOutcome` / `EncodeContext<'a, Value, Unit>`**: low-level engine
-  plumbing for one buffered encode attempt.
+- **`EncodeContext<'a, Value, Unit>`**: context shared by encode policy hooks
+  and the buffered encode engine.
 - **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a strict
   `TranscodeDecoder` that leaves engine-detected incomplete tails in the
   caller's input buffer and wraps codec-reported decode errors.
@@ -121,8 +125,9 @@ The default feature set is empty. Enable the `io` feature to use the
   engine that composes decode hooks, encode hooks, and the common buffered
   conversion loop.
 - **`TranscodeDecodeInput<I>`** *(requires the `io` feature)*: owns a
-  unit-level `BufferedInput` and drives caller-provided streaming decoders
-  through `transcode_into` / `finish_transcode_into`.
+  unit-level `BufferedInput`; it supports strict and lifecycle-aware
+  single-value decoding as well as caller-provided streaming decoders through
+  `transcode_into` / `finish_transcode_into`.
 - **`TranscodeEncodeOutput<O>`** *(requires the `io` feature)*: owns a
   unit-level `BufferedOutput`; ordinary `flush` drains buffered units. Stateful
   streaming encoders use `transcode_from` and `finish`.
@@ -279,7 +284,9 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | Type | Purpose |
 |------|---------|
 | `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
-| `CodecValueDecoder<C>` | Decode exactly one borrowed `[C::Unit]` slice into `C::Value` by using `C: Codec` |
+| `CodecValueDecoder<C>` | Strictly decode exactly one borrowed `[C::Unit]` slice, or preserve reset/main/finish output through its lifecycle-aware methods |
+| `DecodeLifecycleOutput<Value>` | Own reset output, the main decoded value, and finish output from one complete lifecycle |
+| `DecodeLifecycleProgress<Value>` | Return a main decoded value plus the reset/finish lengths written into separate caller buffers |
 | `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
 | `CodecTranscodeDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
 | `CodecTranscodeConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
@@ -288,7 +295,7 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 
 | Type | Purpose |
 |------|---------|
-| `TranscodeDecodeInput<I>` *(requires `io`)* | Decode units from a `qubit_io::Input` by passing a caller-owned streaming decoder to `transcode_into` and `finish_transcode_into` |
+| `TranscodeDecodeInput<I>` *(requires `io`)* | Strictly decode one value, preserve one complete lifecycle, or drive a caller-owned streaming decoder over a `qubit_io::Input` |
 | `TranscodeEncodeOutput<O>` *(requires `io`)* | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
 
 ### Encoder Hooks And Engines
@@ -299,7 +306,6 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 | `TranscodeEncodeHooks<C>` | Hook contract for unencodable-value policy, preparing for reset, and finalizing encoded output |
 | `TranscodeEncodeError<E, V>` / `TranscodeEncodeErrorOf<C>` | Encode-side error and its codec-derived alias |
 | `EncodeUnencodableAction<Value>` | Policy action returned for values outside the codec's encodable domain |
-| `EncodeOutcome` | Per-value engine outcome: consumed with written output, or needs more output without consuming |
 | `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor used by encode engine helpers |
 
 ### Decoder Hooks And Engines
@@ -351,10 +357,11 @@ assert_eq!(TranscodeStatus::Complete, progress.status());
 - `encode_len(value)` must equal the number of units `Codec::encode` writes for
   the same value and codec state, and it must not exceed
   `Codec::MAX_UNITS_PER_VALUE`.
-- Stateful owned one-value callers should use `CodecValueEncoder<C>` and
-  `CodecValueDecoder<C>`. Callers that need caller-provided buffers should use
-  the streaming transcoder adapters so reset, main value, and finish lifecycle
-  handling stays centralized.
+- Stateful owned one-value encoding uses `CodecValueEncoder<C>`. Decoding
+  codecs with lifecycle output should use
+  `CodecValueDecoder::decode_lifecycle`; callers that provide reusable buffers
+  can use `decode_lifecycle_with_scratch`. Continuous streams should use the
+  streaming transcoder adapters.
 - Directional adapters expose `TranscodeEncodeError`, `TranscodeDecodeError`,
   or `TranscodeConvertError`. Each keeps framework failures separate from
   phase-tagged codec and policy domain errors.

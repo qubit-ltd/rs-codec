@@ -1,9 +1,11 @@
 # 单值解码生命周期输出设计
 
+> 状态：已实现。
+
 ## 背景
 
-`CodecValueDecoder::decode`、`TranscodeDecodeInput::read_decoded_with` 和
-`read_decoded_with_scratch` 当前执行完整的
+修复前，`CodecValueDecoder::decode`、`TranscodeDecodeInput::read_decoded_with`
+和 `read_decoded_with_scratch` 会执行完整的
 `decode_reset -> decode -> decode_finish` 生命周期，但只返回主体
 `Codec::decode` 产生的一个值。reset 和 finish 阶段产生的值会写入同一块 scratch，
 随后被丢弃；finish 还可能覆盖 reset 的输出。

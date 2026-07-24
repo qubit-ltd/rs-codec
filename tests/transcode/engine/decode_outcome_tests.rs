@@ -5,35 +5,26 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Tests for decode-side one-step outcomes.
+//! Tests decode outcomes through the public decoder-engine boundary.
 
-use qubit_codec::engine::DecodeOutcome;
+use qubit_codec::{
+    CodecTranscodeDecoder,
+    TranscodeStatus,
+    Transcoder,
+};
 
-#[test]
-fn test_emitted_creates_emitted_outcome() {
-    assert_eq!(
-        DecodeOutcome::Emitted {
-            read: crate::nz(2),
-            emitted: crate::nz(1),
-        },
-        DecodeOutcome::emitted(crate::nz(2), crate::nz(1)),
-    );
-}
+use crate::common::IdentityCodec;
 
 #[test]
-fn test_skipped_creates_skipped_outcome() {
-    assert_eq!(
-        DecodeOutcome::Skipped { read: crate::nz(3) },
-        DecodeOutcome::skipped(crate::nz(3)),
-    );
-}
+fn test_decode_outcome_emits_through_transcode_progress() {
+    let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
+    let mut output = [0_u8; 1];
 
-#[test]
-fn test_need_input_creates_need_input_outcome() {
-    assert_eq!(
-        DecodeOutcome::NeedInput {
-            required: crate::nz(4),
-        },
-        DecodeOutcome::need_input(crate::nz(4)),
-    );
+    let progress = decoder
+        .transcode(&[7], 0, &mut output, 0)
+        .expect("identity decode should succeed");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!((1, 1), (progress.read(), progress.written()));
+    assert_eq!([7], output);
 }
