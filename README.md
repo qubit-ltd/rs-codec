@@ -225,6 +225,13 @@ Add this to your `Cargo.toml`:
 qubit-codec = "0.11"
 ```
 
+## User Guide
+
+The [user guide](doc/user_guide.md) explains abstraction selection and the
+formal `Codec` and `Transcoder` implementer contracts, including progress,
+lifecycle, EOF, and error-recovery rules. A
+[Chinese version](doc/user_guide.zh_CN.md) is available.
+
 ## Quick Start
 
 ```rust

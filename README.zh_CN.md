@@ -202,6 +202,12 @@ unit-to-unit 转换（如 UTF-8 字节 → UTF-16 字节）的写法是组合一
 qubit-codec = "0.11"
 ```
 
+## 用户手册
+
+[用户手册](doc/user_guide.zh_CN.md)说明抽象选择和正式的 `Codec`、`Transcoder`
+实现者契约，包括进度、生命周期、EOF 和错误恢复规则。另有
+[英文版](doc/user_guide.md)。
+
 ## 快速开始
 
 ```rust
