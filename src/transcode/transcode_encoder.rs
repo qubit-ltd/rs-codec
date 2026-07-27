@@ -20,7 +20,14 @@ use super::{
 /// distinguish encoding direction from decoding and unit-to-unit conversion.
 ///
 /// The word "buffered" describes the caller-managed buffer and progress model.
-/// It does not require the implementor to own an internal buffer.
+/// It does not require the implementor to own an internal buffer. An encoder
+/// may retain consumed input internally, but [`Transcoder::transcode`] must
+/// consume every visible input value before returning
+/// [`crate::TranscodeStatus::Complete`] and must never return
+/// [`crate::TranscodeStatus::NeedInput`]. It returns
+/// [`crate::TranscodeStatus::NeedOutput`] when more output capacity is needed;
+/// [`Transcoder::finish`] emits any retained output after the caller has
+/// supplied the complete logical input stream.
 pub trait TranscodeEncoder:
     Transcoder<
     Error = TranscodeEncodeError<

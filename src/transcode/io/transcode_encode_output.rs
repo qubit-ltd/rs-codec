@@ -33,6 +33,7 @@ use crate::{
     Codec,
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
+    TranscodeEncoder,
     TranscodeStatus,
     Transcoder,
     value::codec_value_lifecycle::{
@@ -183,7 +184,6 @@ where
     /// # Returns
     ///
     /// The wrapped output and the buffer holding pending units.
-    #[must_use]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }
@@ -283,6 +283,70 @@ where
     /// # Errors
     ///
     /// Returns invalid input ranges, capacity, transcode, or output errors.
+    ///
+    /// # Examples
+    ///
+    /// A value that only implements [`Transcoder`] is not an encoder and cannot
+    /// be passed to this method.
+    ///
+    /// ```compile_fail
+    /// use qubit_codec::{
+    ///     CapacityError, TranscodeEncodeError, TranscodeEncodeOutput,
+    ///     TranscodeProgress, Transcoder,
+    /// };
+    ///
+    /// struct GenericTranscoder;
+    ///
+    /// impl Transcoder for GenericTranscoder {
+    ///     type Input = u8;
+    ///     type Output = u8;
+    ///     type Error = TranscodeEncodeError<(), u8>;
+    ///
+    ///     fn max_transcode_output_len(
+    ///         &self,
+    ///         input_len: usize,
+    ///     ) -> Result<usize, CapacityError> {
+    ///         Ok(input_len)
+    ///     }
+    ///
+    ///     fn reset(
+    ///         &mut self,
+    ///         _output: &mut [u8],
+    ///         _output_index: usize,
+    ///     ) -> Result<usize, Self::Error> {
+    ///         Ok(0)
+    ///     }
+    ///
+    ///     fn transcode(
+    ///         &mut self,
+    ///         input: &[u8],
+    ///         input_index: usize,
+    ///         _output: &mut [u8],
+    ///         _output_index: usize,
+    ///     ) -> Result<TranscodeProgress, Self::Error> {
+    ///         Ok(TranscodeProgress::complete(input.len() - input_index, 0))
+    ///     }
+    ///
+    ///     fn finish(
+    ///         &mut self,
+    ///         _output: &mut [u8],
+    ///         _output_index: usize,
+    ///     ) -> Result<usize, Self::Error> {
+    ///         Ok(0)
+    ///     }
+    /// }
+    ///
+    /// let mut output = TranscodeEncodeOutput::with_capacity(std::io::sink(), 1);
+    /// let mut transcoder = GenericTranscoder;
+    /// let mut map_error = |_| std::io::Error::other("transcode error");
+    /// let _ = output.transcode_from(
+    ///     &mut transcoder,
+    ///     &mut map_error,
+    ///     &[0_u8],
+    ///     0,
+    ///     1,
+    /// );
+    /// ```
     pub fn transcode_from<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -292,7 +356,7 @@ where
         count: usize,
     ) -> Result<usize>
     where
-        E: Transcoder<Input = Value, Output = O::Item>,
+        E: TranscodeEncoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
     {
         let input_end = UncheckedSlice::checked_range_end(
@@ -346,7 +410,7 @@ where
                 TranscodeStatus::NeedInput { .. } => {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
-                        "encoder unexpectedly requested more input",
+                        "encoder violated the TranscodeEncoder contract by requesting more input",
                     ));
                 }
             }

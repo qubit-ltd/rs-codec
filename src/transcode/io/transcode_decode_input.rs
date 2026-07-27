@@ -230,7 +230,6 @@ where
     /// # Returns
     ///
     /// The wrapped input and the buffer holding unread units.
-    #[must_use]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
     }
