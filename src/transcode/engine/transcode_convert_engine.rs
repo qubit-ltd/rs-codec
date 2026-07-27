@@ -252,10 +252,10 @@ where
     encode_engine: TranscodeEncodeEngine<E, EH>,
     /// Decoded value waiting for target output capacity.
     pending: PendingValueSlot<D::Value>,
-    /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
-    /// Zero-sized in release builds. The converter owns its own guard rather
-    /// than delegating to the inner decode/encode engines, because lifecycle
-    /// events here describe the converter as a whole.
+    /// Guard for the `reset → transcode* → finish` lifecycle in every build
+    /// profile. The converter owns its own guard rather than delegating to the
+    /// inner decode/encode engines, because lifecycle events here describe the
+    /// converter as a whole.
     lifecycle: LifecycleGuard,
 }
 

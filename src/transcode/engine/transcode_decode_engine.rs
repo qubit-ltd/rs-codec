@@ -168,8 +168,8 @@ pub struct TranscodeDecodeEngine<C, H> {
     pub(super) codec: C,
     /// Policy hooks used for decode failures.
     pub(super) hooks: H,
-    /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
-    /// Zero-sized in release builds.
+    /// Guard for the `reset → transcode* → finish` lifecycle in every build
+    /// profile.
     lifecycle: LifecycleGuard,
 }
 

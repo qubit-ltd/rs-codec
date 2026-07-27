@@ -142,8 +142,8 @@ use crate::{
 pub struct TranscodeEncodeEngine<C, H> {
     codec: C,
     hooks: H,
-    /// Debug-only guard for the `reset → transcode* → finish` lifecycle.
-    /// Zero-sized in release builds.
+    /// Guard for the `reset → transcode* → finish` lifecycle in every build
+    /// profile.
     lifecycle: LifecycleGuard,
 }
 

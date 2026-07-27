@@ -26,9 +26,9 @@ use crate::{
 ///
 /// `CodecValueDecoder` is the default bridge from the low-level unchecked
 /// [`Codec`] contract to the convenience-layer [`ValueDecoder`] contract. The
-/// supplied input slice must contain exactly one encoded value. After a
-/// successful decode, the adapter calls [`Codec::decode_finish`] to reset
-/// decode-side stream state for the next call.
+/// supplied input slice must contain exactly one encoded value. The adapter
+/// runs the complete decode lifecycle, including [`Codec::decode_finish`],
+/// before returning the decoded value.
 ///
 /// # Type Parameters
 ///
