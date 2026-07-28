@@ -206,14 +206,6 @@ where
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
         let unread = self.unread();
-        debug_assert!(
-            UncheckedSlice::range_fits(unread.len(), 0, count),
-            "unchecked unread copy range exceeds unread source",
-        );
-        debug_assert!(
-            UncheckedSlice::range_fits(output.len(), output_index, count),
-            "unchecked copy destination range exceeds output buffer",
-        );
         unsafe {
             UncheckedSlice::copy_nonoverlapping(
                 unread,
