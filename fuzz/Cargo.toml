@@ -1,0 +1,27 @@
+[package]
+name = "qubit-codec-fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qubit-codec = { path = "..", features = ["io"] }
+
+[[bin]]
+name = "transcode_encode_output_lifecycle"
+path = "fuzz_targets/transcode_encode_output_lifecycle.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "transcode_decode_input_lifecycle"
+path = "fuzz_targets/transcode_decode_input_lifecycle.rs"
+test = false
+doc = false
+bench = false
