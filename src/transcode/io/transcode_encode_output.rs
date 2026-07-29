@@ -179,7 +179,11 @@ where
         self.ensure_spare_capacity(required.get())
     }
 
-    /// Consumes this adapter and returns its parts.
+    /// Consumes this adapter without flushing the wrapped output.
+    ///
+    /// This method does not call [`Self::flush`] and performs no I/O. Pending
+    /// units remain in the returned buffer, which transfers their delivery
+    /// responsibility to the caller.
     ///
     /// # Returns
     ///
