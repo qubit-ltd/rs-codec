@@ -1,196 +1,203 @@
 # Qubit Codec 用户手册
 
-`qubit-codec` 提供 Qubit binary、text、misc 和 I/O codec crate 共用的领域无关契约。
-它有意不提供具体的线格式或字符集。本手册说明如何选择抽象，并在需要时正确实现其契约。
+[English](user_guide.md) · [README](../README.zh_CN.md) · [API 文档](https://docs.rs/qubit-codec)
 
-逐项的函数签名、trait bound 和错误变体请查阅生成的 API 文档。本手册重点解释实现者必须同时保持的跨方法关系。
+本手册适用于 `qubit-codec` 0.11 及 Rust 1.94 以上版本，面向需要把逻辑 value
+转换为编码 unit，或在调用方管理的缓冲区中转换编码 unit 的 codec crate 与 adapter
+作者。它不定义具体线格式或字符集。
 
-## 选择最小够用的抽象
+## 手册目标与读者
 
-| 需求 | 使用 |
-| --- | --- |
-| 在调用方缓冲区上编码或解码一个值/quantum | `Codec` |
-| 将整个借用值转换为自有输出 | `ValueEncoder` / `ValueDecoder` |
-| 把已有 `Codec` 包装成严格的流式 bridge | `CodecTranscodeEncoder`、`CodecTranscodeDecoder` 或 `CodecTranscodeConverter` |
-| 对畸形值或不可编码值应用策略 | 带 hooks 的 `TranscodeXxxEngine` |
-| 定义专用的、由调用方提供缓冲区的流转换 | `Transcoder` |
+当格式 crate 需要一个 codec quantum 的可复用契约、自有完整值 facade 或流式转换循环时，
+使用本库。具体二进制布局、字符集和格式专属的 `std::io` 集成应位于相邻领域 crate。
 
-不要仅因数据需要编码就实现 `Codec`。对“完整输入”才是合理单位的格式，例如格式化 hex 字符串或 C 字符串字面量，通常直接实现 `ValueEncoder` / `ValueDecoder` 更清晰。反过来，已有 `Codec` 能用现成 adapter 包装时，也不要重复实现缓冲循环。
+贯穿场景是：一个格式 crate 先实现单个局部 value 的 `Codec`，随后希望同时提供自有
+输出的便捷操作与缓冲区流式 API，又不想重复编写游标、容量和 EOF 规则。
 
-## `Codec` 实现者指南
-
-`Codec` 持有一个逻辑值或 quantum，并在调用方提供的 unit 缓冲区上工作。它的 `encode` 和 `decode` 入口为 `unsafe`，因为 checked adapter 会一次完成边界检查，热路径不必重复构造 slice。实现不得读写文档定义的调用方可用范围之外的内存。
-
-### 必须保持的不变量
-
-- `MIN_UNITS_PER_VALUE` 和 `MAX_UNITS_PER_VALUE` 都非零，且前者不大于后者。
-- `decode` 只读取可见输入。可见前缀合法但不足以形成值时，返回 `DecodeFailure::Incomplete`；不要消费该前缀。
-- 成功的 `decode` 返回非零消费数，且不超过当前可用输入。
-- 对同一 value 和 codec 状态，`encode_len` 必须精确等于成功 `encode` 返回的数量；故意在内部缓冲时二者都可以为零。
-- `encode_len` 不得超过 `MAX_UNITS_PER_VALUE`。
-- 调用方会先查询 `can_encode_value(value)`，再调用 `encode_len` 和 `encode`；应在前者拒绝不支持的值，而不是把它伪装成任意 `EncodeError`。
-- reset 与 finish 的上界必须覆盖每一种可达流状态，不能只覆盖当前状态。无状态生命周期阶段应返回零。
-- 返回任何错误后，内部状态必须仍保持一致，并符合已文档化的 retry/reset 策略。
-
-### 最小定宽 codec
-
-下面模板适用于无状态、单字节值 codec。`debug_assert!` 用于陈述 unchecked 前置条件；checked adapter 会在调用这些方法前保证它们成立。
-
-```rust
-use core::{convert::Infallible, num::NonZeroUsize};
-use qubit_codec::{Codec, DecodeFailure, nz};
-
-struct ByteCodec;
-
-impl Codec for ByteCodec {
-    type Value = u8;
-    type Unit = u8;
-    type DecodeError = Infallible;
-    type EncodeError = Infallible;
-
-    const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
-
-    unsafe fn encode(
-        &mut self,
-        value: &u8,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Infallible> {
-        debug_assert!(output_index < output.len());
-        output[output_index] = *value;
-        Ok(1)
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u8],
-        input_index: usize,
-    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
-        debug_assert!(input_index < input.len());
-        Ok((input[input_index], nz!(1)))
-    }
-}
-```
-
-### 变宽与有状态 codec
-
-输出宽度依赖 value 时，应覆盖 `encode_len`。带缓冲的 encoder 可以针对一个 value 同时从 `encode_len` 和 `encode` 返回零，并在后续输入或 `encode_finish` 时输出保留内容；此时必须声明足以容纳保留输出的 finish 上界。
-
-decode 侧状态不会得到 EOF 输入 slice。若输入尾部需要在 EOF 时重新解释，默认 `Codec` bridge 的边界就不合适：应把该策略放在自定义 `Transcoder` 或 value-level facade 中。`decode_finish` 可以输出保留值或验证 decode 状态，但不能重新读取此前报告为 incomplete 的尾部。
-
-## `Transcoder` 实现者指南
-
-`Transcoder` 将一个逻辑输入流转换为输出流。它的 index 是传入 slice 中的绝对位置；`TranscodeProgress::read()` 与 `written()` 是相对于这些位置的数量。调用方负责补充输入，并决定不完整尾部在 EOF 时代表什么。
-
-### 生命周期
+## 概念模型
 
 ```text
-reset(output) -> 反复 transcode(...) -> 调用方处理 EOF 尾部 -> finish(output)
+逻辑 value <-> Codec <-> 编码 unit
+                   |
+       +-----------+------------+
+       |                        |
+自有单值 adapter             调用方缓冲区 transcoder
+       |                        |
+ValueEncoder / ValueDecoder  reset -> transcode* -> finish
 ```
 
-`reset` 在保留不可变配置的同时开始一条新的逻辑流。`finish` 成功后，为可移植性，调用方在复用实例前应先 reset。实现必须在 reset 时丢弃所有流本地的 pending state。
+应选择最小够用的层：
 
-### 进度规则
-
-| 结果 | 必须表达的含义 |
+| 需求 | 推荐 API |
 | --- | --- |
-| `Complete` | 从 `input_index` 起的所有可见输入均已消费。 |
-| `NeedInput` | 不完整尾部未被消费，重试时必须仍可用。 |
-| `NeedOutput` | 输出容量阻止继续转换；报告绝对输出边界和未满足需求。 |
+| 存在一个局部 value 边界 | 实现 `Codec` |
+| 只有完整输入才是合理单位 | 直接实现 `ValueEncoder` / `ValueDecoder` |
+| 已有 `Codec` 且无需自定义策略 | `CodecValue*` 或 `CodecTranscode*` adapter |
+| 畸形或不可编码 value 需要策略 | `engine::TranscodeXxxEngine` 与 hooks |
+| 需要 EOF 感知或其他专用流行为 | 实现 `Transcoder` |
 
-不得在只消费前缀后返回 `Complete`。也不要用 `finish` 偷偷重新解释不完整尾部：调用方必须在 finalization 前明确选择并应用 EOF 策略。
+格式化 hex 字符串或 C 字符串字面量常常没有合理的单值 quantum，直接用 value-level
+实现更清晰；定宽数字或字符 codec 通常从 `Codec` 开始。
 
-### 最小字节复制 transcoder
+## 场景：以两个层次发布一个 codec
+
+假定你的 crate 有一个局部 value codec，并有两种调用方：一种持有完整输入并需要自有
+输出，另一种提供可复用缓冲区。先实现 `Codec`，再用 `CodecValueEncoder` /
+`CodecValueDecoder` 服务前者，用 `CodecTranscodeEncoder` /
+`CodecTranscodeDecoder` 服务严格的缓冲转换。
+
+unit-to-unit 转换使用 `CodecTranscodeConverter` 构建严格的 decode-encode 管线；
+只有 decode 或 encode 侧确实需要策略决策时，才使用
+`engine::TranscodeConvertEngine`。
+
+## 安装与最小配置
+
+```toml
+[dependencies]
+qubit-codec = "0.11"
+```
+
+基础 crate 没有默认 feature。仅在使用 `TranscodeDecodeInput` 或
+`TranscodeEncodeOutput`（它们桥接 `qubit-io` buffered input/output trait）时启用
+`io`：
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.11", features = ["io"] }
+```
+
+## 核心工作流
+
+### 1. 实现 `Codec` 契约
+
+`Codec` 声明 `Value`、`Unit`、错误类型以及每个 value 的最小/最大 unit 数。
+`encode` 与 `decode` 是 unsafe 入口，checked adapter 会先做边界检查；实现仍必须
+遵守其文档化前置条件。
+
+| 规则 | 原因 |
+| --- | --- |
+| `MIN_UNITS_PER_VALUE` 与 `MAX_UNITS_PER_VALUE` 均非零且有序 | 调用方据此安全进入 decode 并规划容量。 |
+| `decode` 只读取可见输入 | 合法但过短的前缀返回 `DecodeFailure::Incomplete`，且不消费该尾部。 |
+| 成功 `decode` 消费非零的可见数量 | 进度仍然可靠且可重试。 |
+| `can_encode_value` 拒绝域外 value | checked encoder 会在 `encode_len` 与 `encode` 之前查询它。 |
+| `encode_len` 与同状态下成功的 `encode` 输出精确相等 | 容量探测正确；允许刻意的零输出缓冲。 |
+| 生命周期上界覆盖全部可达流状态 | 调用方可在 reset 或 finish 前安全分配。 |
+
+无状态 codec 使用默认的零生命周期输出。有状态 encoder 如果在 EOF 写入 trailer，
+必须声明 `MAX_ENCODE_FINISH_UNITS`；decoder 如果输出保留的最终 value，必须声明
+`MAX_DECODE_FINISH_VALUES`。
+
+### 2. 选择 adapter 或驱动流
+
+自有完整值操作的 value trait 形状很小：
 
 ```rust
-use core::{convert::Infallible, num::NonZeroUsize};
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::ValueEncoder;
 
-struct ByteCopy;
+struct PrefixEncoder;
 
-impl Transcoder for ByteCopy {
-    type Input = u8;
-    type Output = u8;
-    type Error = TranscodeDecodeError<Infallible>;
+impl ValueEncoder<str> for PrefixEncoder {
+    type Output = String;
+    type Error = core::convert::Infallible;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        Ok(input_len)
-    }
-
-    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
-        Ok(0)
-    }
-
-    fn transcode(
-        &mut self,
-        input: &[u8],
-        input_index: usize,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        Self::Error::ensure_transcode_indices(
-            input.len(), input_index, output.len(), output_index,
-        )?;
-        let count = (input.len() - input_index).min(output.len() - output_index);
-        output[output_index..output_index + count]
-            .copy_from_slice(&input[input_index..input_index + count]);
-        if input_index + count == input.len() {
-            Ok(TranscodeProgress::complete(count, count))
-        } else {
-            Ok(TranscodeProgress::new(
-                TranscodeStatus::NeedOutput {
-                    output_index: output_index + count,
-                    required: NonZeroUsize::MIN,
-                    available: 0,
-                },
-                count,
-                count,
-            ))
-        }
-    }
-
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
-        Ok(0)
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+        Ok(format!("encoded:{input}"))
     }
 }
+
+let mut encoder = PrefixEncoder;
+assert_eq!("encoded:codec", encoder.encode("codec")?);
+
+# Ok::<(), core::convert::Infallible>(())
 ```
 
-有状态 transcoder 的 `max_reset_output_len`、`max_transcode_output_len` 和 `max_finish_output_len` 必须是对每种可达状态都保守成立的上界。`max_total_output_len` 将它们合成为完整 `reset -> transcode -> finish` 操作的上界。
+调用方缓冲区转换遵循显式生命周期：
 
-## 错误与恢复
+```text
+根据声明的上界分配输出
+        |
+reset(output)
+        |
+反复 transcode(input, input_index, output, output_index)
+        |
+保留/补充 NeedInput 尾部，或应用调用方自己的 EOF 策略
+        |
+finish(output)
+```
 
-错误模型有意保留不同的恢复信息：
+`TranscodeProgress` 报告相对于传入下标的 `read` 与 `written` 数量；
+`TranscodeStatus` 解释停止原因：
 
-- `DecodeFailure` 仅用于低层 `Codec::decode` 边界，区分 incomplete prefix 与 invalid unit。
-- `TranscodeFailure` 报告 framework 问题：非法 index、输出不足、溢出、不完整的整体输入和 trailing input。
-- `CapacityError` 在写入输出前报告容量规划算术失败。
-- `TranscodeDomainError` 为 domain error 添加 reset/main/finish 阶段上下文。
-- 方向性错误保留失败来自 decode、encode 还是 converter；`TranscodeEncodeError` / `TranscodeConvertError` 还能保留不可编码 value。
-
-除非调用方确实对所有类别采取相同恢复动作，否则不要在下游 API 中压平这些类别。尤其是 incomplete prefix 往往可重试，而畸形输入和进度契约破坏通常不可重试。
-
-## 常见实现错误
-
-| 错误 | 正确规则 |
+| 状态 | 调用方动作 |
 | --- | --- |
-| 部分读取后返回 `Complete` | 返回 `NeedInput` 或 `NeedOutput`；`Complete` 必须消费全部可见输入。 |
-| 消费不完整尾部 | 保持其归调用方所有，并返回 `NeedInput` 或 `DecodeFailure::Incomplete`。 |
-| 让 `encode_len` 仅是上界 | 它必须等于相同状态下实际成功 `encode` 的数量。 |
-| 只按当前状态计算 reset/finish 大小 | 上界必须覆盖每一种可达状态。 |
-| 用 `finish` 检查调用方输入 | `finish` 没有源输入；应在默认 bridge 外明确实现 EOF 策略。 |
-| 在领域 crate 重写 engine 的游标逻辑 | 策略模型匹配时，使用严格 adapter 或带 hooks 的 `TranscodeXxxEngine`。 |
+| `Complete` | 从 `input_index` 起的全部可见输入均已消费。可提供下一段，或在 EOF 时 finish。 |
+| `NeedInput` | 保留未消费尾部，补充输入后重试；EOF 时应用格式明确规定的尾部策略。 |
+| `NeedOutput` | 排空或替换输出缓冲区，并按报告的进度继续。 |
 
-## 相关文档
+不得在只消费前缀后返回 `Complete`。`finish` 不接收源输入，不能悄悄重新解释由
+调用方持有的不完整尾部。
 
-- [README](../README.zh_CN.md)：crate 概述、特性清单和 API 地图。
-- [English user guide](user_guide.md)：本手册英文版。
-- Rust API 文档：详细的方法契约和错误变体。
+### 3. 安全完成并复用
+
+调用方提供完全部输入并处理不完整尾部后，`finish` 输出内部保留的最终内容，例如
+padding、checksum 或 stream trailer。成功后逻辑流关闭；在同一 transcoder 实例上开始
+下一条逻辑流前，调用 `reset`。
+
+`max_reset_output_len`、`max_transcode_output_len` 与
+`max_finish_output_len` 必须对每种可达状态都保守成立。
+`max_total_output_len` 将它们合成为一次完整 `reset -> transcode -> finish` 的上界；
+`transcode_complete_into` 使用调用方提供的完整输出缓冲区执行该流程。
+
+## 进阶用法
+
+严格的 `CodecTranscode*` adapter 直接暴露 codec-domain 错误。若格式需要
+replacement、skip、count 或分阶段 report 等策略，应保留 engine 的公共循环，只实现
+hooks：
+
+- `engine::TranscodeEncodeEngine` 与 `TranscodeEncodeHooks` 处理不可编码 value、
+  reset 与 finish 策略；
+- `engine::TranscodeDecodeEngine` 与 `TranscodeDecodeHooks` 处理非法输入策略；
+- `engine::TranscodeConvertEngine` 组合两侧及其 hooks。
+
+若格式需要 EOF-aware maximal-munch 解析、延迟边界决策，或在 EOF 重新解释 pending
+prefix，使用自定义 `Transcoder` 或 value-level facade。这类策略不能塞入 `finish`。
+
+公开配置使用运行时 `ByteOrder`；希望静态选择时，使用 `ByteOrderSpec` 与
+`BigEndian`、`LittleEndian` 或 `NativeEndian`。
+
+## 错误与诊断
+
+| 错误类型 | 含义与通常的恢复方式 |
+| --- | --- |
+| `DecodeFailure` | 底层可见前缀不完整或 codec-domain 输入非法。只有前者可重试。 |
+| `TranscodeFailure` | framework failure：下标、容量、不完整整体输入、trailing input 或相关流条件。 |
+| `CapacityError` | 写入输出前的容量规划算术失败。 |
+| `TranscodeDomainError<E>` | 带 reset、main 或 finish 阶段标签的 domain/policy 错误。 |
+| 方向性 transcode 错误 | 保留失败来源是 encode、decode 还是 conversion；encode/conversion 错误可保留不可编码 value。 |
+| `TranscodeContractError` | 自定义 transcoder 报告了不一致进度，应视为实现缺陷。 |
+
+除非下游调用方确实对两者采取相同恢复动作，不要把不完整前缀与畸形输入压平为同一错误。
+
+## 排障
+
+| 症状 | 检查方式 |
+| --- | --- |
+| 文件结尾出现 `NeedInput` | 保留尾部；按格式 EOF 策略处理它，之后调用 `finish`。 |
+| `NeedOutput` 持续重复 | 用 `TranscodeProgress` 推进，提供相关容量，并确认自定义计数真实。 |
+| checked adapter 拒绝容量 | 检查上界是否覆盖全部可达状态中的 reset、main 与 finish 输出。 |
+| 单值 decode 拒绝输入 | `CodecValueDecoder` 是严格的；需要时改用 lifecycle-aware 或 streaming API。 |
+| 格式需要错误替换 | 使用合适 engine 的 hooks，不要复制 buffered loop。 |
+
+## 限制与最佳实践
+
+- 具体格式、字符集和高层 reader/writer adapter 应留在领域 crate。
+- 将 `NeedInput` 视为流式边界信号，而不是最终 EOF 错误。
+- 保持 unsafe `Codec` 实现小而精确，确保长度与消费不变量严格成立。
+- 自有输出 helper 会为返回值分配内存；需要控制分配时使用调用方缓冲区 API。
+- 仅为实际使用的 `qubit-io` bridge 启用 `io`。
+
+## 延伸阅读
+
+- [README](../README.zh_CN.md)
+- [English user guide](user_guide.md)
+- [API 文档](https://docs.rs/qubit-codec)

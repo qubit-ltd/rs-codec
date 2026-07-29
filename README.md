@@ -7,431 +7,114 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Core codec traits and buffer conversion primitives for Rust.
+`qubit-codec` is the domain-neutral foundation for Rust codecs that need a
+clear boundary between one-value encoding, owned-value convenience APIs, and
+caller-buffered streaming conversion. It is for codec authors and adapter
+authors; concrete binary formats, character sets, and text formats live in
+sibling crates.
 
-## Overview
+## Why This Crate Exists
 
-Qubit Codec is the domain-neutral foundation for Qubit codec crates. It contains
-small traits and value types that are shared by binary, text, misc, and I/O
-adapter crates, without concrete format implementations.
+A format crate often starts with a small `Codec` for one value—for example, a
+fixed-width scalar or one character—but later needs an owned convenience API,
+a buffered stream adapter, or malformed-input policy. Reimplementing cursor
+handling and EOF behavior at each layer makes the contracts diverge.
 
-This crate provides:
-
-- `Codec` for low-level single-value buffer codecs.
-- `CodecValueEncoder`, `CodecValueDecoder`, `CodecTranscodeEncoder`,
-  `CodecTranscodeDecoder`, and `CodecTranscodeConverter` adapters for explicit
-  codec-backed value and buffered conversion.
-- `TranscodeEncodeEngine`, `TranscodeEncodeHooks`, and
-  `EncodeUnencodableAction` for reusing the common buffered encoding loop in
-  policy-aware downstream encoders.
-- `TranscodeDecodeEngine`, `TranscodeDecodeHooks`, `DecodeInvalidAction`, and
-  `DecodeContext` for reusing the common buffered decoding loop in policy-aware
-  downstream decoders.
-- `TranscodeConvertEngine` and `TranscodeConvertError` for policy-aware
-  unit-to-unit conversion pipelines built from a decode side and an encode side.
-- `ValueEncoder` and `ValueDecoder` traits for owned whole-value convenience APIs.
-- `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` for
-  caller-managed logical-stream conversion.
-- `TranscodeEncoder`, `TranscodeDecoder`, and `TranscodeConverter` marker traits
-  for semantic transcoder direction.
-- `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and
-  `NativeEndian` for byte-order metadata shared by binary and text codecs.
-- `nz`, `nz_const`, and `nz!` for checked `NonZeroUsize` construction.
-
-Concrete codecs live in sibling crates such as `qubit-codec-binary`,
-`qubit-codec-text`, and `qubit-codec-misc`.
-
-## Design Goals
-
-- **Layered Boundaries**: keep domain-neutral traits separate from binary, text,
-  misc, and stream-specific implementations.
-- **Small Public Surface**: expose only the primitives that multiple codec
-  crates need to share.
-- **Policy Neutrality**: leave charset, malformed-input, and wire-format rules to
-  domain crates.
-- **Zero-Cost Markers**: represent byte order as copyable type/value markers
-  without runtime allocation.
-- **Stable Progress Reporting**: use `TranscodeProgress` and `TranscodeStatus` to make
-  caller-managed buffer conversion explicit.
-
-## Features
-
-### Cargo Features
-
-The default feature set is empty. Enable the `io` feature to use the
-`qubit-io` bridge, including `TranscodeDecodeInput` and
-`TranscodeEncodeOutput`.
-
-### Core Conversion Traits
-
-- **`Codec`**: encodes and decodes one value or codec quantum
-  against a caller-managed unit buffer.
-- **`DecodeFailure`**: separates incomplete-prefix flow control from
-  codec-domain invalid input returned by `Codec::decode`.
-- **`TranscodeFailure`**: carries framework failures such as invalid indices,
-  insufficient output, overflow, incomplete input, and trailing input.
-- **`TranscodeDomainError<E>`**: attaches reset, main, or finish phase context
-  to codec and policy errors.
-- **`TranscodeEncodeError<E, V>` / `TranscodeDecodeError<E>` /
-  `TranscodeConvertError<DE, EE, V>`**: directional public errors that combine
-  framework and domain failures.
-- **`ValueEncoder<Input>`**: converts a borrowed value into an owned output type.
-- **`ValueDecoder<Input>`**: converts a borrowed encoded value into an owned decoded
-  output type.
-- **`CodecValueEncoder<C>`**: wraps a `Codec` as a
-  `ValueEncoder<C::Value>` that returns owned `Vec<C::Unit>` output.
-- **`CodecValueDecoder<C>`**: wraps a `Codec` as a
-  strict `ValueDecoder<[C::Unit]>` that accepts exactly one encoded value when
-  decode reset and finish do not emit values. Its lifecycle-aware methods
-  preserve reset, main, and finish output separately.
-- **`DecodeLifecycleOutput<Value>` / `DecodeLifecycleProgress<Value>`**:
-  owned and caller-scratch results for one complete decode lifecycle.
-
-### Buffered Transcoder Primitives
-
-- **`Transcoder`**: converts `Input` associated items into `Output` associated
-  items inside caller-provided buffers, then finishes internally retained output
-  after the caller has handled any incomplete input tail.
-- **`TranscodeEncoder`**: semantic `Transcoder` bound for value-to-unit buffered
-  encoding.
-- **`TranscodeDecoder`**: semantic `Transcoder` bound for unit-to-value buffered
-  decoding.
-- **`TranscodeConverter`**: semantic `Transcoder` bound for unit-to-unit buffered
-  conversion.
-- **`CodecTranscodeEncoder<C>`**: wraps a `Codec` as a `TranscodeEncoder` over
-  caller-provided output buffers.
-- **`TranscodeEncodeEngine<C, H>`**: reusable engine that owns a
-  codec plus policy hooks and runs the common buffered encoding loop.
-- **`TranscodeEncodeHooks<C>`**: policy hook trait used by
-  codec-backed encoders that need unencodable-value, reset, or finalization
-  policy while sharing the common loop.
-- **`EncodeUnencodableAction<Value>`**: action returned by encode hooks for
-  unencodable values: skip the value or encode a replacement.
-- **`EncodeContext<'a, Value, Unit>`**: context shared by encode policy hooks
-  and the buffered encode engine.
-- **`CodecTranscodeDecoder<C>`**: wraps a `Codec` as a strict
-  `TranscodeDecoder` that leaves engine-detected incomplete tails in the
-  caller's input buffer and wraps codec-reported decode errors.
-- **`TranscodeDecodeEngine<C, H>`**: reusable engine that owns a
-  codec, policy hooks, and the common decode loop.
-- **`TranscodeDecodeHooks<C>`**: policy hook trait used by
-  codec-backed decoders that need custom invalid-input behavior while
-  sharing the common decode loop.
-- **`DecodeInvalidAction<Value>`**: hook return value used by decoder engines
-  for invalid-input policy decisions.
-- **`CodecTranscodeConverter<D, E>`**: composes a
-  decoding codec and an encoding codec as a policy-free `TranscodeConverter`.
-- **`TranscodeConvertEngine<D, E, DH, EH>`**: reusable unit-to-unit converter
-  engine that composes decode hooks, encode hooks, and the common buffered
-  conversion loop.
-- **`TranscodeDecodeInput<I>`** *(requires the `io` feature)*: owns a
-  unit-level `BufferedInput`; it supports strict and lifecycle-aware
-  single-value decoding as well as caller-provided streaming decoders through
-  `transcode_into` / `finish_transcode_into`.
-- **`TranscodeEncodeOutput<O>`** *(requires the `io` feature)*: owns a
-  unit-level `BufferedOutput`; ordinary `flush` drains buffered units. Stateful
-  streaming encoders use `transcode_from` and `finish`.
-- **`TranscodeProgress`**: reports relative input units read and output units
-  written.
-- **`TranscodeStatus`**: distinguishes complete conversion from `NeedInput` and
-  `NeedOutput` stops.
-- **`TranscodeFailure` / `CapacityError` / `TranscodeContractError`**: report
-  framework-level buffer, capacity-planning, and broken-progress contract
-  failures separately from codec or policy domain errors.
-
-### Byte Order Markers
-
-- **`ByteOrder`**: runtime byte-order enum for public APIs.
-- **`ByteOrderSpec`**: type-level byte-order trait used by hot codecs.
-- **`BigEndian` / `LittleEndian`**: zero-sized marker types.
-
-### Focused Public API
-
-- **No concrete formats**: binary, text, and miscellaneous codecs are published
-  in sibling crates.
-
-## Choosing the Right Abstraction
-
-`qubit-codec` ships several layers because real codec stacks have different
-needs. Use this decision tree to pick the smallest piece that fits your case.
-
-```text
-What are you writing?
-
-├── A new codec for one logical value (a UTF-8 char, a LEB128 integer,
-│   a Base64 quantum, a fixed-width scalar, …)
-│       → implement Codec
-│         (unchecked single-value contract; the foundation everything else builds on)
-│
-├── A whole-string codec where "one logical value" has no useful meaning
-│   (Base64 padding, hex with separators, percent encoding, C string literal, …)
-│       → implement ValueEncoder<Input> / ValueDecoder<Input> directly
-│         (skip Codec; these two traits also serve as the convenience layer)
-│
-├── A streaming wrapper around an existing Codec, with no error policy:
-│   strict pass-through that surfaces every codec error as-is
-│       → use CodecTranscodeDecoder<C> / CodecTranscodeEncoder<C>
-│         / CodecTranscodeConverter<D, E>
-│         (no custom code; you get a fully wired Transcoder)
-│
-├── An owned-output wrapper around a Codec (one call → one Vec<Unit>
-│   or one Value)
-│       → use CodecValueEncoder<C> / CodecValueDecoder<C>
-│         (allocates per call; convenience-layer ValueEncoder/Decoder)
-│
-└── A streaming codec that needs to make decisions on malformed input:
-    skip, replace, count, or report — not just propagate
-        → implement TranscodeDecodeHooks<C> / TranscodeEncodeHooks<C>
-          and wrap them in TranscodeDecodeEngine<C, H> / TranscodeEncodeEngine<C, H>
-          (you only write the policy; the engine owns the buffered loop,
-           cursor bookkeeping, NeedInput/NeedOutput reporting, and capacity checks)
-
-For unit-to-unit conversion (e.g. UTF-8 bytes → UTF-16 bytes), compose a
-decode codec + an encode codec:
-- strict pipeline    → CodecTranscodeConverter<D, E>
-- with policy hooks  → TranscodeConvertEngine<D, E, DH, EH>
-```
-
-### Layer overview
-
-```text
-┌────────────────────────────────────────────────────────────────┐
-│  qubit-io-binary / qubit-io-text             (concrete I/O)    │
-├────────────────────────────────────────────────────────────────┤
-│  TranscodeDecodeInput / TranscodeEncodeOutput  (I/O bridges; requires io) │
-├────────────────────────────────────────────────────────────────┤
-│  TranscodeXxxEngine + TranscodeXxxHooks       (policy + loop)  │
-│  CodecTranscodeDecoder / Encoder / Converter  (strict bridges) │
-├────────────────────────────────────────────────────────────────┤
-│  Transcoder + TranscodeProgress + TranscodeStatus               │
-│  ValueEncoder<Input> / ValueDecoder<Input>      (convenience)  │
-├────────────────────────────────────────────────────────────────┤
-│  Codec                                  (single-value, unchecked) │
-└────────────────────────────────────────────────────────────────┘
-```
-
-Implementing further up the stack does *not* mean rewriting the lower layers:
-`CodecValueEncoder<C>` and `CodecTranscodeDecoder<C>` are concrete adapters
-that turn any `Codec` into the higher-layer trait for free. Only drop down to
-the engine + hooks layer when you actually need policy decisions on invalid
-input, replacement output, or stateful finish output.
+This crate supplies the shared contracts and adapters so a format crate can
+keep its format rules local while reusing the checked conversion machinery.
 
 ## Installation
-
-Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 qubit-codec = "0.11"
 ```
 
-## User Guide
+The default feature set is empty. Enable `io` only when using the
+`qubit-io` bridge types:
 
-The [user guide](doc/user_guide.md) explains abstraction selection and the
-formal `Codec` and `Transcoder` implementer contracts, including progress,
-lifecycle, EOF, and error-recovery rules. A
-[Chinese version](doc/user_guide.zh_CN.md) is available.
+```toml
+[dependencies]
+qubit-codec = { version = "0.11", features = ["io"] }
+```
 
 ## Quick Start
 
+For a whole-value operation whose useful unit is the complete input, implement
+`ValueEncoder` directly. This is preferable to forcing a `Codec` abstraction
+onto a format with no meaningful single-value quantum.
+
 ```rust
-use qubit_codec::{
-    TranscodeProgress,
-    TranscodeStatus,
-    ValueEncoder,
-};
+use qubit_codec::ValueEncoder;
 
-struct StringEncoder;
+struct PrefixEncoder;
 
-impl ValueEncoder<str> for StringEncoder {
+impl ValueEncoder<str> for PrefixEncoder {
     type Output = String;
     type Error = core::convert::Infallible;
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
-        Ok(input.to_owned())
+        Ok(format!("encoded:{input}"))
     }
 }
 
-let mut encoder = StringEncoder;
-let encoded = ValueEncoder::<str>::encode(&mut encoder, "codec")?;
-assert_eq!("codec", encoded);
-
-let progress = TranscodeProgress::complete(3, 4);
-assert_eq!(TranscodeStatus::Complete, progress.status());
+let mut encoder = PrefixEncoder;
+let output = encoder.encode("codec")?;
+assert_eq!("encoded:codec", output);
 
 # Ok::<(), core::convert::Infallible>(())
 ```
 
-## API Reference
+When the format does have a local value boundary, implement `Codec` and then
+select a supplied adapter: `CodecValueEncoder` or `CodecValueDecoder` for
+owned single-value output; `CodecTranscodeEncoder`, `CodecTranscodeDecoder`,
+or `CodecTranscodeConverter` for strict caller-buffered conversion.
 
-### Core Codec Traits
+## What It Provides
 
-| Trait | Purpose | Typical Implementor |
-|-------|---------|---------------------|
-| `Codec` | Encode/decode one value or quantum against caller buffers | Binary scalar, charset char, escaped byte, Base64 quantum |
-| `ValueEncoder<Input>` | Encode a borrowed input into an owned output | Convenience text, binary, or misc helper |
-| `ValueDecoder<Input>` | Decode a borrowed input into an owned output | Convenience text, binary, or misc helper |
-| `TranscodeEncoder` | Encode logical values into caller-provided unit buffers | Charset or binary buffered encoder |
-| `TranscodeDecoder` | Decode encoded units into caller-provided value buffers | Charset or binary buffered decoder |
-| `TranscodeConverter` | Convert encoded units between representations | Charset or binary buffered converter |
+| Need | Public API |
+| --- | --- |
+| One value or codec quantum over caller buffers | `Codec` and `DecodeFailure` |
+| Owned whole-value conversion | `ValueEncoder`, `ValueDecoder`, `CodecValueEncoder`, `CodecValueDecoder` |
+| Strict buffered encode, decode, or unit conversion | `TranscodeEncoder`, `TranscodeDecoder`, `TranscodeConverter`, and the `CodecTranscode*` adapters |
+| Policy-aware buffered conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and their hooks |
+| Caller-managed streaming lifecycle | `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` |
+| Shared byte-order metadata | `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and `NativeEndian` |
+| `qubit-io` buffered bridges | `TranscodeDecodeInput` and `TranscodeEncodeOutput` with feature `io` |
 
-| Type | Purpose |
-|------|---------|
-| `DecodeFailure<E>` | Low-level decode result for incomplete visible prefixes or invalid codec-domain input |
-| `TranscodeFailure` | Framework failure for invalid indices, insufficient output, output-length overflow, incomplete input, or trailing input |
-| `TranscodeDomainError<E>` | Codec or policy error tagged with reset, main, or finish phase context |
-| `TranscodeEncodeError<E, V>` | Encode-side error combining framework, unencodable-value, and domain failures |
-| `TranscodeDecodeError<E>` | Decode-side error combining framework and domain failures |
-| `TranscodeConvertError<DE, EE, V>` | Converter error preserving decode-side, encode-side, unencodable-value, and framework failures |
-| `CapacityError` | Capacity-planning error returned before allocating or writing output |
-| `TranscodeContractError` | Error reported when a custom `Transcoder` returns inconsistent progress |
+For a streaming converter, the lifecycle is explicit:
 
-### Codec Adapters
+```text
+reset(output) -> transcode(...) repeatedly -> handle any EOF tail -> finish(output)
+```
 
-| Type | Purpose |
-|------|---------|
-| `CodecValueEncoder<C>` | Allocate owned `Vec<C::Unit>` output for one borrowed `C::Value` by using `C: Codec` without requiring `C::Value: Clone` |
-| `CodecValueDecoder<C>` | Strictly decode exactly one borrowed `[C::Unit]` slice, or preserve reset/main/finish output through its lifecycle-aware methods |
-| `DecodeLifecycleOutput<Value>` | Own reset output, the main decoded value, and finish output from one complete lifecycle |
-| `DecodeLifecycleProgress<Value>` | Return a main decoded value plus the reset/finish lengths written into separate caller buffers |
-| `CodecTranscodeEncoder<C>` | Encode `C::Value` slices into caller-provided `C::Unit` buffers by using `C: Codec` |
-| `CodecTranscodeDecoder<C>` | Strictly decode `C::Unit` slices into caller-provided `C::Value` buffers by using `C: Codec` |
-| `CodecTranscodeConverter<D, E>` | Decode `D::Unit` source units and encode `E::Unit` target units with `E::Value = D::Value` |
+`Complete` means that a `transcode` call consumed all visible input from its
+requested index. `NeedInput` leaves the incomplete tail with the caller for a
+retry or an explicit EOF decision; `NeedOutput` means the output buffer must be
+extended or drained before conversion continues.
 
-### I/O Adapters
+## Boundaries and Guarantees
 
-| Type | Purpose |
-|------|---------|
-| `TranscodeDecodeInput<I>` *(requires `io`)* | Strictly decode one value, preserve one complete lifecycle, or drive a caller-owned streaming decoder over a `qubit_io::Input` |
-| `TranscodeEncodeOutput<O>` *(requires `io`)* | Own a `qubit_io::Output`; ordinary `flush` drains buffered units. Stateful streaming encoders use `transcode_from` and `finish` |
+- This crate does not implement concrete binary formats, character sets,
+  Base64, hex, percent encoding, or `std::io` reader/writer extensions.
+- `Codec::decode` distinguishes an incomplete visible prefix from invalid
+  codec-domain input through `DecodeFailure`; an incomplete prefix is not an
+  EOF decision.
+- `Codec::encode_len` must exactly match a successful `Codec::encode` call for
+  the same value and codec state, including intentional zero-output buffering.
+- `Transcoder` capacity bounds must cover every reachable transient state, not
+  only the current one. `finish` does not receive a caller-owned incomplete
+  input tail.
+- Owned adapters may allocate their returned `Vec` values. Streaming APIs use
+  caller-provided buffers; feature `io` adds `qubit-io` bridge types.
 
-### Encoder Hooks And Engines
+## Learn More
 
-| Type | Purpose |
-|------|---------|
-| `TranscodeEncodeEngine<C, H>` | Reusable buffered encoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeEncodeHooks<C>` | Hook contract for unencodable-value policy, preparing for reset, and finalizing encoded output |
-| `TranscodeEncodeError<E, V>` / `TranscodeEncodeErrorOf<C>` | Encode-side error and its codec-derived alias |
-| `EncodeUnencodableAction<Value>` | Policy action returned for values outside the codec's encodable domain |
-| `EncodeContext<'a, Value, Unit>` | Input value, input index, output slice, and cursor used by encode engine helpers |
-
-### Decoder Hooks And Engines
-
-| Type | Purpose |
-|------|---------|
-| `TranscodeDecodeEngine<C, H>` | Reusable buffered decoder engine backed by a low-level `Codec` and policy hooks |
-| `TranscodeDecodeHooks<C>` | Hook contract for invalid-input decode policy |
-| `TranscodeDecodeError<E>` / `TranscodeDecodeErrorOf<C>` | Decode-side error and its codec-derived alias |
-| `DecodeContext` | Context passed to decode policy hooks |
-| `DecodeInvalidAction<Value>` | Invalid-input policy action: skip input or emit a replacement value |
-
-### Converter Engines
-
-| Type | Purpose |
-|------|---------|
-| `TranscodeConvertEngine<D, E, DH, EH>` | Reusable unit-to-unit converter that decodes with `D`, encodes with `E`, and applies decode/encode hooks |
-| `TranscodeConvertError<DE, EE, V>` / `TranscodeConvertErrorOf<D, E>` | Converter error and its codec-derived alias |
-
-### `Transcoder` Operations
-
-| Method | Description |
-|--------|-------------|
-| `max_transcode_output_len(input_len)` | Return a streaming-phase upper bound valid for every reachable transient state |
-| `max_total_output_len(input_len)` | Return the full `reset -> transcode -> finish` output upper bound |
-| `max_reset_output_len()` | Return a reset-output upper bound valid for every reachable transient state |
-| `max_finish_output_len()` | Return a finish-output upper bound valid for every reachable transient state |
-| `reset()` | Reset retained stream state while keeping configuration |
-| `transcode(input, input_index, output, output_index)` | Convert input units into output units |
-| `transcode_complete_into(input, output)` | Run one complete `reset -> transcode -> finish` stream from the start of the supplied slices |
-| `finish(output, output_index)` | Finish internally retained output such as digests or trailers |
-
-### `TranscodeStatus` Values
-
-| Status | Meaning |
-|--------|---------|
-| `Complete` | The current conversion step completed |
-| `NeedInput` | More input units are required; the incomplete tail remains in the caller's input buffer |
-| `NeedOutput` | More output capacity is required |
-
-### Contract Notes
-
-- `Codec::MIN_UNITS_PER_VALUE` is the safety lower bound for calling `Codec::decode`;
-  `Codec::MAX_UNITS_PER_VALUE` is the per-value output/read upper bound. Checked
-  adapters assert `min <= max` before using these values.
-- `Codec::decode` returns `DecodeFailure::Incomplete` when the visible input is a
-  valid prefix that needs more units, and `DecodeFailure::Invalid` for
-  codec-domain malformed, non-canonical, or otherwise invalid input.
-- `encode_len(value)` must equal the number of units `Codec::encode` writes for
-  the same value and codec state, and it must not exceed
-  `Codec::MAX_UNITS_PER_VALUE`.
-- Stateful owned one-value encoding uses `CodecValueEncoder<C>`. Decoding
-  codecs with lifecycle output should use
-  `CodecValueDecoder::decode_lifecycle`; callers that provide reusable buffers
-  can use `decode_lifecycle_with_scratch`. Continuous streams should use the
-  streaming transcoder adapters.
-- Directional adapters expose `TranscodeEncodeError`, `TranscodeDecodeError`,
-  or `TranscodeConvertError`. Each keeps framework failures separate from
-  phase-tagged codec and policy domain errors.
-- `NeedInput` means the reported tail was not consumed and must remain available
-  when the caller retries with more input. It is a streaming boundary signal,
-  not an EOF error; `finish` does not receive that source tail. Callers must
-  apply their own EOF policy before finalization.
-- Default codec-backed decoders and converters are intended for formats whose
-  value boundary is locally decidable from the visible prefix plus codec state.
-  Formats that require EOF-aware maximal-munch parsing, delayed boundary
-  decisions, or reinterpretation of a pending prefix at EOF should use a custom
-  `Transcoder` or value-level facade for that policy.
-- `NeedOutput` means the reported input was not fully consumed because the
-  output slice reached its bound.
-
-### Byte Order Types
-
-| Type | Use Case |
-|------|----------|
-| `ByteOrder` | Runtime byte-order selection in public APIs |
-| `ByteOrderSpec` | Type-level byte-order abstraction |
-| `nz`, `nz!` | Checked `NonZeroUsize` construction |
-| `BigEndian` | Big-endian type marker |
-| `LittleEndian` | Little-endian type marker |
-| `NativeEndian` | Native-endian type marker |
-
-## Crate Boundary
-
-`qubit-codec` does not contain concrete binary formats, character sets, or
-percent/Base64/hex codecs. When the `io` feature is enabled, its I/O-facing
-surface is limited to low-level `qubit_io::Input` / `qubit_io::Output` bridge
-types used by downstream stream crates. Keep `std::io::Read` /
-`std::io::Write` extension traits and concrete reader/writer adapters in domain
-crates so downstream users can depend on only the layers they need.
-
-## Performance Considerations
-
-The streaming traits and engine main loops operate on caller-provided buffers.
-`BigEndian` and `LittleEndian` are zero-sized, and `ByteOrder` is a small
-copyable enum. Owned value adapters such as `CodecValueEncoder` allocate their
-`Vec<Unit>` result, and codec lifecycle output or an I/O decode window that
-outgrows the base buffer may use temporary scratch storage. Concrete downstream
-codecs may have additional allocation behavior.
-
-## Dependencies
-
-Runtime dependencies are intentionally small:
-
-- `thiserror` provides public error type implementations.
-- With the `io` feature, `qubit-io` provides `BufferedInput` and
-  `BufferedOutput` used by `TranscodeDecodeInput` and `TranscodeEncodeOutput`.
-
-## Related Projects
-
-- [qubit-codec-binary](https://github.com/qubit-ltd/rs-codec-binary): binary
-  buffer codecs.
-- [qubit-codec-text](https://github.com/qubit-ltd/rs-codec-text): charset and
-  Unicode buffer codecs.
-- [qubit-codec-misc](https://github.com/qubit-ltd/rs-codec-misc): reusable
-  miscellaneous byte and text codecs.
-- [qubit-io](https://github.com/qubit-ltd/rs-io): generic `std::io` helpers.
-- More Rust libraries from Qubit are available under the
-  [qubit-ltd](https://github.com/qubit-ltd) GitHub organization.
+- [User guide](doc/user_guide.md): abstraction selection, lifecycle rules,
+  errors, and implementation checklist.
+- [中文用户手册](doc/user_guide.zh_CN.md)
+- [API documentation](https://docs.rs/qubit-codec)
+- [中文 README](README.zh_CN.md)
 
 ## Testing
 

@@ -1,243 +1,218 @@
 # Qubit Codec User Guide
 
-`qubit-codec` provides the domain-neutral contracts shared by Qubit binary,
-text, miscellaneous, and I/O codec crates. It intentionally does not provide
-concrete wire formats or character sets. This guide explains how to select an
-abstraction and, when needed, implement its contracts correctly.
+[中文](user_guide.zh_CN.md) · [README](../README.md) · [API documentation](https://docs.rs/qubit-codec)
 
-For item-by-item signatures, bounds, and error variants, use the generated API
-documentation. This guide concentrates on the relationships between methods
-that an implementation must preserve.
+This guide covers `qubit-codec` 0.11 for Rust 1.94 and later. It is for codec
+and adapter authors who need to convert logical values into encoded units, or
+convert encoded units through caller-managed buffers. It does not define a wire
+format or character set.
 
-## Choose the Smallest Abstraction
+## Purpose and Audience
 
-| Requirement | Use |
-| --- | --- |
-| Encode or decode one value/quantum against a caller buffer | `Codec` |
-| Convert an entire borrowed value into owned output | `ValueEncoder` / `ValueDecoder` |
-| Wrap an existing `Codec` in a strict streaming bridge | `CodecTranscodeEncoder`, `CodecTranscodeDecoder`, or `CodecTranscodeConverter` |
-| Apply policy to malformed or unencodable values | `TranscodeXxxEngine` with its hooks |
-| Define a bespoke caller-buffered stream transform | `Transcoder` |
+Use this crate when a format crate needs a reusable contract for one codec
+quantum, an owned whole-value facade, or a streaming conversion loop. Concrete
+binary layouts, character sets, and format-specific `std::io` integrations
+belong in sibling domain crates.
 
-Do not implement `Codec` merely because data is encoded. Whole-input formats
-whose useful unit is the complete input, such as a formatted hex string or a C
-literal, are usually clearer as `ValueEncoder` / `ValueDecoder` implementations.
-Conversely, do not duplicate a buffering loop when an existing `Codec` can be
-wrapped by one of the provided adapters.
+The guide follows a format crate that starts with a `Codec` for one local value
+and then needs both a convenient owned operation and a buffered stream API,
+without duplicating cursor, capacity, and EOF rules.
 
-## `Codec` Implementer Guide
-
-`Codec` owns one logical value or quantum and operates on caller-provided unit
-buffers. Its `encode` and `decode` entry points are `unsafe` because checked
-adapters perform the bounds checks once and keep hot paths free of repeated
-slice construction. An implementation must never read or write outside the
-documented caller-provided range.
-
-### Required invariants
-
-- `MIN_UNITS_PER_VALUE` and `MAX_UNITS_PER_VALUE` are non-zero, and the former
-  is no greater than the latter.
-- `decode` only reads visible input. If the visible prefix is valid but cannot
-  form a value, return `DecodeFailure::Incomplete`; do not consume it.
-- Successful `decode` returns a non-zero consumed count no greater than the
-  currently available input.
-- For the same value and codec state, `encode_len` exactly equals the count
-  returned by successful `encode`, including a deliberate zero when output is
-  retained internally.
-- `encode_len` never exceeds `MAX_UNITS_PER_VALUE`.
-- `can_encode_value(value)` is queried before `encode_len` and `encode`; reject
-  a value there instead of treating an unsupported value as an arbitrary
-  `EncodeError`.
-- Reset and finish bounds cover every reachable stream state, not merely the
-  current state. Return zero for stateless lifecycle phases.
-- After any error, internal state remains self-consistent and can follow the
-  documented retry/reset policy.
-
-### Minimal fixed-width codec
-
-This template is suitable for a stateless one-byte value codec. It uses
-`debug_assert!` to document the unchecked preconditions; checked adapters
-enforce them before calling these methods.
-
-```rust
-use core::{convert::Infallible, num::NonZeroUsize};
-use qubit_codec::{Codec, DecodeFailure, nz};
-
-struct ByteCodec;
-
-impl Codec for ByteCodec {
-    type Value = u8;
-    type Unit = u8;
-    type DecodeError = Infallible;
-    type EncodeError = Infallible;
-
-    const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
-
-    unsafe fn encode(
-        &mut self,
-        value: &u8,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Infallible> {
-        debug_assert!(output_index < output.len());
-        output[output_index] = *value;
-        Ok(1)
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u8],
-        input_index: usize,
-    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
-        debug_assert!(input_index < input.len());
-        Ok((input[input_index], nz!(1)))
-    }
-}
-```
-
-### Variable-width and stateful codecs
-
-Override `encode_len` when output width depends on the value. A buffered
-encoder may validly return zero from both `encode_len` and `encode` for a value
-that it retains until later input or `encode_finish`; it must then declare a
-finish bound large enough for the retained output.
-
-Decode-side state does not receive an EOF input slice. If an input tail must be
-reinterpreted at EOF, the default `Codec` bridge is the wrong boundary: put
-that policy in a custom `Transcoder` or a value-level facade. `decode_finish`
-may emit retained values or validate decode state, but cannot re-read a tail
-previously reported as incomplete.
-
-## `Transcoder` Implementer Guide
-
-`Transcoder` converts a logical input stream into an output stream. Its indices
-are absolute positions in the supplied slices; `TranscodeProgress::read()` and
-`written()` are relative counts from those positions. The caller owns input
-refill and decides what an incomplete tail means at EOF.
-
-### Lifecycle
+## Conceptual Model
 
 ```text
-reset(output) -> transcode(...) repeatedly -> caller handles EOF tail -> finish(output)
+logical value <-> Codec <-> encoded units
+                     |
+        +------------+-------------+
+        |                          |
+owned one-value adapters     caller-buffered transcoders
+        |                          |
+ValueEncoder / ValueDecoder  reset -> transcode* -> finish
 ```
 
-`reset` starts a new logical stream while retaining immutable configuration.
-After successful `finish`, portable callers reset before reusing the instance.
-Implementations must discard stream-local pending state on reset.
+Choose the smallest layer that fits:
 
-### Progress rules
-
-| Result | Required meaning |
+| Requirement | Recommended API |
 | --- | --- |
-| `Complete` | All input visible from `input_index` was consumed. |
-| `NeedInput` | The incomplete tail was not consumed and must remain available for retry. |
-| `NeedOutput` | Output capacity stopped conversion; report the absolute output boundary and unsatisfied requirement. |
+| One local value boundary exists | Implement `Codec` |
+| The complete input is the useful unit | Implement `ValueEncoder` / `ValueDecoder` directly |
+| Existing `Codec`, no custom policy | `CodecValue*` or `CodecTranscode*` adapters |
+| Invalid or unencodable values need policy | `engine::TranscodeXxxEngine` plus hooks |
+| EOF-aware or otherwise bespoke stream behavior | Implement `Transcoder` |
 
-Never return `Complete` after consuming only a prefix. Do not use `finish` to
-silently reinterpret an incomplete tail: callers must choose and apply the EOF
-policy before finalization.
+A formatted hex string or C string literal often has no meaningful one-value
+quantum, so a direct value-level implementation is clearer. A fixed-width
+number or character codec normally starts with `Codec`.
 
-### Minimal byte-copy transcoder
+## Scenario: Publish One Codec at Two Levels
+
+Suppose your crate has a local-value codec and two consumers: one owns a
+complete input and wants owned output; the other supplies reusable buffers.
+Implement `Codec` first, then expose `CodecValueEncoder` /
+`CodecValueDecoder` for the first consumer and `CodecTranscodeEncoder` /
+`CodecTranscodeDecoder` for the strict buffered path.
+
+For unit-to-unit conversion, use `CodecTranscodeConverter` for a strict
+decode-plus-encode pipeline. Use `engine::TranscodeConvertEngine` only when
+the decode or encode side needs a real policy decision.
+
+## Installation and Minimal Configuration
+
+```toml
+[dependencies]
+qubit-codec = "0.11"
+```
+
+The base crate has no default features. Enable `io` only for
+`TranscodeDecodeInput` or `TranscodeEncodeOutput`, which bridge
+`qubit-io` buffered input/output traits:
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.11", features = ["io"] }
+```
+
+## Core Workflow
+
+### 1. Implement the `Codec` contract
+
+A `Codec` declares `Value`, `Unit`, error types, and minimum/maximum units
+per value. Its unsafe `encode` and `decode` entry points are used by checked
+adapters after bounds checks; implementations must still honour their documented
+preconditions.
+
+| Rule | Why it matters |
+| --- | --- |
+| `MIN_UNITS_PER_VALUE` and `MAX_UNITS_PER_VALUE` are non-zero and ordered | Callers use them for safe decode entry and capacity planning. |
+| `decode` reads only visible input | A valid but short prefix returns `DecodeFailure::Incomplete` without consuming its tail. |
+| Successful `decode` consumes a non-zero visible count | Progress remains sound and retryable. |
+| `can_encode_value` rejects out-of-domain values | Checked encoders call it before `encode_len` and `encode`. |
+| `encode_len` exactly matches successful `encode` output in the same state | Capacity probing stays correct; deliberate zero-output buffering is allowed. |
+| Lifecycle bounds cover every reachable stream state | Callers can allocate safely before reset or finish. |
+
+Stateless codecs use the default zero lifecycle output. A stateful encoder that
+writes an EOF trailer must declare `MAX_ENCODE_FINISH_UNITS`; a decoder that
+emits retained final values must declare `MAX_DECODE_FINISH_VALUES`.
+
+### 2. Use an adapter or drive a stream
+
+For an owned whole-value operation, the value traits have a minimal shape:
 
 ```rust
-use core::{convert::Infallible, num::NonZeroUsize};
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::ValueEncoder;
 
-struct ByteCopy;
+struct PrefixEncoder;
 
-impl Transcoder for ByteCopy {
-    type Input = u8;
-    type Output = u8;
-    type Error = TranscodeDecodeError<Infallible>;
+impl ValueEncoder<str> for PrefixEncoder {
+    type Output = String;
+    type Error = core::convert::Infallible;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        Ok(input_len)
-    }
-
-    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
-        Ok(0)
-    }
-
-    fn transcode(
-        &mut self,
-        input: &[u8],
-        input_index: usize,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, Self::Error> {
-        Self::Error::ensure_transcode_indices(
-            input.len(), input_index, output.len(), output_index,
-        )?;
-        let count = (input.len() - input_index).min(output.len() - output_index);
-        output[output_index..output_index + count]
-            .copy_from_slice(&input[input_index..input_index + count]);
-        if input_index + count == input.len() {
-            Ok(TranscodeProgress::complete(count, count))
-        } else {
-            Ok(TranscodeProgress::new(
-                TranscodeStatus::NeedOutput {
-                    output_index: output_index + count,
-                    required: NonZeroUsize::MIN,
-                    available: 0,
-                },
-                count,
-                count,
-            ))
-        }
-    }
-
-    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
-        Ok(0)
+    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+        Ok(format!("encoded:{input}"))
     }
 }
+
+let mut encoder = PrefixEncoder;
+assert_eq!("encoded:codec", encoder.encode("codec")?);
+
+# Ok::<(), core::convert::Infallible>(())
 ```
 
-For a stateful transcoder, `max_reset_output_len`,
-`max_transcode_output_len`, and `max_finish_output_len` must be conservative
-upper bounds from every reachable state. `max_total_output_len` combines them
-for a complete `reset -> transcode -> finish` operation.
+For caller-buffered conversion, use the explicit lifecycle:
 
-## Errors and Recovery
+```text
+allocate output from declared bounds
+        |
+reset(output)
+        |
+transcode(input, input_index, output, output_index) repeatedly
+        |
+preserve/refill a NeedInput tail, or apply the caller's EOF policy
+        |
+finish(output)
+```
 
-Errors deliberately preserve different recovery information:
+`TranscodeProgress` contains relative `read` and `written` counts from the
+provided indices. `TranscodeStatus` explains why conversion stopped:
 
-- `DecodeFailure` is used only at the low-level `Codec::decode` boundary and
-  separates incomplete prefixes from invalid units.
-- `TranscodeFailure` reports framework problems: invalid indices, insufficient
-  output, overflow, incomplete whole input, and trailing input.
-- `CapacityError` reports capacity-planning arithmetic before output is written.
-- `TranscodeDomainError` adds reset/main/finish phase context to domain errors.
-- Directional errors preserve whether a failure came from decode, encode, or a
-  converter, and `TranscodeEncodeError` / `TranscodeConvertError` can preserve
-  an unencodable value.
-
-Do not flatten these categories in downstream APIs unless the caller truly has
-the same recovery action for every category. In particular, an incomplete
-prefix is commonly retryable, while malformed input and broken progress
-contracts generally are not.
-
-## Frequent Implementation Errors
-
-| Error | Correct rule |
+| Status | Caller action |
 | --- | --- |
-| Returning `Complete` after a partial read | Return `NeedInput` or `NeedOutput`; `Complete` consumes every visible input unit. |
-| Consuming an incomplete tail | Leave it caller-owned and report `NeedInput` or `DecodeFailure::Incomplete`. |
-| Making `encode_len` only an upper bound | It must equal the actual successful `encode` count in the same state. |
-| Sizing reset/finish from current state only | Bounds must cover every reachable state. |
-| Using `finish` to inspect caller input | `finish` receives no source input; make EOF policy explicit outside the default bridge. |
-| Reimplementing engine cursor logic in a domain crate | Use strict adapters or `TranscodeXxxEngine` plus hooks when their policy model fits. |
+| `Complete` | All visible input from `input_index` was consumed. Supply another segment or finish at EOF. |
+| `NeedInput` | Preserve the unconsumed tail, refill input, and retry; at EOF, apply the format's explicit tail policy. |
+| `NeedOutput` | Drain or replace the output buffer and continue from the reported progress. |
 
-## Related Documentation
+Never return `Complete` after consuming only a prefix. `finish` receives no
+source input and cannot silently reinterpret a caller-owned incomplete tail.
 
-- [README](../README.md): crate overview, feature list, and API map.
-- [Chinese user guide](user_guide.zh_CN.md): Chinese version of this guide.
-- Rust API documentation: detailed method contracts and error variants.
+### 3. Finish and reuse
+
+`finish` emits retained final output such as padding, a checksum, or a stream
+trailer after the caller has supplied all input and handled any incomplete tail.
+Its success closes the logical stream; call `reset` before another stream.
+
+`max_reset_output_len`, `max_transcode_output_len`, and
+`max_finish_output_len` must be conservative for every reachable state.
+`max_total_output_len` combines them for one complete
+`reset -> transcode -> finish` operation, and `transcode_complete_into`
+performs that operation with a caller-provided complete output buffer.
+
+## Advanced Usage
+
+Strict `CodecTranscode*` adapters surface codec-domain errors directly. When a
+format needs replacement, skipping, counting, or phase-specific reporting, keep
+the common loop in an engine and implement hooks instead:
+
+- `engine::TranscodeEncodeEngine` with `TranscodeEncodeHooks` handles
+  unencodable-value, reset, and finish policy.
+- `engine::TranscodeDecodeEngine` with `TranscodeDecodeHooks` handles
+  invalid-input policy.
+- `engine::TranscodeConvertEngine` composes both sides with their hooks.
+
+Use a custom `Transcoder` or value-level facade for EOF-aware maximal-munch
+parsing, delayed boundary decisions, or pending-prefix reinterpretation at EOF.
+Those policies cannot be put into `finish`.
+
+Use runtime `ByteOrder` in public configuration. Use `ByteOrderSpec` with
+`BigEndian`, `LittleEndian`, or `NativeEndian` where static selection is
+valuable.
+
+## Errors and Diagnostics
+
+| Error type | Meaning and usual recovery |
+| --- | --- |
+| `DecodeFailure` | Low-level incomplete visible prefix or invalid codec-domain input. Only the incomplete case is retryable. |
+| `TranscodeFailure` | Framework failure involving indices, capacity, incomplete whole input, trailing input, or related stream conditions. |
+| `CapacityError` | Capacity-planning arithmetic failed before output is written. |
+| `TranscodeDomainError<E>` | Domain/policy error tagged with reset, main, or finish phase. |
+| Directional transcode errors | Preserve whether failure came from the encode, decode, or conversion side; encode/conversion errors may retain an unencodable value. |
+| `TranscodeContractError` | A custom transcoder reported inconsistent progress; treat it as an implementation defect. |
+
+Do not flatten an incomplete prefix and malformed input unless downstream callers
+genuinely take the same recovery action for both.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `NeedInput` at a file end | Preserve the tail, apply the format's EOF policy, then call `finish`. |
+| Repeated `NeedOutput` | Advance by `TranscodeProgress`, provide the relevant capacity, and verify custom counters are truthful. |
+| Checked adapter rejects capacity | Ensure bounds include reset, main, and finish output from every reachable state. |
+| One-value decode rejects input | `CodecValueDecoder` is strict; use lifecycle-aware or streaming APIs when the format requires them. |
+| A format needs replacement | Use the appropriate engine hooks rather than duplicate the buffered loop. |
+
+## Limitations and Best Practices
+
+- Keep concrete formats, character sets, and high-level reader/writer adapters
+  in domain crates.
+- Treat `NeedInput` as a streaming boundary signal, not a final EOF error.
+- Keep unsafe `Codec` implementations small and make length/consumption
+  invariants exact.
+- Owned-output helpers can allocate their returned values; choose
+  caller-buffered APIs when allocation control matters.
+- Enable `io` only for the `qubit-io` bridges you use.
+
+## Further Reading
+
+- [README](../README.md)
+- [中文用户手册](user_guide.zh_CN.md)
+- [API documentation](https://docs.rs/qubit-codec)
