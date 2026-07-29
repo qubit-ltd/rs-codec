@@ -7,38 +7,16 @@
 // =============================================================================
 //! Buffered output driver that encodes values into units.
 
-use core::{
-    fmt,
-    num::NonZeroUsize,
-};
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use core::{fmt, num::NonZeroUsize};
+use std::io::{Error, ErrorKind, Result, Seek, SeekFrom, Write};
 
-use qubit_io::{
-    Buffer,
-    BufferedOutput,
-    Output,
-    Seekable,
-    UncheckedSlice,
-};
+use qubit_io::{Buffer, BufferedOutput, Output, Seekable, UncheckedSlice};
 
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeStatus,
-    Transcoder,
+    CapacityError, Codec, TranscodeEncodeError, TranscodeEncodeErrorOf, TranscodeEncoder,
+    TranscodeStatus, Transcoder,
     value::codec_value_lifecycle::{
-        encode_complete_value_into_reserved,
-        max_complete_encode_units,
+        encode_complete_value_into_reserved, max_complete_encode_units,
     },
 };
 
@@ -50,7 +28,8 @@ use crate::{
 /// storing codec-specific state in the buffer owner.
 ///
 /// [`Self::flush`] only drains already buffered units. State-aware streaming
-/// encoders can use [`Self::transcode_from`] and [`Self::finish`] explicitly.
+/// encoders can use [`Self::reset`], [`Self::transcode`], and [`Self::finish`]
+/// explicitly.
 ///
 /// # Type Parameters
 ///
@@ -103,21 +82,15 @@ where
 
     /// Returns a shared reference to the wrapped unit output.
     ///
+    /// Pending units remain in this adapter's internal buffer and are not
+    /// visible through the returned output until [`Self::flush`] succeeds.
+    ///
     /// # Returns
     ///
     /// A shared reference to the wrapped unit output.
     #[must_use]
     pub const fn inner(&self) -> &O {
         self.output.inner()
-    }
-
-    /// Returns a mutable reference to the wrapped unit output.
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to the wrapped unit output.
-    pub fn inner_mut(&mut self) -> &mut O {
-        self.output.inner_mut()
     }
 
     /// Returns the available capacity of the spare output buffer.
@@ -172,10 +145,7 @@ where
         self.output.ensure_spare_capacity(count)
     }
 
-    fn ensure_transcode_spare_capacity(
-        &mut self,
-        required: NonZeroUsize,
-    ) -> Result<()> {
+    fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
         self.ensure_spare_capacity(required.get())
     }
 
@@ -188,6 +158,7 @@ where
     /// # Returns
     ///
     /// The wrapped output and the buffer holding pending units.
+    #[must_use = "the returned output and pending buffer must be handled"]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }
@@ -235,30 +206,61 @@ where
         M: FnMut(C::EncodeError) -> Error,
     {
         let max_units = map_encode_value_result(
-            max_complete_encode_units::<C>()
-                .map_err(TranscodeEncodeErrorOf::<C>::from),
+            max_complete_encode_units::<C>().map_err(TranscodeEncodeErrorOf::<C>::from),
             &mut map_error,
         )?;
         self.ensure_spare_capacity(max_units)?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= max_units,
             "reserved spare buffer is smaller than codec upper bound",
         );
         let written = map_encode_value_result(
-            encode_complete_value_into_reserved(
-                codec,
-                value,
-                units,
-                output_index,
-                max_units,
-            ),
+            encode_complete_value_into_reserved(codec, value, units, output_index, max_units),
             &mut map_error,
         )?;
         // SAFETY: The spare buffer has the conservative complete lifecycle
         // capacity, and the helper reports how many initialized units it
         // actually wrote.
+        unsafe {
+            self.output.advance(written);
+        }
+        Ok(())
+    }
+
+    /// Runs encoder reset and buffers any stream-prefix units.
+    ///
+    /// This method reserves enough persistent buffer capacity for all reset
+    /// output before calling `encoder`. It does not flush pending units.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity errors, allocation errors, or reset errors mapped by
+    /// `map_error`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `encoder` writes more than its declared reset bound.
+    pub fn reset<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
+    where
+        E: Transcoder<Input = Value, Output = O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        let required = encoder
+            .max_reset_output_len()
+            .map_err(capacity_error_to_invalid_data)?;
+        self.ensure_spare_capacity(required)?;
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        debug_assert!(
+            available >= required,
+            "insufficient reset capacity reserved in spare output buffer",
+        );
+        let written = encoder
+            .reset(units, output_index)
+            .map_err(&mut *map_error)?;
+        assert!(written <= required, "reset wrote beyond its bound");
+        // SAFETY: The encoder reported initialized units within the spare
+        // range reserved above.
         unsafe {
             self.output.advance(written);
         }
@@ -343,7 +345,7 @@ where
     /// let mut output = TranscodeEncodeOutput::with_capacity(std::io::sink(), 1);
     /// let mut transcoder = GenericTranscoder;
     /// let mut map_error = |_| std::io::Error::other("transcode error");
-    /// let _ = output.transcode_from(
+    /// let _ = output.transcode(
     ///     &mut transcoder,
     ///     &mut map_error,
     ///     &[0_u8],
@@ -351,7 +353,7 @@ where
     ///     1,
     /// );
     /// ```
-    pub fn transcode_from<E, M, Value>(
+    pub fn transcode<E, M, Value>(
         &mut self,
         encoder: &mut E,
         map_error: &mut M,
@@ -377,8 +379,7 @@ where
         let mut required_spare = NonZeroUsize::MIN;
         while read_total < count {
             self.ensure_transcode_spare_capacity(required_spare)?;
-            let (units, output_index, available_output) =
-                self.output.spare_raw_parts_mut();
+            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
             debug_assert!(
                 available_output >= required_spare.get(),
                 "reserved spare buffer is smaller than required encoder output",
@@ -437,11 +438,7 @@ where
     ///
     /// Returns capacity, transcode finalization, or wrapped output flush
     /// errors.
-    pub fn finish<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
+    pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
@@ -451,8 +448,7 @@ where
             Err(error) => return Err(capacity_error_to_invalid_data(error)),
         };
         self.ensure_spare_capacity(required)?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
             "insufficient finish capacity reserved in spare output buffer",
