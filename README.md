@@ -70,6 +70,11 @@ select a supplied adapter: `CodecValueEncoder` or `CodecValueDecoder` for
 owned single-value output; `CodecTranscodeEncoder`, `CodecTranscodeDecoder`,
 or `CodecTranscodeConverter` for strict caller-buffered conversion.
 
+If a codec emits values from `decode_reset` or `decode_finish`, strict
+single-value decode intentionally rejects it. Use `CodecValueDecoder`'s
+`decode_lifecycle` or `decode_lifecycle_with_scratch` instead; see the
+[lifecycle-aware decode example](examples/decode_lifecycle.rs).
+
 ## What It Provides
 
 | Need | Public API |

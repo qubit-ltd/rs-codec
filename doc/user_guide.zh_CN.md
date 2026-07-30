@@ -148,6 +148,14 @@ padding、checksum 或 stream trailer。成功后逻辑流关闭；在同一 tra
 `max_total_output_len` 将它们合成为一次完整 `reset -> transcode -> finish` 的上界；
 `transcode_complete_into` 使用调用方提供的完整输出缓冲区执行该流程。
 
+### Decode 生命周期输出
+
+`CodecValueDecoder::decode` 是有意严格的：若 codec 从 `decode_reset` 或
+`decode_finish` 产出 value，它会拒绝该 codec，因为单个返回值无法保留三个阶段的输出。
+适合自有 `Vec` 输出时使用 `decode_lifecycle`；调用方持有可复用 reset 与 finish 缓冲区时
+使用 `decode_lifecycle_with_scratch`。可运行的[生命周期感知 decode 示例](../examples/decode_lifecycle.rs)
+展示了严格拒绝以及被保留的 reset、主值和 finish value。
+
 ## 进阶用法
 
 严格的 `CodecTranscode*` adapter 直接暴露 codec-domain 错误。若格式需要

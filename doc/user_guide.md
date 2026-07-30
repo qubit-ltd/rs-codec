@@ -156,6 +156,16 @@ Its success closes the logical stream; call `reset` before another stream.
 `reset -> transcode -> finish` operation, and `transcode_complete_into`
 performs that operation with a caller-provided complete output buffer.
 
+### Decode lifecycle output
+
+`CodecValueDecoder::decode` is intentionally strict: it rejects a codec that
+declares output from `decode_reset` or `decode_finish`, because one returned
+value cannot preserve all three phases. Use `decode_lifecycle` when owned
+`Vec` output is appropriate, or `decode_lifecycle_with_scratch` when the
+caller owns reusable reset and finish buffers. The runnable
+[lifecycle-aware decode example](../examples/decode_lifecycle.rs) shows the
+strict rejection and the preserved reset, main, and finish values.
+
 ## Advanced Usage
 
 Strict `CodecTranscode*` adapters surface codec-domain errors directly. When a

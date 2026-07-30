@@ -65,6 +65,10 @@ assert_eq!("encoded:codec", output);
 `CodecTranscodeEncoder`、`CodecTranscodeDecoder` 或
 `CodecTranscodeConverter` 用于严格的调用方缓冲区转换。
 
+若 codec 会从 `decode_reset` 或 `decode_finish` 产出 value，严格单值 decode 会有意
+拒绝该 codec。此时应使用 `CodecValueDecoder` 的 `decode_lifecycle` 或
+`decode_lifecycle_with_scratch`；参见[生命周期感知 decode 示例](examples/decode_lifecycle.rs)。
+
 ## 核心能力
 
 | 需求 | 公开 API |
