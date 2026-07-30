@@ -106,28 +106,69 @@ mod value;
 /// Policy-aware transcode engines, hooks, contexts, and policy actions.
 pub mod engine {
     pub use crate::transcode::{
-        DecodeContext, DecodeInvalidAction, DecodeInvalidActionOf, EncodeContext,
-        EncodeUnencodableAction, EncodeUnencodableActionOf, TranscodeConvertEngine,
-        TranscodeDecodeEngine, TranscodeDecodeHooks, TranscodeEncodeEngine, TranscodeEncodeHooks,
+        DecodeContext,
+        DecodeInvalidAction,
+        DecodeInvalidActionOf,
+        EncodeContext,
+        EncodeUnencodableAction,
+        EncodeUnencodableActionOf,
+        TranscodeConvertEngine,
+        TranscodeDecodeEngine,
+        TranscodeDecodeHooks,
+        TranscodeEncodeEngine,
+        TranscodeEncodeHooks,
     };
 }
 
-pub use byte_order::{BigEndian, ByteOrder, ByteOrderSpec, LittleEndian, NativeEndian};
-pub use codec::{Codec, DecodeFailure};
-pub use nz::{nz, nz_const};
+pub use byte_order::{
+    BigEndian,
+    ByteOrder,
+    ByteOrderSpec,
+    LittleEndian,
+    NativeEndian,
+};
+pub use codec::{
+    Codec,
+    DecodeFailure,
+};
+pub use nz::{
+    nz,
+    nz_const,
+};
 #[cfg(feature = "io")]
 pub use transcode::{
-    AsyncTranscodeDecodeInput, AsyncTranscodeEncodeOutput, TranscodeDecodeInput,
+    AsyncTranscodeDecodeInput,
+    AsyncTranscodeDecodeStep,
+    AsyncTranscodeEncodeOutput,
+    TranscodeDecodeInput,
     TranscodeEncodeOutput,
 };
 pub use transcode::{
-    CapacityError, CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder,
-    TranscodeContractError, TranscodeConvertError, TranscodeConvertErrorOf, TranscodeConverter,
-    TranscodeDecodeError, TranscodeDecodeErrorOf, TranscodeDecoder, TranscodeDomainError,
-    TranscodeEncodeError, TranscodeEncodeErrorOf, TranscodeEncoder, TranscodeFailure,
-    TranscodeProgress, TranscodeStatus, Transcoder,
+    CapacityError,
+    CodecTranscodeConverter,
+    CodecTranscodeDecoder,
+    CodecTranscodeEncoder,
+    TranscodeContractError,
+    TranscodeConvertError,
+    TranscodeConvertErrorOf,
+    TranscodeConverter,
+    TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
+    TranscodeDecoder,
+    TranscodeDomainError,
+    TranscodeEncodeError,
+    TranscodeEncodeErrorOf,
+    TranscodeEncoder,
+    TranscodeFailure,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
 };
 pub use value::{
-    CodecValueDecoder, CodecValueEncoder, DecodeLifecycleOutput, DecodeLifecycleProgress,
-    ValueDecoder, ValueEncoder,
+    CodecValueDecoder,
+    CodecValueEncoder,
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
+    ValueDecoder,
+    ValueEncoder,
 };

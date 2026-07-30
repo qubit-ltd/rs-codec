@@ -6,10 +6,4 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod async_transcode_decode_input_tests;
-mod async_transcode_decode_step_tests;
-mod async_transcode_encode_output_tests;
-mod codec_decode_driver_tests;
-mod transcode_decode_input_tests;
-mod transcode_encode_output_tests;
-mod transcode_progress_validation_tests;
+//! Progress validation is exercised through the public bridge tests.

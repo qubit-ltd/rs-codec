@@ -7,23 +7,47 @@
 // =============================================================================
 //! Buffered asynchronous output driver for streaming transcoders.
 
-use core::{fmt, num::NonZeroUsize};
-use std::io::{Error, ErrorKind, Result};
+use core::fmt;
+use std::{
+    collections::TryReserveError,
+    future::poll_fn,
+    io::{
+        Error,
+        ErrorKind,
+        Result,
+    },
+    pin::Pin,
+    task::{
+        Context,
+        Poll,
+    },
+};
 
-use qubit_io::{AsyncBufferedOutput, AsyncOutput, Buffer, UncheckedSlice};
+use qubit_io::{
+    AsyncBufferedOutput,
+    AsyncOutput,
+    Buffer,
+    UncheckedSlice,
+};
 
-use crate::{CapacityError, TranscodeEncoder, Transcoder};
+use crate::{
+    CapacityError,
+    TranscodeEncoder,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
+};
 
-use super::transcode_progress_driver::{EncodeStep, encode_progress};
+use super::transcode_progress_validation::validate_encode_progress;
 
 /// Buffers asynchronous transcoder output while preserving pending units.
 ///
 /// This adapter is the asynchronous counterpart to
 /// [`super::TranscodeEncodeOutput`]. It owns the unit-level buffer, so a
 /// future cancelled while the wrapped output is pending retains every unit
-/// that the transcoder has already produced. Callers can retry the same
-/// lifecycle operation to resume delivery without re-running completed output
-/// phases.
+/// that the transcoder has already produced. Each transcode operation returns
+/// after exactly one encoder invocation, so its progress is the explicit
+/// source-consumption commit boundary.
 ///
 /// # Type Parameters
 ///
@@ -34,6 +58,7 @@ where
     O::Item: Clone + Default,
 {
     output: AsyncBufferedOutput<O>,
+    required_spare: usize,
 }
 
 impl<O> AsyncTranscodeEncodeOutput<O>
@@ -54,6 +79,7 @@ where
     pub fn new(inner: O) -> Self {
         Self {
             output: AsyncBufferedOutput::new(inner),
+            required_spare: 1,
         }
     }
 
@@ -71,7 +97,30 @@ where
     pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
             output: AsyncBufferedOutput::with_capacity(inner, capacity),
+            required_spare: 1,
         }
+    }
+
+    /// Tries to create an adapter with at least `capacity` buffered units.
+    ///
+    /// # Errors
+    ///
+    /// Returns an allocation error when the internal unit buffer cannot be
+    /// allocated.
+    pub fn try_with_capacity(
+        inner: O,
+        capacity: usize,
+    ) -> std::result::Result<Self, TryReserveError> {
+        Ok(Self {
+            output: AsyncBufferedOutput::try_with_capacity(inner, capacity)?,
+            required_spare: 1,
+        })
+    }
+
+    /// Returns the total internal unit-buffer capacity.
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.output.capacity()
     }
 
     /// Returns a shared reference to the wrapped asynchronous output.
@@ -175,7 +224,8 @@ where
             .max_reset_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .reset(units, output_index)
@@ -188,12 +238,13 @@ where
         Ok(())
     }
 
-    /// Transcodes an indexed input range into the retained asynchronous buffer.
+    /// Polls one cancellation-safe encoder operation.
     ///
-    /// The adapter grows its persistent unit buffer when the encoder reports a
-    /// larger `NeedOutput` requirement, and it delivers pending output before
-    /// retrying. It never exposes a `NeedInput` result from an encoder because
-    /// the complete caller-supplied input range is already available.
+    /// The adapter may first deliver previously pending output to make a
+    /// conservative spare range available. Once it invokes `encoder`, it
+    /// advances the produced units and returns immediately without another
+    /// poll. The returned [`TranscodeProgress`] is therefore the exact source
+    /// range committed by this call.
     ///
     /// # Parameters
     ///
@@ -205,21 +256,22 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the number of source values consumed.
+    /// Returns one validated encoder progress report.
     ///
     /// # Errors
     ///
     /// Returns invalid input ranges, output delivery, allocation, contract, or
     /// mapped transcoder errors. Pending units remain retained after a failed
     /// asynchronous delivery.
-    pub async fn transcode_async<E, M, Value>(
-        &mut self,
+    pub fn poll_transcode<E, M, Value>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         encoder: &mut E,
         map_error: &mut M,
         input: &[Value],
         input_index: usize,
         count: usize,
-    ) -> Result<usize>
+    ) -> Poll<Result<TranscodeProgress>>
     where
         E: TranscodeEncoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
@@ -231,46 +283,92 @@ where
             "encode input range exceeds source buffer",
         )?;
         if count == 0 {
-            return Ok(0);
+            return Poll::Ready(Ok(TranscodeProgress::complete(0, 0)));
         }
         let input = &input[..input_end];
-        let mut read_total = 0;
-        let mut required_spare = NonZeroUsize::MIN;
-        while read_total < count {
-            self.ensure_spare_capacity_async(required_spare.get())
-                .await?;
-            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
-            debug_assert!(available_output >= required_spare.get());
-            let remaining_input = count - read_total;
-            let progress = encoder
-                .transcode(input, input_index + read_total, units, output_index)
-                .map_err(&mut *map_error)?;
-            let progress = encode_progress(
-                progress,
-                input_index + read_total,
-                remaining_input,
-                output_index,
-                available_output,
-            )?;
-            let read = progress.read;
-            let written = progress.written;
-            // SAFETY: Progress validation proves the initialized output count
-            // fits the current spare range.
-            unsafe {
-                self.output.advance(written);
+        let this = self.as_mut().get_mut();
+        let per_value = match encoder.max_transcode_output_len(1) {
+            Ok(required) => required.max(1),
+            Err(error) => {
+                return Poll::Ready(Err(capacity_error_to_invalid_data(error)));
             }
-            read_total += read;
-            match progress.step {
-                EncodeStep::Complete => return Ok(read_total),
-                EncodeStep::NeedOutput(required) => {
-                    required_spare = required;
-                    if read_total == count {
-                        self.ensure_spare_capacity_async(required.get()).await?;
-                    }
-                }
-            }
+        };
+        let required_spare = this.required_spare.max(per_value);
+        let required_capacity =
+            this.output.pending_len().saturating_add(required_spare);
+        if let Err(error) = this.output.try_reserve_capacity(required_capacity)
+        {
+            return Poll::Ready(Err(allocation_to_io_error(error)));
         }
-        Ok(read_total)
+        match Pin::new(&mut this.output)
+            .poll_ensure_spare_capacity(cx, required_spare)
+        {
+            Poll::Ready(Ok(())) => {}
+            Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
+            Poll::Pending => return Poll::Pending,
+        }
+        let (units, output_index, available_output) =
+            this.output.spare_raw_parts_mut();
+        let progress = encoder
+            .transcode(input, input_index, units, output_index)
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_encode_progress(
+                    progress,
+                    input_index,
+                    count,
+                    output_index,
+                    available_output,
+                )
+            });
+        let progress = match progress {
+            Ok(progress) => progress,
+            Err(error) => return Poll::Ready(Err(error)),
+        };
+        // SAFETY: Progress validation proves the initialized output count fits
+        // the spare window provided to the encoder.
+        unsafe {
+            this.output.advance(progress.written());
+        }
+        this.required_spare = match progress.status() {
+            TranscodeStatus::NeedOutput { required, .. } => required.get(),
+            TranscodeStatus::Complete => 1,
+            TranscodeStatus::NeedInput { .. } => {
+                unreachable!("validated encoder progress cannot need input");
+            }
+        };
+        Poll::Ready(Ok(progress))
+    }
+
+    /// Transcodes one cancellation-safe progress step into the retained buffer.
+    ///
+    /// This is the async wrapper for [`Self::poll_transcode`]. It returns after
+    /// one encoder invocation; callers that need to consume a whole source
+    /// range must advance the source index by [`TranscodeProgress::read`] and
+    /// call it again.
+    pub async fn transcode_async<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+        input: &[Value],
+        input_index: usize,
+        count: usize,
+    ) -> Result<TranscodeProgress>
+    where
+        E: TranscodeEncoder<Input = Value, Output = O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        poll_fn(|cx| {
+            Pin::new(&mut *self).poll_transcode(
+                cx,
+                encoder,
+                map_error,
+                input,
+                input_index,
+                count,
+            )
+        })
+        .await
     }
 
     /// Finishes the encoder and retains its final output for delivery.
@@ -303,7 +401,8 @@ where
             .max_finish_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) = self.output.spare_raw_parts_mut();
+        let (units, output_index, available) =
+            self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .finish(units, output_index)
@@ -318,7 +417,10 @@ where
 
     /// Reserves enough total buffer capacity and makes `count` spare slots
     /// available for one transcoder operation.
-    async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
+    async fn ensure_spare_capacity_async(
+        &mut self,
+        count: usize,
+    ) -> Result<()> {
         let required_capacity = self.output.pending_len().saturating_add(count);
         self.output
             .try_reserve_capacity(required_capacity)

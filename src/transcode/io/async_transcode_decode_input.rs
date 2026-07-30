@@ -10,16 +10,36 @@
 use core::fmt;
 use std::{
     collections::TryReserveError,
-    io::{Error, ErrorKind, Result},
+    future::poll_fn,
+    io::{
+        Error,
+        ErrorKind,
+        Result,
+    },
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
 };
 
-use qubit_io::{AsyncBufferedInput, AsyncInput, Buffer, UncheckedSlice};
+use qubit_io::{
+    AsyncBufferedInput,
+    AsyncInput,
+    Buffer,
+    UncheckedSlice,
+};
 
-use crate::{CapacityError, Transcoder};
+use crate::{
+    CapacityError,
+    TranscodeProgress,
+    Transcoder,
+};
 
-use super::transcode_progress_driver::{DecodeStep, decode_progress};
+use super::{
+    async_transcode_decode_step::AsyncTranscodeDecodeStep,
+    transcode_progress_validation::validate_decode_progress,
+};
 
 /// Decodes an asynchronous unit stream into values.
 ///
@@ -150,7 +170,12 @@ where
     /// The caller must guarantee that the indexed range fits in output, does
     /// not overflow, holds no overlapping unread units, and count is no
     /// greater than the unread unit count.
-    pub unsafe fn copy_unread_to(&self, output: &mut [I::Item], output_index: usize, count: usize) {
+    pub unsafe fn copy_unread_to(
+        &self,
+        output: &mut [I::Item],
+        output_index: usize,
+        count: usize,
+    ) {
         // SAFETY: The caller upholds the delegated buffer-copy contract.
         unsafe {
             self.input.copy_unread_to(output, output_index, count);
@@ -290,23 +315,28 @@ where
         self.input.fill_until_async(count).await
     }
 
-    /// Decodes values into an indexed output range with a streaming decoder.
+    /// Polls one cancellation-safe decoder operation.
     ///
-    /// Incomplete EOF tails remain unread and return the number of values
-    /// written, allowing callers to apply their own EOF policy.
+    /// The operation first refills only when no unread unit is buffered. After
+    /// a decoder call changes either the decoder or the buffered input, it
+    /// immediately returns [`AsyncTranscodeDecodeStep::Progress`] and never
+    /// polls the input again. This makes the returned progress the commit
+    /// boundary for cancellation: resume with the adapter's current state,
+    /// rather than replaying the previous source range.
     ///
     /// # Errors
     ///
     /// Returns input, allocation, output-range, invalid-progress, or mapped
     /// decoder errors.
-    pub async fn transcode_async<D, M, Value>(
-        &mut self,
+    pub fn poll_transcode<D, M, Value>(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         decoder: &mut D,
         map_error: &mut M,
         output: &mut [Value],
         output_index: usize,
         count: usize,
-    ) -> Result<usize>
+    ) -> Poll<Result<AsyncTranscodeDecodeStep>>
     where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
@@ -318,44 +348,75 @@ where
             "decoded output range exceeds destination buffer",
         )?;
         if count == 0 {
-            return Ok(0);
+            return Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(
+                TranscodeProgress::complete(0, 0),
+            )));
         }
         let output = &mut output[..output_end];
-        let mut written_total = 0;
-        loop {
-            if self.unread_len() == 0 && !self.fill_more_async().await? {
-                return Ok(written_total);
-            }
-            let available_input = self.unread_len();
-            let remaining_output = count - written_total;
-            let progress = decoder
-                .transcode(self.unread(), 0, output, output_index + written_total)
-                .map_err(&mut *map_error)?;
-            let progress = decode_progress(
-                progress,
-                0,
-                available_input,
-                output_index + written_total,
-                remaining_output,
-            )?;
-            self.consume(progress.consumed);
-            written_total += progress.written;
-            match progress.step {
-                DecodeStep::Complete if written_total == count => {
-                    return Ok(written_total);
+        if self.as_ref().get_ref().unread_len() == 0 {
+            let this = self.as_mut().get_mut();
+            match Pin::new(&mut this.input).poll_fill_more(cx) {
+                Poll::Ready(Ok(true)) => {}
+                Poll::Ready(Ok(false)) => {
+                    return Poll::Ready(Ok(
+                        AsyncTranscodeDecodeStep::EndOfInput,
+                    ));
                 }
-                DecodeStep::Complete => {}
-                DecodeStep::NeedOutput => {
-                    return Ok(written_total);
-                }
-                DecodeStep::NeedInput(required) => {
-                    if self.fill_until_async(required.get()).await? {
-                        continue;
-                    }
-                    return Ok(written_total);
-                }
+                Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
+                Poll::Pending => return Poll::Pending,
             }
         }
+        let this = self.as_mut().get_mut();
+        let available_input = this.unread_len();
+        let progress = decoder
+            .transcode(this.unread(), 0, output, output_index)
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
+            });
+        let progress = match progress {
+            Ok(progress) => progress,
+            Err(error) => return Poll::Ready(Err(error)),
+        };
+        this.consume(progress.read());
+        Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(progress)))
+    }
+
+    /// Decodes one cancellation-safe progress step into an indexed output
+    /// range.
+    ///
+    /// This is the async wrapper for [`Self::poll_transcode`]. It returns after
+    /// one decoder invocation; callers that require a complete destination
+    /// range must drive successive steps and retain each returned progress.
+    pub async fn transcode_async<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<AsyncTranscodeDecodeStep>
+    where
+        D: Transcoder<Input = I::Item, Output = Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        poll_fn(|cx| {
+            Pin::new(&mut *self).poll_transcode(
+                cx,
+                decoder,
+                map_error,
+                output,
+                output_index,
+                count,
+            )
+        })
+        .await
     }
 }
 
@@ -385,7 +446,9 @@ where
         count: usize,
     ) -> Poll<Result<usize>> {
         // SAFETY: Pinning this wrapper pins its buffered input field.
-        let input = unsafe { Pin::new_unchecked(&mut self.as_mut().get_unchecked_mut().input) };
+        let input = unsafe {
+            Pin::new_unchecked(&mut self.as_mut().get_unchecked_mut().input)
+        };
         // SAFETY: The caller upholds the delegated indexed-read contract.
         unsafe { input.poll_read_unchecked(cx, output, index, count) }
     }

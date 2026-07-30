@@ -7,13 +7,15 @@
 // =============================================================================
 
 mod async_transcode_decode_input;
+mod async_transcode_decode_step;
 mod async_transcode_encode_output;
 mod codec_decode_driver;
 mod transcode_decode_input;
 mod transcode_encode_output;
-mod transcode_progress_driver;
+mod transcode_progress_validation;
 
 pub use async_transcode_decode_input::AsyncTranscodeDecodeInput;
+pub use async_transcode_decode_step::AsyncTranscodeDecodeStep;
 pub use async_transcode_encode_output::AsyncTranscodeEncodeOutput;
 pub use transcode_decode_input::TranscodeDecodeInput;
 pub use transcode_encode_output::TranscodeEncodeOutput;
