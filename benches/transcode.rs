@@ -23,6 +23,7 @@ use criterion::{
 };
 use qubit_codec::{
     CapacityError,
+    TranscodeDecodeError,
     TranscodeProgress,
     Transcoder,
 };
@@ -37,7 +38,7 @@ struct CopyTranscoder;
 impl Transcoder for CopyTranscoder {
     type Input = u8;
     type Output = u8;
-    type Error = Infallible;
+    type Error = TranscodeDecodeError<Infallible>;
 
     fn max_transcode_output_len(
         &self,
