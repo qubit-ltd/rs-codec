@@ -64,14 +64,19 @@ qubit-codec = "0.11"
 ```
 
 The base crate has no default features. Enable `io` only for
-`TranscodeDecodeInput`, `TranscodeEncodeOutput`, or the cancellation-safe
-`AsyncTranscodeEncodeOutput`, which bridge `qubit-io` buffered input/output
+`TranscodeDecodeInput`, `TranscodeEncodeOutput`, or the partial-I/O
+`AsyncTranscodeDecodeInput` and `AsyncTranscodeEncodeOutput`, which bridge `qubit-io` buffered input/output
 traits:
 
 ```toml
 [dependencies]
 qubit-codec = { version = "0.11", features = ["io"] }
 ```
+
+Each async bridge call returns after one transcoder invocation. The returned
+progress is committed before the call can suspend again: advance the source or
+destination cursor by `read()` or `written()`, and call again to continue.
+Decoder EOF is reported explicitly as `AsyncTranscodeDecodeStep::EndOfInput`.
 
 ## Core Workflow
 

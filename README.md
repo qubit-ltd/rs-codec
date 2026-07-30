@@ -85,7 +85,7 @@ single-value decode intentionally rejects it. Use `CodecValueDecoder`'s
 | Policy-aware buffered conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and their hooks |
 | Caller-managed streaming lifecycle | `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` |
 | Shared byte-order metadata | `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and `NativeEndian` |
-| `qubit-io` buffered bridges | `TranscodeDecodeInput`, `TranscodeEncodeOutput`, and cancellation-safe `AsyncTranscodeEncodeOutput` with feature `io` |
+| `qubit-io` buffered bridges | `TranscodeDecodeInput`, `TranscodeEncodeOutput`, and the partial-I/O `AsyncTranscodeDecodeInput` / `AsyncTranscodeEncodeOutput` with feature `io` |
 
 For a streaming converter, the lifecycle is explicit:
 
@@ -97,6 +97,13 @@ reset(output) -> transcode(...) repeatedly -> handle any EOF tail -> finish(outp
 requested index. `NeedInput` leaves the incomplete tail with the caller for a
 retry or an explicit EOF decision; `NeedOutput` means the output buffer must be
 extended or drained before conversion continues.
+
+The async bridges expose this same progress directly: every `poll_transcode`
+or `transcode_async` call performs at most one transcoder invocation after
+any required I/O preparation. A returned `TranscodeProgress` (or
+`AsyncTranscodeDecodeStep::Progress`) is already committed and is never
+followed by another await in that call. Advance the caller cursor by its
+reported count; EOF is the explicit `AsyncTranscodeDecodeStep::EndOfInput`.
 
 ## Boundaries and Guarantees
 

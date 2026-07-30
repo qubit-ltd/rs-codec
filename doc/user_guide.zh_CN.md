@@ -58,13 +58,17 @@ qubit-codec = "0.11"
 ```
 
 基础 crate 没有默认 feature。仅在使用 `TranscodeDecodeInput`、
-`TranscodeEncodeOutput` 或具取消安全性的 `AsyncTranscodeEncodeOutput`
+`TranscodeEncodeOutput` 或部分 I/O 的 `AsyncTranscodeDecodeInput` 与 `AsyncTranscodeEncodeOutput`
 （它们桥接 `qubit-io` buffered input/output trait）时启用 `io`：
 
 ```toml
 [dependencies]
 qubit-codec = { version = "0.11", features = ["io"] }
 ```
+
+每次异步桥接调用在一次 transcoder 调用后即返回。返回的 progress 会在该调用再次
+挂起前提交：按 `read()` 或 `written()` 推进调用方游标，再次调用以继续。decoder 的 EOF
+会明确返回为 `AsyncTranscodeDecodeStep::EndOfInput`。
 
 ## 核心工作流
 
