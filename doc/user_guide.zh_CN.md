@@ -57,9 +57,9 @@ unit-to-unit 转换使用 `CodecTranscodeConverter` 构建严格的 decode-encod
 qubit-codec = "0.11"
 ```
 
-基础 crate 没有默认 feature。仅在使用 `TranscodeDecodeInput` 或
-`TranscodeEncodeOutput`（它们桥接 `qubit-io` buffered input/output trait）时启用
-`io`：
+基础 crate 没有默认 feature。仅在使用 `TranscodeDecodeInput`、
+`TranscodeEncodeOutput` 或具取消安全性的 `AsyncTranscodeEncodeOutput`
+（它们桥接 `qubit-io` buffered input/output trait）时启用 `io`：
 
 ```toml
 [dependencies]

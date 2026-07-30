@@ -64,8 +64,9 @@ qubit-codec = "0.11"
 ```
 
 The base crate has no default features. Enable `io` only for
-`TranscodeDecodeInput` or `TranscodeEncodeOutput`, which bridge
-`qubit-io` buffered input/output traits:
+`TranscodeDecodeInput`, `TranscodeEncodeOutput`, or the cancellation-safe
+`AsyncTranscodeEncodeOutput`, which bridge `qubit-io` buffered input/output
+traits:
 
 ```toml
 [dependencies]

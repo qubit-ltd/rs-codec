@@ -85,7 +85,7 @@ single-value decode intentionally rejects it. Use `CodecValueDecoder`'s
 | Policy-aware buffered conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and their hooks |
 | Caller-managed streaming lifecycle | `Transcoder`, `TranscodeProgress`, and `TranscodeStatus` |
 | Shared byte-order metadata | `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, and `NativeEndian` |
-| `qubit-io` buffered bridges | `TranscodeDecodeInput` and `TranscodeEncodeOutput` with feature `io` |
+| `qubit-io` buffered bridges | `TranscodeDecodeInput`, `TranscodeEncodeOutput`, and cancellation-safe `AsyncTranscodeEncodeOutput` with feature `io` |
 
 For a streaming converter, the lifecycle is explicit:
 

@@ -23,8 +23,11 @@ use qubit_codec::{
 
 const RESET: u8 = 0xa2;
 const FINISH: u8 = 0xf2;
+/// Keeps standalone fuzz runs aligned with the CI input-size budget.
+const MAX_INPUT_LEN: usize = 4 * 1024;
 
 fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_INPUT_LEN)];
     let mut input =
         TranscodeDecodeInput::with_capacity(Cursor::new(data.to_vec()), 1);
     let mut decoder = MarkerDecoder;

@@ -79,7 +79,7 @@ assert_eq!("encoded:codec", output);
 | 带策略的缓冲转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 及其 hooks |
 | 调用方管理的流生命周期 | `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus` |
 | 共享字节序元数据 | `ByteOrder`、`ByteOrderSpec`、`BigEndian`、`LittleEndian` 和 `NativeEndian` |
-| `qubit-io` 缓冲桥接 | 启用 `io` feature 后的 `TranscodeDecodeInput` 和 `TranscodeEncodeOutput` |
+| `qubit-io` 缓冲桥接 | 启用 `io` feature 后的 `TranscodeDecodeInput`、`TranscodeEncodeOutput` 和具取消安全性的 `AsyncTranscodeEncodeOutput` |
 
 流式转换的生命周期是显式的：
 
