@@ -8,21 +8,11 @@
 //! Private driver for decoding one codec value from buffered input.
 
 use core::num::NonZeroUsize;
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-};
+use std::io::{Error, ErrorKind, Result};
 
-use qubit_io::{
-    BufferedInput,
-    Input,
-};
+use qubit_io::{BufferedInput, Input};
 
-use crate::{
-    Codec,
-    DecodeFailure,
-};
+use crate::{Codec, DecodeFailure};
 
 /// Drives one codec decode operation against persistent buffered input.
 pub(super) struct CodecDecodeDriver<'a, I>
@@ -46,27 +36,20 @@ where
     }
 
     /// Reads one decoded value after codec lifecycle reset completed.
-    pub(super) fn read_one<C, M>(
-        &mut self,
-        codec: &mut C,
-        map_error: &mut M,
-    ) -> Result<C::Value>
+    pub(super) fn read_one<C, M>(&mut self, codec: &mut C, map_error: &mut M) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         let min_units_per_value = C::MIN_UNITS_PER_VALUE;
-        let max_units_per_value =
-            C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
+        let max_units_per_value = C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
         self.input
             .try_reserve_capacity(min_units_per_value)
             .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
 
         loop {
-            let available = self.prepare_buffered_window(
-                min_units_per_value,
-                max_units_per_value,
-            )?;
+            let available =
+                self.prepare_buffered_window(min_units_per_value, max_units_per_value)?;
             let units = &self.input.unread()[..available];
             debug_assert!(units.len() >= min_units_per_value);
             let decode_result = unsafe {
@@ -86,9 +69,7 @@ where
                     self.refill_after_incomplete(required_total, available)?;
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
-                    return self.reject::<C, M>(
-                        source, consumed, available, map_error,
-                    );
+                    return self.reject::<C, M>(source, consumed, available, map_error);
                 }
             }
         }
@@ -101,9 +82,7 @@ where
         max_units_per_value: usize,
     ) -> Result<usize> {
         let available = self.input.unread_len();
-        if available < min_units_per_value
-            && !self.input.fill_until(min_units_per_value)?
-        {
+        if available < min_units_per_value && !self.input.fill_until(min_units_per_value)? {
             let available = self.input.unread_len();
             // SAFETY: `available` is the current unread length.
             unsafe {

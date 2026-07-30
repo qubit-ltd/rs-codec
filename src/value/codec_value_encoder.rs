@@ -11,13 +11,10 @@ use core::fmt;
 
 use super::ValueEncoder;
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeErrorOf,
+    CapacityError, Codec, TranscodeEncodeErrorOf,
     codec::assert_unit_bounds,
     value::codec_value_lifecycle::{
-        encode_complete_value_into_reserved,
-        max_complete_encode_units,
+        encode_complete_value_into_reserved, max_complete_encode_units,
     },
 };
 
@@ -157,10 +154,7 @@ where
     /// Panics when the wrapped codec reports more reset or finish output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
-    fn encode(
-        &mut self,
-        input: &C::Value,
-    ) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         let units = max_complete_encode_units::<C>()?;
         let mut output = Vec::with_capacity(units);
         self.encode_into(input, &mut output)?;

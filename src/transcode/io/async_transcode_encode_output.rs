@@ -7,33 +7,14 @@
 // =============================================================================
 //! Buffered asynchronous output driver for streaming transcoders.
 
-use core::{
-    fmt,
-    num::NonZeroUsize,
-};
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-};
+use core::{fmt, num::NonZeroUsize};
+use std::io::{Error, ErrorKind, Result};
 
-use qubit_io::{
-    AsyncBufferedOutput,
-    AsyncOutput,
-    Buffer,
-    UncheckedSlice,
-};
+use qubit_io::{AsyncBufferedOutput, AsyncOutput, Buffer, UncheckedSlice};
 
-use crate::{
-    CapacityError,
-    TranscodeEncoder,
-    Transcoder,
-};
+use crate::{CapacityError, TranscodeEncoder, Transcoder};
 
-use super::transcode_progress_driver::{
-    EncodeStep,
-    encode_progress,
-};
+use super::transcode_progress_driver::{EncodeStep, encode_progress};
 
 /// Buffers asynchronous transcoder output while preserving pending units.
 ///
@@ -194,8 +175,7 @@ where
             .max_reset_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .reset(units, output_index)
@@ -259,8 +239,7 @@ where
         while read_total < count {
             self.ensure_spare_capacity_async(required_spare.get())
                 .await?;
-            let (units, output_index, available_output) =
-                self.output.spare_raw_parts_mut();
+            let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
             debug_assert!(available_output >= required_spare.get());
             let remaining_input = count - read_total;
             let progress = encoder
@@ -286,8 +265,7 @@ where
                 EncodeStep::NeedOutput(required) => {
                     required_spare = required;
                     if read_total == count {
-                        self.ensure_spare_capacity_async(required.get())
-                            .await?;
+                        self.ensure_spare_capacity_async(required.get()).await?;
                     }
                 }
             }
@@ -325,8 +303,7 @@ where
             .max_finish_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .finish(units, output_index)
@@ -341,10 +318,7 @@ where
 
     /// Reserves enough total buffer capacity and makes `count` spare slots
     /// available for one transcoder operation.
-    async fn ensure_spare_capacity_async(
-        &mut self,
-        count: usize,
-    ) -> Result<()> {
+    async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
         let required_capacity = self.output.pending_len().saturating_add(count);
         self.output
             .try_reserve_capacity(required_capacity)

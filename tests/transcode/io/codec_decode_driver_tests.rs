@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    io::Cursor,
-    io::Error,
-};
+use std::{io::Cursor, io::Error};
 
 use qubit_codec::TranscodeDecodeInput;
 

@@ -26,48 +26,25 @@ mod transcode_progress;
 mod transcode_status;
 mod transcoder;
 
-pub use adapter::{
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-};
+pub use adapter::{CodecTranscodeConverter, CodecTranscodeDecoder, CodecTranscodeEncoder};
 pub use capacity_error::CapacityError;
 pub use engine::{
-    DecodeContext,
-    DecodeInvalidAction,
-    DecodeInvalidActionOf,
-    EncodeContext,
-    EncodeUnencodableAction,
-    EncodeUnencodableActionOf,
-    TranscodeConvertEngine,
-    TranscodeDecodeEngine,
-    TranscodeDecodeHooks,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
+    DecodeContext, DecodeInvalidAction, DecodeInvalidActionOf, EncodeContext,
+    EncodeUnencodableAction, EncodeUnencodableActionOf, TranscodeConvertEngine,
+    TranscodeDecodeEngine, TranscodeDecodeHooks, TranscodeEncodeEngine, TranscodeEncodeHooks,
 };
 #[cfg(feature = "io")]
 pub use io::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeEncodeOutput,
-    TranscodeDecodeInput,
+    AsyncTranscodeDecodeInput, AsyncTranscodeEncodeOutput, TranscodeDecodeInput,
     TranscodeEncodeOutput,
 };
 pub use transcode_contract_error::TranscodeContractError;
-pub use transcode_convert_error::{
-    TranscodeConvertError,
-    TranscodeConvertErrorOf,
-};
+pub use transcode_convert_error::{TranscodeConvertError, TranscodeConvertErrorOf};
 pub use transcode_converter::TranscodeConverter;
-pub use transcode_decode_error::{
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-};
+pub use transcode_decode_error::{TranscodeDecodeError, TranscodeDecodeErrorOf};
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_domain_error::TranscodeDomainError;
-pub use transcode_encode_error::{
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-};
+pub use transcode_encode_error::{TranscodeEncodeError, TranscodeEncodeErrorOf};
 pub use transcode_encoder::TranscodeEncoder;
 pub use transcode_failure::TranscodeFailure;
 pub use transcode_progress::TranscodeProgress;

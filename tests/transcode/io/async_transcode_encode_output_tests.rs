@@ -10,20 +10,12 @@ use std::{
     future::Future,
     io,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
+    task::{Context, Poll, Waker},
 };
 
 use qubit_codec::{
-    AsyncTranscodeEncodeOutput,
-    CapacityError,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
+    AsyncTranscodeEncodeOutput, CapacityError, TranscodeEncodeError, TranscodeEncoder,
+    TranscodeProgress, Transcoder,
 };
 use qubit_io::AsyncOutput;
 
@@ -68,10 +60,7 @@ impl AsyncOutput for ChunkedAsyncOutput {
         Poll::Ready(Ok(written))
     }
 
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.flushed = true;
         Poll::Ready(Ok(()))
     }
@@ -100,10 +89,7 @@ impl Transcoder for CopyEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<(), char>;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -111,11 +97,7 @@ impl Transcoder for CopyEncoder {
         Ok(1)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         output[output_index] = b'^';
         Ok(1)
     }
@@ -150,11 +132,7 @@ impl Transcoder for CopyEncoder {
         Ok(1)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         output[output_index] = b'!';
         Ok(1)
     }
@@ -165,25 +143,16 @@ impl TranscodeEncoder for CopyEncoder {
 }
 
 #[test]
-fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending()
--> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
-        ChunkedAsyncOutput::new(1),
-        1,
-    );
+fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending() -> io::Result<()>
+{
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
     complete(output.reset_async(&mut encoder, &mut map_error))?;
     assert_eq!(
         2,
-        complete(output.transcode_async(
-            &mut encoder,
-            &mut map_error,
-            &['a', 'b'],
-            0,
-            2,
-        ))?,
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2,))?,
     );
     complete(output.finish_async(&mut encoder, &mut map_error))?;
     complete(output.flush_async())?;

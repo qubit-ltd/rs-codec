@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CodecTranscodeDecoder,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec::{CodecTranscodeDecoder, TranscodeStatus, Transcoder};
 
 use crate::common::IdentityCodec;
 

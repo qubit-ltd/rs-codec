@@ -6,12 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    DecodeFailure,
-    TranscodeDecodeError,
-    TranscodeDomainError,
-    TranscodeFailure,
-};
+use qubit_codec::{DecodeFailure, TranscodeDecodeError, TranscodeDomainError, TranscodeFailure};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain error")]
@@ -19,8 +14,7 @@ struct DomainError;
 
 #[test]
 fn test_decode_error_wraps_framework_and_domain_errors() {
-    let failure =
-        TranscodeDecodeError::<DomainError>::invalid_input_index(3, 1);
+    let failure = TranscodeDecodeError::<DomainError>::invalid_input_index(3, 1);
     assert_eq!(
         TranscodeDecodeError::Failure(TranscodeFailure::InvalidInputIndex {
             index: 3,
@@ -29,8 +23,7 @@ fn test_decode_error_wraps_framework_and_domain_errors() {
         failure,
     );
 
-    let domain =
-        TranscodeDecodeError::<DomainError>::domain_finish(DomainError);
+    let domain = TranscodeDecodeError::<DomainError>::domain_finish(DomainError);
     assert_eq!(Some(&DomainError), domain.domain_ref());
     assert_eq!(
         Some(&TranscodeDomainError::Finish {
@@ -52,11 +45,7 @@ fn test_decode_error_maps_decode_failure() {
 
     let invalid = DecodeFailure::invalid(DomainError, crate::nz(1));
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(
-            DomainError,
-            5,
-            Some(crate::nz(1)),
-        ),
+        TranscodeDecodeError::domain_main_with_consumed(DomainError, 5, Some(crate::nz(1)),),
         TranscodeDecodeError::from_decode_failure(invalid, 5, 3),
     );
 }
