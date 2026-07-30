@@ -135,6 +135,12 @@ pub use nz::{
     nz,
     nz_const,
 };
+#[cfg(feature = "io")]
+pub use transcode::{
+    AsyncTranscodeEncodeOutput,
+    TranscodeDecodeInput,
+    TranscodeEncodeOutput,
+};
 pub use transcode::{
     CapacityError,
     CodecTranscodeConverter,
@@ -155,11 +161,6 @@ pub use transcode::{
     TranscodeProgress,
     TranscodeStatus,
     Transcoder,
-};
-#[cfg(feature = "io")]
-pub use transcode::{
-    TranscodeDecodeInput,
-    TranscodeEncodeOutput,
 };
 pub use value::{
     CodecValueDecoder,
