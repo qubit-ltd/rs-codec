@@ -27,8 +27,12 @@ use qubit_io::{
 use crate::{
     CapacityError,
     TranscodeEncoder,
-    TranscodeStatus,
     Transcoder,
+};
+
+use super::transcode_progress_driver::{
+    EncodeStep,
+    encode_progress,
 };
 
 /// Buffers asynchronous transcoder output while preserving pending units.
@@ -262,36 +266,29 @@ where
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
-            progress
-                .validate(
-                    input_index + read_total,
-                    remaining_input,
-                    output_index,
-                    available_output,
-                )
-                .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
-            let read = progress.read();
-            let written = progress.written();
+            let progress = encode_progress(
+                progress,
+                input_index + read_total,
+                remaining_input,
+                output_index,
+                available_output,
+            )?;
+            let read = progress.read;
+            let written = progress.written;
             // SAFETY: Progress validation proves the initialized output count
             // fits the current spare range.
             unsafe {
                 self.output.advance(written);
             }
             read_total += read;
-            match progress.status() {
-                TranscodeStatus::Complete => return Ok(read_total),
-                TranscodeStatus::NeedOutput { required, .. } => {
+            match progress.step {
+                EncodeStep::Complete => return Ok(read_total),
+                EncodeStep::NeedOutput(required) => {
                     required_spare = required;
                     if read_total == count {
                         self.ensure_spare_capacity_async(required.get())
                             .await?;
                     }
-                }
-                TranscodeStatus::NeedInput { .. } => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "encoder violated the TranscodeEncoder contract by requesting more input",
-                    ));
                 }
             }
         }

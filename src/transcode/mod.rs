@@ -47,6 +47,7 @@ pub use engine::{
 };
 #[cfg(feature = "io")]
 pub use io::{
+    AsyncTranscodeDecodeInput,
     AsyncTranscodeEncodeOutput,
     TranscodeDecodeInput,
     TranscodeEncodeOutput,

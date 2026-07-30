@@ -137,6 +137,7 @@ pub use nz::{
 };
 #[cfg(feature = "io")]
 pub use transcode::{
+    AsyncTranscodeDecodeInput,
     AsyncTranscodeEncodeOutput,
     TranscodeDecodeInput,
     TranscodeEncodeOutput,

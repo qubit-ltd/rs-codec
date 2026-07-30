@@ -31,12 +31,15 @@ use crate::{
     DecodeLifecycleOutput,
     DecodeLifecycleProgress,
     TranscodeFailure,
-    TranscodeStatus,
     Transcoder,
     codec::assert_decode_lifecycle_bounds,
 };
 
 use super::codec_decode_driver::CodecDecodeDriver;
+use super::transcode_progress_driver::{
+    DecodeStep,
+    decode_progress,
+};
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///
@@ -598,28 +601,27 @@ where
             let progress = decoder
                 .transcode(units, 0, output, output_index + written_total)
                 .map_err(&mut *map_error)?;
-            progress
-                .validate(
-                    0,
-                    available_input,
-                    output_index + written_total,
-                    remaining_output,
-                )
-                .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
-            let consumed = progress.read();
-            let written = progress.written();
+            let progress = decode_progress(
+                progress,
+                0,
+                available_input,
+                output_index + written_total,
+                remaining_output,
+            )?;
+            let consumed = progress.consumed;
+            let written = progress.written;
             self.consume(consumed);
             written_total += written;
-            match progress.status() {
-                TranscodeStatus::Complete => {
+            match progress.step {
+                DecodeStep::Complete => {
                     if written_total == count {
                         return Ok(written_total);
                     }
                 }
-                TranscodeStatus::NeedOutput { .. } => {
+                DecodeStep::NeedOutput => {
                     return Ok(written_total);
                 }
-                TranscodeStatus::NeedInput { required, .. } => {
+                DecodeStep::NeedInput(required) => {
                     if self.fill_until(required.get())? {
                         continue;
                     }

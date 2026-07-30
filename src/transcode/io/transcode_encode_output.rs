@@ -35,12 +35,16 @@ use crate::{
     TranscodeEncodeError,
     TranscodeEncodeErrorOf,
     TranscodeEncoder,
-    TranscodeStatus,
     Transcoder,
     value::codec_value_lifecycle::{
         encode_complete_value_into_reserved,
         max_complete_encode_units,
     },
+};
+
+use super::transcode_progress_driver::{
+    EncodeStep,
+    encode_progress,
 };
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
@@ -449,35 +453,28 @@ where
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
                 .map_err(&mut *map_error)?;
-            progress
-                .validate(
-                    input_index + read_total,
-                    remaining_input,
-                    output_index,
-                    available_output,
-                )
-                .map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
-            let read = progress.read();
-            let written = progress.written();
+            let progress = encode_progress(
+                progress,
+                input_index + read_total,
+                remaining_input,
+                output_index,
+                available_output,
+            )?;
+            let read = progress.read;
+            let written = progress.written;
             // SAFETY: The progress bounds check above proved that the encoder
             // initialized no more than the available spare output window.
             unsafe {
                 self.output.advance(written);
             }
             read_total += read;
-            match progress.status() {
-                TranscodeStatus::Complete => return Ok(read_total),
-                TranscodeStatus::NeedOutput { required, .. } => {
+            match progress.step {
+                EncodeStep::Complete => return Ok(read_total),
+                EncodeStep::NeedOutput(required) => {
                     required_spare = required;
                     if read_total == count {
                         self.ensure_transcode_spare_capacity(required)?;
                     }
-                }
-                TranscodeStatus::NeedInput { .. } => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "encoder violated the TranscodeEncoder contract by requesting more input",
-                    ));
                 }
             }
         }
