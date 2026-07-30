@@ -27,6 +27,12 @@ use qubit_codec::{
 };
 use qubit_io::Input;
 
+#[test]
+fn try_with_capacity_allocates_decode_buffer() {
+    TranscodeDecodeInput::try_with_capacity(Cursor::new(vec![1_u8]), 1)
+        .expect("decode buffer should allocate");
+}
+
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 enum PairDecodeError {
     #[error("bad input index")]

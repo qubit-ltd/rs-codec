@@ -8,6 +8,7 @@
 //! Buffered input driver that decodes units into values.
 
 use core::fmt;
+use std::collections::TryReserveError;
 use std::io::{
     Error,
     ErrorKind,
@@ -91,6 +92,27 @@ where
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
         }
+    }
+
+    /// Creates a decoder input with a unit buffer of at least `capacity`.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Unit input read by this adapter.
+    /// * `capacity` - Requested internal unit buffer capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an allocation error when the requested buffer cannot be
+    /// allocated.
+    #[inline]
+    pub fn try_with_capacity(
+        inner: I,
+        capacity: usize,
+    ) -> std::result::Result<Self, TryReserveError> {
+        Ok(Self {
+            input: BufferedInput::try_with_capacity(inner, capacity)?,
+        })
     }
 
     /// Returns a shared reference to the wrapped unit input.

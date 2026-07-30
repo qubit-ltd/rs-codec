@@ -27,6 +27,12 @@ use qubit_codec::{
 };
 use qubit_io::Output;
 
+#[test]
+fn try_with_capacity_allocates_encode_buffer() {
+    TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), 1)
+        .expect("encode buffer should allocate");
+}
+
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 enum PairEncodeError {
     #[error("bad input index")]
@@ -1524,6 +1530,25 @@ fn test_buffered_encode_output_finish_writes_and_flushes() {
     output
         .flush()
         .expect("explicit flush should be harmless after finish");
+    assert_eq!(&[0xeeee], output.inner().units.as_slice());
+}
+
+#[test]
+fn test_buffered_encode_output_finish_to_buffer_defers_delivery() {
+    let output = UnitOutput::default();
+    let mut encoder = FinishEncoder::default();
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
+    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, u32>) -> Error =
+        map_error;
+
+    output
+        .finish_to_buffer(&mut encoder, &mut mapper)
+        .expect("finish should retain the encoder trailer");
+
+    assert!(output.inner().units.is_empty());
+    output
+        .flush()
+        .expect("flush should deliver the retained trailer");
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
 }
 

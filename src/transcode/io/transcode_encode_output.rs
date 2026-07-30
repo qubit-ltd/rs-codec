@@ -11,6 +11,7 @@ use core::{
     fmt,
     num::NonZeroUsize,
 };
+use std::collections::TryReserveError;
 use std::io::{
     Error,
     ErrorKind,
@@ -100,6 +101,27 @@ where
         Self {
             output: BufferedOutput::with_capacity(inner, capacity),
         }
+    }
+
+    /// Creates an encoder output with a unit buffer of at least `capacity`.
+    ///
+    /// # Parameters
+    ///
+    /// * `inner` - Unit output written by this adapter.
+    /// * `capacity` - Requested internal unit buffer capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an allocation error when the requested buffer cannot be
+    /// allocated.
+    #[inline]
+    pub fn try_with_capacity(
+        inner: O,
+        capacity: usize,
+    ) -> std::result::Result<Self, TryReserveError> {
+        Ok(Self {
+            output: BufferedOutput::try_with_capacity(inner, capacity)?,
+        })
     }
 
     /// Returns a shared reference to the wrapped unit output.
@@ -486,6 +508,38 @@ where
         E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
     {
+        self.finish_to_buffer(encoder, map_error)?;
+        self.output.flush()
+    }
+
+    /// Finishes the encoder while retaining final units in the output buffer.
+    ///
+    /// This method separates encoder finalization from output delivery. It is
+    /// useful when a caller must record successful finalization before a later
+    /// flush can fail. Call [`Self::flush`] to deliver the retained units.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder whose final units are being collected.
+    /// * `map_error` - Function mapping transcode errors into I/O errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns capacity planning, allocation, or transcoder finalization
+    /// errors. It does not perform output I/O.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `encoder` writes more units than its declared finish bound.
+    pub fn finish_to_buffer<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+    ) -> Result<()>
+    where
+        E: Transcoder<Input = Value, Output = O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
         let required = match encoder.max_finish_output_len() {
             Ok(required) => required,
             Err(error) => return Err(capacity_error_to_invalid_data(error)),
@@ -506,7 +560,7 @@ where
         unsafe {
             self.output.advance(written);
         }
-        self.output.flush()
+        Ok(())
     }
 }
 
