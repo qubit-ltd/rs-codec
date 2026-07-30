@@ -9,9 +9,16 @@
 
 use core::fmt;
 
-use super::{DecodeLifecycleOutput, DecodeLifecycleProgress, ValueDecoder};
+use super::{
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
+    ValueDecoder,
+};
 use crate::{
-    Codec, TranscodeDecodeErrorOf, TranscodeFailure, codec::assert_decode_lifecycle_bounds,
+    Codec,
+    TranscodeDecodeErrorOf,
+    TranscodeFailure,
+    codec::assert_decode_lifecycle_bounds,
     value::codec_value_lifecycle::decode_exact_complete_value,
 };
 
@@ -90,10 +97,18 @@ where
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length.
-    pub fn decode(&mut self, input: &[C::Unit]) -> Result<C::Value, TranscodeDecodeErrorOf<C>> {
+    pub fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>> {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()?;
         let (value, reset_written, finish_written) =
-            decode_exact_complete_value(&mut self.codec, input, &mut [], &mut [])?;
+            decode_exact_complete_value(
+                &mut self.codec,
+                input,
+                &mut [],
+                &mut [],
+            )?;
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
         Ok(value)
@@ -167,9 +182,15 @@ where
         input: &[C::Unit],
         reset_output: &mut [C::Value],
         finish_output: &mut [C::Value],
-    ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>> {
+    ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>>
+    {
         let (value, reset_written, finish_written) =
-            decode_exact_complete_value(&mut self.codec, input, reset_output, finish_output)?;
+            decode_exact_complete_value(
+                &mut self.codec,
+                input,
+                reset_output,
+                finish_output,
+            )?;
         Ok(DecodeLifecycleProgress::new(
             value,
             reset_written,
@@ -186,7 +207,10 @@ where
     type Error = TranscodeDecodeErrorOf<C>;
 
     #[inline(always)]
-    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
+    fn decode(
+        &mut self,
+        input: &[C::Unit],
+    ) -> Result<Self::Output, Self::Error> {
         self.decode(input)
     }
 }

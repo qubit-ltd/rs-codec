@@ -7,7 +7,11 @@
 // =============================================================================
 //! Tests encode outcomes through the public encoder-engine boundary.
 
-use qubit_codec::{CodecTranscodeEncoder, TranscodeStatus, Transcoder};
+use qubit_codec::{
+    CodecTranscodeEncoder,
+    TranscodeStatus,
+    Transcoder,
+};
 
 use crate::common::IdentityCodec;
 

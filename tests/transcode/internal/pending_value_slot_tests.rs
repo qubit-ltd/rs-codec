@@ -6,13 +6,17 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{CodecTranscodeConverter, TranscodeStatus};
+use qubit_codec::{
+    CodecTranscodeConverter,
+    TranscodeStatus,
+};
 
 use crate::common::IdentityCodec;
 
 #[test]
 fn test_pending_value_slot_drains_before_reading_more_input() {
-    let mut converter = CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
+    let mut converter =
+        CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
     let first = converter
         .transcode(&[13], 0, &mut [], 0)
         .expect("short output should retain the decoded value");

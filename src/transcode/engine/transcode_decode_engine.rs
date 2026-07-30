@@ -10,14 +10,27 @@
 use core::num::NonZeroUsize;
 
 use super::super::internal::{
-    applied_decode_invalid_action::AppliedDecodeInvalidAction, decode_state::DecodeState,
+    applied_decode_invalid_action::AppliedDecodeInvalidAction,
+    decode_state::DecodeState,
     lifecycle_guard::LifecycleGuard,
 };
-use super::{DecodeContext, DecodeInvalidAction, DecodeOutcome, TranscodeDecodeHooks};
+use super::{
+    DecodeContext,
+    DecodeInvalidAction,
+    DecodeOutcome,
+    TranscodeDecodeHooks,
+};
 use crate::codec::assert_unit_bounds;
 use crate::{
-    CapacityError, Codec, DecodeFailure, TranscodeDecodeError, TranscodeDecodeErrorOf,
-    TranscodeDecoder, TranscodeFailure, TranscodeProgress, Transcoder,
+    CapacityError,
+    Codec,
+    DecodeFailure,
+    TranscodeDecodeError,
+    TranscodeDecodeErrorOf,
+    TranscodeDecoder,
+    TranscodeFailure,
+    TranscodeProgress,
+    Transcoder,
 };
 
 /// Reusable buffered decoding engine for codec-backed decoders.
@@ -161,7 +174,10 @@ pub struct TranscodeDecodeEngine<C, H> {
 }
 
 /// Adds two independent decoded-value capacity bounds.
-fn add_decode_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
+fn add_decode_output_bounds(
+    first: usize,
+    second: usize,
+) -> Result<usize, CapacityError> {
     first
         .checked_add(second)
         .ok_or(CapacityError::OutputLengthOverflow)
@@ -286,7 +302,10 @@ where
     /// overflow.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
 
@@ -338,7 +357,10 @@ where
     /// arithmetic overflow.
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
-    pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_total_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
         sum_decode_output_bounds(C::MAX_DECODE_RESET_VALUES, transcode, finish)
@@ -372,7 +394,11 @@ where
     ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
-        TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
+        TranscodeFailure::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -426,7 +452,8 @@ where
         let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE)
             .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
         let min_units_len = min_units.get();
-        let mut state = DecodeState::new(input, input_index, output, output_index);
+        let mut state =
+            DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
             let context = state.context();
             let available = context.available();
@@ -438,13 +465,14 @@ where
             }
             let output_index = state.output_cursor();
             let output = state.output_mut();
-            let (outcome, _) = self.decode_one(input, context, |value, _input_index| {
-                // SAFETY: `needs_output()` returned false, so the output
-                // cursor points at a writable initialized slot.
-                unsafe {
-                    *output.get_unchecked_mut(output_index) = value;
-                }
-            })?;
+            let (outcome, _) =
+                self.decode_one(input, context, |value, _input_index| {
+                    // SAFETY: `needs_output()` returned false, so the output
+                    // cursor points at a writable initialized slot.
+                    unsafe {
+                        *output.get_unchecked_mut(output_index) = value;
+                    }
+                })?;
             if let Some(progress) = state.apply_decode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -491,16 +519,23 @@ where
     ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_finish_attempt()?;
         let required = self.max_finish_output_len()?;
-        TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
-        let finished = unsafe { self.codec.decode_finish(output, output_index) }
-            .map_err(TranscodeDecodeError::domain_finish)?;
+        TranscodeFailure::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
+        let finished =
+            unsafe { self.codec.decode_finish(output, output_index) }
+                .map_err(TranscodeDecodeError::domain_finish)?;
         assert!(
             finished <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
         );
-        let written = self
-            .hooks
-            .finish_hooks(&mut self.codec, output, output_index + finished)?;
+        let written = self.hooks.finish_hooks(
+            &mut self.codec,
+            output,
+            output_index + finished,
+        )?;
         assert!(
             finished + written <= required,
             "TranscodeDecodeEngine hook wrote beyond its finish bound",
@@ -618,11 +653,13 @@ where
                     context,
                 )? {
                     DecodeInvalidAction::Reject => {
-                        return Err(TranscodeDecodeError::domain_main_with_consumed(
-                            source,
-                            context.input_index(),
-                            consumed,
-                        ));
+                        return Err(
+                            TranscodeDecodeError::domain_main_with_consumed(
+                                source,
+                                context.input_index(),
+                                consumed,
+                            ),
+                        );
                     }
                     DecodeInvalidAction::Skip { consumed } => {
                         AppliedDecodeInvalidAction::Skip { consumed }
@@ -647,13 +684,17 @@ where
     {
         match action {
             AppliedDecodeInvalidAction::Skip { consumed } => {
-                let read =
-                    DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(
+                    consumed,
+                    context.available(),
+                );
                 (DecodeOutcome::skipped(read), None)
             }
             AppliedDecodeInvalidAction::Emit { value, consumed } => {
-                let read =
-                    DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(
+                    consumed,
+                    context.available(),
+                );
                 let consumed_value = consume(value, context.input_index());
                 (
                     DecodeOutcome::emitted(read, NonZeroUsize::MIN),
@@ -676,7 +717,10 @@ where
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_transcode_output_len(self, input_len)
     }
 
@@ -712,7 +756,13 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        TranscodeDecodeEngine::transcode(self, input, input_index, output, output_index)
+        TranscodeDecodeEngine::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.

@@ -7,12 +7,26 @@
 // =============================================================================
 //! Baseline benchmarks for the generic `Transcoder` lifecycle.
 
-use std::{convert::Infallible, hint::black_box, time::Duration};
+use std::{
+    convert::Infallible,
+    hint::black_box,
+    time::Duration,
+};
 
 use criterion::{
-    BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main, measurement::WallTime,
+    BenchmarkGroup,
+    Criterion,
+    Throughput,
+    criterion_group,
+    criterion_main,
+    measurement::WallTime,
 };
-use qubit_codec::{CapacityError, TranscodeDecodeError, TranscodeProgress, Transcoder};
+use qubit_codec::{
+    CapacityError,
+    TranscodeDecodeError,
+    TranscodeProgress,
+    Transcoder,
+};
 
 const FIXTURE_LEN: usize = 64 * 1024;
 const SAMPLE_SIZE: usize = 20;
@@ -26,11 +40,18 @@ impl Transcoder for CopyTranscoder {
     type Output = u8;
     type Error = TranscodeDecodeError<Infallible>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -58,13 +79,20 @@ impl Transcoder for CopyTranscoder {
         }
     }
 
-    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }
 
 /// Benchmarks direct and complete-lifecycle transcode paths.
-fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
+fn bench_complete_paths(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    input: &[u8],
+) {
     let mut transcoder = CopyTranscoder;
     let mut output = vec![0_u8; input.len()];
     group.bench_function("direct", |bencher| {
@@ -79,7 +107,10 @@ fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) 
     group.bench_function("complete_lifecycle", |bencher| {
         bencher.iter(|| {
             let written = transcoder
-                .transcode_complete_into(black_box(input), output.as_mut_slice())
+                .transcode_complete_into(
+                    black_box(input),
+                    output.as_mut_slice(),
+                )
                 .expect("copy transcoder is infallible");
             black_box((written, output[0]));
         });
@@ -87,7 +118,10 @@ fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) 
 }
 
 /// Benchmarks the same conversion under intentionally small output windows.
-fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
+fn bench_streaming_windows(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    input: &[u8],
+) {
     for window in [32_usize, 1024] {
         let name = format!("output_window_{window}");
         group.bench_function(name, |bencher| {
@@ -98,7 +132,12 @@ fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
                 let mut written_total = 0;
                 while input_index < input.len() {
                     let progress = transcoder
-                        .transcode(black_box(input), input_index, output.as_mut_slice(), 0)
+                        .transcode(
+                            black_box(input),
+                            input_index,
+                            output.as_mut_slice(),
+                            0,
+                        )
                         .expect("copy transcoder is infallible");
                     input_index += progress.read();
                     written_total += progress.written();

@@ -12,5 +12,8 @@ mod codec;
 mod decode_failure;
 
 pub use codec::Codec;
-pub(crate) use codec::{assert_decode_lifecycle_bounds, assert_unit_bounds};
+pub(crate) use codec::{
+    assert_decode_lifecycle_bounds,
+    assert_unit_bounds,
+};
 pub use decode_failure::DecodeFailure;

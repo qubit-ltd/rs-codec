@@ -26,8 +26,12 @@ fn test_encode_context_getters_and_parts() {
     output[2] = 3;
     let _ = output;
 
-    let (context_input_value, context_input_index, context_output, context_output_index) =
-        context.into_parts();
+    let (
+        context_input_value,
+        context_input_index,
+        context_output,
+        context_output_index,
+    ) = context.into_parts();
 
     assert_eq!(0x8d_u8, *context_input_value);
     assert_eq!(11, context_input_index);
