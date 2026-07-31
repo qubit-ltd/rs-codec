@@ -78,6 +78,24 @@ impl AsyncInput for ChunkedAsyncInput {
     }
 }
 
+/// Input that fails every attempted read.
+#[derive(Debug, Default)]
+struct FailingAsyncInput;
+
+impl AsyncInput for FailingAsyncInput {
+    type Item = u8;
+
+    unsafe fn poll_read_unchecked(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _output: &mut [u8],
+        _index: usize,
+        _count: usize,
+    ) -> Poll<io::Result<usize>> {
+        Poll::Ready(Err(io::Error::other("input failure")))
+    }
+}
+
 /// Polls a future to completion without requiring an asynchronous runtime.
 fn complete<F>(future: F) -> F::Output
 where
@@ -168,6 +186,110 @@ impl Transcoder for PairDecoder {
         _output_index: usize,
     ) -> Result<usize, Self::Error> {
         Ok(0)
+    }
+}
+
+/// Decoder with observable lifecycle output.
+#[derive(Debug, Default)]
+struct LifecycleDecoder;
+
+impl Transcoder for LifecycleDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, qubit_codec::CapacityError> {
+        Ok(0)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+        Ok(1)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        output[output_index] = 0xaaaa;
+        Ok(1)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        input_index: usize,
+        _output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::complete(input_index, output_index))
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+        Ok(1)
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        output[output_index] = 0xbbbb;
+        Ok(1)
+    }
+}
+
+/// Decoder whose lifecycle capacity query fails.
+#[derive(Debug, Default)]
+struct CapacityFailingDecoder;
+
+impl Transcoder for CapacityFailingDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, qubit_codec::CapacityError> {
+        Ok(0)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+        Err(qubit_codec::CapacityError::OutputLengthOverflow)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity failure prevents reset")
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::complete(0, 0))
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+        Err(qubit_codec::CapacityError::OutputLengthOverflow)
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("capacity failure prevents finish")
     }
 }
 
@@ -350,5 +472,187 @@ fn test_async_transcode_decode_input_rejects_invalid_progress() -> io::Result<()
     .expect_err("invalid progress must be rejected");
 
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    Ok(())
+}
+
+/// Verifies buffered-input operations preserve the unread window.
+#[test]
+fn test_async_transcode_decode_input_exposes_buffer_operations() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(
+        vec![0x12, 0x34],
+        2,
+    ));
+
+    assert!(AsyncInput::is_buffered(&input));
+    assert_eq!(0, input.unread_len());
+    assert!(complete(input.fill_more_async())?);
+    assert_eq!([0x12, 0x34], input.unread());
+
+    let mut copied = [0_u8; 3];
+    // SAFETY: The destination range and unread count both fit the buffers.
+    unsafe {
+        input.copy_unread_to(&mut copied, 1, 2);
+    }
+    assert_eq!([0, 0x12, 0x34], copied);
+    input.consume(1);
+    assert_eq!([0x34], input.unread());
+
+    input.inner_mut().max_chunk = 1;
+    assert_eq!(1, input.inner().max_chunk);
+    let (inner, unread) = input.into_parts();
+    assert_eq!(2, inner.position);
+    assert_eq!([0x34], unread.readable());
+    Ok(())
+}
+
+/// Verifies constructor capacity requests and EOF refill behavior.
+#[test]
+fn test_async_transcode_decode_input_capacity_and_eof() -> io::Result<()> {
+    let input = AsyncTranscodeDecodeInput::try_with_capacity(
+        ChunkedAsyncInput::new(Vec::new(), 1),
+        3,
+    )?;
+    assert!(input.capacity() >= 3);
+    assert!(format!("{input:?}").contains("AsyncTranscodeDecodeInput"));
+
+    assert!(AsyncTranscodeDecodeInput::try_with_capacity(
+        ChunkedAsyncInput::new(Vec::new(), 1),
+        usize::MAX,
+    )
+    .is_err());
+
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(
+        ChunkedAsyncInput::new(vec![0x12], 1),
+        1,
+    );
+    assert!(!complete(input.fill_until_async(2))?);
+    assert_eq!([0x12], input.unread());
+    assert!(!complete(input.fill_more_async())?);
+    Ok(())
+}
+
+/// Verifies zero-length decode operations and invalid destination ranges.
+#[test]
+fn test_async_transcode_decode_input_validates_output_range() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(
+        Vec::new(),
+        1,
+    ));
+    let mut decoder = PairDecoder;
+    let mut map_error =
+        |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    assert_eq!(
+        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::complete(0, 0)),
+        complete(input.transcode_async(
+            &mut decoder,
+            &mut map_error,
+            &mut output,
+            0,
+            0,
+        ))?,
+    );
+    let error = complete(input.transcode_async(
+        &mut decoder,
+        &mut map_error,
+        &mut output,
+        1,
+        1,
+    ))
+    .expect_err("invalid output range must fail");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    Ok(())
+}
+
+/// Verifies lifecycle output uses the caller's indexed destination range.
+#[test]
+fn test_async_transcode_decode_input_runs_decoder_lifecycle() -> io::Result<()> {
+    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut decoder = LifecycleDecoder;
+    let mut map_error =
+        |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 3];
+
+    assert_eq!(1, input.reset(&mut decoder, &mut map_error, &mut output, 1, 1)?);
+    assert_eq!(1, input.finish(&mut decoder, &mut map_error, &mut output, 2, 1)?);
+    assert_eq!([0, 0xaaaa, 0xbbbb], output);
+    let error = input
+        .reset(&mut decoder, &mut map_error, &mut output, 0, 0)
+        .expect_err("short reset output must fail");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    let error = input
+        .reset(&mut decoder, &mut map_error, &mut output, 3, 1)
+        .expect_err("invalid reset output range must fail");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    let error = input
+        .finish(&mut decoder, &mut map_error, &mut output, 0, 0)
+        .expect_err("short finish output must fail");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    let error = input
+        .finish(&mut decoder, &mut map_error, &mut output, 3, 1)
+        .expect_err("invalid finish output range must fail");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    Ok(())
+}
+
+/// Verifies async input reads and EOF steps delegate through the wrapper.
+#[test]
+fn test_async_transcode_decode_input_reads_and_reports_eof() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(vec![0x12], 1));
+    let mut units = [0_u8; 1];
+    assert_eq!(1, complete(input.read_async(&mut units))?);
+    assert_eq!([0x12], units);
+
+    let mut decoder = PairDecoder;
+    let mut map_error =
+        |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+    assert_eq!(
+        AsyncTranscodeDecodeStep::EndOfInput,
+        complete(input.transcode_async(
+            &mut decoder,
+            &mut map_error,
+            &mut output,
+            0,
+            1,
+        ))?,
+    );
+    Ok(())
+}
+
+/// Verifies decoder capacity failures become invalid-data I/O errors.
+#[test]
+fn test_async_transcode_decode_input_maps_lifecycle_capacity_errors()
+-> io::Result<()> {
+    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut decoder = CapacityFailingDecoder;
+    let mut map_error =
+        |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    let reset = input
+        .reset(&mut decoder, &mut map_error, &mut output, 0, 1)
+        .expect_err("capacity failure must be mapped");
+    assert_eq!(io::ErrorKind::InvalidData, reset.kind());
+    let finish = input
+        .finish(&mut decoder, &mut map_error, &mut output, 0, 1)
+        .expect_err("capacity failure must be mapped");
+    assert_eq!(io::ErrorKind::InvalidData, finish.kind());
+    Ok(())
+}
+
+/// Verifies refill failures and impossible capacity requests retain I/O errors.
+#[test]
+fn test_async_transcode_decode_input_maps_refill_errors() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(FailingAsyncInput);
+    let error = complete(input.fill_more_async())
+        .expect_err("input failure must be preserved");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let error = complete(input.fill_until_async(usize::MAX))
+        .expect_err("impossible capacity must fail");
+    assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
     Ok(())
 }

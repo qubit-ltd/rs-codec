@@ -33,6 +33,7 @@ struct ChunkedAsyncOutput {
     max_chunk: usize,
     pending: bool,
     flushed: bool,
+    failed: bool,
 }
 
 impl ChunkedAsyncOutput {
@@ -43,6 +44,7 @@ impl ChunkedAsyncOutput {
             max_chunk,
             pending: true,
             flushed: false,
+            failed: false,
         }
     }
 }
@@ -57,6 +59,9 @@ impl AsyncOutput for ChunkedAsyncOutput {
         index: usize,
         count: usize,
     ) -> Poll<io::Result<usize>> {
+        if self.failed {
+            return Poll::Ready(Err(io::Error::other("output failure")));
+        }
         if self.pending {
             self.pending = false;
             cx.waker().wake_by_ref();
@@ -173,6 +178,59 @@ impl TranscodeEncoder for CopyEncoder {
     type EncodeError = ();
 }
 
+/// Encoder whose capacity query fails before writing output.
+#[derive(Debug, Default)]
+struct CapacityFailingEncoder {
+    maximum: bool,
+}
+
+impl Transcoder for CapacityFailingEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), char>;
+
+    fn max_transcode_output_len(
+        &self,
+        _input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        if self.maximum {
+            Ok(usize::MAX)
+        } else {
+            Err(CapacityError::OutputLengthOverflow)
+        }
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        unreachable!("capacity failure prevents transcoding")
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for CapacityFailingEncoder {
+    type EncodeError = ();
+}
+
 #[test]
 fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending()
 -> io::Result<()> {
@@ -244,5 +302,126 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending()
     drop(future);
 
     assert_eq!(1, output.pending_len());
+    Ok(())
+}
+
+/// Verifies constructors and draining expose buffered output state correctly.
+#[test]
+fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<()> {
+    let output = AsyncTranscodeEncodeOutput::try_with_capacity(
+        ChunkedAsyncOutput::new(1),
+        3,
+    )?;
+    assert!(output.capacity() >= 3);
+    assert_eq!(0, output.pending_len());
+    assert!(format!("{output:?}").contains("AsyncTranscodeEncodeOutput"));
+    assert!(AsyncTranscodeEncodeOutput::try_with_capacity(
+        ChunkedAsyncOutput::new(1),
+        usize::MAX,
+    )
+    .is_err());
+
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
+        ChunkedAsyncOutput::new(1),
+        1,
+    );
+    let mut encoder = CopyEncoder;
+    let mut map_error = |_| io::Error::other("copy encoder cannot fail");
+    complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))?;
+    assert_eq!(1, output.pending_len());
+    complete(output.drain_async())?;
+    assert_eq!(0, output.pending_len());
+    assert_eq!(b"a", output.inner().bytes.as_slice());
+    output.inner_mut().flushed = true;
+    assert!(output.inner().flushed);
+    Ok(())
+}
+
+/// Verifies zero-length encode operations and invalid source ranges.
+#[test]
+fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = CopyEncoder;
+    let mut map_error = |_| io::Error::other("copy encoder cannot fail");
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        complete(output.transcode_async(
+            &mut encoder,
+            &mut map_error,
+            &['a'],
+            0,
+            0,
+        ))?,
+    );
+    let error = complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        1,
+        1,
+    ))
+    .expect_err("invalid input range must fail");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    Ok(())
+}
+
+/// Verifies capacity planning failures cross the asynchronous I/O boundary.
+#[test]
+fn test_async_transcode_encode_output_maps_capacity_errors() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = CapacityFailingEncoder::default();
+    let mut map_error = |_| io::Error::other("encoder cannot reach domain failure");
+
+    let error = complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))
+    .expect_err("capacity failure must cross the I/O boundary");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    encoder.maximum = true;
+    let error = complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))
+    .expect_err("impossible spare capacity must fail");
+    assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
+    Ok(())
+}
+
+/// Verifies asynchronous output delivery failures remain visible to callers.
+#[test]
+fn test_async_transcode_encode_output_propagates_delivery_errors() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
+        ChunkedAsyncOutput::new(1),
+        1,
+    );
+    let mut encoder = CopyEncoder;
+    let mut map_error = |_| io::Error::other("copy encoder cannot fail");
+
+    complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))?;
+    output.inner_mut().failed = true;
+
+    let error = complete(output.drain_async())
+        .expect_err("delivery error must be preserved");
+    assert_eq!(io::ErrorKind::Other, error.kind());
     Ok(())
 }
