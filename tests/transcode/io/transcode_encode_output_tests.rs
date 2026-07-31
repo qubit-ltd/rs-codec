@@ -73,7 +73,9 @@ impl Codec for CompleteEncodeLifecycleCodec {
     type EncodeError = PairEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_RESET_UNITS: usize = 1;
     const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
@@ -134,7 +136,9 @@ impl Codec for ResetWidthCodec {
     type EncodeError = PairEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     fn encode_len(&self, _value: &u32) -> usize {
         if self.reset {
@@ -1780,7 +1784,9 @@ impl Codec for ScriptedEncodeCodec {
     type EncodeError = PairEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
     const MAX_ENCODE_RESET_UNITS: usize = 1;
     const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
@@ -1957,7 +1963,9 @@ impl Codec for OverflowEncodeBoundCodec {
     type EncodeError = PairEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
     const MAX_ENCODE_RESET_UNITS: usize = usize::MAX;
     const MAX_ENCODE_FINISH_UNITS: usize = usize::MAX;
 
@@ -2019,7 +2027,7 @@ fn test_buffered_encode_output_write_encoded_reports_output_bound_overflow() {
 
 #[test]
 #[should_panic(
-    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE"
 )]
 fn test_buffered_encode_output_write_encoded_rejects_width_beyond_bound() {
     let mut output =
@@ -2033,7 +2041,7 @@ fn test_buffered_encode_output_write_encoded_rejects_width_beyond_bound() {
 
 #[test]
 #[should_panic(
-    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE"
 )]
 fn test_buffered_encode_output_write_encoded_rejects_width_beyond_bound_via_scratch()
  {

@@ -134,7 +134,8 @@ fn assert_reserved_output_drained(
 ///     type EncodeError = Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
-///     const MAX_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -162,7 +163,8 @@ fn assert_reserved_output_drained(
 ///     type EncodeError = Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
-///     const MAX_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -283,9 +285,9 @@ where
     ///
     /// # Compile-Time Checks
     ///
-    /// Fails to compile when either codec declares zero unit bounds or when
-    /// [`Codec::MIN_UNITS_PER_VALUE`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Fails to compile when either codec declares a zero decode unit bound or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(
@@ -529,7 +531,9 @@ where
     /// # Errors
     ///
     /// Returns a converter error if reset validation or target reset output
-    /// emission fails.
+    /// emission fails. Capacity and index failures occur before converter state
+    /// is changed. Once reset execution starts, an error poisons the converter
+    /// until a later reset succeeds.
     ///
     /// # Panics
     ///
@@ -543,13 +547,13 @@ where
     where
         D::Value: Default,
     {
-        self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
+        self.lifecycle.on_reset_start();
 
         self.pending.clear();
 
@@ -565,6 +569,7 @@ where
             .reset(state.output_mut(), output_cursor)?;
         state.advance_output(encoder_written);
         self.drain_decoder_reset(&mut state)?;
+        self.lifecycle.on_reset_success();
         Ok(state.written())
     }
 
@@ -593,7 +598,9 @@ where
     /// Returns hook errors when indices are invalid or concrete conversion
     /// fails. Invalid output indices are reported through the encode-side
     /// error path. Returns [`TranscodeFailure::TranscodeAfterFinish`] when the
-    /// logical stream was already finished and has not been reset.
+    /// logical stream was already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started.
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -667,7 +674,11 @@ where
     /// Returns a converter error when output capacity checks fail or when
     /// hook finalization fails. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
-    /// already finished and has not been reset.
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started. Capacity and index failures occur before
+    /// finish execution and remain retryable; later failures poison the
+    /// converter until reset succeeds.
     ///
     /// # Panics
     ///
@@ -688,6 +699,7 @@ where
             output_index,
             required,
         )?;
+        self.lifecycle.on_finish_start();
 
         let empty_input: &[D::Unit] = &[];
         let mut state = ConvertState::new(empty_input, 0, output, output_index);

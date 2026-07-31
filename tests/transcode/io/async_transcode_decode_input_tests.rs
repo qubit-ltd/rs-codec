@@ -205,7 +205,9 @@ impl Transcoder for LifecycleDecoder {
         Ok(0)
     }
 
-    fn max_reset_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_reset_output_len(
+        &self,
+    ) -> Result<usize, qubit_codec::CapacityError> {
         Ok(1)
     }
 
@@ -228,7 +230,9 @@ impl Transcoder for LifecycleDecoder {
         Ok(TranscodeProgress::complete(input_index, output_index))
     }
 
-    fn max_finish_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_finish_output_len(
+        &self,
+    ) -> Result<usize, qubit_codec::CapacityError> {
         Ok(1)
     }
 
@@ -258,7 +262,9 @@ impl Transcoder for CapacityFailingDecoder {
         Ok(0)
     }
 
-    fn max_reset_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_reset_output_len(
+        &self,
+    ) -> Result<usize, qubit_codec::CapacityError> {
         Err(qubit_codec::CapacityError::OutputLengthOverflow)
     }
 
@@ -280,7 +286,9 @@ impl Transcoder for CapacityFailingDecoder {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
-    fn max_finish_output_len(&self) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_finish_output_len(
+        &self,
+    ) -> Result<usize, qubit_codec::CapacityError> {
         Err(qubit_codec::CapacityError::OutputLengthOverflow)
     }
 
@@ -477,7 +485,8 @@ fn test_async_transcode_decode_input_rejects_invalid_progress() -> io::Result<()
 
 /// Verifies buffered-input operations preserve the unread window.
 #[test]
-fn test_async_transcode_decode_input_exposes_buffer_operations() -> io::Result<()> {
+fn test_async_transcode_decode_input_exposes_buffer_operations()
+-> io::Result<()> {
     let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(
         vec![0x12, 0x34],
         2,
@@ -515,11 +524,13 @@ fn test_async_transcode_decode_input_capacity_and_eof() -> io::Result<()> {
     assert!(input.capacity() >= 3);
     assert!(format!("{input:?}").contains("AsyncTranscodeDecodeInput"));
 
-    assert!(AsyncTranscodeDecodeInput::try_with_capacity(
-        ChunkedAsyncInput::new(Vec::new(), 1),
-        usize::MAX,
-    )
-    .is_err());
+    assert!(
+        AsyncTranscodeDecodeInput::try_with_capacity(
+            ChunkedAsyncInput::new(Vec::new(), 1),
+            usize::MAX,
+        )
+        .is_err()
+    );
 
     let mut input = AsyncTranscodeDecodeInput::with_capacity(
         ChunkedAsyncInput::new(vec![0x12], 1),
@@ -533,11 +544,10 @@ fn test_async_transcode_decode_input_capacity_and_eof() -> io::Result<()> {
 
 /// Verifies zero-length decode operations and invalid destination ranges.
 #[test]
-fn test_async_transcode_decode_input_validates_output_range() -> io::Result<()> {
-    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(
-        Vec::new(),
-        1,
-    ));
+fn test_async_transcode_decode_input_validates_output_range() -> io::Result<()>
+{
+    let mut input =
+        AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
     let mut decoder = PairDecoder;
     let mut map_error =
         |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -567,15 +577,23 @@ fn test_async_transcode_decode_input_validates_output_range() -> io::Result<()> 
 
 /// Verifies lifecycle output uses the caller's indexed destination range.
 #[test]
-fn test_async_transcode_decode_input_runs_decoder_lifecycle() -> io::Result<()> {
-    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+fn test_async_transcode_decode_input_runs_decoder_lifecycle() -> io::Result<()>
+{
+    let input =
+        AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
     let mut decoder = LifecycleDecoder;
     let mut map_error =
         |error| io::Error::new(io::ErrorKind::InvalidData, error);
     let mut output = [0_u16; 3];
 
-    assert_eq!(1, input.reset(&mut decoder, &mut map_error, &mut output, 1, 1)?);
-    assert_eq!(1, input.finish(&mut decoder, &mut map_error, &mut output, 2, 1)?);
+    assert_eq!(
+        1,
+        input.reset(&mut decoder, &mut map_error, &mut output, 1, 1)?
+    );
+    assert_eq!(
+        1,
+        input.finish(&mut decoder, &mut map_error, &mut output, 2, 1)?
+    );
     assert_eq!([0, 0xaaaa, 0xbbbb], output);
     let error = input
         .reset(&mut decoder, &mut map_error, &mut output, 0, 0)
@@ -599,7 +617,8 @@ fn test_async_transcode_decode_input_runs_decoder_lifecycle() -> io::Result<()> 
 /// Verifies async input reads and EOF steps delegate through the wrapper.
 #[test]
 fn test_async_transcode_decode_input_reads_and_reports_eof() -> io::Result<()> {
-    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(vec![0x12], 1));
+    let mut input =
+        AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(vec![0x12], 1));
     let mut units = [0_u8; 1];
     assert_eq!(1, complete(input.read_async(&mut units))?);
     assert_eq!([0x12], units);
@@ -625,7 +644,8 @@ fn test_async_transcode_decode_input_reads_and_reports_eof() -> io::Result<()> {
 #[test]
 fn test_async_transcode_decode_input_maps_lifecycle_capacity_errors()
 -> io::Result<()> {
-    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let input =
+        AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
     let mut decoder = CapacityFailingDecoder;
     let mut map_error =
         |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -650,7 +670,8 @@ fn test_async_transcode_decode_input_maps_refill_errors() -> io::Result<()> {
         .expect_err("input failure must be preserved");
     assert_eq!(io::ErrorKind::Other, error.kind());
 
-    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut input =
+        AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
     let error = complete(input.fill_until_async(usize::MAX))
         .expect_err("impossible capacity must fail");
     assert_eq!(io::ErrorKind::OutOfMemory, error.kind());

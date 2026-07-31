@@ -31,6 +31,7 @@ use crate::{
     DecodeLifecycleOutput,
     DecodeLifecycleProgress,
     TranscodeFailure,
+    TranscodeProgress,
     TranscodeStatus,
     Transcoder,
     codec::assert_decode_lifecycle_bounds,
@@ -178,6 +179,58 @@ where
                 .map_err(allocation_to_io_error)?;
         }
         self.input.fill_until(count)
+    }
+
+    /// Performs one decode step and preserves the transcoder stop status.
+    ///
+    /// `None` means that the wrapped input reached EOF with no buffered units.
+    /// Consumed input is committed before this method returns. Callers can use
+    /// the returned [`TranscodeProgress`] to distinguish `NeedOutput` from an
+    /// incomplete input tail without guessing from the unread buffer alone.
+    pub fn transcode_step<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<Option<TranscodeProgress>>
+    where
+        D: Transcoder<Input = I::Item, Output = Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        let output_end = UncheckedSlice::checked_range_end(
+            output.len(),
+            output_index,
+            count,
+            "decoded output range exceeds destination buffer",
+        )?;
+        if count == 0 {
+            return Ok(Some(TranscodeProgress::complete(0, 0)));
+        }
+        if self.unread_len() == 0 && !self.fill_more()? {
+            return Ok(None);
+        }
+        let available_input = self.unread_len();
+        let progress = decoder
+            .transcode(
+                self.unread(),
+                0,
+                &mut output[..output_end],
+                output_index,
+            )
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
+            })?;
+        self.consume(progress.read());
+        Ok(Some(progress))
     }
 
     /// Consumes unread units from the current buffer window.

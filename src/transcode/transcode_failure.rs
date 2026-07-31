@@ -116,6 +116,12 @@ pub enum TranscodeFailure {
     /// `finish` was called after the logical stream was already finished.
     #[error("finish called twice without an intervening reset")]
     FinishAfterFinish,
+
+    /// Reset or finish failed after codec, hook, or buffered state may have
+    /// changed. Continuing could repeat side effects or observe inconsistent
+    /// state; a successful reset is required before further use.
+    #[error("transcoder lifecycle is poisoned; a successful reset is required")]
+    LifecyclePoisoned,
 }
 
 impl TranscodeFailure {

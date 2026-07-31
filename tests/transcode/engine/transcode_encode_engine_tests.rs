@@ -35,7 +35,9 @@ impl Codec for WideCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 0
@@ -77,6 +79,56 @@ impl Codec for WideCodec {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FullyBufferedCodec;
+
+impl Codec for FullyBufferedCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 0;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FullyBufferedHooks;
+
+impl TranscodeEncodeHooks<FullyBufferedCodec> for FullyBufferedHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut FullyBufferedCodec,
+        _context: &EncodeContext<'_, u8, u8>,
+    ) -> Result<
+        EncodeUnencodableAction<u8>,
+        qubit_codec::TranscodeEncodeErrorOf<FullyBufferedCodec>,
+    > {
+        Ok(EncodeUnencodableAction::Reject)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct OverlongEncodeLenCodec;
 
 impl Codec for OverlongEncodeLenCodec {
@@ -87,7 +139,9 @@ impl Codec for OverlongEncodeLenCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 0
@@ -228,7 +282,9 @@ impl Codec for ReplacementEncodeFailCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 0
@@ -327,7 +383,9 @@ impl Codec for FinishFailingCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -386,7 +444,9 @@ impl Codec for OverreportingEncodeCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -536,7 +596,7 @@ fn test_transcode_encode_engine_exposes_codec_hooks_and_parts() {
 
 #[test]
 #[should_panic(
-    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE"
 )]
 fn test_buffered_encode_engine_panics_when_value_width_exceeds_codec_maximum() {
     let mut encoder =
@@ -548,7 +608,7 @@ fn test_buffered_encode_engine_panics_when_value_width_exceeds_codec_maximum() {
 
 #[test]
 #[should_panic(
-    expected = "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE"
 )]
 fn test_buffered_encode_engine_panics_when_replacement_width_exceeds_codec_maximum()
  {
@@ -599,6 +659,19 @@ fn test_buffered_encode_engine_reports_bounds_and_resets() {
         .expect("complete encode should fit the planned output");
     assert_eq!(2, written);
     assert_eq!(&[11, 12], &output[..written]);
+}
+
+#[test]
+fn test_buffered_encode_engine_allows_zero_encode_unit_bound() {
+    let mut engine =
+        TranscodeEncodeEngine::new(FullyBufferedCodec, FullyBufferedHooks);
+    assert_eq!(Ok(0), engine.max_transcode_output_len(3));
+
+    let progress = engine
+        .transcode(&[1, 2, 3], 0, &mut [], 0)
+        .expect("fully buffered values should not require immediate output");
+    assert_eq!(3, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]
@@ -968,7 +1041,9 @@ impl Codec for ResetEmittingCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -1018,7 +1093,9 @@ impl Codec for ResetFailCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -1230,6 +1307,68 @@ fn test_buffered_encode_engine_lifecycle_allows_reuse_after_reset() {
     engine
         .finish(&mut output, 1)
         .expect("second logical stream finalizes");
+}
+
+#[test]
+fn test_buffered_encode_engine_failed_reset_preserves_finished_state() {
+    let mut engine = TranscodeEncodeEngine::<_, _>::new(
+        ResetEmittingCodec,
+        ResetPassthroughHooks,
+    );
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+
+    let error = engine
+        .reset(&mut [], 0)
+        .expect_err("reset should reject insufficient output");
+    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        Err(TranscodeEncodeError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+}
+
+#[test]
+fn test_buffered_encode_engine_failed_finish_poisoned_until_reset() {
+    let mut engine = TranscodeEncodeEngine::<_, _>::new(
+        ReplacementEncodeFailCodec,
+        FailingFinishHooks,
+    );
+    let mut output = [0_u8; 1];
+    let error = engine
+        .finish(&mut output, 0)
+        .expect_err("finish hook should fail after codec finish");
+    assert_eq!(
+        TranscodeEncodeError::domain_finish(EngineError::Rejected {
+            input_index: 0
+        }),
+        error,
+    );
+
+    assert_eq!(
+        Err(TranscodeEncodeError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.finish(&mut output, 0),
+    );
+    assert_eq!(
+        Err(TranscodeEncodeError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+
+    engine
+        .reset(&mut [], 0)
+        .expect("successful reset should recover a poisoned engine");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode should resume after successful reset");
+    assert_eq!(1, progress.read());
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

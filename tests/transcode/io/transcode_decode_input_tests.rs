@@ -70,7 +70,9 @@ impl Codec for FixedPairCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -122,7 +124,9 @@ impl Codec for DecodeLifecycleCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
@@ -195,7 +199,9 @@ impl Codec for NonDefaultValueCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -229,7 +235,9 @@ impl Codec for InconsistentLifecycleBoundCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
     const MAX_DECODE_LIFECYCLE_VALUES: usize = 0;
 
@@ -1952,7 +1960,9 @@ impl Codec for InvalidPairReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -1989,7 +1999,9 @@ impl Codec for GrowingPairReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2027,7 +2039,9 @@ impl Codec for OverconsumeReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2130,7 +2144,9 @@ impl Codec for PartialWindowIncompleteCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2167,7 +2183,9 @@ impl Codec for OverlongIncompleteReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2198,7 +2216,9 @@ impl Codec for OverconsumeInvalidReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -2253,7 +2273,9 @@ impl Codec for ScratchGrowingReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2331,7 +2353,9 @@ impl Codec for ScratchByteCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 3;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 3;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 3;
 
     unsafe fn decode(
         &mut self,
@@ -2402,7 +2426,7 @@ fn test_buffered_decode_input_switches_to_scratch_when_incomplete_exceeds_capaci
 
 #[test]
 #[should_panic(
-    expected = "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE"
 )]
 fn test_buffered_decode_input_panics_when_scratch_hint_exceeds_codec_maximum() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003]]);
@@ -2851,7 +2875,9 @@ impl Codec for AlwaysIncompleteReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -2882,7 +2908,9 @@ impl Codec for StuckIncompleteReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -3022,7 +3050,9 @@ impl Codec for ImpossibleIncompleteMainLoopCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -3053,7 +3083,9 @@ impl Codec for InvalidWithConsumedReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -3135,7 +3167,9 @@ impl Codec for IncompleteBeyondBufferReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 4;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 4;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
 
     unsafe fn decode(
         &mut self,
@@ -3166,7 +3200,9 @@ impl Codec for InvalidWithoutConsumedReadCodec {
     type EncodeError = PairDecodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,

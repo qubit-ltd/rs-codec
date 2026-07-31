@@ -57,7 +57,7 @@ where
     {
         let min_units_per_value = C::MIN_UNITS_PER_VALUE;
         let max_units_per_value =
-            C::MAX_UNITS_PER_VALUE.max(min_units_per_value);
+            C::MAX_DECODE_UNITS_PER_VALUE.max(min_units_per_value);
         self.input
             .try_reserve_capacity(min_units_per_value)
             .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
@@ -80,8 +80,8 @@ where
                 }
                 Err(DecodeFailure::Incomplete { required_total }) => {
                     assert!(
-                        required_total.get() <= C::MAX_UNITS_PER_VALUE,
-                        "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE",
+                        required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
+                        "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                     );
                     self.refill_after_incomplete(required_total, available)?;
                 }

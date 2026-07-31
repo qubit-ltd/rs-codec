@@ -73,7 +73,9 @@ impl Codec for SourceCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -108,7 +110,9 @@ impl Codec for TargetCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         *value != 99
@@ -158,7 +162,9 @@ impl Codec for ResetEmittingTargetCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -198,7 +204,9 @@ impl Codec for ResetDependentTargetCodec {
     type EncodeError = EngineError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
     fn can_encode_value(&self, _value: &u8) -> bool {
@@ -263,7 +271,9 @@ impl Codec for ResetFailTargetCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -302,7 +312,9 @@ impl Codec for FinishOverflowTargetCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_FINISH_UNITS: usize = usize::MAX;
 
     unsafe fn decode(
@@ -332,7 +344,9 @@ impl Codec for MismatchCapacityTargetCodec {
     type EncodeError = EngineError;
 
     const MIN_UNITS_PER_VALUE: usize = 3;
-    const MAX_UNITS_PER_VALUE: usize = 3;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 3;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 3;
 
     unsafe fn decode(
         &mut self,
@@ -424,7 +438,9 @@ impl Codec for ErrorSourceCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -459,7 +475,9 @@ impl<const FINISH_BOUND: usize> Codec for FinishValueSourceCodec<FINISH_BOUND> {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_FINISH_VALUES: usize = FINISH_BOUND;
 
@@ -979,7 +997,7 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
             Err(CapacityError::OutputLengthOverflow)
         } else {
             input_len
-                .checked_mul(<TargetCodec as Codec>::MAX_UNITS_PER_VALUE)
+                .checked_mul(<TargetCodec as Codec>::MAX_ENCODE_UNITS_PER_VALUE)
                 .ok_or(CapacityError::OutputLengthOverflow)
         }
     }
@@ -2093,7 +2111,9 @@ impl Codec for StatelessResetSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     unsafe fn decode(
@@ -2134,7 +2154,9 @@ impl Codec for StatelessResetFailingSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 0;
 
     unsafe fn decode(
@@ -2228,7 +2250,9 @@ impl Codec for OverflowResetSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = usize::MAX;
 
     unsafe fn decode(
@@ -2272,7 +2296,9 @@ impl Codec for OverflowResetTargetCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
     unsafe fn decode(
@@ -2632,7 +2658,9 @@ impl Codec for ResetEmittingSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -2680,7 +2708,9 @@ impl Codec for ResetEncodingFailSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -2769,7 +2799,9 @@ impl Codec for ResetFailingSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -2838,7 +2870,9 @@ impl Codec for FinishFailingSourceCodec {
     type EncodeError = core::convert::Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
     unsafe fn decode(
@@ -3087,6 +3121,86 @@ fn test_buffered_convert_engine_lifecycle_allows_reuse_after_reset() {
     engine
         .finish(&mut output, 1)
         .expect("second logical stream finalizes");
+}
+
+#[test]
+fn test_buffered_convert_engine_failed_reset_preserves_finished_state() {
+    let mut engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        ResetEmittingTargetCodec,
+        StrictDecodeHooks,
+        ResetTargetHooks,
+    );
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+
+    let error = engine
+        .reset(&mut [], 0)
+        .expect_err("reset should reject insufficient output");
+    assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+}
+
+#[test]
+fn test_buffered_convert_engine_partial_reset_failure_poisoned() {
+    let mut engine = TranscodeConvertEngine::new(
+        ResetFailingSourceCodec,
+        ResetEmittingTargetCodec,
+        ResetFailSourceDecodeHooks,
+        ResetTargetHooks,
+    );
+    let mut output = [0_u8; 2];
+    engine
+        .reset(&mut output, 0)
+        .expect_err("source reset should fail after target reset succeeds");
+    assert_eq!(0xaa, output[0]);
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+}
+
+#[test]
+fn test_buffered_convert_engine_failed_finish_poisoned_until_reset() {
+    let mut engine = TranscodeConvertEngine::new(
+        FinishFailingSourceCodec,
+        TargetCodec,
+        FinishFailSourceDecodeHooks,
+        StrictEncodeHooks,
+    );
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect_err("source finish should fail");
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.finish(&mut output, 0),
+    );
+    assert_eq!(
+        Err(TranscodeConvertError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+
+    engine
+        .reset(&mut output, 0)
+        .expect("successful reset should recover a poisoned converter");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode should resume after successful reset");
+    assert_eq!(1, progress.read());
 }
 
 #[test]

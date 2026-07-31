@@ -54,9 +54,10 @@ where
     ///
     /// # Compile-Time Checks
     ///
-    /// Fails to compile when the supplied codec declares zero unit bounds or
-    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Fails to compile when the supplied codec declares a zero decode unit
+    /// bound or when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`]. The encode bound may be zero for
+    /// a fully buffered codec.
     #[inline]
     #[must_use]
     pub fn new(codec: C) -> Self {
@@ -92,8 +93,8 @@ where
     ///
     /// Panics when the wrapped codec reports more reset or finish output than
     /// its declared bounds, when [`Codec::encode_len`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`], or when encoding writes a different
-    /// value width than [`Codec::encode_len`].
+    /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`], or when encoding writes a
+    /// different value width than [`Codec::encode_len`].
     pub fn encode_into(
         &mut self,
         input: &C::Value,

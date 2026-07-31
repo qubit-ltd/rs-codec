@@ -19,18 +19,21 @@ use super::decode_failure::DecodeFailure;
 /// convenience APIs are responsible for checked buffer management and owned
 /// output allocation.
 ///
-/// `MIN_UNITS_PER_VALUE` and `MAX_UNITS_PER_VALUE` describe the representation
-/// width bounds for one value. The minimum is a lower-bound hint for checked
-/// layers: if fewer than this many units are available, no complete value can
-/// exist, so a streaming caller can request more input or report an incomplete
-/// EOF tail. For decoding, this minimum is the smallest safety precondition
-/// checked callers must satisfy before entering
-/// [`decode`](Self::decode). The maximum is a value-independent upper bound
-/// callers can use for coarse capacity planning. Once encode state is
-/// initialized, checked callers should reserve the exact
-/// [`encode_len`](Self::encode_len) for a known value. Complete-lifecycle
-/// adapters that still need to run [`encode_reset`](Self::encode_reset) must
-/// reserve the maximum first because reset may change the exact width.
+/// `MIN_UNITS_PER_VALUE` and `MAX_DECODE_UNITS_PER_VALUE` describe the readable
+/// representation-width bounds for one decoded value. If fewer than the
+/// minimum units are available, no complete value can exist, so a streaming
+/// caller can request more input or report an incomplete EOF tail. The minimum
+/// is also the smallest safety precondition checked callers must satisfy before
+/// entering [`decode`](Self::decode). The decode maximum bounds successful
+/// consumption and incomplete-input requirements for one value.
+///
+/// `MAX_ENCODE_UNITS_PER_VALUE` is the independent value-agnostic upper bound
+/// for main-phase encode output. Reserving that many units makes encoding safe
+/// for every encodable value. Once a value and encode state are known, callers
+/// may instead reserve the exact [`encode_len`](Self::encode_len), which must
+/// not exceed the encode maximum. Complete-lifecycle adapters that still need
+/// to run [`encode_reset`](Self::encode_reset) must reserve the maximum first
+/// because reset may change the exact width.
 ///
 /// A codec may keep decode-side and encode-side stream state. That state is an
 /// implementation detail owned by the codec. Callers do not snapshot or restore
@@ -68,11 +71,12 @@ use super::decode_failure::DecodeFailure;
 /// point.
 ///
 /// Implementations must also guarantee that
-/// [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE) is less than or equal to
-/// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE). Both bounds must be
-/// non-zero, and `MAX_UNITS_PER_VALUE` must be a valid upper bound for one
-/// complete encoded value or codec quantum. Checked adapters enforce this
-/// invariant with compile-time assertions before using codec-provided bounds.
+/// [`MIN_UNITS_PER_VALUE`](Self::MIN_UNITS_PER_VALUE) is non-zero and no larger
+/// than [`MAX_DECODE_UNITS_PER_VALUE`](Self::MAX_DECODE_UNITS_PER_VALUE), which
+/// must also be non-zero. `MAX_ENCODE_UNITS_PER_VALUE` may be zero for a codec
+/// that always buffers each accepted value instead of immediately emitting
+/// units. Checked adapters enforce the decode-bound invariants with
+/// compile-time assertions before using codec-provided bounds.
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
     type Value;
@@ -86,7 +90,7 @@ pub trait Codec {
     /// The type of errors reported when encoding an unsupported value.
     type EncodeError;
 
-    /// The minimum possible non-zero unit count for one encoded value.
+    /// The minimum possible non-zero readable unit count for one decoded value.
     ///
     /// This is a lower bound used by checked callers for planning and fast
     /// impossibility checks. If a streaming decoder has fewer than this many
@@ -96,13 +100,29 @@ pub trait Codec {
     /// input unit count.
     const MIN_UNITS_PER_VALUE: usize;
 
-    /// The maximum non-zero unit count needed to encode or decode one value.
+    /// The maximum unit count emitted when encoding one value.
+    ///
+    /// This is a value-independent upper bound for the main encode phase. When
+    /// no concrete value is available, reserving this many writable units is
+    /// sufficient for any encodable value, without first calling
+    /// [`encode_len`](Self::encode_len). For a known value, callers may reserve
+    /// only the exact length returned by `encode_len` instead. This bound does
+    /// not include output produced by encode reset or finish phases.
+    ///
+    /// This is also the multiplier used by default encode hooks when estimating
+    /// the maximum number of output units needed for an input value count.
+    ///
+    /// The bound may be zero for a codec that buffers every accepted value and
+    /// emits retained output only during a later lifecycle phase.
+    const MAX_ENCODE_UNITS_PER_VALUE: usize;
+
+    /// The maximum non-zero unit count consumed to decode one value.
     ///
     /// This is a value-independent upper bound for one complete encoded value
-    /// or codec quantum. It is the multiplier used by default encode hooks
-    /// when estimating the maximum number of output units needed for an input
-    /// value count.
-    const MAX_UNITS_PER_VALUE: usize;
+    /// or codec quantum on the decode side. Successful decode consumption and
+    /// the `required_total` carried by [`DecodeFailure::Incomplete`] must not
+    /// exceed this bound.
+    const MAX_DECODE_UNITS_PER_VALUE: usize;
 
     /// The maximum unit count emitted when resetting encode state.
     ///
@@ -190,21 +210,25 @@ pub trait Codec {
     /// `value`.
     ///
     /// The default implementation returns
-    /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE), which is the
-    /// conservative bound callers can use when no specific value is available.
-    /// Fixed-width codecs do not need to override this method.
+    /// [`MAX_ENCODE_UNITS_PER_VALUE`](Self::MAX_ENCODE_UNITS_PER_VALUE). This
+    /// default is correct only when every successful main encode writes exactly
+    /// that many units in the relevant codec state, as fixed-width codecs
+    /// normally do.
     ///
-    /// Variable-width codecs (LEB128, UTF-8, GB18030, …) should override this
-    /// to report the true encoded length for encodable `value`s. Doing so lets
-    /// buffered adapters and stream writers reserve only what is actually
-    /// needed and enables capacity probing without performing the encode.
+    /// Variable-width, buffering, or otherwise state-dependent codecs must
+    /// override this method to report the true encoded length for encodable
+    /// `value`s. The return value is never an estimate or an "unknown" marker:
+    /// it must equal the unit count [`encode`](Self::encode) subsequently
+    /// writes for the same `value` under the same codec state. It must also
+    /// never exceed
+    /// [`MAX_ENCODE_UNITS_PER_VALUE`](Self::MAX_ENCODE_UNITS_PER_VALUE).
+    /// Callers that do not yet have a concrete value should use
+    /// `MAX_ENCODE_UNITS_PER_VALUE` directly instead of calling this method.
+    ///
     /// Default codec-backed encoders use this exact value for per-value output
     /// capacity. The contract requires callers to use this method only when
     /// [`can_encode_value`](Self::can_encode_value) returned `true` for the
-    /// same `value`. Under that precondition, the returned length must equal
-    /// the unit count [`encode`](Self::encode) writes for the same `value`
-    /// under the same codec state, and must never exceed
-    /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
+    /// same `value`.
     ///
     /// # Parameters
     ///
@@ -224,7 +248,7 @@ pub trait Codec {
     #[inline(always)]
     #[must_use]
     fn encode_len(&self, _value: &Self::Value) -> usize {
-        Self::MAX_UNITS_PER_VALUE
+        Self::MAX_ENCODE_UNITS_PER_VALUE
     }
 
     /// Emits stream-start output and resets encode-side state.
@@ -293,12 +317,17 @@ pub trait Codec {
     ///
     /// The caller must guarantee that
     /// [`can_encode_value`](Self::can_encode_value) returned `true` for
-    /// `value`, and that the implementation can write at least
-    /// [`encode_len`](Self::encode_len) units for the same `value` and codec
-    /// state starting at `output_index`. On success, implementations must
-    /// return that exact written unit count, including `0` for deliberate
-    /// buffering, and the count must be no larger than
-    /// [`MAX_UNITS_PER_VALUE`](Self::MAX_UNITS_PER_VALUE).
+    /// `value`. Starting at `output_index`, the caller must also provide either
+    /// at least
+    /// [`MAX_ENCODE_UNITS_PER_VALUE`](Self::MAX_ENCODE_UNITS_PER_VALUE)
+    /// writable
+    /// units, which is sufficient for every encodable value, or at least the
+    /// exact [`encode_len`](Self::encode_len) for the same `value` and codec
+    /// state. On success, implementations must return that exact written unit
+    /// count, including `0` for deliberate buffering, and the count must be no
+    /// larger than `MAX_ENCODE_UNITS_PER_VALUE`. Implementations must not write
+    /// beyond the exact `encode_len` capacity on either the success or error
+    /// path.
     #[must_use = "encoded length and encode errors must be handled"]
     unsafe fn encode(
         &mut self,
@@ -417,9 +446,12 @@ pub trait Codec {
     /// valid but incomplete prefix.
     ///
     /// On success, implementations must return a consumed unit count no larger
-    /// than the available input. The return type guarantees that successful
-    /// decoding always consumes at least one unit. Implementations should use
-    /// `debug_assert!` to state these unchecked entry-point assumptions.
+    /// than either the available input or
+    /// [`MAX_DECODE_UNITS_PER_VALUE`](Self::MAX_DECODE_UNITS_PER_VALUE). An
+    /// incomplete result's `required_total` must also not exceed that maximum.
+    /// The return type guarantees that successful decoding always consumes at
+    /// least one unit. Implementations should use `debug_assert!` to state
+    /// these unchecked entry-point assumptions.
     #[must_use = "decoded value, consumed length, and decode errors must be handled"]
     unsafe fn decode(
         &mut self,
@@ -478,10 +510,11 @@ pub trait Codec {
 ///
 /// # Panics
 ///
-/// Panics at compile time when either width bound is zero or when
+/// Panics at compile time when either decode width bound is zero or when
 /// [`Codec::MIN_UNITS_PER_VALUE`] is greater than
-/// [`Codec::MAX_UNITS_PER_VALUE`], because these invariants must hold for any
-/// well-formed [`Codec`] implementation and violating them is always a bug.
+/// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], because these invariants must hold
+/// for any well-formed [`Codec`] implementation and violating them is always a
+/// bug.
 #[inline(always)]
 pub(crate) fn assert_unit_bounds<C>()
 where
@@ -493,12 +526,12 @@ where
             "Codec::MIN_UNITS_PER_VALUE must be non-zero",
         );
         assert!(
-            C::MAX_UNITS_PER_VALUE > 0,
-            "Codec::MAX_UNITS_PER_VALUE must be non-zero",
+            C::MAX_DECODE_UNITS_PER_VALUE > 0,
+            "Codec::MAX_DECODE_UNITS_PER_VALUE must be non-zero",
         );
         assert!(
-            C::MIN_UNITS_PER_VALUE <= C::MAX_UNITS_PER_VALUE,
-            "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_UNITS_PER_VALUE",
+            C::MIN_UNITS_PER_VALUE <= C::MAX_DECODE_UNITS_PER_VALUE,
+            "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_DECODE_UNITS_PER_VALUE",
         );
     }
 }
