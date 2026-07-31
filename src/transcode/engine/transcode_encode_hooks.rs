@@ -66,7 +66,8 @@ use crate::{
 ///     type EncodeError = Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
-///     const MAX_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -120,9 +121,10 @@ where
     /// maximum hook-owned pending output that may be drained during transcode.
     ///
     /// The default implementation multiplies `input_len` by
-    /// [`Codec::MAX_UNITS_PER_VALUE`]. This bound is valid for direct encoding,
-    /// skipped unencodable values, and single-value replacements. Override it
-    /// only when hook-owned pending output can be drained during `transcode`.
+    /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`]. This bound is valid for direct
+    /// encoding, skipped unencodable values, and single-value replacements.
+    /// Override it only when hook-owned pending output can be drained
+    /// during `transcode`.
     ///
     /// # Parameters
     ///
@@ -145,7 +147,7 @@ where
         input_len: usize,
     ) -> Result<usize, CapacityError> {
         input_len
-            .checked_mul(C::MAX_UNITS_PER_VALUE)
+            .checked_mul(C::MAX_ENCODE_UNITS_PER_VALUE)
             .ok_or(CapacityError::OutputLengthOverflow)
     }
 

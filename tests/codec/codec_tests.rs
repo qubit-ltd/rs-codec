@@ -20,7 +20,9 @@ impl Codec for ByteIncrementCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -67,7 +69,9 @@ impl Codec for StatefulLifecycleCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -131,7 +135,8 @@ fn test_codec_trait_encodes_and_decodes_one_value() {
         .expect("decoding should be infallible");
 
     assert_eq!(1, <ByteIncrementCodec as Codec>::MIN_UNITS_PER_VALUE,);
-    assert_eq!(1, <ByteIncrementCodec as Codec>::MAX_UNITS_PER_VALUE,);
+    assert_eq!(1, <ByteIncrementCodec as Codec>::MAX_ENCODE_UNITS_PER_VALUE,);
+    assert_eq!(1, <ByteIncrementCodec as Codec>::MAX_DECODE_UNITS_PER_VALUE,);
     assert!(codec.can_encode_value(&41));
     assert_eq!(1, written);
     assert_eq!(1, consumed.get());
@@ -208,7 +213,9 @@ impl Codec for BufferedEncodeCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn encode_len(&self, value: &u8) -> usize {
         usize::from(*value == 0)

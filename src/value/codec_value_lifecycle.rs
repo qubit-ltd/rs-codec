@@ -42,7 +42,7 @@ where
 {
     assert_unit_bounds::<C>();
     C::MAX_ENCODE_RESET_UNITS
-        .checked_add(C::MAX_UNITS_PER_VALUE)
+        .checked_add(C::MAX_ENCODE_UNITS_PER_VALUE)
         .and_then(|units| units.checked_add(C::MAX_ENCODE_FINISH_UNITS))
         .ok_or(CapacityError::OutputLengthOverflow)
 }
@@ -108,8 +108,8 @@ where
     }
     let value_units = codec.encode_len(value);
     assert!(
-        value_units <= C::MAX_UNITS_PER_VALUE,
-        "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE",
+        value_units <= C::MAX_ENCODE_UNITS_PER_VALUE,
+        "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE",
     );
     let value_and_finish = value_units
         .checked_add(C::MAX_ENCODE_FINISH_UNITS)
@@ -171,8 +171,8 @@ where
 ///
 /// # Panics
 ///
-/// Panics when the codec consumes beyond available input, or writes more reset
-/// or finish values than its declared bounds.
+/// Panics when the codec consumes beyond available input or its declared decode
+/// maximum, or writes more reset or finish values than its declared bounds.
 pub(crate) fn decode_exact_complete_value<C>(
     codec: &mut C,
     input: &[C::Unit],
@@ -216,6 +216,10 @@ where
     assert!(
         consumed.get() <= input.len(),
         "Codec::decode consumed beyond available input",
+    );
+    assert!(
+        consumed.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
+        "Codec::decode consumed beyond Codec::MAX_DECODE_UNITS_PER_VALUE",
     );
     TranscodeFailure::ensure_no_trailing_input(consumed.get(), input.len())?;
 

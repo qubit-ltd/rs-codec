@@ -9,31 +9,13 @@
 
 use core::fmt;
 use std::collections::TryReserveError;
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Result,
-    Seek,
-    SeekFrom,
-};
+use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-use qubit_io::{
-    Buffer,
-    BufferedInput,
-    Input,
-    Seekable,
-    UncheckedSlice,
-};
+use qubit_io::{Buffer, BufferedInput, Input, Seekable, UncheckedSlice};
 
 use crate::{
-    Codec,
-    DecodeLifecycleOutput,
-    DecodeLifecycleProgress,
-    TranscodeFailure,
-    TranscodeStatus,
-    Transcoder,
-    codec::assert_decode_lifecycle_bounds,
+    codec::assert_decode_lifecycle_bounds, Codec, DecodeLifecycleOutput, DecodeLifecycleProgress,
+    TranscodeFailure, TranscodeProgress, TranscodeStatus, Transcoder,
 };
 
 use super::codec_decode_driver::CodecDecodeDriver;
@@ -180,6 +162,47 @@ where
         self.input.fill_until(count)
     }
 
+    /// Performs one decode step and preserves the transcoder stop status.
+    ///
+    /// `None` means that the wrapped input reached EOF with no buffered units.
+    /// Consumed input is committed before this method returns. Callers can use
+    /// the returned [`TranscodeProgress`] to distinguish `NeedOutput` from an
+    /// incomplete input tail without guessing from the unread buffer alone.
+    pub fn transcode_step<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<Option<TranscodeProgress>>
+    where
+        D: Transcoder<Input = I::Item, Output = Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        let output_end = UncheckedSlice::checked_range_end(
+            output.len(),
+            output_index,
+            count,
+            "decoded output range exceeds destination buffer",
+        )?;
+        if count == 0 {
+            return Ok(Some(TranscodeProgress::complete(0, 0)));
+        }
+        if self.unread_len() == 0 && !self.fill_more()? {
+            return Ok(None);
+        }
+        let available_input = self.unread_len();
+        let progress = decoder
+            .transcode(self.unread(), 0, &mut output[..output_end], output_index)
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_decode_progress(progress, 0, available_input, output_index, count)
+            })?;
+        self.consume(progress.read());
+        Ok(Some(progress))
+    }
+
     /// Consumes unread units from the current buffer window.
     ///
     /// # Parameters
@@ -214,23 +237,12 @@ where
     /// a valid range inside `output`, that the addition does not overflow, that
     /// `count <= self.unread_len()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
-    pub unsafe fn copy_unread_to(
-        &self,
-        output: &mut [I::Item],
-        output_index: usize,
-        count: usize,
-    ) {
+    pub unsafe fn copy_unread_to(&self, output: &mut [I::Item], output_index: usize, count: usize) {
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
         let unread = self.unread();
         unsafe {
-            UncheckedSlice::copy_nonoverlapping(
-                unread,
-                0,
-                output,
-                output_index,
-                count,
-            );
+            UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
         }
     }
 
@@ -311,23 +323,15 @@ where
     /// Panics when [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] does not match the
     /// codec's reset and finish bounds, or when the codec reports more reset
     /// or finish values than those bounds.
-    pub fn read_decoded_with<C, M>(
-        &mut self,
-        codec: &mut C,
-        map_error: M,
-    ) -> Result<C::Value>
+    pub fn read_decoded_with<C, M>(&mut self, codec: &mut C, map_error: M) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()
             .map_err(|error| Error::new(ErrorKind::Unsupported, error))?;
-        let progress = self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            &mut [],
-            &mut [],
-            map_error,
-        )?;
+        let progress =
+            self.read_decoded_lifecycle_with_scratch_impl(codec, &mut [], &mut [], map_error)?;
         let (value, reset_written, finish_written) = progress.into_parts();
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
@@ -375,8 +379,7 @@ where
         let mut reset_output = Vec::new();
         reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish_output = Vec::new();
-        finish_output
-            .resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
+        finish_output.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let progress = self.read_decoded_lifecycle_with_scratch_impl(
             codec,
             &mut reset_output,
@@ -434,12 +437,7 @@ where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
-        self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            reset_output,
-            finish_output,
-            map_error,
-        )
+        self.read_decoded_lifecycle_with_scratch_impl(codec, reset_output, finish_output, map_error)
     }
 
     fn read_decoded_lifecycle_with_scratch_impl<C, M>(
@@ -477,8 +475,7 @@ where
             "Codec::decode_reset wrote beyond its reset bound",
         );
 
-        let value = CodecDecodeDriver::new(&mut self.input)
-            .read_one(codec, &mut map_error)?;
+        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
 
         let finish_written = unsafe {
             // SAFETY: The finish output length check above reserves the

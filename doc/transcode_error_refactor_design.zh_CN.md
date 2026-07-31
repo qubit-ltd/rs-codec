@@ -110,6 +110,9 @@ pub enum TranscodeFailure {
 
     #[error("finish called twice without an intervening reset")]
     FinishAfterFinish,
+
+    #[error("transcoder lifecycle is poisoned; a successful reset is required")]
+    LifecyclePoisoned,
 }
 ```
 
@@ -879,7 +882,6 @@ impl<D, E> Transcoder for CharsetConverter<D, E>
 where
     D: CharsetCodec,
     E: CharsetCodec,
-    E::Unit: Clone,
 {
     type Input = D::Unit;
     type Output = E::Unit;

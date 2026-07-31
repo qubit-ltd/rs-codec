@@ -50,7 +50,9 @@ impl Codec for PrefixCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -116,7 +118,9 @@ impl Codec for UnknownInvalidCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -148,7 +152,9 @@ impl Codec for HintOnlyCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -191,7 +197,9 @@ impl Codec for OverconsumingCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -232,7 +240,9 @@ impl Codec for OverlongIncompleteCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -285,7 +295,9 @@ impl Codec for DropTrackedCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -618,7 +630,9 @@ impl Codec for MinTwoCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 2;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -660,7 +674,9 @@ impl Codec for OverflowFlushCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_FINISH_VALUES: usize = usize::MAX;
 
@@ -1139,7 +1155,20 @@ fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_available_inpu
 
 #[test]
 #[should_panic(
-    expected = "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE"
+    expected = "Codec::decode consumed beyond Codec::MAX_DECODE_UNITS_PER_VALUE"
+)]
+fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_decode_maximum()
+ {
+    let mut decoder =
+        TranscodeDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
+    let mut output = [0_u8; 1];
+
+    let _ = decoder.transcode(&[1, 2], 0, &mut output, 0);
+}
+
+#[test]
+#[should_panic(
+    expected = "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE"
 )]
 fn test_transcode_decode_engine_panics_when_incomplete_hint_exceeds_codec_maximum()
  {
@@ -1221,7 +1250,9 @@ impl Codec for FlushFailCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
@@ -1322,7 +1353,9 @@ impl Codec for ResetFailCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
@@ -1587,6 +1620,88 @@ fn test_transcode_decode_engine_lifecycle_allows_multiple_resets() {
     }
 }
 
+#[test]
+fn test_transcode_decode_engine_failed_reset_preserves_finished_state() {
+    let mut engine = TranscodeDecodeEngine::<_, _>::new(
+        ResetEmittingDecodeCodec,
+        ResetEmittingDecodePassthroughHooks,
+    );
+    let mut output = [0_u8; 1];
+    engine
+        .finish(&mut output, 0)
+        .expect("finish closes the logical stream");
+
+    let error = engine
+        .reset(&mut [], 0)
+        .expect_err("reset should reject insufficient output");
+    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::TranscodeAfterFinish,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+}
+
+#[test]
+fn test_transcode_decode_engine_failed_finish_poisoned_until_reset() {
+    let mut engine =
+        TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
+    let mut output = [0_u8; 1];
+    let error = engine
+        .finish(&mut output, 0)
+        .expect_err("codec finish should fail");
+    assert_eq!(TranscodeDecodeError::domain_finish(FlushFailError), error);
+
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.finish(&mut output, 0),
+    );
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+
+    engine
+        .reset(&mut [], 0)
+        .expect("successful reset should recover a poisoned engine");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode should resume after successful reset");
+    assert_eq!(1, progress.read());
+}
+
+#[test]
+fn test_transcode_decode_engine_failed_reset_poisoned_until_successful_reset() {
+    let mut engine = TranscodeDecodeEngine::<_, _>::new(
+        ResetFailCodec::default(),
+        ResetErrorMappingHooks,
+    );
+    let mut output = [0_u8; 1];
+    engine
+        .reset(&mut output, 0)
+        .expect_err("codec reset should fail after reset execution starts");
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(
+            TranscodeFailure::LifecyclePoisoned,
+        )),
+        engine.transcode(&[1_u8], 0, &mut output, 0),
+    );
+
+    engine.codec_mut().fail_reset = false;
+    engine
+        .reset(&mut output, 0)
+        .expect("successful reset should recover a poisoned engine");
+    let progress = engine
+        .transcode(&[1_u8], 0, &mut output, 0)
+        .expect("transcode should resume after successful reset");
+    assert_eq!(1, progress.read());
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct InvalidHookErrorHooks;
 
@@ -1765,7 +1880,9 @@ impl Codec for ResetEmittingDecodeCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_RESET_VALUES: usize = 1;
 

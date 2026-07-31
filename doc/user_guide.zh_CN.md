@@ -80,7 +80,8 @@ qubit-codec = { version = "0.11", features = ["io"] }
 
 | 规则 | 原因 |
 | --- | --- |
-| `MIN_UNITS_PER_VALUE` 与 `MAX_UNITS_PER_VALUE` 均非零且有序 | 调用方据此安全进入 decode 并规划容量。 |
+| `MIN_UNITS_PER_VALUE` 与 `MAX_DECODE_UNITS_PER_VALUE` 均非零且有序 | 调用方据此安全进入 decode，并约束不完整输入。 |
+| `encode_len` 是精确值且不超过 `MAX_ENCODE_UNITS_PER_VALUE` | 调用方可预留已知 value 的精确宽度或与 value 无关的编码上限；全缓冲 encoder 的该上限允许为零。 |
 | `decode` 只读取可见输入 | 合法但过短的前缀返回 `DecodeFailure::Incomplete`，且不消费该尾部。 |
 | 成功 `decode` 消费非零的可见数量 | 进度仍然可靠且可重试。 |
 | `can_encode_value` 拒绝域外 value | checked encoder 会在 `encode_len` 与 `encode` 之前查询它。 |
