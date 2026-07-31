@@ -91,7 +91,8 @@ use crate::{
 ///     type EncodeError = core::convert::Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
-///     const MAX_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -211,9 +212,9 @@ where
     ///
     /// # Compile-Time Checks
     ///
-    /// Fails to compile when the supplied codec declares zero unit bounds or
-    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Fails to compile when the supplied codec declares a zero decode unit
+    /// bound or when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`].
     #[inline]
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
@@ -386,19 +387,21 @@ where
     ///
     /// Returns framework errors when the caller provides invalid or
     /// insufficient output capacity. Returns domain errors when codec reset
-    /// or hook reset handling fails.
+    /// or hook reset handling fails. Capacity and index failures occur before
+    /// any reset state is changed. Once reset execution starts, an error
+    /// poisons the engine until a later reset succeeds.
     pub fn reset(
         &mut self,
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
-        self.lifecycle.on_reset();
         let required = C::MAX_DECODE_RESET_VALUES;
         TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
+        self.lifecycle.on_reset_start();
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -410,6 +413,7 @@ where
             written <= required,
             "Codec::decode_reset wrote beyond its reset bound",
         );
+        self.lifecycle.on_reset_success();
         Ok(written)
     }
 
@@ -433,7 +437,9 @@ where
     /// `output_index` is outside `output`, or when a concrete policy hook
     /// rejects a value. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
-    /// already finished and has not been reset.
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started.
     pub fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -504,7 +510,11 @@ where
     /// insufficient output capacity. Returns domain errors when codec finish or
     /// hook finalization fails. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
-    /// already finished and has not been reset.
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started. Capacity and index failures occur before
+    /// finish execution and remain retryable; later failures poison the engine
+    /// until reset succeeds.
     ///
     /// # Panics
     ///
@@ -524,6 +534,7 @@ where
             output_index,
             required,
         )?;
+        self.lifecycle.on_finish_start();
         let finished =
             unsafe { self.codec.decode_finish(output, output_index) }
                 .map_err(TranscodeDecodeError::domain_finish)?;
@@ -603,8 +614,8 @@ where
     ///
     /// Panics when the codec reports consumption beyond the available input,
     /// an incomplete-input requirement beyond
-    /// [`Codec::MAX_UNITS_PER_VALUE`], or hooks return an action that consumes
-    /// beyond the available input.
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], or hooks return an action that
+    /// consumes beyond the available input.
     pub(crate) fn decode_one<R, F>(
         &mut self,
         input: &[C::Unit],
@@ -628,6 +639,10 @@ where
                     consumed.get() <= context.available(),
                     "Codec::decode consumed beyond available input",
                 );
+                assert!(
+                    consumed.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
+                    "Codec::decode consumed beyond Codec::MAX_DECODE_UNITS_PER_VALUE",
+                );
                 let consumed_value = consume(value, context.input_index());
                 Ok((
                     DecodeOutcome::emitted(consumed, NonZeroUsize::MIN),
@@ -640,8 +655,8 @@ where
                     "Codec::decode incomplete required_total must exceed available input",
                 );
                 assert!(
-                    required_total.get() <= C::MAX_UNITS_PER_VALUE,
-                    "Codec::decode incomplete required_total exceeded Codec::MAX_UNITS_PER_VALUE",
+                    required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
+                    "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                 );
                 Ok((DecodeOutcome::need_input(required_total), None))
             }

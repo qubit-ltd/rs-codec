@@ -28,7 +28,9 @@ impl Codec for VariableByteDecoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -84,7 +86,9 @@ impl Codec for PairByteEncoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -127,7 +131,9 @@ impl Codec for FlushFailDecoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -170,7 +176,9 @@ impl Codec for ResetFailEncoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_ENCODE_RESET_UNITS: usize = 1;
 
@@ -215,7 +223,9 @@ impl Codec for MinTwoDecoder {
 
     const MIN_UNITS_PER_VALUE: usize = 2;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -265,7 +275,9 @@ impl Codec for FlushValueDecoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
@@ -320,7 +332,9 @@ impl Codec for NonDefaultDecoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     unsafe fn decode(
         &mut self,
@@ -362,7 +376,9 @@ impl Codec for NonDefaultEncoder {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &NonDefaultValue) -> bool {
         value.0 != 13

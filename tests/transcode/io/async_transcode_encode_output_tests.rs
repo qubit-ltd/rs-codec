@@ -307,7 +307,8 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending()
 
 /// Verifies constructors and draining expose buffered output state correctly.
 #[test]
-fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<()> {
+fn test_async_transcode_encode_output_exposes_buffer_operations()
+-> io::Result<()> {
     let output = AsyncTranscodeEncodeOutput::try_with_capacity(
         ChunkedAsyncOutput::new(1),
         3,
@@ -315,11 +316,13 @@ fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<
     assert!(output.capacity() >= 3);
     assert_eq!(0, output.pending_len());
     assert!(format!("{output:?}").contains("AsyncTranscodeEncodeOutput"));
-    assert!(AsyncTranscodeEncodeOutput::try_with_capacity(
-        ChunkedAsyncOutput::new(1),
-        usize::MAX,
-    )
-    .is_err());
+    assert!(
+        AsyncTranscodeEncodeOutput::try_with_capacity(
+            ChunkedAsyncOutput::new(1),
+            usize::MAX,
+        )
+        .is_err()
+    );
 
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(
         ChunkedAsyncOutput::new(1),
@@ -345,8 +348,10 @@ fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<
 
 /// Verifies zero-length encode operations and invalid source ranges.
 #[test]
-fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()>
+{
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
@@ -375,9 +380,11 @@ fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()> 
 /// Verifies capacity planning failures cross the asynchronous I/O boundary.
 #[test]
 fn test_async_transcode_encode_output_maps_capacity_errors() -> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
     let mut encoder = CapacityFailingEncoder::default();
-    let mut map_error = |_| io::Error::other("encoder cannot reach domain failure");
+    let mut map_error =
+        |_| io::Error::other("encoder cannot reach domain failure");
 
     let error = complete(output.transcode_async(
         &mut encoder,
@@ -403,7 +410,8 @@ fn test_async_transcode_encode_output_maps_capacity_errors() -> io::Result<()> {
 
 /// Verifies asynchronous output delivery failures remain visible to callers.
 #[test]
-fn test_async_transcode_encode_output_propagates_delivery_errors() -> io::Result<()> {
+fn test_async_transcode_encode_output_propagates_delivery_errors()
+-> io::Result<()> {
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(
         ChunkedAsyncOutput::new(1),
         1,

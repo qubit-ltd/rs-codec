@@ -13,7 +13,8 @@
 //! this; engines historically rely on caller discipline. `LifecycleGuard`
 //! rejects common misuse (calling `transcode` after `finish` without an
 //! intervening `reset`, or calling `finish` twice in a row) in every build
-//! profile.
+//! profile. It also prevents callers from continuing after a reset or finish
+//! operation failed after potentially mutating codec or hook state.
 
 use super::lifecycle_phase::LifecyclePhase;
 use crate::TranscodeFailure;
@@ -22,11 +23,11 @@ use crate::TranscodeFailure;
 ///
 /// Lifecycle rules:
 ///
-/// - `transcode` is rejected when the engine is `Finished`. Callers must
-///   `reset` before starting another logical stream.
-/// - `finish` is rejected when the engine is already `Finished`. Repeating
-///   `finish` is almost always a bug.
-/// - `reset` is always legal and returns the engine to `Fresh`.
+/// - `transcode` is rejected when the engine is `Finished` or `Poisoned`.
+/// - `finish` is rejected when the engine is already `Finished` or `Poisoned`.
+/// - reset preflight never changes the phase.
+/// - starting reset or finish marks the engine `Poisoned`; success commits the
+///   corresponding `Fresh` or `Finished` phase.
 ///
 /// `Fresh → finish` is intentionally allowed: stateless transcoders may
 /// finalize an empty stream, and forcing a synthetic `transcode(&[])` call
@@ -51,10 +52,18 @@ impl LifecycleGuard {
         }
     }
 
-    /// Records a `reset` event. Always legal; returns the guard to
-    /// [`LifecyclePhase::Fresh`].
+    /// Records that reset execution is starting and state may be mutated.
+    ///
+    /// Reset is legal from every phase. The guard remains poisoned unless the
+    /// caller later invokes [`Self::on_reset_success`].
     #[inline(always)]
-    pub(crate) fn on_reset(&mut self) {
+    pub(crate) fn on_reset_start(&mut self) {
+        self.phase = LifecyclePhase::Poisoned;
+    }
+
+    /// Commits the [`LifecyclePhase::Fresh`] phase after reset succeeds.
+    #[inline(always)]
+    pub(crate) fn on_reset_success(&mut self) {
         self.phase = LifecyclePhase::Fresh;
     }
 
@@ -63,11 +72,19 @@ impl LifecycleGuard {
     /// # Errors
     ///
     /// Returns [`TranscodeFailure::TranscodeAfterFinish`] when `transcode` is
-    /// called after `finish` without an intervening `reset`.
+    /// called after `finish` without an intervening reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
+    /// failure.
     #[inline(always)]
     pub(crate) fn on_transcode(&mut self) -> Result<(), TranscodeFailure> {
-        if self.phase == LifecyclePhase::Finished {
-            return Err(TranscodeFailure::TranscodeAfterFinish);
+        match self.phase {
+            LifecyclePhase::Finished => {
+                return Err(TranscodeFailure::TranscodeAfterFinish);
+            }
+            LifecyclePhase::Poisoned => {
+                return Err(TranscodeFailure::LifecyclePoisoned);
+            }
+            LifecyclePhase::Fresh | LifecyclePhase::Streaming => {}
         }
         if self.phase == LifecyclePhase::Fresh {
             self.phase = LifecyclePhase::Streaming;
@@ -83,13 +100,30 @@ impl LifecycleGuard {
     /// # Errors
     ///
     /// Returns [`TranscodeFailure::FinishAfterFinish`] when `finish` is called
-    /// twice without an intervening `reset`.
+    /// twice without an intervening reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
+    /// failure.
     #[inline(always)]
     pub(crate) fn on_finish_attempt(&self) -> Result<(), TranscodeFailure> {
-        if self.phase == LifecyclePhase::Finished {
-            return Err(TranscodeFailure::FinishAfterFinish);
+        match self.phase {
+            LifecyclePhase::Finished => {
+                return Err(TranscodeFailure::FinishAfterFinish);
+            }
+            LifecyclePhase::Poisoned => {
+                return Err(TranscodeFailure::LifecyclePoisoned);
+            }
+            LifecyclePhase::Fresh | LifecyclePhase::Streaming => {}
         }
         Ok(())
+    }
+
+    /// Records that finish execution is starting and state may be mutated.
+    ///
+    /// The guard remains poisoned unless the caller later invokes
+    /// [`Self::on_finish_success`].
+    #[inline(always)]
+    pub(crate) fn on_finish_start(&mut self) {
+        self.phase = LifecyclePhase::Poisoned;
     }
 
     /// Commits the `Finished` state after `finish` actually completed. Call

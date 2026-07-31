@@ -83,7 +83,8 @@ use crate::{
 ///     type EncodeError = Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
-///     const MAX_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 ///
 ///     unsafe fn decode(
 ///         &mut self,
@@ -165,9 +166,10 @@ where
     ///
     /// # Compile-Time Checks
     ///
-    /// Fails to compile when the supplied codec declares zero unit bounds or
-    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`].
+    /// Fails to compile when the supplied codec declares a zero decode unit
+    /// bound or when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`]. The encode bound may be zero for
+    /// a fully buffered codec.
     #[inline]
     #[must_use]
     pub fn new(codec: C, hooks: H) -> Self {
@@ -342,19 +344,21 @@ where
     ///
     /// Returns framework errors when the caller provides invalid or
     /// insufficient output capacity. Returns domain errors when codec reset or
-    /// hook reset handling fails.
+    /// hook reset handling fails. Capacity and index failures occur before any
+    /// reset state is changed. Once reset execution starts, an error poisons
+    /// the engine until a later reset succeeds.
     pub fn reset(
         &mut self,
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
-        self.lifecycle.on_reset();
         let required = self.max_reset_output_len()?;
         TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             required,
         )?;
+        self.lifecycle.on_reset_start();
         self.hooks.reset_hooks(&mut self.codec);
         let written = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
@@ -366,6 +370,7 @@ where
             written <= required,
             "Codec::encode_reset wrote beyond its reset bound",
         );
+        self.lifecycle.on_reset_success();
         Ok(written)
     }
 
@@ -392,7 +397,9 @@ where
     /// `output_index` is outside `output`, or when hook planning or writing
     /// rejects a value. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
-    /// already finished and has not been reset.
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started.
     pub fn transcode(
         &mut self,
         input: &[C::Value],
@@ -446,7 +453,11 @@ where
     /// insufficient output capacity. Returns domain errors when codec finish or
     /// hook finalization fails. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
-    /// already finished and has not been reset.
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started. Capacity and index failures occur before
+    /// finish execution and remain retryable; later failures poison the engine
+    /// until reset succeeds.
     ///
     /// # Panics
     ///
@@ -466,6 +477,7 @@ where
             output_index,
             required,
         )?;
+        self.lifecycle.on_finish_start();
         let finished = unsafe {
             // SAFETY: The capacity check above reserves the codec's declared
             // finish-output bound at `output_index`.
@@ -566,16 +578,16 @@ where
     /// # Panics
     ///
     /// Panics when [`Codec::encode_len`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`] or [`Codec::encode`] writes a different
-    /// number of units than planned.
+    /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`] or [`Codec::encode`] writes a
+    /// different number of units than planned.
     fn encode_encodable_value(
         &mut self,
         context: EncodeContext<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, TranscodeEncodeErrorOf<C>> {
         let required = self.codec.encode_len(context.input_value());
         assert!(
-            required <= C::MAX_UNITS_PER_VALUE,
-            "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE",
+            required <= C::MAX_ENCODE_UNITS_PER_VALUE,
+            "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE",
         );
         if context.available_output() < required {
             return Ok(EncodeOutcome::need_output(
@@ -654,8 +666,8 @@ where
     ///
     /// Panics when hooks return a replacement value that the codec cannot
     /// encode, [`Codec::encode_len`] exceeds
-    /// [`Codec::MAX_UNITS_PER_VALUE`], or [`Codec::encode`] writes a different
-    /// number of units than planned.
+    /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`], or [`Codec::encode`] writes a
+    /// different number of units than planned.
     fn encode_replacement_value(
         &mut self,
         value: C::Value,
@@ -667,8 +679,8 @@ where
         );
         let required = self.codec.encode_len(&value);
         assert!(
-            required <= C::MAX_UNITS_PER_VALUE,
-            "Codec::encode_len exceeded Codec::MAX_UNITS_PER_VALUE",
+            required <= C::MAX_ENCODE_UNITS_PER_VALUE,
+            "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE",
         );
         if context.available_output() < required {
             return Ok(EncodeOutcome::need_output(

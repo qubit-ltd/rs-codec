@@ -48,7 +48,9 @@ impl Codec for MarkerCodec {
     type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_RESET_VALUES: usize = 1;
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 

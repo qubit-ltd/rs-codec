@@ -28,7 +28,9 @@ impl Codec for PairByteCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
     unsafe fn decode(
         &mut self,
@@ -74,7 +76,9 @@ impl Codec for VariableWidthCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 3;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 3;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 3;
 
     fn encode_len(&self, value: &u8) -> usize {
         match *value {
@@ -130,7 +134,9 @@ impl Codec for RejectOddCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
     fn can_encode_value(&self, value: &u8) -> bool {
         value.is_multiple_of(2)

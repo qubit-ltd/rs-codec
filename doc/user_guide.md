@@ -89,7 +89,8 @@ preconditions.
 
 | Rule | Why it matters |
 | --- | --- |
-| `MIN_UNITS_PER_VALUE` and `MAX_UNITS_PER_VALUE` are non-zero and ordered | Callers use them for safe decode entry and capacity planning. |
+| `MIN_UNITS_PER_VALUE` and `MAX_DECODE_UNITS_PER_VALUE` are non-zero and ordered | Callers use them for safe decode entry and incomplete-input bounds. |
+| `encode_len` is exact and does not exceed `MAX_ENCODE_UNITS_PER_VALUE` | Callers can reserve either the exact known-value width or the value-independent encode bound; the bound may be zero for fully buffered encoders. |
 | `decode` reads only visible input | A valid but short prefix returns `DecodeFailure::Incomplete` without consuming its tail. |
 | Successful `decode` consumes a non-zero visible count | Progress remains sound and retryable. |
 | `can_encode_value` rejects out-of-domain values | Checked encoders call it before `encode_len` and `encode`. |

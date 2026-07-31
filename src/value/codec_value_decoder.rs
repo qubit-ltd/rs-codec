@@ -96,7 +96,7 @@ where
     /// # Panics
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
-    /// the input slice length.
+    /// the input slice length or [`Codec::MAX_DECODE_UNITS_PER_VALUE`].
     pub fn decode(
         &mut self,
         input: &[C::Unit],
