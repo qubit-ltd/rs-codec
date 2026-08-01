@@ -93,8 +93,10 @@ For a streaming converter, the lifecycle is explicit:
 reset(output) -> transcode(...) repeatedly -> handle any EOF tail -> finish(output)
 ```
 
-A newly created transcoder is uninitialized: the first successful operation must
-be `reset`. After `finish`, call `reset` again before reusing the instance.
+Built-in transcode engines start uninitialized: the first successful operation
+must be `reset`, and after `finish` they require another `reset` before reuse.
+Custom `Transcoder` implementations must honor the same contract themselves;
+the trait cannot intercept arbitrary state changes inside user-defined methods.
 
 `Complete` means that a `transcode` call consumed all visible input from its
 requested index. `NeedInput` leaves the incomplete tail with the caller for a

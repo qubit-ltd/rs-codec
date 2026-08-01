@@ -87,8 +87,9 @@ assert_eq!("encoded:codec", output);
 reset(output) -> 反复 transcode(...) -> 处理 EOF 尾部 -> finish(output)
 ```
 
-新建的 transcoder 处于未初始化状态，第一次成功操作必须是 `reset`；`finish` 成功后，
-再次使用实例前也必须先调用 `reset`。
+内置 transcode engine 新建时处于未初始化状态，第一次成功操作必须是 `reset`；
+`finish` 成功后，再次使用实例前也必须先调用 `reset`。自定义 `Transcoder` 实现也
+必须遵守同一契约；trait 无法拦截用户自定义方法内部的任意状态变更。
 
 `Complete` 表示本次 `transcode` 从请求下标开始消费了全部可见输入。`NeedInput`
 把不完整尾部保留给调用方，以便重试或显式做 EOF 决策；`NeedOutput` 表示必须扩展或
