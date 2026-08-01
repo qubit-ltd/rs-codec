@@ -6,8 +6,8 @@ Run the safe/unchecked indexing A/B benchmark with:
 cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- safe_vs_unchecked
 ```
 
-The benchmark compares the same copy loop implemented with iterator-based safe
-access and explicit `get_unchecked` access. It is a code-generation probe, not
+The benchmark compares the same copy loop implemented with safe indexing and
+explicit `get_unchecked` access. It is a code-generation probe, not
 a correctness test; the safe version is the default choice unless assembly
 shows a measurable regression in a real hot path.
 
