@@ -250,7 +250,7 @@ pub trait Codec {
     /// # Errors
     ///
     /// Returns `Self::EncodeError` when reset output cannot be emitted.
-    /// Implementations must leave decode state unchanged when returning an
+    /// Implementations must leave encode state unchanged when returning an
     /// error.
     ///
     /// # Safety

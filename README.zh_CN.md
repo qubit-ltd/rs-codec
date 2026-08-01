@@ -87,9 +87,17 @@ assert_eq!("encoded:codec", output);
 reset(output) -> 反复 transcode(...) -> 处理 EOF 尾部 -> finish(output)
 ```
 
+新建的 transcoder 处于未初始化状态，第一次成功操作必须是 `reset`；`finish` 成功后，
+再次使用实例前也必须先调用 `reset`。
+
 `Complete` 表示本次 `transcode` 从请求下标开始消费了全部可见输入。`NeedInput`
 把不完整尾部保留给调用方，以便重试或显式做 EOF 决策；`NeedOutput` 表示必须扩展或
 排空输出缓冲区后才能继续。
+
+异步 bridge 直接暴露相同的进度：每次 `poll_transcode` 或 `transcode_async` 在完成
+必要的 I/O 准备后至多调用一次 transcoder。返回的 `TranscodeProgress`（或
+`AsyncTranscodeDecodeStep::Progress`）已经提交，不会在同一次调用中再次 await；调用方
+应按返回计数推进游标，EOF 由显式的 `AsyncTranscodeDecodeStep::EndOfInput` 表示。
 
 ## 边界与保证
 
