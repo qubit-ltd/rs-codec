@@ -13,7 +13,8 @@ use criterion::{
     BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main, measurement::WallTime,
 };
 use qubit_codec::{
-    CapacityError, Codec, DecodeFailure, TranscodeDecodeError, TranscodeProgress, Transcoder,
+    CapacityError, Codec, CodecTranscodeDecoder, DecodeFailure, TranscodeDecodeError,
+    TranscodeProgress, Transcoder,
     engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks},
 };
 
@@ -98,9 +99,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(count, count))
         } else {
             Ok(TranscodeProgress::need_output(
-                output_index + count,
                 qubit_codec::nz(1),
-                output.len() - count,
                 count,
                 count,
             ))
@@ -149,6 +148,40 @@ fn bench_decode_engine(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
                 .transcode(black_box(input), 0, output.as_mut_slice(), 0)
                 .expect("copy codec is infallible");
             black_box((progress.read(), progress.written()));
+        });
+    });
+}
+
+/// Copies the fixture with ordinary safe indexing.
+#[inline(never)]
+fn copy_safe_exact(input: &[u8], output: &mut [u8]) {
+    for (source, destination) in input.iter().zip(output.iter_mut()) {
+        *destination = *source;
+    }
+}
+
+/// Benchmarks the public codec adapter against an equivalent safe copy loop.
+fn bench_codec_adapter(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
+    let mut decoder = CodecTranscodeDecoder::new(CopyCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("copy codec reset is infallible");
+    let mut adapter_output = vec![0_u8; input.len()];
+    group.bench_function("codec_adapter", |bencher| {
+        bencher.iter(|| {
+            let progress = decoder
+                .transcode(black_box(input), 0, adapter_output.as_mut_slice(), 0)
+                .expect("copy codec is infallible");
+            black_box((progress.read(), progress.written(), adapter_output[0]));
+        });
+    });
+
+    let mut safe_output = vec![0_u8; input.len()];
+    group.bench_function("safe_copy_loop", |bencher| {
+        bencher.iter(|| {
+            copy_safe_exact(black_box(input), black_box(safe_output.as_mut_slice()));
+            black_box(safe_output[0]);
         });
     });
 }
@@ -226,6 +259,7 @@ fn bench_transcoder(criterion: &mut Criterion) {
     complete.measurement_time(Duration::from_secs(5));
     bench_complete_paths(&mut complete, &input);
     bench_decode_engine(&mut complete, &input);
+    bench_codec_adapter(&mut complete, &input);
     complete.finish();
 
     let mut streaming = criterion.benchmark_group("transcoder_streaming");
