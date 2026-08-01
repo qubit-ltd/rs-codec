@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    TranscodeDomainError,
-    TranscodeEncodeError,
-    TranscodeFailure,
-};
+use qubit_codec::{TranscodeDomainError, TranscodeEncodeError, TranscodeFailure};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain error")]
@@ -35,8 +31,7 @@ fn test_encode_error_accessors_mapping_and_validation() {
     let domain = TranscodeEncodeError::<&str, char>::domain_reset("reset");
     let main = TranscodeEncodeError::<&str, char>::domain_main("encode", 3);
     let finish = TranscodeEncodeError::<&str, char>::domain_finish("finish");
-    let no_context =
-        TranscodeEncodeError::<&str, char>::unencodable_without_context(8);
+    let no_context = TranscodeEncodeError::<&str, char>::unencodable_without_context(8);
 
     assert!(!failure.is_domain());
     assert!(domain.is_domain());
@@ -89,14 +84,10 @@ fn test_encode_error_accessors_mapping_and_validation() {
     ));
     assert_eq!(
         Ok(()),
-        TranscodeEncodeError::<&str, char>::ensure_transcode_indices(
-            2, 1, 2, 1
-        ),
+        TranscodeEncodeError::<&str, char>::ensure_transcode_indices(2, 1, 2, 1),
     );
     assert!(matches!(
-        TranscodeEncodeError::<&str, char>::ensure_transcode_indices(
-            2, 3, 2, 1
-        ),
+        TranscodeEncodeError::<&str, char>::ensure_transcode_indices(2, 3, 2, 1),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InvalidInputIndex { .. }
         ))

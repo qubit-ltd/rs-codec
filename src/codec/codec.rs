@@ -38,18 +38,18 @@ use super::decode_failure::DecodeFailure;
 /// A codec may keep decode-side and encode-side stream state. That state is an
 /// implementation detail owned by the codec. Callers do not snapshot or restore
 /// it; implementations must keep their own state internally consistent across
-/// every public operation, including operations that return `Err`.
+/// every public operation. A failed decode attempt must not advance decode
+/// state, so callers can retry the same input after refilling their buffer or
+/// applying an invalid-input policy.
 ///
 /// Decode operations see only the currently supplied input slice and codec
-/// state. They do not receive an explicit EOF marker and they cannot look past
-/// the visible input. Returning [`DecodeFailure::Incomplete`] requests
-/// more input for the current value; it is not itself an EOF error. The default
-/// codec-backed streaming adapters therefore fit formats whose value boundary
-/// is locally decidable from the visible prefix plus codec state. Formats that
-/// require EOF-aware maximal-munch parsing, delayed boundary decisions, or
-/// reinterpretation of an incomplete tail at EOF should put that policy in a
-/// custom [`crate::Transcoder`] or value-level facade instead of relying on the
-/// default `Codec` bridge.
+/// state. [`decode`](Self::decode) treats that slice as an open stream segment;
+/// [`decode_eof`](Self::decode_eof) receives the same preconditions after the
+/// caller has established that no more units will arrive. Returning
+/// [`DecodeFailure::Incomplete`] from `decode` requests more input for the
+/// current value; it is not itself an EOF error. Codecs that need EOF-aware
+/// maximal-munch parsing or reinterpretation of a trailing prefix can override
+/// `decode_eof` without changing their streaming behavior.
 ///
 /// # Associated Types
 ///
@@ -163,21 +163,6 @@ pub trait Codec {
     /// the default `0`.
     const MAX_DECODE_FINISH_VALUES: usize = 0;
 
-    /// The aggregate maximum output count of either decode lifecycle phase.
-    ///
-    /// This derived bound is the larger of
-    /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) and
-    /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES). It does
-    /// not describe storage that preserves both phases simultaneously;
-    /// lifecycle-aware APIs use separate reset and finish buffers.
-    /// Implementations should not override this constant.
-    const MAX_DECODE_LIFECYCLE_VALUES: usize =
-        if Self::MAX_DECODE_RESET_VALUES > Self::MAX_DECODE_FINISH_VALUES {
-            Self::MAX_DECODE_RESET_VALUES
-        } else {
-            Self::MAX_DECODE_FINISH_VALUES
-        };
-
     /// Returns whether `value` is in this codec's encodable value domain.
     ///
     /// The default implementation returns `true`, which is correct for codecs
@@ -265,8 +250,8 @@ pub trait Codec {
     /// # Errors
     ///
     /// Returns `Self::EncodeError` when reset output cannot be emitted.
-    /// Implementations must leave their internal state consistent when
-    /// returning an error.
+    /// Implementations must leave decode state unchanged when returning an
+    /// error.
     ///
     /// # Safety
     ///
@@ -459,6 +444,29 @@ pub trait Codec {
         input_index: usize,
     ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>>;
 
+    /// Decodes one value after the caller has established end of input.
+    ///
+    /// This method has the same safety and state guarantees as
+    /// [`decode`](Self::decode), but may resolve an otherwise incomplete
+    /// trailing prefix using EOF-aware format rules. The default preserves the
+    /// open-stream behavior by delegating to [`decode`](Self::decode).
+    ///
+    /// # Safety
+    ///
+    /// The caller must satisfy the same input-index and minimum-readable-unit
+    /// preconditions as [`decode`](Self::decode). Implementations must not
+    /// read beyond the currently available units.
+    #[inline(always)]
+    #[must_use = "decoded value, consumed length, and decode errors must be handled"]
+    unsafe fn decode_eof(
+        &mut self,
+        input: &[Self::Unit],
+        input_index: usize,
+    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        // SAFETY: `decode_eof` has the same preconditions as `decode`.
+        unsafe { self.decode(input, input_index) }
+    }
+
     /// Finishes decode-side EOF state into `output`.
     ///
     /// `decode_finish` receives no source input. Callers must have already
@@ -534,33 +542,4 @@ where
             "Codec::MIN_UNITS_PER_VALUE must not exceed Codec::MAX_DECODE_UNITS_PER_VALUE",
         );
     }
-}
-
-/// Validates the declared bounds for a complete decode lifecycle.
-///
-/// # Type Parameters
-///
-/// - `C`: Codec whose decode lifecycle bounds are validated.
-///
-/// # Returns
-///
-/// Returns unit after verifying that [`Codec::MAX_DECODE_LIFECYCLE_VALUES`] is
-/// the larger of the codec's reset and finish output bounds.
-///
-/// # Panics
-///
-/// Panics when the codec overrides the derived lifecycle bound with a value
-/// that does not match its reset and finish bounds.
-#[inline(always)]
-pub(crate) fn assert_decode_lifecycle_bounds<C>()
-where
-    C: Codec,
-{
-    assert_unit_bounds::<C>();
-    let expected = C::MAX_DECODE_RESET_VALUES.max(C::MAX_DECODE_FINISH_VALUES);
-    assert_eq!(
-        C::MAX_DECODE_LIFECYCLE_VALUES,
-        expected,
-        "Codec::MAX_DECODE_LIFECYCLE_VALUES must match its lifecycle bounds",
-    );
 }

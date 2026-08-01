@@ -8,11 +8,7 @@
 //! Tests for the semantic transcode decoder marker trait.
 
 use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeDecoder,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, TranscodeDecodeError, TranscodeDecoder, TranscodeProgress, Transcoder,
 };
 
 #[derive(Default)]
@@ -23,10 +19,7 @@ impl Transcoder for ByteToChar {
     type Output = char;
     type Error = TranscodeDecodeError<core::convert::Infallible>;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -48,10 +41,7 @@ impl Transcoder for ByteToChar {
         input_index: usize,
         output: &mut [char],
         output_index: usize,
-    ) -> Result<
-        TranscodeProgress,
-        TranscodeDecodeError<core::convert::Infallible>,
-    > {
+    ) -> Result<TranscodeProgress, TranscodeDecodeError<core::convert::Infallible>> {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);

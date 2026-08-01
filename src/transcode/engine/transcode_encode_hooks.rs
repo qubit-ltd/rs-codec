@@ -7,15 +7,8 @@
 // =============================================================================
 //! Policy hooks used by buffered encoder engines.
 
-use super::{
-    encode_context::EncodeContext,
-    encode_unencodable_action::EncodeUnencodableAction,
-};
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeErrorOf,
-};
+use super::{encode_context::EncodeContext, encode_unencodable_action::EncodeUnencodableAction};
+use crate::{CapacityError, Codec, TranscodeEncodeErrorOf};
 
 /// Policy hooks for [`crate::engine::TranscodeEncodeEngine`].
 ///

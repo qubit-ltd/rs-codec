@@ -6,12 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    Codec,
-    CodecTranscodeDecoder,
-    TranscodeDecodeError,
-    Transcoder,
-};
+use qubit_codec::{Codec, CodecTranscodeDecoder, TranscodeDecodeError, Transcoder};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
@@ -38,10 +33,7 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -87,10 +79,7 @@ impl Codec for InvalidByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
             Err(qubit_codec::DecodeFailure::invalid(
                 InvalidByteError,
@@ -122,11 +111,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(
-            InvalidByteError,
-            0,
-            Some(crate::nz(1)),
-        ),
+        TranscodeDecodeError::domain_main_with_consumed(InvalidByteError, 0, Some(crate::nz(1)),),
         error,
     );
 }

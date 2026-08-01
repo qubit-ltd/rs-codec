@@ -9,15 +9,8 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    decode_context::DecodeContext,
-    decode_invalid_action::DecodeInvalidAction,
-};
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeErrorOf,
-};
+use super::{decode_context::DecodeContext, decode_invalid_action::DecodeInvalidAction};
+use crate::{CapacityError, Codec, TranscodeDecodeErrorOf};
 
 /// Policy hooks for [`crate::engine::TranscodeDecodeEngine`].
 ///
@@ -139,11 +132,11 @@ where
     /// cover every reachable transient hook and codec state, including the
     /// maximum hook-owned pending output that may be drained during transcode.
     ///
-    /// The default implementation divides `input_len` by
-    /// [`Codec::MIN_UNITS_PER_VALUE`]. Override it when hook policy can emit a
-    /// different number of values than direct codec decoding, for example when
-    /// invalid input is ignored, replaced, expanded, or when hook-owned pending
-    /// output can be drained during `transcode`.
+    /// The default implementation returns `input_len`, which remains
+    /// conservative when a replacement policy consumes fewer units than a
+    /// valid codec value. Override it when hook policy can emit more than one
+    /// value per source unit or when hook-owned pending output can be drained
+    /// during `transcode`.
     ///
     /// # Parameters
     ///
@@ -165,7 +158,7 @@ where
         _codec: &C,
         input_len: usize,
     ) -> Result<usize, CapacityError> {
-        Ok(input_len / C::MIN_UNITS_PER_VALUE)
+        Ok(input_len)
     }
 
     /// Returns an upper bound for values emitted by finishing hook-owned state.

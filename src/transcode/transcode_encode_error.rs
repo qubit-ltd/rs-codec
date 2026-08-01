@@ -10,8 +10,7 @@
 use thiserror::Error;
 
 use super::{
-    capacity_error::CapacityError,
-    transcode_domain_error::TranscodeDomainError,
+    capacity_error::CapacityError, transcode_domain_error::TranscodeDomainError,
     transcode_failure::TranscodeFailure,
 };
 use crate::Codec;
@@ -76,11 +75,7 @@ impl<E, V> TranscodeEncodeError<E, V> {
 
     /// Creates an incomplete-input framework error.
     #[inline(always)]
-    pub const fn incomplete_input(
-        input_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
+    pub const fn incomplete_input(input_index: usize, required: usize, available: usize) -> Self {
         Self::Failure(TranscodeFailure::incomplete_input(
             input_index,
             required,
@@ -173,9 +168,7 @@ impl<E, V> TranscodeEncodeError<E, V> {
     #[must_use]
     pub const fn unencodable_ref(&self) -> Option<(usize, Option<&V>)> {
         match self {
-            Self::Unencodable { input_index, value } => {
-                Some((*input_index, value.as_ref()))
-            }
+            Self::Unencodable { input_index, value } => Some((*input_index, value.as_ref())),
             Self::Failure(_) | Self::Domain(_) => None,
         }
     }
@@ -191,9 +184,7 @@ impl<E, V> TranscodeEncodeError<E, V> {
             Self::Unencodable { input_index, value } => {
                 TranscodeEncodeError::Unencodable { input_index, value }
             }
-            Self::Domain(error) => {
-                TranscodeEncodeError::Domain(error.map_source(f))
-            }
+            Self::Domain(error) => TranscodeEncodeError::Domain(error.map_source(f)),
         }
     }
 
@@ -205,24 +196,18 @@ impl<E, V> TranscodeEncodeError<E, V> {
     {
         match self {
             Self::Failure(failure) => TranscodeEncodeError::Failure(failure),
-            Self::Unencodable { input_index, value } => {
-                TranscodeEncodeError::Unencodable {
-                    input_index,
-                    value: value.map(f),
-                }
-            }
+            Self::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
+                input_index,
+                value: value.map(f),
+            },
             Self::Domain(error) => TranscodeEncodeError::Domain(error),
         }
     }
 
     /// Ensures the output index is valid.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_index(output_len, output_index)
-            .map_err(Self::from)
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+        TranscodeFailure::ensure_output_index(output_len, output_index).map_err(Self::from)
     }
 
     /// Ensures input and output indices are valid.
@@ -233,13 +218,8 @@ impl<E, V> TranscodeEncodeError<E, V> {
         output_len: usize,
         output_index: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_transcode_indices(
-            input_len,
-            input_index,
-            output_len,
-            output_index,
-        )
-        .map_err(Self::from)
+        TranscodeFailure::ensure_transcode_indices(input_len, input_index, output_len, output_index)
+            .map_err(Self::from)
     }
 
     /// Ensures output capacity is sufficient.
@@ -249,12 +229,8 @@ impl<E, V> TranscodeEncodeError<E, V> {
         output_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_capacity(
-            output_len,
-            output_index,
-            required,
-        )
-        .map_err(Self::from)
+        TranscodeFailure::ensure_output_capacity(output_len, output_index, required)
+            .map_err(Self::from)
     }
 }
 

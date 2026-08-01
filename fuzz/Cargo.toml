@@ -25,3 +25,10 @@ path = "fuzz_targets/transcode_decode_input_lifecycle.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "transcode_decode_engine"
+path = "fuzz_targets/transcode_decode_engine.rs"
+test = false
+doc = false
+bench = false
