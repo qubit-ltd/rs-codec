@@ -219,9 +219,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 2,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
@@ -246,9 +244,7 @@ fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 1,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
@@ -287,9 +283,7 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
         .expect("incomplete codec failure should request more input");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            input_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );
@@ -371,9 +365,7 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
         .expect("partial input should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            input_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );

@@ -133,9 +133,7 @@ impl Transcoder for CopyEncoder {
             Ok(TranscodeProgress::complete(written, written))
         } else {
             Ok(TranscodeProgress::need_output(
-                output_index + written,
                 qubit_codec::nz(1),
-                output.len() - written,
                 written,
                 written,
             ))
@@ -207,7 +205,7 @@ fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending(
 
     complete(output.reset_async(&mut encoder, &mut map_error))?;
     assert_eq!(
-        TranscodeProgress::need_output(2, qubit_codec::nz(1), 0, 1, 1),
+        TranscodeProgress::need_output(qubit_codec::nz(1), 1, 1),
         complete(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2,))?,
     );
     assert_eq!(
@@ -236,7 +234,7 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending() ->
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(progress)) => {
             assert_eq!(
-                TranscodeProgress::need_output(1, qubit_codec::nz(1), 0, 1, 1),
+                TranscodeProgress::need_output(qubit_codec::nz(1), 1, 1),
                 progress,
             );
         }

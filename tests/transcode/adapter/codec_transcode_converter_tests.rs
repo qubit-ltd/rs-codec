@@ -499,9 +499,7 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() 
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 4,
             required: crate::nz(2),
-            available: 0,
         },
         progress.status(),
     );
@@ -574,9 +572,7 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
         .expect("strict converter should classify incomplete input");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            input_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );
@@ -611,9 +607,7 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
 
     assert_eq!(
         TranscodeStatus::NeedInput {
-            input_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );
@@ -640,9 +634,7 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );
@@ -811,9 +803,7 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
         .expect("partial value should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            input_index: 0,
             required: crate::nz(2),
-            available: 1,
         },
         progress.status(),
     );

@@ -64,11 +64,9 @@ impl TranscodeProgress {
     ///
     /// # Parameters
     ///
-    /// - `input_index`: Absolute input boundary where conversion stopped.
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
-    /// - `available`: Input units currently available at the boundary.
     /// - `read`: Number of consumed input units.
     /// - `written`: Number of produced output units.
     ///
@@ -77,28 +75,16 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_input(
-        input_index: usize,
-        required: NonZeroUsize,
-        available: usize,
-        read: usize,
-        written: usize,
-    ) -> Self {
-        Self::new(
-            TranscodeStatus::need_input(input_index, required, available),
-            read,
-            written,
-        )
+    pub const fn need_input(required: NonZeroUsize, read: usize, written: usize) -> Self {
+        Self::new(TranscodeStatus::need_input(required), read, written)
     }
 
     /// Creates progress that stopped because more output capacity is needed.
     ///
     /// # Parameters
     ///
-    /// - `output_index`: Absolute output boundary where conversion stopped.
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Output units currently available at the boundary.
     /// - `read`: Number of consumed input units.
     /// - `written`: Number of produced output units.
     ///
@@ -107,18 +93,8 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_output(
-        output_index: usize,
-        required: NonZeroUsize,
-        available: usize,
-        read: usize,
-        written: usize,
-    ) -> Self {
-        Self::new(
-            TranscodeStatus::need_output(output_index, required, available),
-            read,
-            written,
-        )
+    pub const fn need_output(required: NonZeroUsize, read: usize, written: usize) -> Self {
+        Self::new(TranscodeStatus::need_output(required), read, written)
     }
 
     /// Returns the status that stopped conversion.
@@ -198,9 +174,9 @@ impl TranscodeProgress {
     ///
     /// Buffered drivers should call this before using [`Self::read`] or
     /// [`Self::written`] to advance unchecked input or output cursors. The
-    /// method checks relative counters, absolute status indices, unsatisfied
-    /// `NeedInput` / `NeedOutput` requirements, and the `Complete` invariant
-    /// that all visible input was consumed.
+    /// method checks relative counters, unsatisfied `NeedInput` / `NeedOutput`
+    /// requirements, and the `Complete` invariant that all visible input was
+    /// consumed.
     ///
     /// This is a contract checker, not a semantic recovery policy. It performs
     /// the same validation in every build profile. Drivers that advance unsafe
@@ -225,8 +201,8 @@ impl TranscodeProgress {
     /// # Errors
     ///
     /// Returns [`TranscodeContractError`] when a custom transcoder reports
-    /// counters, status indices, or missing-capacity requirements that do not
-    /// match the buffers supplied by the caller.
+    /// counters or missing-capacity requirements that do not match the buffers
+    /// supplied by the caller.
     pub fn validate(
         &self,
         input_index: usize,
@@ -247,21 +223,18 @@ impl TranscodeProgress {
             });
         }
 
-        let expected_input_index = input_index.checked_add(self.read).ok_or(
+        input_index.checked_add(self.read).ok_or(
             TranscodeContractError::ProgressIndexOverflow {
                 index: input_index,
                 advanced: self.read,
             },
         )?;
-        let expected_output_index = output_index.checked_add(self.written).ok_or(
+        output_index.checked_add(self.written).ok_or(
             TranscodeContractError::ProgressIndexOverflow {
                 index: output_index,
                 advanced: self.written,
             },
         )?;
-        let expected_input_available = available_input - self.read;
-        let expected_output_available = available_output - self.written;
-
         match self.status {
             TranscodeStatus::Complete => {
                 if self.read != available_input {
@@ -272,23 +245,8 @@ impl TranscodeProgress {
                 }
                 Ok(())
             }
-            TranscodeStatus::NeedInput {
-                input_index,
-                required,
-                available,
-            } => {
-                if input_index != expected_input_index {
-                    return Err(TranscodeContractError::StatusIndexMismatch {
-                        reported: input_index,
-                        expected: expected_input_index,
-                    });
-                }
-                if available != expected_input_available {
-                    return Err(TranscodeContractError::StatusAvailableMismatch {
-                        reported: available,
-                        expected: expected_input_available,
-                    });
-                }
+            TranscodeStatus::NeedInput { required } => {
+                let available = available_input - self.read;
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {
                         required: required.get(),
@@ -297,23 +255,8 @@ impl TranscodeProgress {
                 }
                 Ok(())
             }
-            TranscodeStatus::NeedOutput {
-                output_index,
-                required,
-                available,
-            } => {
-                if output_index != expected_output_index {
-                    return Err(TranscodeContractError::StatusIndexMismatch {
-                        reported: output_index,
-                        expected: expected_output_index,
-                    });
-                }
-                if available != expected_output_available {
-                    return Err(TranscodeContractError::StatusAvailableMismatch {
-                        reported: available,
-                        expected: expected_output_available,
-                    });
-                }
+            TranscodeStatus::NeedOutput { required } => {
+                let available = available_output - self.written;
                 if required.get() <= available {
                     return Err(TranscodeContractError::SatisfiedNeed {
                         required: required.get(),

@@ -99,9 +99,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(read, written))
         } else {
             let status = TranscodeStatus::NeedOutput {
-                output_index: output_index + written,
                 required: crate::nz(1),
-                available: output.len().saturating_sub(output_index + written),
             };
             Ok(TranscodeProgress::new(status, read, written))
         }
@@ -240,9 +238,7 @@ impl Transcoder for PairTranscoder {
             }
             return Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedInput {
-                    input_index: input_index + complete_len,
                     required: crate::nz(2),
-                    available: 1,
                 },
                 complete_len,
                 complete_len / 2,

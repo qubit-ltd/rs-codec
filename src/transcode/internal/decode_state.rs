@@ -176,7 +176,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Returns progress with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     pub(in crate::transcode) fn need_output_progress(&self) -> TranscodeProgress {
-        self.state.need_output_progress(NonZeroUsize::MIN, 0)
+        self.state.need_output_progress(NonZeroUsize::MIN)
     }
 
     /// Returns progress for a policy-selected need-input stop.
@@ -186,8 +186,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// - `required`: Current minimum total source units required before
     ///   retrying from the current input position. A later retry may raise this
     ///   lower bound.
-    /// - `available`: Source units visible at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns progress at the current decode cursor.
@@ -195,9 +193,8 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     pub(in crate::transcode) fn need_input_progress_with(
         &self,
         required: NonZeroUsize,
-        available: usize,
     ) -> TranscodeProgress {
-        self.state.need_input_progress(required, available)
+        self.state.need_input_progress(required)
     }
 
     /// Applies one decode outcome to this decode state.
@@ -230,9 +227,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
                 self.skip(read);
                 None
             }
-            DecodeOutcome::NeedInput { required } => {
-                Some(self.need_input_progress_with(required, self.available()))
-            }
+            DecodeOutcome::NeedInput { required } => Some(self.need_input_progress_with(required)),
         }
     }
 }

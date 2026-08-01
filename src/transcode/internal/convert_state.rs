@@ -207,19 +207,13 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
-    /// - `available`: Input units currently available at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
-    pub(crate) fn need_input_progress(
-        &self,
-        required: NonZeroUsize,
-        available: usize,
-    ) -> TranscodeProgress {
-        self.state.need_input_progress(required, available)
+    pub(crate) fn need_input_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
+        self.state.need_input_progress(required)
     }
 
     /// Returns progress for missing output.
@@ -228,19 +222,13 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Output units currently available at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
-    pub(crate) fn need_output_progress(
-        &self,
-        required: NonZeroUsize,
-        available: usize,
-    ) -> TranscodeProgress {
-        self.state.need_output_progress(required, available)
+    pub(crate) fn need_output_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
+        self.state.need_output_progress(required)
     }
 
     /// Applies one decode outcome to this conversion state.
@@ -272,9 +260,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
                 self.advance_input(read.get());
                 None
             }
-            DecodeOutcome::NeedInput { required } => {
-                Some(self.need_input_progress(required, self.available_input()))
-            }
+            DecodeOutcome::NeedInput { required } => Some(self.need_input_progress(required)),
         }
     }
 
@@ -306,7 +292,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
                     required.get() > available,
                     "EncodeOutcome::NeedOutput required capacity must exceed available output",
                 );
-                Some(self.need_output_progress(required, available))
+                Some(self.need_output_progress(required))
             }
         }
     }

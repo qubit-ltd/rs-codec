@@ -822,9 +822,7 @@ fn test_buffered_encode_engine_uses_exact_value_width_for_output_pressure() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 1,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
@@ -920,9 +918,7 @@ fn test_buffered_encode_engine_replacement_waits_for_output_capacity() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
