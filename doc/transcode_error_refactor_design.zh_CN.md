@@ -52,7 +52,8 @@ enum TranscodeConvertError<DE, EE, V> {
 
 ## 强制生命周期
 
-所有引擎和 `Transcoder` adapter 都遵循：
+所有内置 transcode engine 都强制遵循，I/O adapter 则按该顺序调用底层
+`Transcoder`：
 
 ```text
 reset → transcode* → finish
@@ -68,6 +69,10 @@ reset 或 finish 在 codec/hook 已可能修改状态后失败，会进入 `Pois
 `LifecycleGuard` 在所有构建 profile 都执行检查，避免 debug/release 行为分叉。对应
 的错误是 `TranscodeBeforeReset`、`FinishBeforeReset`、`TranscodeAfterFinish`、
 `FinishAfterFinish` 和 `LifecyclePoisoned`。
+
+`Transcoder` trait 允许自定义实现直接定义三个方法，因此 trait 本身不能替实现者
+拦截任意状态突变；自定义实现必须遵守同一契约，或由调用方包在能执行该检查的
+engine 中。
 
 ## 编码 hook 上下文
 
