@@ -9,6 +9,7 @@
 mod applied_decode_invalid_action_tests;
 mod convert_state_tests;
 mod decode_state_tests;
+mod encode_attempt_tests;
 mod encode_state_tests;
 mod lifecycle_guard_tests;
 mod lifecycle_phase_tests;

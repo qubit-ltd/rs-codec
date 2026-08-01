@@ -6,29 +6,25 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{CodecTranscodeEncoder, TranscodeStatus, Transcoder};
+use qubit_codec::{CodecTranscodeEncoder, Transcoder};
 
 use crate::common::IdentityCodec;
 
 #[test]
-fn test_encode_state_stops_before_input_when_output_is_full() {
+fn test_encode_attempt_is_exercised_by_encoder() {
     let mut encoder = CodecTranscodeEncoder::new(IdentityCodec);
     let mut reset_output = [];
     encoder
         .reset(&mut reset_output, 0)
         .expect("initialize stream");
 
-    let mut output = [];
-
+    let mut output = [0_u8; 1];
     let progress = encoder
-        .transcode(&[9], 0, &mut output, 0)
-        .expect("short output should be reported as progress");
+        .transcode(&[7], 0, &mut output, 0)
+        .expect("encode attempt should complete");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
-        },
-        progress.status(),
-    );
-    assert_eq!((0, 0), (progress.read(), progress.written()));
+    assert!(progress.is_complete());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([7], output);
 }

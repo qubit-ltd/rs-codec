@@ -261,8 +261,6 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
-    /// - `available`: Input units currently available at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with need-input status.
@@ -271,15 +269,8 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     pub(in crate::transcode) fn need_input_progress(
         &self,
         required: NonZeroUsize,
-        available: usize,
     ) -> TranscodeProgress {
-        TranscodeProgress::need_input(
-            self.input_cursor,
-            required,
-            available,
-            self.read(),
-            self.written(),
-        )
+        TranscodeProgress::need_input(required, self.read(), self.written())
     }
 
     /// Returns progress for missing output.
@@ -288,8 +279,6 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     ///
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Output units currently available at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with need-output status.
@@ -298,14 +287,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     pub(in crate::transcode) fn need_output_progress(
         &self,
         required: NonZeroUsize,
-        available: usize,
     ) -> TranscodeProgress {
-        TranscodeProgress::need_output(
-            self.output_cursor,
-            required,
-            available,
-            self.read(),
-            self.written(),
-        )
+        TranscodeProgress::need_output(required, self.read(), self.written())
     }
 }

@@ -9,79 +9,15 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::engine::{EncodeContext, EncodeOutcome};
+use super::super::engine::EncodeOutcome;
 use super::super::transcode_progress::TranscodeProgress;
+use super::encode_attempt::EncodeAttempt;
 use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered encode call.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
     /// Shared input/output state for this encode call.
     state: TranscodeState<'a, Value, Unit>,
-}
-
-/// Engine-owned mutable state for one encode attempt.
-pub(in crate::transcode) struct EncodeAttempt<'a, Value, Unit> {
-    /// Input value being encoded.
-    value: &'a Value,
-    /// Absolute input index of `value`.
-    input_index: usize,
-    /// Complete mutable output slice owned by the engine.
-    output: &'a mut [Unit],
-    /// Absolute output index where writing begins.
-    output_index: usize,
-}
-
-impl<'a, Value, Unit> EncodeAttempt<'a, Value, Unit> {
-    /// Creates an engine-owned encode attempt.
-    #[inline(always)]
-    pub(in crate::transcode) fn new(
-        value: &'a Value,
-        input_index: usize,
-        output: &'a mut [Unit],
-        output_index: usize,
-    ) -> Self {
-        Self {
-            value,
-            input_index,
-            output,
-            output_index,
-        }
-    }
-
-    /// Returns the input value being encoded.
-    #[inline(always)]
-    pub(in crate::transcode) fn value(&self) -> &Value {
-        self.value
-    }
-
-    /// Returns the absolute input index.
-    #[inline(always)]
-    pub(in crate::transcode) const fn input_index(&self) -> usize {
-        self.input_index
-    }
-
-    /// Returns writable output capacity.
-    #[inline(always)]
-    pub(in crate::transcode) fn available_output(&self) -> usize {
-        self.output.len().saturating_sub(self.output_index)
-    }
-
-    /// Returns the read-only policy view for this attempt.
-    #[inline(always)]
-    pub(in crate::transcode) fn context(&self) -> EncodeContext<'_, Value> {
-        EncodeContext::new(
-            self.value,
-            self.input_index,
-            self.output_index,
-            self.available_output(),
-        )
-    }
-
-    /// Returns all mutable engine state for the encode operation.
-    #[inline(always)]
-    pub(in crate::transcode) fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
-        (self.value, self.input_index, self.output, self.output_index)
-    }
 }
 
 impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
@@ -182,8 +118,6 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Output units currently writable at the stop boundary.
-    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity
@@ -192,9 +126,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     pub(in crate::transcode) fn need_output_progress_with(
         &self,
         required: NonZeroUsize,
-        available: usize,
     ) -> TranscodeProgress {
-        self.state.need_output_progress(required, available)
+        self.state.need_output_progress(required)
     }
 
     /// Applies one encode outcome to this encode state.
@@ -222,7 +155,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
                     required.get() > available,
                     "EncodeOutcome::NeedOutput required capacity must exceed available output",
                 );
-                Some(self.need_output_progress_with(required, available))
+                Some(self.need_output_progress_with(required))
             }
         }
     }

@@ -10,8 +10,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::internal::{
-    encode_state::{EncodeAttempt, EncodeState},
-    lifecycle_guard::LifecycleGuard,
+    encode_attempt::EncodeAttempt, encode_state::EncodeState, lifecycle_guard::LifecycleGuard,
 };
 use super::{EncodeOutcome, EncodeUnencodableAction, TranscodeEncodeHooks};
 use crate::codec::assert_unit_bounds;
@@ -115,10 +114,10 @@ use crate::{
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
 ///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
-///     TranscodeStatus::NeedOutput { output_index, .. } => {
-///         assert_eq!(2, output_index);
+///     TranscodeStatus::NeedOutput { .. } => {
+///         assert_eq!(2, progress.written());
 ///         assert_eq!([1, 2], output);
-///         // Write out `output[..output_index]`, then resume at
+///         // Write out `output[..progress.written()]`, then resume at
 ///         // `progress.read()` with fresh output capacity.
 ///     }
 ///     TranscodeStatus::NeedInput { .. } => unreachable!("encoders do not read encoded input"),

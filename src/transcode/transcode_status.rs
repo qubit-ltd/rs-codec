@@ -27,37 +27,22 @@ pub enum TranscodeStatus {
     /// source is closed. Calling [`crate::Transcoder::finish`] does not pass
     /// this tail back to the transcoder.
     ///
-    /// - `input_index`: Absolute input index where input ended while decoding.
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
-    /// - `available`: Number of input units currently available from the
-    ///   current input position.
     NeedInput {
-        /// Absolute input index where input ended.
-        input_index: usize,
         /// Current minimum total input units required before retrying from the
         /// current input position. A later retry may raise this lower bound.
         required: NonZeroUsize,
-        /// Number of input units currently available.
-        available: usize,
     },
 
     /// More output capacity is needed before conversion can continue.
     ///
-    /// - `output_index`: Absolute output index where output ended while
-    ///   decoding.
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Number of output units currently available from the
-    ///   current output position.
     NeedOutput {
-        /// Absolute output index where output ended.
-        output_index: usize,
         /// Total output units required from the current output position.
         required: NonZeroUsize,
-        /// Number of output units currently available.
-        available: usize,
     },
 }
 
@@ -66,48 +51,32 @@ impl TranscodeStatus {
     ///
     /// # Parameters
     ///
-    /// - `input_index`: Absolute input boundary where conversion stopped.
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
-    /// - `available`: Input units currently available at the boundary.
     ///
     /// # Returns
     ///
     /// Returns a [`TranscodeStatus::NeedInput`] value.
     #[inline(always)]
     #[must_use]
-    pub const fn need_input(input_index: usize, required: NonZeroUsize, available: usize) -> Self {
-        Self::NeedInput {
-            input_index,
-            required,
-            available,
-        }
+    pub const fn need_input(required: NonZeroUsize) -> Self {
+        Self::NeedInput { required }
     }
 
     /// Creates a status that requests more output capacity.
     ///
     /// # Parameters
     ///
-    /// - `output_index`: Absolute output boundary where conversion stopped.
     /// - `required`: Total output units required from the current output
     ///   position.
-    /// - `available`: Output units currently available at the boundary.
     ///
     /// # Returns
     ///
     /// Returns a [`TranscodeStatus::NeedOutput`] value.
     #[inline(always)]
     #[must_use]
-    pub const fn need_output(
-        output_index: usize,
-        required: NonZeroUsize,
-        available: usize,
-    ) -> Self {
-        Self::NeedOutput {
-            output_index,
-            required,
-            available,
-        }
+    pub const fn need_output(required: NonZeroUsize) -> Self {
+        Self::NeedOutput { required }
     }
 }

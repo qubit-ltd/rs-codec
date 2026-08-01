@@ -1324,9 +1324,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
@@ -1355,9 +1353,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
         .expect("conversion should retain decoded value when output is empty");
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );
@@ -1368,9 +1364,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
         .expect("conversion should report pending output before reading new input");
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );

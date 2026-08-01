@@ -1,5 +1,16 @@
 # Transcode benchmarks
 
+Compare the public codec adapter with a direct safe copy loop using:
+
+```bash
+cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- codec_adapter
+cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- safe_copy_loop
+```
+
+This measures the complete `CodecTranscodeDecoder` path, including progress
+bookkeeping and lifecycle state, against an equivalent safe copy loop. The
+buffers and reset setup are allocated outside the timed iterations.
+
 Run the safe/unchecked indexing A/B benchmark with:
 
 ```bash

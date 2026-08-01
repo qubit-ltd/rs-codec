@@ -138,11 +138,13 @@ use crate::{
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
 ///     TranscodeStatus::Complete => assert_eq!(&output[..progress.written()], b"a?b"),
-///     TranscodeStatus::NeedInput { input_index, .. } => {
-///         // Keep `input[input_index..]`, append more source units, and resume.
+///     TranscodeStatus::NeedInput { .. } => {
+///         // Keep `input[input_index + progress.read()..]`, append more source
+///         // units, and resume.
 ///     }
-///     TranscodeStatus::NeedOutput { output_index, .. } => {
-///         // Drain `output[..output_index]`, then resume with more output room.
+///     TranscodeStatus::NeedOutput { .. } => {
+///         // Drain `output[..progress.written()]`, then resume with more output
+///         // room.
 ///     }
 /// }
 /// # Ok::<(), qubit_codec::TranscodeDecodeError<ByteDecodeError>>(())
@@ -468,7 +470,7 @@ where
             let context = state.context();
             let available = context.available();
             if available < min_units_len {
-                return Ok(state.need_input_progress_with(min_units, available));
+                return Ok(state.need_input_progress_with(min_units));
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());

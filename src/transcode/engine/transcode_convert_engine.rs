@@ -14,7 +14,7 @@
 use core::num::NonZeroUsize;
 
 use super::super::internal::{
-    convert_state::ConvertState, encode_state::EncodeAttempt, lifecycle_guard::LifecycleGuard,
+    convert_state::ConvertState, encode_attempt::EncodeAttempt, lifecycle_guard::LifecycleGuard,
     pending_value::PendingValue, pending_value_slot::PendingValueSlot,
 };
 use super::{
@@ -207,10 +207,10 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 ///
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
-///     TranscodeStatus::NeedOutput { output_index, .. } => {
-///         assert_eq!(2, output_index);
+///     TranscodeStatus::NeedOutput { .. } => {
+///         assert_eq!(2, progress.written());
 ///         assert_eq!([2, 3], output);
-///         // Drain `output[..output_index]`, then resume at
+///         // Drain `output[..progress.written()]`, then resume at
 ///         // `progress.read()` with fresh output capacity.
 ///     }
 ///     TranscodeStatus::Complete => unreachable!("output is intentionally short"),
@@ -611,7 +611,7 @@ where
         while state.has_input() {
             let available = state.available_input();
             if available < min_input_len {
-                return Ok(state.need_input_progress(min_input_units, available));
+                return Ok(state.need_input_progress(min_input_units));
             }
 
             let previous_read = state.read();
