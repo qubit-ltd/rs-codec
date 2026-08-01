@@ -5,127 +5,80 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Encode context for one buffered encode attempt.
+//! Read-only policy context for one buffered encode attempt.
 
-/// Context for one encode attempt inside a buffered encoder engine.
+/// Read-only context supplied to an encode policy hook.
 ///
-/// The context carries the current input value and output cursor used by the
-/// encode engine while producing one internal step outcome. It is public so
-/// lower-level engine helpers can share the same cursor representation.
+/// The engine retains ownership of the mutable output slice. Hooks can inspect
+/// the current value and cursor/capacity metadata, then return an
+/// [`crate::engine::EncodeUnencodableAction`] without being able to mutate
+/// output behind the engine's progress accounting.
 ///
 /// # Type Parameters
 ///
 /// - `Value`: Logical input value type.
-/// - `Unit`: Encoded output unit type.
-#[derive(Debug)]
-pub struct EncodeContext<'a, Value, Unit> {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EncodeContext<'a, Value> {
     input_value: &'a Value,
     input_index: usize,
-    output: &'a mut [Unit],
     output_index: usize,
+    available_output: usize,
 }
 
-impl<'a, Value, Unit> EncodeContext<'a, Value, Unit> {
-    /// Creates an encode context.
+impl<'a, Value> EncodeContext<'a, Value> {
+    /// Creates an encode policy context.
     ///
     /// # Parameters
     ///
     /// - `input_value`: Borrowed input value being encoded.
     /// - `input_index`: Absolute input index of `input_value`.
-    /// - `output`: Complete output unit slice visible to the encoder.
-    /// - `output_index`: Start position in `output` where writing begins.
+    /// - `output_index`: Absolute output index where writing begins.
+    /// - `available_output`: Output units writable from `output_index`.
     ///
     /// # Returns
     ///
-    /// Returns an encode context.
+    /// Returns a read-only encode context.
     #[inline(always)]
     #[must_use]
-    pub fn new(
+    pub const fn new(
         input_value: &'a Value,
         input_index: usize,
-        output: &'a mut [Unit],
         output_index: usize,
+        available_output: usize,
     ) -> Self {
         Self {
             input_value,
             input_index,
-            output,
             output_index,
+            available_output,
         }
     }
 
     /// Returns the input value being encoded.
-    ///
-    /// # Returns
-    ///
-    /// Returns a shared reference to the current input value.
     #[inline(always)]
     #[must_use]
-    pub fn input_value(&self) -> &Value {
+    pub const fn input_value(&self) -> &Value {
         self.input_value
     }
 
     /// Returns the absolute input index of the current value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the absolute input index.
     #[inline(always)]
     #[must_use]
-    pub fn input_index(&self) -> usize {
+    pub const fn input_index(&self) -> usize {
         self.input_index
     }
 
-    /// Returns the complete output unit slice visible to the encoder.
-    ///
-    /// # Returns
-    ///
-    /// Returns the output slice.
+    /// Returns the absolute output index where writing begins.
     #[inline(always)]
     #[must_use]
-    pub fn output(&mut self) -> &mut [Unit] {
-        self.output
-    }
-
-    /// Returns the start position in the output slice where writing begins.
-    ///
-    /// # Returns
-    ///
-    /// Returns the absolute output index.
-    #[inline(always)]
-    #[must_use]
-    pub fn output_index(&self) -> usize {
+    pub const fn output_index(&self) -> usize {
         self.output_index
     }
 
-    /// Returns writable output units from the current output index.
-    ///
-    /// # Returns
-    ///
     /// Returns output capacity visible to this encode attempt.
     #[inline(always)]
     #[must_use]
-    pub fn available_output(&self) -> usize {
-        self.output.len().saturating_sub(self.output_index)
-    }
-
-    /// Consumes the context and returns all parts.
-    ///
-    /// Use this when you need simultaneous access to the input value reference
-    /// and the mutable output slice, since Rust's borrow checker disallows
-    /// taking `&self` and `&mut self` in the same expression.
-    ///
-    /// # Returns
-    ///
-    /// Returns `(input_value, input_index, output, output_index)`.
-    #[inline(always)]
-    #[must_use]
-    pub fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
-        (
-            self.input_value,
-            self.input_index,
-            self.output,
-            self.output_index,
-        )
+    pub const fn available_output(&self) -> usize {
+        self.available_output
     }
 }

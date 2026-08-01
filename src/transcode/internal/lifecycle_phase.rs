@@ -11,15 +11,18 @@
 ///
 /// The variant ordering mirrors the documented call sequence:
 ///
-/// 1. `Fresh` — newly constructed, or just reset; first input may be supplied.
-/// 2. `Streaming` — at least one `transcode` call has been observed.
-/// 3. `Finished` — `finish` completed; the only legal next step is `reset`.
-/// 4. `Poisoned` — reset or finish execution failed after state may have
+/// 1. `Uninitialized` — newly constructed; only `reset` is legal.
+/// 2. `Fresh` — just reset; first input may be supplied.
+/// 3. `Streaming` — at least one `transcode` call has been observed.
+/// 4. `Finished` — `finish` completed; the only legal next step is `reset`.
+/// 5. `Poisoned` — reset or finish execution failed after state may have
 ///    changed; only a successful `reset` can return to `Fresh`.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub(in crate::transcode) enum LifecyclePhase {
-    /// Fresh or just-reset engine ready to accept the next logical stream.
+    /// Newly constructed engine that has not been reset.
     #[default]
+    Uninitialized,
+    /// Fresh or just-reset engine ready to accept the next logical stream.
     Fresh,
     /// At least one `transcode` call has been observed since the last reset.
     Streaming,

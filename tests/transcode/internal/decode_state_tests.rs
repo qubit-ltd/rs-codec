@@ -13,6 +13,11 @@ use crate::common::IdentityCodec;
 #[test]
 fn test_decode_state_advances_input_and_output_together() {
     let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = decoder

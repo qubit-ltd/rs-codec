@@ -354,7 +354,7 @@ impl TranscodeEncodeHooks<ResetEmittingTargetCodec> for ResetTargetHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetEmittingTargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeErrorOf<ResetEmittingTargetCodec>,
@@ -370,7 +370,7 @@ impl TranscodeEncodeHooks<FinishOverflowTargetCodec> for FinishOverflowEncodeHoo
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut FinishOverflowTargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeErrorOf<FinishOverflowTargetCodec>,
@@ -390,7 +390,7 @@ impl TranscodeEncodeHooks<ResetFailTargetCodec> for ResetFailTargetHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut ResetFailTargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeErrorOf<ResetFailTargetCodec>,
@@ -524,7 +524,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeErrorOf<C>> {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -554,7 +554,7 @@ impl TranscodeEncodeHooks<TargetCodec> for PerBatchOverheadEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        context: &EncodeContext<'_, u8, u8>,
+        context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -578,7 +578,7 @@ impl TranscodeEncodeHooks<MismatchCapacityTargetCodec> for MismatchCapacityEncod
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut MismatchCapacityTargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeErrorOf<MismatchCapacityTargetCodec>,
@@ -811,7 +811,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FinishEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        context: &EncodeContext<'_, u8, u8>,
+        context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -936,7 +936,7 @@ impl TranscodeEncodeHooks<TargetCodec> for ErrorPathEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         match self.mode {
             ErrorPathEncodeMode::PrepareError => Err(TranscodeEncodeError::domain_main(
@@ -1017,7 +1017,7 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut TargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, qubit_codec::TranscodeEncodeErrorOf<TargetCodec>> {
         Err(TranscodeEncodeError::domain_main(
             EngineError::Encode,
@@ -1030,12 +1030,16 @@ type CopyConvertEngine =
     TranscodeConvertEngine<SourceCodec, TargetCodec, StrictDecodeHooks, StrictEncodeHooks>;
 
 fn new_copy_engine() -> CopyConvertEngine {
-    TranscodeConvertEngine::new(
+    let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         StrictDecodeHooks,
         StrictEncodeHooks,
-    )
+    );
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before copy conversion");
+    engine
 }
 
 #[test]
@@ -1079,7 +1083,7 @@ fn new_error_path_engine(
 fn new_finish_engine(
     hooks: FinishHooks,
 ) -> TranscodeConvertEngine<SourceCodec, TargetCodec, FinishDecodeHooks, StrictEncodeHooks> {
-    TranscodeConvertEngine::new(
+    let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         FinishDecodeHooks {
@@ -1088,38 +1092,54 @@ fn new_finish_engine(
             fail: false,
         },
         StrictEncodeHooks,
-    )
+    );
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before finish conversion");
+    engine
 }
 
 fn new_batch_finish_engine()
 -> TranscodeConvertEngine<SourceCodec, TargetCodec, BatchFinishDecodeHooks, StrictEncodeHooks> {
-    TranscodeConvertEngine::new(
+    let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         BatchFinishDecodeHooks::default(),
         StrictEncodeHooks,
-    )
+    );
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before batch finish conversion");
+    engine
 }
 
 fn new_finish_encode_engine()
 -> TranscodeConvertEngine<SourceCodec, TargetCodec, StrictDecodeHooks, FinishEncodeHooks> {
-    TranscodeConvertEngine::new(
+    let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
         StrictDecodeHooks,
         FinishEncodeHooks::default(),
-    )
+    );
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before finish encode conversion");
+    engine
 }
 
 fn new_repair_engine(
     action: RepairAction,
 ) -> TranscodeConvertEngine<ErrorSourceCodec, TargetCodec, RepairDecodeHooks, StrictEncodeHooks> {
-    TranscodeConvertEngine::new(
+    let mut engine = TranscodeConvertEngine::new(
         ErrorSourceCodec,
         TargetCodec,
         RepairDecodeHooks { action },
         StrictEncodeHooks,
-    )
+    );
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before repair conversion");
+    engine
 }
 
 #[test]
@@ -1226,6 +1246,9 @@ fn test_buffered_convert_engine_default_builds_engine() {
         StrictDecodeHooks,
         StrictEncodeHooks,
     >::default();
+    engine
+        .reset(&mut [], 0)
+        .expect("reset before default converter transcode");
     let mut output = [0_u8; 1];
 
     let progress = engine
@@ -1247,6 +1270,11 @@ fn test_buffered_convert_engine_new_uses_supplied_components() {
         StrictDecodeHooks,
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = engine
@@ -1266,6 +1294,10 @@ fn test_buffered_convert_engine_new_uses_supplied_policy_hooks() {
         FactoryDecodeHooks { marker: 11 },
         FactoryEncodeHooks { offset: 7 },
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     assert_eq!(Ok(12), engine.max_transcode_output_len(1));
 
@@ -1457,6 +1489,10 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
         encode_max_output_error_for_len: Some(2),
         ..ErrorPathHooks::default()
     });
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
     let error = engine
         .finish(&mut [], 0)
         .expect_err("encoding decoder finish values should report bound overflow");
@@ -1499,34 +1535,34 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     assert_eq!(TranscodeConvertError::output_length_overflow(), error);
 
     let mut engine = new_error_path_engine(ErrorPathHooks {
-        encode_max_output_error: true,
+        encode_max_output_error_for_len: Some(1),
         ..ErrorPathHooks::default()
     });
-    let mut empty_output = [0_u8; 0];
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+    assert_eq!(
+        Err(CapacityError::OutputLengthOverflow),
+        engine.max_transcode_output_len(1)
+    );
     let progress = engine
-        .transcode(&[1], 0, &mut empty_output, 0)
-        .expect("conversion should retain pending value");
+        .transcode(&[1], 0, &mut [], 0)
+        .expect("output pressure should be reported before encoding");
     assert!(matches!(
         progress.status(),
         TranscodeStatus::NeedOutput { .. }
     ));
-    assert_eq!(
-        Err(CapacityError::OutputLengthOverflow),
-        engine.max_transcode_output_len(0)
-    );
-    assert_eq!(
-        Err(CapacityError::OutputLengthOverflow),
-        engine.max_finish_output_len()
-    );
-    let error = engine
-        .finish(&mut empty_output, 0)
-        .expect_err("pending output bound overflow should be mapped by finish");
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
 
+    let mut empty_output = [0_u8; 0];
     let mut engine = new_error_path_engine(ErrorPathHooks {
         decode_finish_len: usize::MAX,
         ..ErrorPathHooks::default()
     });
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
     let progress = engine
         .transcode(&[1], 0, &mut empty_output, 0)
         .expect("conversion should retain pending value");
@@ -1552,6 +1588,11 @@ fn test_buffered_convert_engine_finish_maps_encoder_finish_bound_overflow() {
         StrictDecodeHooks,
         FinishOverflowEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     assert_eq!(
         Err(CapacityError::OutputLengthOverflow),
         engine.max_finish_output_len()
@@ -1572,6 +1613,11 @@ fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow
         FixedFinishBoundDecodeHooks { finish_len: 1 },
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     assert_eq!(
@@ -1596,6 +1642,11 @@ fn test_buffered_convert_engine_finish_maps_late_decode_finish_bound_overflow() 
         },
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -1612,6 +1663,10 @@ fn test_buffered_convert_engine_maps_encode_value_error() {
         encode_mode: ErrorPathEncodeMode::PrepareError,
         ..ErrorPathHooks::default()
     });
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -1648,6 +1703,10 @@ fn test_buffered_convert_engine_finish_maps_decode_error() {
         encode_mode: ErrorPathEncodeMode::Normal,
         ..ErrorPathHooks::default()
     });
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -1675,6 +1734,10 @@ fn test_buffered_convert_engine_finish_runs_zero_bound_decoder_teardown() {
         },
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     assert_eq!(0, engine.finish(&mut [], 0).expect("finish should succeed"));
 }
@@ -1691,6 +1754,10 @@ fn test_buffered_convert_engine_finish_maps_configured_decoder_teardown_error() 
         },
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     let error = engine
         .finish(&mut [], 0)
@@ -1711,6 +1778,10 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
         encode_mode: ErrorPathEncodeMode::FinishError,
         ..ErrorPathHooks::default()
     });
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -2191,7 +2262,7 @@ impl TranscodeEncodeHooks<OverflowResetTargetCodec> for OverflowResetTargetEncod
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut OverflowResetTargetCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeErrorOf<OverflowResetTargetCodec>,
@@ -2411,6 +2482,11 @@ fn test_buffered_convert_engine_finish_hits_pending_unreachable() {
         StrictDecodeHooks,
         MismatchCapacityEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut empty_output = [0_u8; 0];
 
     let _ = engine.transcode(&[1], 0, &mut empty_output, 0);
@@ -2428,6 +2504,11 @@ fn test_buffered_convert_engine_finish_hits_decoder_finish_unreachable() {
         FinishDecodeHooks::default(),
         MismatchCapacityEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let required = engine.max_finish_output_len().expect("finish bound");
     let mut output = vec![0_u8; required];
     let _ = engine.finish(&mut output, 0);
@@ -2441,6 +2522,11 @@ fn test_buffered_convert_engine_maps_decode_policy_domain_error() {
         ImpossibleFailureDecodeHooks,
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -2855,6 +2941,11 @@ fn test_buffered_convert_engine_finish_maps_decoder_finish_error() {
         FinishFailSourceDecodeHooks,
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = engine
@@ -2930,6 +3021,11 @@ fn test_buffered_convert_engine_failed_reset_preserves_finished_state() {
         StrictDecodeHooks,
         ResetTargetHooks,
     );
+    let mut reset_output = [0_u8; 1];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
     engine
         .finish(&mut output, 0)
@@ -2976,6 +3072,11 @@ fn test_buffered_convert_engine_failed_finish_poisoned_until_reset() {
         FinishFailSourceDecodeHooks,
         StrictEncodeHooks,
     );
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
     engine
         .finish(&mut output, 0)

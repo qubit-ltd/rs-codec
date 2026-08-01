@@ -1,17 +1,27 @@
-# Generic transcode benchmarks
+# Transcode benchmarks
 
-`transcode.rs` records baseline throughput for the generic `Transcoder`
-contract without selecting a concrete format codec. It compares a direct
-in-memory call, the complete lifecycle helper, and streaming calls constrained
-by two output-window sizes. Input construction and output allocation occur
-outside the timed loop.
-
-Run the benchmark with:
+Run the safe/unchecked indexing A/B benchmark with:
 
 ```bash
-cargo bench --bench transcode
+cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- safe_vs_unchecked
 ```
 
-The reported throughput is input bytes per second. Do not compare absolute
-numbers across machines; use the same hardware and Rust toolchain when judging
-a change to transcode contracts or lifecycle helpers.
+The benchmark compares the same copy loop implemented with iterator-based safe
+access and explicit `get_unchecked` access. It is a code-generation probe, not
+a correctness test; the safe version is the default choice unless assembly
+shows a measurable regression in a real hot path.
+
+Emit optimized assembly for inspection with:
+
+```bash
+cargo rustc --manifest-path rs-codec/Cargo.toml --release --bench transcode -- --emit=asm
+```
+
+Inspect the generated `target/release/deps/transcode-*.s` files and compare the
+`copy_safe` and `copy_unchecked` symbols. On toolchains with `cargo-asm`, the
+equivalent focused commands are:
+
+```bash
+cargo asm --manifest-path rs-codec/Cargo.toml --bench transcode copy_safe
+cargo asm --manifest-path rs-codec/Cargo.toml --bench transcode copy_unchecked
+```

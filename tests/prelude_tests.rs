@@ -102,7 +102,7 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut EchoCodec,
-        _context: &EncodeContext<'_, u8, u8>,
+        _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
         qubit_codec::TranscodeEncodeError<core::convert::Infallible, u8>,
@@ -199,8 +199,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         TranscodeConvertError::EncodeDomain(_)
     ));
 
-    let mut output = [0_u8; 1];
-    let context = EncodeContext::new(&1_u8, 0, &mut output, 0);
+    let context = EncodeContext::new(&1_u8, 0, 0, 1);
     assert_eq!(0, context.input_index());
     assert_eq!(1, context.available_output());
 
