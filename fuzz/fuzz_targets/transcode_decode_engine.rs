@@ -23,6 +23,10 @@ fuzz_target!(|data: &[u8]| {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, RejectingHooks);
     let mut input_index = 0;
     let mut output = [0_u8; 31];
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .unwrap_or_else(|error| panic!("prefix codec reset is infallible: {error}"));
 
     while input_index < data.len() {
         let progress = decoder
