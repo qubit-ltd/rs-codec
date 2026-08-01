@@ -9,11 +9,7 @@
 use core::num::NonZeroUsize;
 
 use qubit_codec::TranscodeDecodeError;
-use qubit_codec::engine::{
-    DecodeContext,
-    DecodeInvalidAction,
-    TranscodeDecodeHooks,
-};
+use qubit_codec::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeHooks};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -38,10 +34,7 @@ impl qubit_codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -66,10 +59,57 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         error: &UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<
-        DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeErrorOf<UnitCodec>,
-    > {
+    ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeErrorOf<UnitCodec>> {
+        Err(TranscodeDecodeError::domain_main(*error, 0))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct WideUnitCodec;
+
+impl qubit_codec::Codec for WideUnitCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = UnitDecodeError;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+        Ok((
+            input[input_index],
+            core::num::NonZeroUsize::new(2).expect("two is non-zero"),
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct WideDefaultOnlyHooks;
+
+impl TranscodeDecodeHooks<WideUnitCodec> for WideDefaultOnlyHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut WideUnitCodec,
+        error: &UnitDecodeError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeErrorOf<WideUnitCodec>> {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }
 }
@@ -80,13 +120,9 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeDecodeHooks::<UnitCodec>::finish_hooks(
-        &mut hooks,
-        &mut codec,
-        &mut output,
-        0,
-    )
-    .expect("default finish should be a no-op");
+    let written =
+        TranscodeDecodeHooks::<UnitCodec>::finish_hooks(&mut hooks, &mut codec, &mut output, 0)
+            .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }
@@ -97,4 +133,15 @@ fn test_transcode_decode_hooks_default_before_reset_is_noop() {
     let mut codec = UnitCodec;
 
     TranscodeDecodeHooks::<UnitCodec>::reset_hooks(&mut hooks, &mut codec);
+}
+
+#[test]
+fn test_transcode_decode_hooks_default_output_bound_covers_replacement_policy() {
+    let hooks = WideDefaultOnlyHooks;
+    let codec = WideUnitCodec;
+
+    let bound = TranscodeDecodeHooks::<WideUnitCodec>::max_transcode_output_len(&hooks, &codec, 5)
+        .expect("the default output bound should not overflow");
+
+    assert_eq!(5, bound);
 }

@@ -43,10 +43,7 @@ impl DecodeOutcome {
     /// Creates an emitted-value outcome.
     #[inline(always)]
     #[must_use]
-    pub(crate) const fn emitted(
-        read: NonZeroUsize,
-        emitted: NonZeroUsize,
-    ) -> Self {
+    pub(crate) const fn emitted(read: NonZeroUsize, emitted: NonZeroUsize) -> Self {
         Self::Emitted { read, emitted }
     }
 

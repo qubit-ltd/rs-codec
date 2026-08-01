@@ -10,20 +10,12 @@ use std::{
     future::Future,
     io,
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
+    task::{Context, Poll, Waker},
 };
 
 use qubit_codec::{
-    AsyncTranscodeEncodeOutput,
-    CapacityError,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
+    AsyncTranscodeEncodeOutput, CapacityError, TranscodeEncodeError, TranscodeEncoder,
+    TranscodeProgress, Transcoder,
 };
 use qubit_io::AsyncOutput;
 
@@ -73,10 +65,7 @@ impl AsyncOutput for ChunkedAsyncOutput {
         Poll::Ready(Ok(written))
     }
 
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.flushed = true;
         Poll::Ready(Ok(()))
     }
@@ -114,10 +103,7 @@ impl Transcoder for CopyEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<(), char>;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -125,11 +111,7 @@ impl Transcoder for CopyEncoder {
         Ok(1)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         output[output_index] = b'^';
         Ok(1)
     }
@@ -164,11 +146,7 @@ impl Transcoder for CopyEncoder {
         Ok(1)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         output[output_index] = b'!';
         Ok(1)
     }
@@ -189,10 +167,7 @@ impl Transcoder for CapacityFailingEncoder {
     type Output = u8;
     type Error = TranscodeEncodeError<(), char>;
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         if self.maximum {
             Ok(usize::MAX)
         } else {
@@ -200,11 +175,7 @@ impl Transcoder for CapacityFailingEncoder {
         }
     }
 
-    fn reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -218,11 +189,7 @@ impl Transcoder for CapacityFailingEncoder {
         unreachable!("capacity failure prevents transcoding")
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }
@@ -232,35 +199,20 @@ impl TranscodeEncoder for CapacityFailingEncoder {
 }
 
 #[test]
-fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending()
--> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
-        ChunkedAsyncOutput::new(1),
-        1,
-    );
+fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending() -> io::Result<()>
+{
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
     complete(output.reset_async(&mut encoder, &mut map_error))?;
     assert_eq!(
         TranscodeProgress::need_output(2, qubit_codec::nz(1), 0, 1, 1),
-        complete(output.transcode_async(
-            &mut encoder,
-            &mut map_error,
-            &['a', 'b'],
-            0,
-            2,
-        ))?,
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2,))?,
     );
     assert_eq!(
         TranscodeProgress::complete(1, 1),
-        complete(output.transcode_async(
-            &mut encoder,
-            &mut map_error,
-            &['a', 'b'],
-            1,
-            1,
-        ))?,
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 1, 1,))?,
     );
     complete(output.finish_async(&mut encoder, &mut map_error))?;
     complete(output.flush_async())?;
@@ -274,21 +226,12 @@ fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending(
 
 /// Verifies encoder progress is returned before later delivery can pend.
 #[test]
-fn test_async_transcode_encode_output_commits_progress_before_later_pending()
--> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
-        ChunkedAsyncOutput::new(1),
-        1,
-    );
+fn test_async_transcode_encode_output_commits_progress_before_later_pending() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
-    let mut future = Box::pin(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a', 'b'],
-        0,
-        2,
-    ));
+    let mut future =
+        Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2));
 
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(progress)) => {
@@ -307,36 +250,20 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending()
 
 /// Verifies constructors and draining expose buffered output state correctly.
 #[test]
-fn test_async_transcode_encode_output_exposes_buffer_operations()
--> io::Result<()> {
-    let output = AsyncTranscodeEncodeOutput::try_with_capacity(
-        ChunkedAsyncOutput::new(1),
-        3,
-    )?;
+fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<()> {
+    let output = AsyncTranscodeEncodeOutput::try_with_capacity(ChunkedAsyncOutput::new(1), 3)?;
     assert!(output.capacity() >= 3);
     assert_eq!(0, output.pending_len());
     assert!(format!("{output:?}").contains("AsyncTranscodeEncodeOutput"));
     assert!(
-        AsyncTranscodeEncodeOutput::try_with_capacity(
-            ChunkedAsyncOutput::new(1),
-            usize::MAX,
-        )
-        .is_err()
+        AsyncTranscodeEncodeOutput::try_with_capacity(ChunkedAsyncOutput::new(1), usize::MAX,)
+            .is_err()
     );
 
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
-        ChunkedAsyncOutput::new(1),
-        1,
-    );
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
-    complete(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a'],
-        0,
-        1,
-    ))?;
+    complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
     assert_eq!(1, output.pending_len());
     complete(output.drain_async())?;
     assert_eq!(0, output.pending_len());
@@ -348,31 +275,17 @@ fn test_async_transcode_encode_output_exposes_buffer_operations()
 
 /// Verifies zero-length encode operations and invalid source ranges.
 #[test]
-fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()>
-{
-    let mut output =
-        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
     assert_eq!(
         TranscodeProgress::complete(0, 0),
-        complete(output.transcode_async(
-            &mut encoder,
-            &mut map_error,
-            &['a'],
-            0,
-            0,
-        ))?,
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 0,))?,
     );
-    let error = complete(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a'],
-        1,
-        1,
-    ))
-    .expect_err("invalid input range must fail");
+    let error = complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 1, 1))
+        .expect_err("invalid input range must fail");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
     Ok(())
 }
@@ -380,56 +293,31 @@ fn test_async_transcode_encode_output_validates_input_range() -> io::Result<()>
 /// Verifies capacity planning failures cross the asynchronous I/O boundary.
 #[test]
 fn test_async_transcode_encode_output_maps_capacity_errors() -> io::Result<()> {
-    let mut output =
-        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
     let mut encoder = CapacityFailingEncoder::default();
-    let mut map_error =
-        |_| io::Error::other("encoder cannot reach domain failure");
+    let mut map_error = |_| io::Error::other("encoder cannot reach domain failure");
 
-    let error = complete(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a'],
-        0,
-        1,
-    ))
-    .expect_err("capacity failure must cross the I/O boundary");
+    let error = complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))
+        .expect_err("capacity failure must cross the I/O boundary");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
     encoder.maximum = true;
-    let error = complete(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a'],
-        0,
-        1,
-    ))
-    .expect_err("impossible spare capacity must fail");
+    let error = complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))
+        .expect_err("impossible spare capacity must fail");
     assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
     Ok(())
 }
 
 /// Verifies asynchronous output delivery failures remain visible to callers.
 #[test]
-fn test_async_transcode_encode_output_propagates_delivery_errors()
--> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(
-        ChunkedAsyncOutput::new(1),
-        1,
-    );
+fn test_async_transcode_encode_output_propagates_delivery_errors() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
-    complete(output.transcode_async(
-        &mut encoder,
-        &mut map_error,
-        &['a'],
-        0,
-        1,
-    ))?;
+    complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
     output.inner_mut().failed = true;
 
-    let error = complete(output.drain_async())
-        .expect_err("delivery error must be preserved");
+    let error = complete(output.drain_async()).expect_err("delivery error must be preserved");
     assert_eq!(io::ErrorKind::Other, error.kind());
     Ok(())
 }
