@@ -27,9 +27,7 @@ fn test_encode_outcome_reports_output_pressure_through_progress() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            output_index: 0,
             required: crate::nz(1),
-            available: 0,
         },
         progress.status(),
     );

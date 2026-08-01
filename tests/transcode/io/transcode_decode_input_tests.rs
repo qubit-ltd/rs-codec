@@ -291,13 +291,7 @@ impl Transcoder for PairDecoder {
         let mut written = 0;
         while input_index + read + 1 < input.len() {
             if output_index + written == output.len() {
-                return Ok(TranscodeProgress::need_output(
-                    output_index + written,
-                    crate::nz(1),
-                    0,
-                    read,
-                    written,
-                ));
+                return Ok(TranscodeProgress::need_output(crate::nz(1), read, written));
             }
             let high = input[input_index + read] as u32;
             let low = input[input_index + read + 1] as u32;
@@ -309,13 +303,7 @@ impl Transcoder for PairDecoder {
         if available == 0 {
             Ok(TranscodeProgress::complete(read, written))
         } else {
-            Ok(TranscodeProgress::need_input(
-                input_index + read,
-                crate::nz(2),
-                available,
-                read,
-                written,
-            ))
+            Ok(TranscodeProgress::need_input(crate::nz(2), read, written))
         }
     }
 
@@ -796,89 +784,7 @@ impl Transcoder for OverflowingNeedInputDecoder {
         if input_index > input.len() {
             return Err(domain(PairDecodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_input(
-            input_index,
-            crate::nz(1),
-            input.len() - input_index,
-            0,
-            0,
-        ))
-    }
-
-    noop_finish!(u32);
-}
-
-#[cfg(debug_assertions)]
-#[derive(Debug, Default)]
-struct MisindexedNeedInputDecoder;
-
-#[cfg(debug_assertions)]
-impl Transcoder for MisindexedNeedInputDecoder {
-    type Input = u16;
-    type Output = u32;
-    type Error = TranscodeDecodeError<PairDecodeError>;
-
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
-        Ok(0)
-    }
-
-    noop_reset!(u32);
-
-    fn transcode(
-        &mut self,
-        input: &[u16],
-        input_index: usize,
-        _output: &mut [u32],
-        _output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeDecodeError<PairDecodeError>> {
-        if input_index > input.len() {
-            return Err(domain(PairDecodeError::BadInputIndex));
-        }
-        Ok(TranscodeProgress::need_input(
-            input_index + 1,
-            crate::nz(1),
-            1,
-            0,
-            0,
-        ))
-    }
-
-    noop_finish!(u32);
-}
-
-#[cfg(debug_assertions)]
-#[derive(Debug, Default)]
-struct MisindexedNeedOutputDecoder;
-
-#[cfg(debug_assertions)]
-impl Transcoder for MisindexedNeedOutputDecoder {
-    type Input = u16;
-    type Output = u32;
-    type Error = TranscodeDecodeError<PairDecodeError>;
-
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
-        Ok(0)
-    }
-
-    noop_reset!(u32);
-
-    fn transcode(
-        &mut self,
-        input: &[u16],
-        input_index: usize,
-        _output: &mut [u32],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeDecodeError<PairDecodeError>> {
-        if input_index > input.len() {
-            return Err(domain(PairDecodeError::BadInputIndex));
-        }
-        Ok(TranscodeProgress::need_output(
-            output_index + 1,
-            crate::nz(1),
-            0,
-            0,
-            0,
-        ))
+        Ok(TranscodeProgress::need_input(crate::nz(1), 0, 0))
     }
 
     noop_finish!(u32);
@@ -1511,34 +1417,6 @@ fn test_buffered_decode_input_rejects_overflowing_need_input() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("reported required"));
-}
-
-#[cfg(debug_assertions)]
-#[test]
-fn test_buffered_decode_input_rejects_misindexed_need_input() {
-    let input = ChunkedInput::new(vec![vec![0x0001]]);
-    let mut decoder = MisindexedNeedInputDecoder;
-    let mut input = TranscodeDecodeInput::with_capacity(input, 3);
-    let mut output = [0_u32; 1];
-    let error = decode_with(&mut input, &mut decoder, &mut output, 0, 1)
-        .expect_err("misindexed NeedInput status should be rejected");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("reported status index"));
-}
-
-#[cfg(debug_assertions)]
-#[test]
-fn test_buffered_decode_input_rejects_misindexed_need_output() {
-    let input = ChunkedInput::new(vec![vec![0x0001]]);
-    let mut decoder = MisindexedNeedOutputDecoder;
-    let mut input = TranscodeDecodeInput::with_capacity(input, 3);
-    let mut output = [0_u32; 1];
-    let error = decode_with(&mut input, &mut decoder, &mut output, 0, 1)
-        .expect_err("misindexed NeedOutput status should be rejected");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("reported status index"));
 }
 
 #[test]

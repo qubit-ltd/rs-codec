@@ -61,23 +61,15 @@ fn complete_progress_written(
     );
     match progress.status() {
         TranscodeStatus::Complete => Ok(progress.written()),
-        TranscodeStatus::NeedOutput {
-            output_index,
-            required,
-            available,
-        } => Err(TranscodeFailure::insufficient_output(
-            output_index,
+        TranscodeStatus::NeedOutput { required } => Err(TranscodeFailure::insufficient_output(
+            output_index + progress.written(),
             required.get(),
-            available,
+            output_len - output_index - progress.written(),
         )),
-        TranscodeStatus::NeedInput {
-            input_index,
-            required,
-            available,
-        } => Err(TranscodeFailure::incomplete_input(
-            input_index,
+        TranscodeStatus::NeedInput { required } => Err(TranscodeFailure::incomplete_input(
+            progress.read(),
             required.get(),
-            available,
+            input_len - progress.read(),
         )),
     }
 }
@@ -226,9 +218,7 @@ fn sum_output_bounds(
 ///         while input_index + read + 1 < input.len() {
 ///             if output_index + written == output.len() {
 ///                 let status = TranscodeStatus::NeedOutput {
-///                     output_index: output_index + written,
 ///                     required: NonZeroUsize::MIN,
-///                     available: 0,
 ///                 };
 ///                 return Ok(TranscodeProgress::new(status, read, written));
 ///             }
@@ -241,11 +231,8 @@ fn sum_output_bounds(
 ///         if input_index + read == input.len() {
 ///             Ok(TranscodeProgress::complete(read, written))
 ///         } else {
-///             let available = input.len() - (input_index + read);
 ///             let status = TranscodeStatus::NeedInput {
-///                 input_index: input_index + read,
 ///                 required: NonZeroUsize::new(2).expect("two is non-zero"),
-///                 available,
 ///             };
 ///             Ok(TranscodeProgress::new(status, read, written))
 ///         }
@@ -271,9 +258,7 @@ fn sum_output_bounds(
 ///     .transcode(&[0x12, 0x34, 0xab, 0xcd], 0, &mut output, 0)
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedOutput {
-///     output_index: 1,
 ///     required: NonZeroUsize::MIN,
-///     available: 0,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
 /// assert_eq!(1, progress.written());
@@ -284,9 +269,7 @@ fn sum_output_bounds(
 ///     .transcode(&[0x12, 0x34, 0xab], 0, &mut output, 0)
 ///     .expect("decoding cannot fail");
 /// assert_eq!(TranscodeStatus::NeedInput {
-///     input_index: 2,
 ///     required: NonZeroUsize::new(2).expect("two is non-zero"),
-///     available: 1,
 /// }, progress.status());
 /// assert_eq!(2, progress.read());
 /// assert_eq!(1, progress.written());
@@ -512,13 +495,12 @@ pub trait Transcoder {
     ) -> Result<TranscodeProgress, Self::Error> {
         let progress = self.transcode(input, input_index, output, output_index)?;
         match progress.status() {
-            TranscodeStatus::NeedInput {
-                input_index,
-                required,
-                available,
-            } => Err(
-                TranscodeFailure::incomplete_input(input_index, required.get(), available).into(),
-            ),
+            TranscodeStatus::NeedInput { required } => Err(TranscodeFailure::incomplete_input(
+                input_index + progress.read(),
+                required.get(),
+                input.len() - input_index - progress.read(),
+            )
+            .into()),
             _ => Ok(progress),
         }
     }
@@ -586,9 +568,7 @@ pub trait Transcoder {
     ///             Ok(qubit_codec::TranscodeProgress::complete(read, written))
     ///         } else {
     ///             let status = qubit_codec::TranscodeStatus::NeedOutput {
-    ///                 output_index: output_index + written,
     ///                 required: NonZeroUsize::MIN,
-    ///                 available: output.len().saturating_sub(output_index + written),
     ///             };
     ///             Ok(qubit_codec::TranscodeProgress::new(
     ///                 status,

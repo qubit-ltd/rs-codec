@@ -146,22 +146,10 @@ impl Transcoder for PairDecoder {
         let available_input = input.len() - input_index;
         let available_output = output.len() - output_index;
         if available_input < 2 {
-            return Ok(TranscodeProgress::need_input(
-                input_index,
-                qubit_codec::nz(2),
-                available_input,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0));
         }
         if available_output == 0 {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                qubit_codec::nz(1),
-                0,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(qubit_codec::nz(1), 0, 0));
         }
         output[output_index] = u16::from_be_bytes([input[input_index], input[input_index + 1]]);
         Ok(TranscodeProgress::complete(2, 1))
@@ -339,13 +327,9 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Re
     let step = complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 1))?;
 
     assert_eq!(
-        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(
-            0,
-            qubit_codec::nz(2),
-            1,
-            0,
-            0,
-        )),
+        AsyncTranscodeDecodeStep::Progress(
+            TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0,)
+        ),
         step
     );
     assert_eq!([0x12], input.unread());

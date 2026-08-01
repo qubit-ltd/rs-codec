@@ -240,14 +240,7 @@ impl Transcoder for PairEncoder {
                 return Err(domain(PairEncodeError::BadInputIndex));
             }
             if output_index + written + 2 > output.len() {
-                let available = output.len() - (output_index + written);
-                return Ok(TranscodeProgress::need_output(
-                    output_index + written,
-                    crate::nz(2),
-                    available,
-                    read,
-                    written,
-                ));
+                return Ok(TranscodeProgress::need_output(crate::nz(2), read, written));
             }
             let value = input[input_index + read];
             output[output_index + written] = (value >> 16) as u16;
@@ -344,13 +337,7 @@ impl Transcoder for FinishEncoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                crate::nz(1),
-                0,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
         }
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::complete(1, 1))
@@ -652,13 +639,7 @@ impl Transcoder for NeedInputEncoder {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_input(
-            input_index,
-            crate::nz(2),
-            input.len() - input_index,
-            0,
-            0,
-        ))
+        Ok(TranscodeProgress::need_input(crate::nz(2), 0, 0))
     }
 
     noop_finish!(u16);
@@ -684,19 +665,13 @@ impl Transcoder for NeedOutputAfterReadEncoder {
         &mut self,
         input: &[u32],
         input_index: usize,
-        output: &mut [u16],
-        output_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, u32>> {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_output(
-            output_index,
-            crate::nz(1),
-            output.len() - output_index,
-            1,
-            0,
-        ))
+        Ok(TranscodeProgress::need_output(crate::nz(1), 1, 0))
     }
 
     noop_finish!(u16);
@@ -727,13 +702,7 @@ impl Transcoder for NeedOutputAfterWriteEncoder {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
         output[output_index] = input[input_index] as u16;
-        Ok(TranscodeProgress::need_output(
-            output_index + 1,
-            crate::nz(1),
-            output.len() - (output_index + 1),
-            1,
-            1,
-        ))
+        Ok(TranscodeProgress::need_output(crate::nz(1), 1, 1))
     }
 
     noop_finish!(u16);
@@ -764,13 +733,7 @@ impl Transcoder for NeedOutputAfterReadPastCapacityEncoder {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
         output[output_index] = input[input_index] as u16;
-        Ok(TranscodeProgress::need_output(
-            output_index + 1,
-            crate::nz(2),
-            output.len() - (output_index + 1),
-            1,
-            1,
-        ))
+        Ok(TranscodeProgress::need_output(crate::nz(2), 1, 1))
     }
 
     noop_finish!(u16);
@@ -809,35 +772,17 @@ impl Transcoder for PrefixBeforeReadEncoder {
         }
         if !self.emitted_prefix {
             if output_index == output.len() {
-                return Ok(TranscodeProgress::need_output(
-                    output_index,
-                    crate::nz(1),
-                    0,
-                    0,
-                    0,
-                ));
+                return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
             }
             output[output_index] = 0xaaaa;
             self.emitted_prefix = true;
-            return Ok(TranscodeProgress::need_output(
-                output_index + 1,
-                crate::nz(1),
-                output.len() - (output_index + 1),
-                0,
-                1,
-            ));
+            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 1));
         }
         if input_index == input.len() {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(
-                output_index,
-                crate::nz(1),
-                0,
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
         }
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::complete(1, 1))
@@ -927,57 +872,13 @@ impl Transcoder for OverflowingNeedOutputEncoder {
         &mut self,
         input: &[u32],
         input_index: usize,
-        output: &mut [u16],
-        output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, u32>> {
-        if input_index > input.len() {
-            return Err(domain(PairEncodeError::BadInputIndex));
-        }
-        Ok(TranscodeProgress::need_output(
-            output_index,
-            crate::nz(1),
-            output.len() - output_index,
-            0,
-            0,
-        ))
-    }
-
-    noop_finish!(u16);
-}
-
-#[cfg(debug_assertions)]
-#[derive(Debug, Default)]
-struct MisindexedNeedOutputEncoder;
-
-#[cfg(debug_assertions)]
-impl Transcoder for MisindexedNeedOutputEncoder {
-    type Input = u32;
-    type Output = u16;
-    type Error = TranscodeEncodeError<PairEncodeError, u32>;
-
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        Ok(input_len)
-    }
-
-    noop_reset!(u16);
-
-    fn transcode(
-        &mut self,
-        input: &[u32],
-        input_index: usize,
         _output: &mut [u16],
-        output_index: usize,
+        _output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeEncodeError<PairEncodeError, u32>> {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_output(
-            output_index + 1,
-            crate::nz(1),
-            0,
-            0,
-            0,
-        ))
+        Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0))
     }
 
     noop_finish!(u16);
@@ -1010,11 +911,7 @@ impl_pair_transcode_encoder!(
 );
 
 #[cfg(debug_assertions)]
-impl_pair_transcode_encoder!(
-    NeedOutputAfterReadEncoder,
-    OverflowingNeedOutputEncoder,
-    MisindexedNeedOutputEncoder,
-);
+impl_pair_transcode_encoder!(NeedOutputAfterReadEncoder, OverflowingNeedOutputEncoder,);
 
 #[derive(Debug)]
 struct FixedCapacityOutput {
@@ -1362,19 +1259,6 @@ fn test_buffered_encode_output_rejects_overflowing_need_output() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("reported required"));
-}
-
-#[cfg(debug_assertions)]
-#[test]
-fn test_buffered_encode_output_rejects_misindexed_need_output() {
-    let output = UnitOutput::default();
-    let mut encoder = MisindexedNeedOutputEncoder;
-    let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-    let error = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
-        .expect_err("misindexed NeedOutput status should be rejected");
-
-    assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("reported status index"));
 }
 
 #[test]

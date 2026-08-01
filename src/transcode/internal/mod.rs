@@ -10,6 +10,7 @@
 pub(in crate::transcode) mod applied_decode_invalid_action;
 pub(in crate::transcode) mod convert_state;
 pub(in crate::transcode) mod decode_state;
+pub(in crate::transcode) mod encode_attempt;
 pub(in crate::transcode) mod encode_state;
 pub(in crate::transcode) mod lifecycle_guard;
 pub(in crate::transcode) mod lifecycle_phase;
