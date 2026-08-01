@@ -1,0 +1,87 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+// =============================================================================
+
+#![no_main]
+
+use core::{convert::Infallible, num::NonZeroUsize};
+
+use libfuzzer_sys::fuzz_target;
+use qubit_codec::{
+    Codec, DecodeFailure, TranscodeDecodeErrorOf,
+    engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks},
+};
+
+const MAX_INPUT_LEN: usize = 4 * 1024;
+
+fuzz_target!(|data: &[u8]| {
+    let data = &data[..data.len().min(MAX_INPUT_LEN)];
+    let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, RejectingHooks);
+    let mut input_index = 0;
+    let mut output = [0_u8; 31];
+
+    while input_index < data.len() {
+        let progress = decoder
+            .transcode(&data[input_index..], 0, &mut output, 0)
+            .unwrap_or_else(|error| panic!("prefix codec is infallible: {error}"));
+        input_index += progress.read();
+        if progress.is_need_input() || progress.is_need_output() {
+            break;
+        }
+    }
+
+    assert!(input_index <= data.len());
+});
+
+#[derive(Default)]
+struct PrefixCodec;
+
+impl Codec for PrefixCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        if input[input_index] == 0xfe && input.len() - input_index == 1 {
+            return Err(DecodeFailure::incomplete(
+                NonZeroUsize::new(2).expect("two is non-zero"),
+            ));
+        }
+        Ok((input[input_index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
+struct RejectingHooks;
+
+impl TranscodeDecodeHooks<PrefixCodec> for RejectingHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        error: &Infallible,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+        match *error {}
+    }
+}

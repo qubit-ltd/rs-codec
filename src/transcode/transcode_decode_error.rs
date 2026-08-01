@@ -12,18 +12,13 @@ use core::num::NonZeroUsize;
 use thiserror::Error;
 
 use super::{
-    capacity_error::CapacityError,
-    transcode_domain_error::TranscodeDomainError,
+    capacity_error::CapacityError, transcode_domain_error::TranscodeDomainError,
     transcode_failure::TranscodeFailure,
 };
-use crate::{
-    Codec,
-    DecodeFailure,
-};
+use crate::{Codec, DecodeFailure};
 
 /// Decode transcode error for a codec-backed decoder.
-pub type TranscodeDecodeErrorOf<C> =
-    TranscodeDecodeError<<C as Codec>::DecodeError>;
+pub type TranscodeDecodeErrorOf<C> = TranscodeDecodeError<<C as Codec>::DecodeError>;
 
 /// Error reported by a decode-oriented transcode operation.
 #[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
@@ -72,11 +67,7 @@ impl<E> TranscodeDecodeError<E> {
 
     /// Creates an incomplete-input framework error.
     #[inline(always)]
-    pub const fn incomplete_input(
-        input_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
+    pub const fn incomplete_input(input_index: usize, required: usize, available: usize) -> Self {
         Self::Failure(TranscodeFailure::incomplete_input(
             input_index,
             required,
@@ -133,12 +124,8 @@ impl<E> TranscodeDecodeError<E> {
     ) -> Self {
         match failure {
             DecodeFailure::Incomplete { required_total } => {
-                TranscodeFailure::incomplete_input(
-                    input_index,
-                    required_total.get(),
-                    available,
-                )
-                .into()
+                TranscodeFailure::incomplete_input(input_index, required_total.get(), available)
+                    .into()
             }
             DecodeFailure::Invalid { source, consumed } => {
                 Self::domain_main_with_consumed(source, input_index, consumed)
@@ -190,20 +177,14 @@ impl<E> TranscodeDecodeError<E> {
     {
         match self {
             Self::Failure(failure) => TranscodeDecodeError::Failure(failure),
-            Self::Domain(error) => {
-                TranscodeDecodeError::Domain(error.map_source(f))
-            }
+            Self::Domain(error) => TranscodeDecodeError::Domain(error.map_source(f)),
         }
     }
 
     /// Ensures the input index is valid.
     #[inline]
-    pub fn ensure_input_index(
-        input_len: usize,
-        input_index: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_input_index(input_len, input_index)
-            .map_err(Self::from)
+    pub fn ensure_input_index(input_len: usize, input_index: usize) -> Result<(), Self> {
+        TranscodeFailure::ensure_input_index(input_len, input_index).map_err(Self::from)
     }
 
     /// Ensures at least `required` input units are readable.
@@ -213,8 +194,7 @@ impl<E> TranscodeDecodeError<E> {
         input_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_min_input(input_len, input_index, required)
-            .map_err(Self::from)
+        TranscodeFailure::ensure_min_input(input_len, input_index, required).map_err(Self::from)
     }
 
     /// Validates a consumed input count and rejects trailing input.
@@ -233,22 +213,14 @@ impl<E> TranscodeDecodeError<E> {
     /// Returns an invalid-input-index failure when `consumed` exceeds
     /// `input_len`, or a trailing-input failure when unconsumed input remains.
     #[inline]
-    pub fn ensure_no_trailing_input(
-        consumed: usize,
-        input_len: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_no_trailing_input(consumed, input_len)
-            .map_err(Self::from)
+    pub fn ensure_no_trailing_input(consumed: usize, input_len: usize) -> Result<(), Self> {
+        TranscodeFailure::ensure_no_trailing_input(consumed, input_len).map_err(Self::from)
     }
 
     /// Ensures the output index is valid.
     #[inline]
-    pub fn ensure_output_index(
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_index(output_len, output_index)
-            .map_err(Self::from)
+    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
+        TranscodeFailure::ensure_output_index(output_len, output_index).map_err(Self::from)
     }
 
     /// Ensures input and output indices are valid.
@@ -259,13 +231,8 @@ impl<E> TranscodeDecodeError<E> {
         output_len: usize,
         output_index: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_transcode_indices(
-            input_len,
-            input_index,
-            output_len,
-            output_index,
-        )
-        .map_err(Self::from)
+        TranscodeFailure::ensure_transcode_indices(input_len, input_index, output_len, output_index)
+            .map_err(Self::from)
     }
 
     /// Ensures output capacity is sufficient.
@@ -275,12 +242,8 @@ impl<E> TranscodeDecodeError<E> {
         output_index: usize,
         required: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_capacity(
-            output_len,
-            output_index,
-            required,
-        )
-        .map_err(Self::from)
+        TranscodeFailure::ensure_output_capacity(output_len, output_index, required)
+            .map_err(Self::from)
     }
 
     /// Ensures output range capacity is sufficient.
@@ -291,13 +254,8 @@ impl<E> TranscodeDecodeError<E> {
         available: usize,
         required: usize,
     ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_range(
-            output_len,
-            output_index,
-            available,
-            required,
-        )
-        .map_err(Self::from)
+        TranscodeFailure::ensure_output_range(output_len, output_index, available, required)
+            .map_err(Self::from)
     }
 }
 

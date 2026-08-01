@@ -10,12 +10,7 @@
 use super::super::engine::TranscodeDecodeEngine;
 use super::CodecTranscodeDecodeHooks;
 use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeErrorOf,
-    TranscodeDecoder,
-    TranscodeProgress,
-    Transcoder,
+    CapacityError, Codec, TranscodeDecodeErrorOf, TranscodeDecoder, TranscodeProgress, Transcoder,
 };
 
 /// Decodes encoded units into caller-provided value buffers by using a
@@ -23,14 +18,9 @@ use crate::{
 ///
 /// `CodecTranscodeDecoder` is a policy-free bridge from the low-level unchecked
 /// [`Codec`] contract to [`Transcoder`] and [`TranscodeDecoder`]. It
-/// leaves incomplete input tails in the caller-provided input slice; callers
-/// own input-buffer refill and EOF incomplete-tail policy.
-///
-/// Because [`Transcoder::finish`] receives no source input, this adapter is
-/// intended for codecs whose decode boundary is locally decidable from the
-/// visible prefix plus codec state. Formats that require EOF-aware
-/// maximal-munch parsing or need to reinterpret a pending prefix at EOF should
-/// provide a custom streaming decoder or a value-level facade.
+/// leaves incomplete input tails in the caller-provided input slice while the
+/// stream remains open. Call [`Transcoder::transcode_eof`] after upstream EOF
+/// so codecs can apply their [`Codec::decode_eof`] policy to a trailing prefix.
 ///
 /// # Type Parameters
 ///
@@ -58,10 +48,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(
-                codec,
-                CodecTranscodeDecodeHooks,
-            ),
+            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
         }
     }
 }
@@ -85,10 +72,7 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -146,6 +130,18 @@ where
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
         self.engine
             .transcode(input, input_index, output, output_index)
+    }
+
+    #[inline(always)]
+    fn transcode_eof(
+        &mut self,
+        input: &[C::Unit],
+        input_index: usize,
+        output: &mut [C::Value],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
+        self.engine
+            .transcode_eof(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
