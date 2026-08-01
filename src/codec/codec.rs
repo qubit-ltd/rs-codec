@@ -77,6 +77,25 @@ use super::decode_failure::DecodeFailure;
 /// that always buffers each accepted value instead of immediately emitting
 /// units. Checked adapters enforce the decode-bound invariants with
 /// compile-time assertions before using codec-provided bounds.
+///
+/// # Why the low-level methods are unchecked
+///
+/// The `unsafe` entry points are intentional: checked adapters validate the
+/// index and capacity preconditions once, then call [`encode`](Self::encode)
+/// and [`decode`](Self::decode) without rebuilding subslices or repeating
+/// bounds checks for every value. The `safe_vs_unchecked` benchmark in
+/// `benches/transcode.rs` compares the same 64 KiB copy loop in release mode.
+/// In the current local run, safe indexing measured about 1.81 µs (33.7 GiB/s)
+/// while explicit `get_unchecked` measured about 1.67 µs (36.6 GiB/s), an
+/// approximately 8% throughput difference. The emitted assembly also retained
+/// a `panic_bounds_check` path for the safe loop because the function type does
+/// not express that the input and output slices have equal lengths; the
+/// unchecked loop had no such loop-side panic path.
+///
+/// These figures are workload- and toolchain-specific, so callers should use
+/// checked adapters unless they can establish the documented preconditions at
+/// a trusted boundary. Codec implementations should keep the unchecked
+/// methods small and use `debug_assert!` for those assumptions.
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
     type Value;
