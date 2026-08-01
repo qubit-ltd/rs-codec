@@ -14,12 +14,12 @@
 use core::num::NonZeroUsize;
 
 use super::super::internal::{
-    convert_state::ConvertState, lifecycle_guard::LifecycleGuard, pending_value::PendingValue,
-    pending_value_slot::PendingValueSlot,
+    convert_state::ConvertState, encode_state::EncodeAttempt, lifecycle_guard::LifecycleGuard,
+    pending_value::PendingValue, pending_value_slot::PendingValueSlot,
 };
 use super::{
-    EncodeContext, TranscodeDecodeHooks, TranscodeEncodeHooks,
-    transcode_decode_engine::TranscodeDecodeEngine, transcode_encode_engine::TranscodeEncodeEngine,
+    TranscodeDecodeHooks, TranscodeEncodeHooks, transcode_decode_engine::TranscodeDecodeEngine,
+    transcode_encode_engine::TranscodeEncodeEngine,
 };
 use crate::codec::assert_unit_bounds;
 use crate::{
@@ -188,7 +188,7 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut TargetCodec,
-///         _context: &EncodeContext<'_, u8, u8>,
+///         _context: &EncodeContext<'_, u8>,
 ///     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<TargetCodec>> {
 ///         unreachable!("TargetCodec accepts every u8")
 ///     }
@@ -202,6 +202,8 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// );
 /// let input = [1_u8, 2, 3];
 /// let mut output = [0_u8; 2];
+/// let mut reset_output = [];
+/// engine.reset(&mut reset_output, 0)?;
 ///
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
@@ -551,8 +553,10 @@ where
     ///
     /// Returns hook errors when indices are invalid or concrete conversion
     /// fails. Invalid output indices are reported through the encode-side
-    /// error path. Returns [`TranscodeFailure::TranscodeAfterFinish`] when the
-    /// logical stream was already finished and has not been reset, or
+    /// error path. Returns [`TranscodeFailure::TranscodeBeforeReset`] when the
+    /// engine has not completed its first reset. Returns
+    /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
+    /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
     /// failed after execution started.
     pub fn transcode(
@@ -647,6 +651,8 @@ where
     ///
     /// Returns a converter error when output capacity checks fail or when
     /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
@@ -933,13 +939,13 @@ where
     ) -> Result<Option<TranscodeProgress>, TranscodeConvertErrorOf<D, E>> {
         let input_index = pending.input_index();
         let output_index = state.output_cursor();
-        let context = EncodeContext::new(
+        let attempt = EncodeAttempt::new(
             pending.value(),
             input_index,
             state.output_mut(),
             output_index,
         );
-        let outcome = match self.encode_engine.encode_one(context) {
+        let outcome = match self.encode_engine.encode_one(attempt) {
             Ok(outcome) => outcome,
             Err(error) => {
                 return Err(TranscodeConvertError::from_encode_error_with_value(

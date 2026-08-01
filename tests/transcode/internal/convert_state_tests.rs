@@ -13,6 +13,11 @@ use crate::common::IdentityCodec;
 #[test]
 fn test_convert_state_reports_completed_cursor_progress() {
     let mut converter = CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = converter

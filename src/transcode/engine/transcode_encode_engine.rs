@@ -9,8 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{encode_state::EncodeState, lifecycle_guard::LifecycleGuard};
-use super::encode_context::EncodeContext;
+use super::super::internal::{
+    encode_state::{EncodeAttempt, EncodeState},
+    lifecycle_guard::LifecycleGuard,
+};
 use super::{EncodeOutcome, EncodeUnencodableAction, TranscodeEncodeHooks};
 use crate::codec::assert_unit_bounds;
 use crate::{
@@ -98,7 +100,7 @@ use crate::{
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut ByteCodec,
-///         _context: &EncodeContext<'_, u8, u8>,
+///         _context: &EncodeContext<'_, u8>,
 ///     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<ByteCodec>> {
 ///         unreachable!("ByteCodec accepts every u8")
 ///     }
@@ -107,6 +109,8 @@ use crate::{
 /// let mut engine = TranscodeEncodeEngine::new(ByteCodec, StrictHooks);
 /// let input = [1_u8, 2, 3];
 /// let mut output = [0_u8; 2];
+/// let mut reset_output = [];
+/// engine.reset(&mut reset_output, 0)?;
 ///
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
@@ -373,6 +377,8 @@ where
     /// Returns hook errors when `input_index` is outside `input`, when
     /// `output_index` is outside `output`, or when hook planning or writing
     /// rejects a value. Returns
+    /// [`TranscodeFailure::TranscodeBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
@@ -396,8 +402,8 @@ where
         while state.has_input() {
             // SAFETY: The loop condition proves that the current input cursor
             // points at an available value.
-            let context = unsafe { state.context_unchecked() };
-            let outcome = self.encode_one(context)?;
+            let attempt = unsafe { state.context_unchecked() };
+            let outcome = self.encode_one(attempt)?;
             if let Some(progress) = state.apply_encode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -428,6 +434,8 @@ where
     /// Returns framework errors when the caller provides invalid or
     /// insufficient output capacity. Returns domain errors when codec finish or
     /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
@@ -518,17 +526,23 @@ where
     ///
     /// Returns an engine-domain error when the codec fails or when the hook
     /// rejects an unencodable value.
-    pub(crate) fn encode_one(
+    pub(in crate::transcode) fn encode_one(
         &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit>,
+        attempt: EncodeAttempt<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, TranscodeEncodeErrorOf<C>> {
-        if self.codec.can_encode_value(context.input_value()) {
-            return self.encode_encodable_value(context);
+        let encodable = {
+            let context = attempt.context();
+            self.codec.can_encode_value(context.input_value())
+        };
+        if encodable {
+            return self.encode_encodable_value(attempt);
         }
-        let action = self
-            .hooks
-            .handle_unencodable_encode(&mut self.codec, &context)?;
-        self.apply_unencodable_action(action, context)
+        let action = {
+            let context = attempt.context();
+            self.hooks
+                .handle_unencodable_encode(&mut self.codec, &context)?
+        };
+        self.apply_unencodable_action(action, attempt)
     }
 
     /// Encodes an encodable input value.
@@ -552,20 +566,20 @@ where
     /// different number of units than planned.
     fn encode_encodable_value(
         &mut self,
-        context: EncodeContext<'_, C::Value, C::Unit>,
+        attempt: EncodeAttempt<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, TranscodeEncodeErrorOf<C>> {
-        let required = self.codec.encode_len(context.input_value());
+        let required = self.codec.encode_len(attempt.value());
         assert!(
             required <= C::MAX_ENCODE_UNITS_PER_VALUE,
             "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE",
         );
-        if context.available_output() < required {
+        if attempt.available_output() < required {
             return Ok(EncodeOutcome::need_output(
                 NonZeroUsize::new(required)
                     .expect("required output is non-zero when capacity is insufficient"),
             ));
         }
-        let (value, input_index, output, output_index) = context.into_parts();
+        let (value, input_index, output, output_index) = attempt.into_parts();
         let written = unsafe {
             // SAFETY: The capacity check above reserves the exact value width.
             self.codec.encode(value, output, output_index)
@@ -596,7 +610,7 @@ where
     fn apply_unencodable_action(
         &mut self,
         action: EncodeUnencodableAction<C::Value>,
-        context: EncodeContext<'_, C::Value, C::Unit>,
+        attempt: EncodeAttempt<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, TranscodeEncodeErrorOf<C>> {
         match action {
             EncodeUnencodableAction::Reject => {
@@ -604,12 +618,12 @@ where
                 // The failure still carries the absolute input index; callers
                 // that need value context can add it in a higher-level facade.
                 Err(TranscodeEncodeError::unencodable_without_context(
-                    context.input_index(),
+                    attempt.input_index(),
                 ))
             }
             EncodeUnencodableAction::Skip => Ok(EncodeOutcome::consumed(0)),
             EncodeUnencodableAction::Replace { value } => {
-                self.encode_replacement_value(value, context)
+                self.encode_replacement_value(value, attempt)
             }
         }
     }
@@ -638,7 +652,7 @@ where
     fn encode_replacement_value(
         &mut self,
         value: C::Value,
-        context: EncodeContext<'_, C::Value, C::Unit>,
+        attempt: EncodeAttempt<'_, C::Value, C::Unit>,
     ) -> Result<EncodeOutcome, TranscodeEncodeErrorOf<C>> {
         assert!(
             self.codec.can_encode_value(&value),
@@ -649,13 +663,13 @@ where
             required <= C::MAX_ENCODE_UNITS_PER_VALUE,
             "Codec::encode_len exceeded Codec::MAX_ENCODE_UNITS_PER_VALUE",
         );
-        if context.available_output() < required {
+        if attempt.available_output() < required {
             return Ok(EncodeOutcome::need_output(
                 NonZeroUsize::new(required)
                     .expect("required output is non-zero when capacity is insufficient"),
             ));
         }
-        let (_, input_index, output, output_index) = context.into_parts();
+        let (_, input_index, output, output_index) = attempt.into_parts();
         let written = unsafe {
             // SAFETY: The capacity check above reserves the exact replacement
             // value width, and the hook contract requires encodability.

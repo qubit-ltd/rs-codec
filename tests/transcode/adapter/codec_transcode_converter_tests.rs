@@ -406,6 +406,13 @@ fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api(
     assert_transcode_converter::<Converter>();
 
     let mut converter = CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
+
+    let mut reset_output = [];
+
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(3), converter.max_transcode_output_len(2));
@@ -440,6 +447,9 @@ fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
     type Converter = CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>;
 
     let mut converter = Converter::new(VariableByteDecoder, PairByteEncoder);
+    converter
+        .reset(&mut [], 0)
+        .expect("reset before trait transcode");
     let mut output = [0_u8; 2];
 
     assert_eq!(
@@ -476,6 +486,11 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() 
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 4];
 
     let progress = converter
@@ -524,6 +539,11 @@ fn test_codec_transcode_converter_finish_encodes_decode_finish_values() {
         FlushValueDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(4), converter.max_finish_output_len());
@@ -542,6 +562,11 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -573,6 +598,11 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
         MinTwoDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -597,6 +627,11 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = converter
@@ -633,6 +668,11 @@ fn test_codec_transcode_converter_finish_drains_pending_decoded_value() {
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut short_output = [0_u8; 1];
 
     let progress = converter
@@ -660,6 +700,11 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -679,6 +724,11 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let error = converter
@@ -708,6 +758,11 @@ fn test_codec_transcode_converter_wraps_decode_finish_error() {
         FlushFailDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = converter
@@ -744,6 +799,11 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
         MinTwoDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = converter
@@ -782,6 +842,11 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         VariableByteDecoder,
         PairByteEncoder,
     );
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 4];
 
     converter

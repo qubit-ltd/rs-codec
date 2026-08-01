@@ -23,7 +23,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,
-        _context: &EncodeContext<'_, C::Value, C::Unit>,
+        _context: &EncodeContext<'_, C::Value>,
     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>> {
         Ok(EncodeUnencodableAction::Reject)
     }

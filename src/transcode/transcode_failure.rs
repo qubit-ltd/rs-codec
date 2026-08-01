@@ -108,9 +108,17 @@ pub enum TranscodeFailure {
     #[error("transcode called after finish without an intervening reset")]
     TranscodeAfterFinish,
 
+    /// `transcode` was called before the first successful reset.
+    #[error("transcode called before reset")]
+    TranscodeBeforeReset,
+
     /// `finish` was called after the logical stream was already finished.
     #[error("finish called twice without an intervening reset")]
     FinishAfterFinish,
+
+    /// `finish` was called before the first successful reset.
+    #[error("finish called before reset")]
+    FinishBeforeReset,
 
     /// Reset or finish failed after codec, hook, or buffered state may have
     /// changed. Continuing could repeat side effects or observe inconsistent

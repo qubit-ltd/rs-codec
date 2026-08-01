@@ -90,7 +90,7 @@ use crate::{CapacityError, Codec, TranscodeEncodeErrorOf};
 ///     fn handle_unencodable_encode(
 ///         &mut self,
 ///         _codec: &mut C,
-///         _context: &EncodeContext<'_, C::Value, C::Unit>,
+///         _context: &EncodeContext<'_, C::Value>,
 ///     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>> {
 ///         Ok(EncodeUnencodableAction::Reject)
 ///     }
@@ -194,7 +194,7 @@ where
     fn handle_unencodable_encode(
         &mut self,
         codec: &mut C,
-        context: &EncodeContext<'_, C::Value, C::Unit>,
+        context: &EncodeContext<'_, C::Value>,
     ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>>;
 
     /// Runs hook-owned cleanup as part of stream reset.

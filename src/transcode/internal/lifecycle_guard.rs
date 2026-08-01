@@ -11,10 +11,11 @@
 //! `reset → transcode* → finish` and then `reset` again before reusing the
 //! instance for another logical stream. The trait itself does not enforce
 //! this; engines historically rely on caller discipline. `LifecycleGuard`
-//! rejects common misuse (calling `transcode` after `finish` without an
-//! intervening `reset`, or calling `finish` twice in a row) in every build
-//! profile. It also prevents callers from continuing after a reset or finish
-//! operation failed after potentially mutating codec or hook state.
+//! rejects common misuse (calling `transcode` or `finish` before `reset`,
+//! calling `transcode` after `finish` without an intervening `reset`, or
+//! calling `finish` twice in a row) in every build profile. It also prevents
+//! callers from continuing after a reset or finish operation failed after
+//! potentially mutating codec or hook state.
 
 use super::lifecycle_phase::LifecyclePhase;
 use crate::TranscodeFailure;
@@ -23,15 +24,14 @@ use crate::TranscodeFailure;
 ///
 /// Lifecycle rules:
 ///
-/// - `transcode` is rejected when the engine is `Finished` or `Poisoned`.
-/// - `finish` is rejected when the engine is already `Finished` or `Poisoned`.
+/// - `transcode` is rejected when the engine is `Uninitialized`, `Finished`,
+///   or `Poisoned`.
+/// - `finish` is rejected when the engine is `Uninitialized`, `Finished`, or
+///   `Poisoned`.
 /// - reset preflight never changes the phase.
 /// - starting reset or finish marks the engine `Poisoned`; success commits the
 ///   corresponding `Fresh` or `Finished` phase.
 ///
-/// `Fresh → finish` is intentionally allowed: stateless transcoders may
-/// finalize an empty stream, and forcing a synthetic `transcode(&[])` call
-/// just to satisfy the guard would be noise.
 #[derive(Debug, Default)]
 pub(crate) struct LifecycleGuard {
     /// Current lifecycle phase.
@@ -39,7 +39,7 @@ pub(crate) struct LifecycleGuard {
 }
 
 impl LifecycleGuard {
-    /// Creates a guard in the [`LifecyclePhase::Fresh`] phase.
+    /// Creates a guard in the [`LifecyclePhase::Uninitialized`] phase.
     ///
     /// # Returns
     ///
@@ -48,7 +48,7 @@ impl LifecycleGuard {
     #[must_use]
     pub(crate) const fn new() -> Self {
         Self {
-            phase: LifecyclePhase::Fresh,
+            phase: LifecyclePhase::Uninitialized,
         }
     }
 
@@ -72,12 +72,17 @@ impl LifecycleGuard {
     /// # Errors
     ///
     /// Returns [`TranscodeFailure::TranscodeAfterFinish`] when `transcode` is
-    /// called after `finish` without an intervening reset, or
+    /// called after `finish` without an intervening reset. Returns
+    /// [`TranscodeFailure::TranscodeBeforeReset`] when called before the first
+    /// successful reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
     /// failure.
     #[inline(always)]
     pub(crate) fn on_transcode(&mut self) -> Result<(), TranscodeFailure> {
         match self.phase {
+            LifecyclePhase::Uninitialized => {
+                return Err(TranscodeFailure::TranscodeBeforeReset);
+            }
             LifecyclePhase::Finished => {
                 return Err(TranscodeFailure::TranscodeAfterFinish);
             }
@@ -100,12 +105,17 @@ impl LifecycleGuard {
     /// # Errors
     ///
     /// Returns [`TranscodeFailure::FinishAfterFinish`] when `finish` is called
-    /// twice without an intervening reset, or
+    /// twice without an intervening reset. Returns
+    /// [`TranscodeFailure::FinishBeforeReset`] when called before the first
+    /// successful reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
     /// failure.
     #[inline(always)]
     pub(crate) fn on_finish_attempt(&self) -> Result<(), TranscodeFailure> {
         match self.phase {
+            LifecyclePhase::Uninitialized => {
+                return Err(TranscodeFailure::FinishBeforeReset);
+            }
             LifecyclePhase::Finished => {
                 return Err(TranscodeFailure::FinishAfterFinish);
             }
