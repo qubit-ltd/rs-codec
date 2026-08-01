@@ -93,6 +93,9 @@ For a streaming converter, the lifecycle is explicit:
 reset(output) -> transcode(...) repeatedly -> handle any EOF tail -> finish(output)
 ```
 
+A newly created transcoder is uninitialized: the first successful operation must
+be `reset`. After `finish`, call `reset` again before reusing the instance.
+
 `Complete` means that a `transcode` call consumed all visible input from its
 requested index. `NeedInput` leaves the incomplete tail with the caller for a
 retry or an explicit EOF decision; `NeedOutput` means the output buffer must be
@@ -104,6 +107,9 @@ any required I/O preparation. A returned `TranscodeProgress` (or
 `AsyncTranscodeDecodeStep::Progress`) is already committed and is never
 followed by another await in that call. Advance the caller cursor by its
 reported count; EOF is the explicit `AsyncTranscodeDecodeStep::EndOfInput`.
+
+The async bridges also require the underlying transcoder to be reset before the
+first progress call and after each completed stream.
 
 ## Boundaries and Guarantees
 

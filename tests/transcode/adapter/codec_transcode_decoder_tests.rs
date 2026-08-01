@@ -204,6 +204,13 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
     assert_transcode_decoder::<CodecTranscodeDecoder<VariableByteCodec>>();
 
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+
+    let mut reset_output = [];
+
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = decoder
@@ -226,6 +233,11 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
 #[test]
 fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -263,6 +275,11 @@ fn test_codec_transcode_decoder_reports_bounds_and_resets_state() {
 #[test]
 fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -291,6 +308,11 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
 #[test]
 fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder
@@ -303,6 +325,11 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
 #[test]
 fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder
@@ -315,6 +342,11 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
 #[test]
 fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder
@@ -327,6 +359,11 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
 #[test]
 fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
     let mut decoder = CodecTranscodeDecoder::new(FixedPairCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -351,6 +388,11 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
 #[test]
 fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder
@@ -370,6 +412,11 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
 #[test]
 fn test_codec_transcode_decoder_wraps_decode_finish_error() {
     let mut decoder = CodecTranscodeDecoder::new(FlushFailCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder

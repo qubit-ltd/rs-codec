@@ -139,7 +139,9 @@ fn sum_output_bounds(
 ///
 /// A transcoder instance has a simple lifecycle:
 ///
-/// 1. A newly created or reset instance is ready for a new logical stream.
+/// 1. A newly created instance is uninitialized; call [`Transcoder::reset`]
+///    before the first stream. A reset instance is ready for a new logical
+///    stream.
 /// 2. Call [`Transcoder::transcode`] zero or more times while input is
 ///    available.
 /// 3. Preserve any tail reported by [`crate::TranscodeStatus::NeedInput`] in
@@ -159,11 +161,12 @@ fn sum_output_bounds(
 ///
 /// `finish` finalizes retained state only; it does not receive source input and
 /// does not reinterpret a tail previously reported by `NeedInput`. For
-/// codec-backed decoders, this means the underlying codec should be able to
-/// decide each value boundary from the visible prefix plus its own state. If a
-/// format needs EOF-aware maximal-munch parsing or must delay whether a prefix
-/// is complete until the next chunk or EOF, implement that policy in a custom
-/// `Transcoder` or a value-level facade.
+/// codec-backed decoders, streaming uses [`Codec::decode`](crate::Codec::decode)
+/// and an explicit EOF call may use [`Codec::decode_eof`](crate::Codec::decode_eof)
+/// through [`Transcoder::transcode_eof`]. If a format needs EOF-aware
+/// maximal-munch parsing or must delay whether a prefix is complete until the
+/// next chunk or EOF, implement that policy in the codec or override
+/// `transcode_eof`.
 ///
 /// `Transcoder` is intentionally independent from any charset
 /// semantics:
@@ -259,6 +262,10 @@ fn sum_output_bounds(
 /// }
 ///
 /// let mut transcoder = U16BeBytesDecoder;
+/// let mut reset_output = [];
+/// transcoder
+///     .reset(&mut reset_output, 0)
+///     .expect("stateless decoder reset cannot fail");
 /// let mut output = [0_u16; 1];
 /// let progress = transcoder
 ///     .transcode(&[0x12, 0x34, 0xab, 0xcd], 0, &mut output, 0)
@@ -602,6 +609,10 @@ pub trait Transcoder {
     /// }
     ///
     /// let mut transcoder = ByteCopy;
+    /// let mut reset_output = [];
+    /// transcoder
+    ///     .reset(&mut reset_output, 0)
+    ///     .expect("stateless transcoder reset cannot fail");
     /// let mut output = [1_u8; 1];
     /// let progress = transcoder
     ///     .transcode(&[7], 0, &mut output, 0)

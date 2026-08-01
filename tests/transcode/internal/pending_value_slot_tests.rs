@@ -13,6 +13,11 @@ use crate::common::IdentityCodec;
 #[test]
 fn test_pending_value_slot_drains_before_reading_more_input() {
     let mut converter = CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
+    let mut reset_output = [];
+    converter
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let first = converter
         .transcode(&[13], 0, &mut [], 0)
         .expect("short output should retain the decoded value");

@@ -132,6 +132,8 @@ use crate::{
 /// let mut engine = TranscodeDecodeEngine::<_, _>::new(ByteCodec, ReplacementHooks);
 /// let input = [b'a', 0xff, b'b'];
 /// let mut output = [0_u8; 3];
+/// let mut reset_output = [];
+/// engine.reset(&mut reset_output, 0)?;
 ///
 /// let progress = engine.transcode(&input, 0, &mut output, 0)?;
 /// match progress.status() {
@@ -410,6 +412,8 @@ where
     /// Returns hook errors when `input_index` is outside `input`, when
     /// `output_index` is outside `output`, or when a concrete policy hook
     /// rejects a value. Returns
+    /// [`TranscodeFailure::TranscodeBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
@@ -509,6 +513,8 @@ where
     /// Returns framework errors when the caller provides invalid or
     /// insufficient output capacity. Returns domain errors when codec finish or
     /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
@@ -659,11 +665,12 @@ where
                     "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                 );
                 if end_of_input {
-                    Err(TranscodeDecodeError::incomplete_input(
+                    Err(TranscodeFailure::incomplete_input(
                         context.input_index(),
                         required_total.get(),
                         context.available(),
-                    ))
+                    )
+                    .into())
                 } else {
                     Ok((DecodeOutcome::need_input(required_total), None))
                 }

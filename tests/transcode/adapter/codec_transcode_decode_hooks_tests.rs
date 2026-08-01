@@ -104,6 +104,11 @@ impl Codec for InvalidByteCodec {
 #[test]
 fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
     let mut decoder = CodecTranscodeDecoder::new(InvalidByteCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder
@@ -119,6 +124,11 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
 #[test]
 fn test_codec_transcode_decode_hooks_wraps_decode_finish_errors() {
     let mut decoder = CodecTranscodeDecoder::new(FlushFailCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder

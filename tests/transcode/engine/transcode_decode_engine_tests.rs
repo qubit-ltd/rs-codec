@@ -753,6 +753,11 @@ fn test_transcode_decode_engine_exposes_codec_hooks_and_parts() {
 #[test]
 fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(OverflowFlushCodec, OverflowFinishHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     assert_eq!(
@@ -777,6 +782,11 @@ fn test_transcode_decode_engine_drops_replaced_output_value() {
         drops: drops.clone(),
     };
     let mut decoder = TranscodeDecodeEngine::new(codec, DropTrackedHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [DropTrackedValue::new(99, drops.clone())];
 
     let progress = decoder
@@ -833,6 +843,11 @@ fn test_transcode_decode_engine_reports_finish_bounds() {
 #[test]
 fn test_transcode_decode_engine_delegates_finish_to_hooks() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     assert_eq!(Ok(1), decoder.max_finish_output_len());
@@ -854,6 +869,11 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
 #[test]
 fn test_transcode_decode_engine_finish_passes_full_output_to_hooks() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverwritingFinishHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let written = decoder
@@ -868,6 +888,11 @@ fn test_transcode_decode_engine_finish_passes_full_output_to_hooks() {
 #[should_panic(expected = "TranscodeDecodeEngine hook wrote beyond its finish bound")]
 fn test_transcode_decode_engine_finish_panics_when_hook_overreports_bound() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, OverreportingFinishHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let _ = decoder.finish(&mut output, 0);
@@ -876,6 +901,11 @@ fn test_transcode_decode_engine_finish_panics_when_hook_overreports_bound() {
 #[test]
 fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder
@@ -888,6 +918,11 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
 #[test]
 fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffer() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder
@@ -916,6 +951,11 @@ fn test_buffered_decode_hooks_default_finish_is_noop() {
 #[test]
 fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -946,6 +986,9 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
 #[test]
 fn test_transcode_decode_engine_uses_codec_eof_decode_path() {
     let mut decoder = TranscodeDecodeEngine::new(EofAwarePrefixCodec, EofAwareHooks);
+    decoder
+        .reset(&mut [], 0)
+        .expect("reset before EOF-aware decode");
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -961,6 +1004,11 @@ fn test_transcode_decode_engine_uses_codec_eof_decode_path() {
 #[test]
 fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_tail() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -982,6 +1030,11 @@ fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_ta
 #[test]
 fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let progress = decoder
@@ -1003,6 +1056,11 @@ fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output()
 #[test]
 fn test_transcode_decode_engine_allows_policy_emit_for_invalid_input() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 2];
 
     let progress = decoder
@@ -1018,6 +1076,11 @@ fn test_transcode_decode_engine_allows_policy_emit_for_invalid_input() {
 #[test]
 fn test_transcode_decode_engine_reports_need_output_before_policy_emit() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let progress = decoder
@@ -1039,6 +1102,11 @@ fn test_transcode_decode_engine_reports_need_output_before_policy_emit() {
 #[test]
 fn test_transcode_decode_engine_allows_policy_skip_for_invalid_input() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, SkippingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -1054,6 +1122,11 @@ fn test_transcode_decode_engine_allows_policy_skip_for_invalid_input() {
 #[test]
 fn test_transcode_decode_engine_passes_invalid_consumed_hint_to_hooks() {
     let mut decoder = TranscodeDecodeEngine::new(HintOnlyCodec, HintOnlySkippingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let progress = decoder
@@ -1075,6 +1148,11 @@ fn test_transcode_decode_engine_panics_on_invalid_skip_action() {
             kind: InvalidDecodeInvalidActionKind::Skip,
         },
     );
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
@@ -1089,6 +1167,11 @@ fn test_transcode_decode_engine_panics_on_invalid_emit_action() {
             kind: InvalidDecodeInvalidActionKind::Emit,
         },
     );
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[0xff], 0, &mut output, 0);
@@ -1097,6 +1180,11 @@ fn test_transcode_decode_engine_panics_on_invalid_emit_action() {
 #[test]
 fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let progress = decoder
@@ -1125,6 +1213,11 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() 
 #[should_panic(expected = "Codec::decode consumed beyond available input")]
 fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_available_input() {
     let mut decoder = TranscodeDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[1], 0, &mut output, 0);
@@ -1134,6 +1227,11 @@ fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_available_inpu
 #[should_panic(expected = "Codec::decode consumed beyond Codec::MAX_DECODE_UNITS_PER_VALUE")]
 fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_decode_maximum() {
     let mut decoder = TranscodeDecodeEngine::new(OverconsumingCodec, OverconsumingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[1, 2], 0, &mut output, 0);
@@ -1145,6 +1243,11 @@ fn test_transcode_decode_engine_panics_when_codec_consumes_beyond_decode_maximum
 )]
 fn test_transcode_decode_engine_panics_when_incomplete_hint_exceeds_codec_maximum() {
     let mut decoder = TranscodeDecodeEngine::new(OverlongIncompleteCodec, OverlongIncompleteHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = decoder.transcode(&[1], 0, &mut output, 0);
@@ -1153,6 +1256,11 @@ fn test_transcode_decode_engine_panics_when_incomplete_hint_exceeds_codec_maximu
 #[test]
 fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [];
 
     let error = decoder
@@ -1169,6 +1277,9 @@ fn test_transcode_decode_engine_implements_buffered_transcoder() {
     assert_decoder::<Decoder>();
 
     let mut decoder = Decoder::new(PrefixCodec, ReplacingHooks);
+    decoder
+        .reset(&mut [], 0)
+        .expect("reset before trait transcode");
 
     let available = <Decoder as Transcoder>::max_transcode_output_len(&decoder, 1)
         .expect("max_transcode_output_len should be callable through trait");
@@ -1401,6 +1512,11 @@ fn test_transcode_decode_engine_reset_calls_hook_before_reset() {
 #[test]
 fn test_transcode_decode_engine_finish_converts_decode_finish_errors() {
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder
@@ -1466,6 +1582,11 @@ fn new_stateless_finish_engine() -> TranscodeDecodeEngine<PrefixCodec, FinishHoo
 #[test]
 fn test_transcode_decode_engine_lifecycle_rejects_double_finish() {
     let mut engine = new_stateless_finish_engine();
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 0];
     engine
         .finish(&mut output, 0)
@@ -1481,6 +1602,11 @@ fn test_transcode_decode_engine_lifecycle_rejects_double_finish() {
 #[test]
 fn test_transcode_decode_engine_lifecycle_rejects_transcode_after_finish() {
     let mut engine = new_stateless_finish_engine();
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 0];
     engine
         .finish(&mut output, 0)
@@ -1497,6 +1623,11 @@ fn test_transcode_decode_engine_lifecycle_rejects_transcode_after_finish() {
 #[test]
 fn test_transcode_decode_engine_lifecycle_allows_finish_without_transcode() {
     let mut engine = new_stateless_finish_engine();
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 0];
     let written = engine
         .finish(&mut output, 0)
@@ -1511,6 +1642,11 @@ fn test_transcode_decode_engine_lifecycle_allows_finish_retry_after_capacity_fai
     // `InsufficientOutput` failure; the guard must not mark the engine
     // closed when finish fails before doing any work.
     let mut engine = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, FinishHooks::default());
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut tiny = [0_u8; 0];
     let _ = engine
         .finish(&mut tiny, 0)
@@ -1525,6 +1661,11 @@ fn test_transcode_decode_engine_lifecycle_allows_finish_retry_after_capacity_fai
 #[test]
 fn test_transcode_decode_engine_lifecycle_allows_reuse_after_reset() {
     let mut engine = new_stateless_finish_engine();
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut buf = [0_u8; 4];
     engine
         .finish(&mut buf, 0)
@@ -1558,6 +1699,11 @@ fn test_transcode_decode_engine_failed_reset_preserves_finished_state() {
         ResetEmittingDecodeCodec,
         ResetEmittingDecodePassthroughHooks,
     );
+    let mut reset_output = [0_u8; 1];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
     engine
         .finish(&mut output, 0)
@@ -1578,6 +1724,11 @@ fn test_transcode_decode_engine_failed_reset_preserves_finished_state() {
 #[test]
 fn test_transcode_decode_engine_failed_finish_poisoned_until_reset() {
     let mut engine = TranscodeDecodeEngine::<_, _>::new(FlushFailCodec, FlushMappingHooks);
+    let mut reset_output = [];
+    engine
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
     let error = engine
         .finish(&mut output, 0)
@@ -1652,6 +1803,11 @@ impl TranscodeDecodeHooks<PrefixCodec> for InvalidHookErrorHooks {
 #[test]
 fn test_transcode_decode_engine_propagates_invalid_decode_hook_errors() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, InvalidHookErrorHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = decoder
@@ -1745,6 +1901,11 @@ impl TranscodeDecodeHooks<UnknownInvalidCodec> for RejectingDecodeHooks {
 #[test]
 fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, RejectingDecodeHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let input = [0xff_u8];
     let mut output = [0_u8; 1];
 
@@ -1765,6 +1926,11 @@ fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
 #[test]
 fn test_transcode_decode_engine_rejects_invalid_unknown_input_via_hooks() {
     let mut decoder = TranscodeDecodeEngine::new(UnknownInvalidCodec, RejectingDecodeHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let input = [0xff_u8];
     let mut output = [0_u8; 1];
 

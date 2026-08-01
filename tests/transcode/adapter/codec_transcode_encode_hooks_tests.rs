@@ -136,6 +136,11 @@ impl Codec for OverreportingEncodeCodec {
 #[test]
 fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
     let mut encoder = CodecTranscodeEncoder::new(RejectOddCodec);
+    let mut reset_output = [];
+    encoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let error = encoder
@@ -149,6 +154,11 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
 #[should_panic(expected = "Codec::encode wrote a different length than Codec::encode_len")]
 fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width() {
     let mut encoder = CodecTranscodeEncoder::new(OverreportingEncodeCodec);
+    let mut reset_output = [];
+    encoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
+
     let mut output = [0_u8; 1];
 
     let _ = encoder.transcode(&[7], 0, &mut output, 0);

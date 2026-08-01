@@ -13,6 +13,10 @@ use crate::common::IdentityCodec;
 #[test]
 fn test_lifecycle_guard_rejects_double_finish() {
     let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     assert_eq!(Ok(0), decoder.finish(&mut [], 0));
     assert_eq!(

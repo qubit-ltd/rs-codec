@@ -19,6 +19,71 @@ pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
     state: TranscodeState<'a, Value, Unit>,
 }
 
+/// Engine-owned mutable state for one encode attempt.
+pub(in crate::transcode) struct EncodeAttempt<'a, Value, Unit> {
+    /// Input value being encoded.
+    value: &'a Value,
+    /// Absolute input index of `value`.
+    input_index: usize,
+    /// Complete mutable output slice owned by the engine.
+    output: &'a mut [Unit],
+    /// Absolute output index where writing begins.
+    output_index: usize,
+}
+
+impl<'a, Value, Unit> EncodeAttempt<'a, Value, Unit> {
+    /// Creates an engine-owned encode attempt.
+    #[inline(always)]
+    pub(in crate::transcode) fn new(
+        value: &'a Value,
+        input_index: usize,
+        output: &'a mut [Unit],
+        output_index: usize,
+    ) -> Self {
+        Self {
+            value,
+            input_index,
+            output,
+            output_index,
+        }
+    }
+
+    /// Returns the input value being encoded.
+    #[inline(always)]
+    pub(in crate::transcode) fn value(&self) -> &Value {
+        self.value
+    }
+
+    /// Returns the absolute input index.
+    #[inline(always)]
+    pub(in crate::transcode) const fn input_index(&self) -> usize {
+        self.input_index
+    }
+
+    /// Returns writable output capacity.
+    #[inline(always)]
+    pub(in crate::transcode) fn available_output(&self) -> usize {
+        self.output.len().saturating_sub(self.output_index)
+    }
+
+    /// Returns the read-only policy view for this attempt.
+    #[inline(always)]
+    pub(in crate::transcode) fn context(&self) -> EncodeContext<'_, Value> {
+        EncodeContext::new(
+            self.value,
+            self.input_index,
+            self.output_index,
+            self.available_output(),
+        )
+    }
+
+    /// Returns all mutable engine state for the encode operation.
+    #[inline(always)]
+    pub(in crate::transcode) fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
+        (self.value, self.input_index, self.output, self.output_index)
+    }
+}
+
 impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Creates mutable encode state.
     ///
@@ -63,13 +128,13 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     #[inline(always)]
     pub(in crate::transcode) unsafe fn context_unchecked(
         &mut self,
-    ) -> EncodeContext<'_, Value, Unit> {
+    ) -> EncodeAttempt<'_, Value, Unit> {
         let input_index = self.state.input_cursor();
         let output_index = self.state.output_cursor();
         let (input, output) = self.state.input_output_mut();
         // SAFETY: Guaranteed by the caller.
         let value = unsafe { input.get_unchecked(input_index) };
-        EncodeContext::new(value, input_index, output, output_index)
+        EncodeAttempt::new(value, input_index, output, output_index)
     }
 
     /// Returns the number of writable output units from the current cursor.
