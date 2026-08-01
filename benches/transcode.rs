@@ -138,6 +138,10 @@ fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) 
 /// Benchmarks the production codec-backed decoder engine hot path.
 fn bench_decode_engine(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
     let mut decoder = TranscodeDecodeEngine::new(CopyCodec, CopyHooks);
+    let mut reset_output = [];
+    decoder
+        .reset(&mut reset_output, 0)
+        .expect("copy codec reset is infallible");
     let mut output = vec![0_u8; input.len()];
     group.bench_function("decode_engine", |bencher| {
         bencher.iter(|| {
