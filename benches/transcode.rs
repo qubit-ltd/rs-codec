@@ -172,6 +172,46 @@ fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
     }
 }
 
+#[inline(never)]
+fn copy_safe(input: &[u8], output: &mut [u8]) {
+    for index in 0..input.len() {
+        output[index] = input[index].wrapping_add(1);
+    }
+}
+
+/// Copies the same fixture with unchecked indexing for an A/B code-generation
+/// comparison. The caller guarantees equal input and output lengths.
+#[inline(never)]
+unsafe fn copy_unchecked(input: &[u8], output: &mut [u8]) {
+    debug_assert_eq!(input.len(), output.len());
+    for index in 0..input.len() {
+        // SAFETY: `index` is bounded by both slices' equal lengths.
+        let source = unsafe { *input.get_unchecked(index) };
+        // SAFETY: `index` is bounded by the equal output length.
+        unsafe { *output.get_unchecked_mut(index) = source.wrapping_add(1) };
+    }
+}
+
+/// Compares safe indexing with explicit unchecked indexing on the same loop.
+fn bench_safe_vs_unchecked(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
+    let mut safe_output = vec![0_u8; input.len()];
+    group.bench_function("safe_indexing", |bencher| {
+        bencher.iter(|| {
+            copy_safe(black_box(input), black_box(safe_output.as_mut_slice()));
+            black_box(safe_output[0]);
+        });
+    });
+
+    let mut unchecked_output = vec![0_u8; input.len()];
+    group.bench_function("unchecked_indexing", |bencher| {
+        bencher.iter(|| {
+            // SAFETY: both output buffers are allocated to `input.len()`.
+            unsafe { copy_unchecked(black_box(input), black_box(unchecked_output.as_mut_slice())) };
+            black_box(unchecked_output[0]);
+        });
+    });
+}
+
 /// Registers generic transcoder baseline measurements.
 fn bench_transcoder(criterion: &mut Criterion) {
     let input: Vec<u8> = (0..FIXTURE_LEN).map(|index| index as u8).collect();
@@ -191,6 +231,14 @@ fn bench_transcoder(criterion: &mut Criterion) {
     streaming.measurement_time(Duration::from_secs(5));
     bench_streaming_windows(&mut streaming, &input);
     streaming.finish();
+
+    let mut indexing = criterion.benchmark_group("safe_vs_unchecked");
+    indexing.throughput(Throughput::Bytes(input.len() as u64));
+    indexing.sample_size(SAMPLE_SIZE);
+    indexing.warm_up_time(Duration::from_secs(2));
+    indexing.measurement_time(Duration::from_secs(5));
+    bench_safe_vs_unchecked(&mut indexing, &input);
+    indexing.finish();
 }
 
 criterion_group!(benches, bench_transcoder);
