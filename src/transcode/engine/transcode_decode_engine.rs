@@ -657,7 +657,7 @@ where
                     Some(consumed_value),
                 ))
             }
-            Err(DecodeFailure::Incomplete { required_total }) => {
+            Err(DecodeFailure::Incomplete { required_total, .. }) => {
                 assert!(
                     required_total.get() > context.available(),
                     "Codec::decode incomplete required_total must exceed available input",

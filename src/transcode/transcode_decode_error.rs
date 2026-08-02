@@ -123,7 +123,7 @@ impl<E> TranscodeDecodeError<E> {
         available: usize,
     ) -> Self {
         match failure {
-            DecodeFailure::Incomplete { required_total } => {
+            DecodeFailure::Incomplete { required_total, .. } => {
                 TranscodeFailure::incomplete_input(input_index, required_total.get(), available)
                     .into()
             }

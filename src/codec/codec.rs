@@ -50,6 +50,9 @@ use super::decode_failure::DecodeFailure;
 /// current value; it is not itself an EOF error. Codecs that need EOF-aware
 /// maximal-munch parsing or reinterpretation of a trailing prefix can override
 /// `decode_eof` without changing their streaming behavior.
+/// An incomplete failure may also retain codec-specific context through
+/// [`DecodeFailure::incomplete_with_source`]; stream drivers may ignore that
+/// context while retrying and use it for detailed EOF diagnostics.
 ///
 /// # Associated Types
 ///
@@ -431,7 +434,8 @@ pub trait Codec {
     /// valid prefix but more units are needed to decide or complete a value.
     /// This reports a streaming boundary, not a final EOF condition; the
     /// caller or higher-level adapter decides what an incomplete tail means
-    /// when the upstream source is closed.
+    /// when the upstream source is closed. Codec-specific context may be
+    /// retained in the failure's optional `source` field.
     /// Returns [`DecodeFailure::Invalid`] when the units are malformed,
     /// non-canonical, unmappable, or otherwise invalid for this codec and the
     /// span is known or unknown. Unknown span is represented as
