@@ -28,10 +28,7 @@ impl Transcoder for CharToByte {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
-        TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -56,10 +53,7 @@ impl Transcoder for CharToByte {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
-        TranscodeEncodeError::<core::convert::Infallible, char>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }

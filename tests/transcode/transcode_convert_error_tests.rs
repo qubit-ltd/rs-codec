@@ -39,8 +39,8 @@ fn test_convert_error_adds_fallback_unencodable_context() {
 fn test_convert_error_accessors_mapping_and_validation() {
     type Convert<V = char> = TranscodeConvertError<&'static str, &'static str, V>;
 
-    let failure: Convert = Convert::incomplete_input(1, 2, 0);
-    let trailing: Convert = Convert::trailing_input(1, 1);
+    let failure: Convert = Convert::Failure(TranscodeFailure::incomplete_input(1, 2, 0));
+    let trailing: Convert = Convert::Failure(TranscodeFailure::trailing_input(1, 1));
     let decode_reset: Convert = Convert::decode_domain_reset("decode reset");
     let decode_main: Convert = Convert::decode_domain_main("decode", 3);
     let decode_consumed: Convert =
@@ -70,7 +70,7 @@ fn test_convert_error_accessors_mapping_and_validation() {
     assert_eq!(None, encode_reset.unencodable_ref());
 
     assert_eq!(
-        TranscodeConvertError::<usize, &str, char>::incomplete_input(1, 2, 0),
+        TranscodeConvertError::Failure(TranscodeFailure::incomplete_input(1, 2, 0)),
         failure.map_decode_domain(str::len),
     );
     assert_eq!(
@@ -91,8 +91,9 @@ fn test_convert_error_accessors_mapping_and_validation() {
             .map_encode_domain(str::len),
     );
     assert_eq!(
-        TranscodeConvertError::<&str, usize, char>::incomplete_input(1, 2, 0),
-        Convert::<char>::incomplete_input(1, 2, 0).map_encode_domain(str::len),
+        TranscodeConvertError::Failure(TranscodeFailure::incomplete_input(1, 2, 0)),
+        Convert::<char>::Failure(TranscodeFailure::incomplete_input(1, 2, 0))
+            .map_encode_domain(str::len),
     );
     assert_eq!(
         TranscodeConvertError::<&str, usize, char>::encode_domain_finish(13),
@@ -107,8 +108,9 @@ fn test_convert_error_accessors_mapping_and_validation() {
         decode_finish.map_value(|value: char| value as u32),
     );
     assert_eq!(
-        TranscodeConvertError::<&str, &str, u32>::incomplete_input(1, 2, 0),
-        Convert::<char>::incomplete_input(1, 2, 0).map_value(|value: char| value as u32),
+        TranscodeConvertError::Failure(TranscodeFailure::incomplete_input(1, 2, 0)),
+        Convert::<char>::Failure(TranscodeFailure::incomplete_input(1, 2, 0))
+            .map_value(|value: char| value as u32),
     );
     assert_eq!(
         TranscodeConvertError::<&str, &str, u32>::encode_domain_reset("encode reset"),
@@ -120,9 +122,10 @@ fn test_convert_error_accessors_mapping_and_validation() {
             .map_value(|value| value as u32),
     );
 
-    let encode_failure = TranscodeEncodeError::<&str, char>::invalid_output_index(3, 1);
+    let encode_failure =
+        TranscodeEncodeError::Failure(TranscodeFailure::invalid_output_index(3, 1));
     assert_eq!(
-        Convert::<char>::invalid_output_index(3, 1),
+        Convert::<char>::Failure(TranscodeFailure::invalid_output_index(3, 1)),
         Convert::<char>::from(encode_failure)
     );
     let encode_domain = TranscodeEncodeError::<&str, char>::domain_reset("encode reset");
@@ -142,9 +145,9 @@ fn test_convert_error_accessors_mapping_and_validation() {
             'z',
         ),
     );
-    let decode_failure = TranscodeDecodeError::<&str>::invalid_input_index(4, 1);
+    let decode_failure = TranscodeDecodeError::Failure(TranscodeFailure::invalid_input_index(4, 1));
     assert_eq!(
-        Convert::<char>::invalid_input_index(4, 1),
+        Convert::<char>::Failure(TranscodeFailure::invalid_input_index(4, 1)),
         Convert::<char>::from(decode_failure)
     );
     let decode_domain = TranscodeDecodeError::<&str>::domain_reset("decode reset");
@@ -157,26 +160,32 @@ fn test_convert_error_accessors_mapping_and_validation() {
         Convert::<char>::decode_domain_main_with_consumed("decode", 3, Some(crate::nz(1)))
     );
 
-    assert_eq!(Ok(()), Convert::<char>::ensure_output_index(2, 2));
+    assert_eq!(
+        Ok::<(), Convert>(()),
+        TranscodeFailure::ensure_output_index(2, 2).map_err(Convert::<char>::from),
+    );
     assert!(matches!(
-        Convert::<char>::ensure_output_index(2, 3),
+        TranscodeFailure::ensure_output_index(2, 3).map_err(Convert::<char>::from),
         Err(TranscodeConvertError::Failure(
             TranscodeFailure::InvalidOutputIndex { .. }
         ))
     ));
     assert_eq!(
-        Ok(()),
-        Convert::<char>::ensure_transcode_indices(2, 1, 2, 1)
+        Ok::<(), Convert>(()),
+        TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1).map_err(Convert::<char>::from)
     );
     assert!(matches!(
-        Convert::<char>::ensure_transcode_indices(2, 3, 2, 1),
+        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1).map_err(Convert::<char>::from),
         Err(TranscodeConvertError::Failure(
             TranscodeFailure::InvalidInputIndex { .. }
         ))
     ));
-    assert_eq!(Ok(()), Convert::<char>::ensure_output_capacity(3, 1, 2));
+    assert_eq!(
+        Ok::<(), Convert>(()),
+        TranscodeFailure::ensure_output_capacity(3, 1, 2).map_err(Convert::<char>::from),
+    );
     assert!(matches!(
-        Convert::<char>::ensure_output_capacity(3, 1, 3),
+        TranscodeFailure::ensure_output_capacity(3, 1, 3).map_err(Convert::<char>::from),
         Err(TranscodeConvertError::Failure(
             TranscodeFailure::InsufficientOutput { .. }
         ))

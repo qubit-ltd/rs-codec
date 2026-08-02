@@ -1416,12 +1416,22 @@ fn test_buffered_convert_engine_reports_invalid_indices() {
     let error = engine
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
-    assert_eq!(TranscodeConvertError::invalid_input_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        ),
+        error,
+    );
 
     let error = engine
         .transcode(&[1], 0, &mut output, 2)
         .expect_err("invalid output index should fail");
-    assert_eq!(TranscodeConvertError::invalid_output_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1490,7 +1500,12 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     let error = engine
         .finish(&mut [], 0)
         .expect_err("encoding decoder finish values should report bound overflow");
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 
     let engine = new_error_path_engine(ErrorPathHooks {
         decode_finish_len: 1,
@@ -1526,7 +1541,12 @@ fn test_buffered_convert_engine_reports_capacity_errors() {
     let error = engine
         .reset(&mut [], 0)
         .expect_err("reset bound overflow should be mapped");
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 
     let mut engine = new_error_path_engine(ErrorPathHooks {
         encode_max_output_error_for_len: Some(1),
@@ -1596,7 +1616,12 @@ fn test_buffered_convert_engine_finish_maps_encoder_finish_bound_overflow() {
         .finish(&mut [], 0)
         .expect_err("encoder finish bound overflow should be mapped");
 
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -1623,7 +1648,12 @@ fn test_buffered_convert_engine_finish_maps_initial_decode_finish_bound_overflow
         .finish(&mut output, 0)
         .expect_err("overflowing decode finish bound should be mapped");
 
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -1647,7 +1677,12 @@ fn test_buffered_convert_engine_finish_maps_late_decode_finish_bound_overflow() 
         .finish(&mut output, 0)
         .expect_err("late decode finish bound overflow should be mapped");
 
-    assert_eq!(TranscodeConvertError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -1687,7 +1722,12 @@ fn test_buffered_convert_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeConvertError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1882,7 +1922,12 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
     let error = engine
         .finish(&mut empty_output, 0)
         .expect_err("finish should reject insufficient output before draining pending value");
-    assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
@@ -1902,7 +1947,12 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
     let error = engine
         .finish(&mut empty_output, 0)
         .expect_err("finish should reject insufficient output before decoder finish");
-    assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
     let mut output = [0_u8; 1];
@@ -1946,7 +1996,12 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
     let error = engine
         .finish(&mut output, 0)
         .expect_err("finish should reject partial one-shot output");
-    assert_eq!(TranscodeConvertError::insufficient_output(0, 2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 2, 1)
+        ),
+        error,
+    );
     assert_eq!([0], output);
     assert_eq!(Ok(2), engine.max_finish_output_len());
 
@@ -1967,7 +2022,12 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
     let error = engine
         .finish(&mut empty_output, 0)
         .expect_err("target finish hook should require one-shot output capacity");
-    assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
 
     let mut output = [0_u8; 1];
     let written = engine
@@ -2356,7 +2416,12 @@ fn test_buffered_convert_engine_reset_rejects_invalid_output_index() {
         .reset(&mut output, 2)
         .expect_err("invalid reset output index should be rejected");
 
-    assert_eq!(TranscodeConvertError::invalid_output_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -2457,7 +2522,12 @@ fn test_buffered_convert_engine_invalid_reset_preserves_pending_value() {
         .reset(&mut output, 2)
         .expect_err("invalid reset output index should be rejected");
 
-    assert_eq!(TranscodeConvertError::invalid_output_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(2, 1)
+        ),
+        error,
+    );
     assert_eq!(Ok(1), engine.max_finish_output_len());
 
     let written = engine
@@ -3028,7 +3098,12 @@ fn test_buffered_convert_engine_failed_reset_preserves_finished_state() {
     let error = engine
         .reset(&mut [], 0)
         .expect_err("reset should reject insufficient output");
-    assert_eq!(TranscodeConvertError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error
+    );
     assert_eq!(
         Err(TranscodeConvertError::Failure(
             TranscodeFailure::TranscodeAfterFinish,

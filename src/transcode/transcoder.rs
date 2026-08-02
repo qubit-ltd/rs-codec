@@ -195,7 +195,7 @@ fn sum_output_bounds(
 ///         output: &mut [u16],
 ///         output_index: usize,
 ///     ) -> Result<usize, Self::Error> {
-///         Self::Error::ensure_output_index(output.len(), output_index)?;
+///         qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
 ///
@@ -206,7 +206,7 @@ fn sum_output_bounds(
 ///         output: &mut [u16],
 ///         output_index: usize,
 ///     ) -> Result<TranscodeProgress, Self::Error> {
-///         Self::Error::ensure_transcode_indices(
+///         qubit_codec::TranscodeFailure::ensure_transcode_indices(
 ///             input.len(),
 ///             input_index,
 ///             output.len(),
@@ -243,7 +243,7 @@ fn sum_output_bounds(
 ///         output: &mut [u16],
 ///         output_index: usize,
 ///     ) -> Result<usize, Self::Error> {
-///         Self::Error::ensure_output_index(output.len(), output_index)?;
+///         qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
 ///         Ok(0)
 ///     }
 /// }
@@ -546,7 +546,7 @@ pub trait Transcoder {
     ///         output: &mut [u8],
     ///         output_index: usize,
     ///     ) -> Result<usize, Self::Error> {
-    ///         Self::Error::ensure_output_index(output.len(), output_index)?;
+    ///         qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
     ///
@@ -583,7 +583,7 @@ pub trait Transcoder {
     ///         output: &mut [u8],
     ///         output_index: usize,
     ///     ) -> Result<usize, Self::Error> {
-    ///         Self::Error::ensure_output_index(output.len(), output_index)?;
+    ///         qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
     ///         Ok(0)
     ///     }
     /// }
