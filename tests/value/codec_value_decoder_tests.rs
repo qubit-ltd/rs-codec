@@ -60,6 +60,15 @@ impl Codec for SingleByteCodec {
     }
 }
 
+#[test]
+fn test_codec_value_decoder_exposes_codec_accessors() {
+    let mut decoder = CodecValueDecoder::new(SingleByteCodec);
+
+    assert_eq!(&SingleByteCodec, decoder.codec());
+    *decoder.codec_mut() = SingleByteCodec;
+    assert_eq!(SingleByteCodec, decoder.into_codec());
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FixedPairCodec;
 
@@ -302,6 +311,43 @@ impl Codec for IncompleteDecodeCodec {
         _input_index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
         Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ContextualIncompleteDecodeCodec;
+
+impl Codec for ContextualIncompleteDecodeCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = TestDecodeError;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+        Err(qubit_codec::DecodeFailure::incomplete_with_source(
+            TestDecodeError::Invalid { consumed: 1 },
+            crate::nz(2),
+        ))
     }
 
     unsafe fn encode(
@@ -748,7 +794,12 @@ fn test_codec_value_decoder_reports_too_short_input_before_main_decode_call() {
     let error =
         ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("one byte is incomplete");
 
-    assert_eq!(TranscodeDecodeError::incomplete_input(0, 2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -758,7 +809,25 @@ fn test_codec_value_decoder_wraps_codec_incomplete_failure() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("codec-reported incomplete input should fail");
 
-    assert_eq!(TranscodeDecodeError::incomplete_input(0, 2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        ),
+        error,
+    );
+}
+
+#[test]
+fn test_codec_value_decoder_preserves_codec_incomplete_source() {
+    let mut decoder =
+        CodecValueDecoder::<ContextualIncompleteDecodeCodec>::new(ContextualIncompleteDecodeCodec);
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect_err("codec-reported incomplete source should be preserved");
+
+    assert_eq!(
+        TranscodeDecodeError::domain_main(TestDecodeError::Invalid { consumed: 1 }, 0),
+        error,
+    );
 }
 
 #[test]
@@ -768,7 +837,12 @@ fn test_codec_value_decoder_rejects_trailing_input() {
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
         .expect_err("trailing input should fail");
 
-    assert_eq!(TranscodeDecodeError::trailing_input(1, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(qubit_codec::TranscodeFailure::trailing_input(
+            1, 1
+        )),
+        error,
+    );
 }
 
 #[test]

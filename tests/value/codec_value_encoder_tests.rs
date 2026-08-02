@@ -54,6 +54,15 @@ impl Codec for PairByteCodec {
     }
 }
 
+#[test]
+fn test_codec_value_encoder_exposes_codec_accessors() {
+    let mut encoder = CodecValueEncoder::new(PairByteCodec);
+
+    assert_eq!(&PairByteCodec, encoder.codec());
+    *encoder.codec_mut() = PairByteCodec;
+    assert_eq!(PairByteCodec, encoder.into_codec());
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RejectOddCodec;
 
@@ -777,7 +786,12 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(TranscodeEncodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -789,7 +803,12 @@ fn test_codec_value_encoder_encode_into_rejects_bound_overflow() {
         .encode_into(&7, &mut output)
         .expect_err("reset plus value bound should overflow");
 
-    assert_eq!(TranscodeEncodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
     assert_eq!(vec![0xaa], output);
 }
 
@@ -802,7 +821,12 @@ fn test_codec_value_encoder_encode_into_rejects_target_len_overflow() {
         .encode_into(&7, &mut output)
         .expect_err("appending encoded units should report length overflow");
 
-    assert_eq!(TranscodeEncodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
     assert_eq!(vec![0xaa], output);
 }
 
