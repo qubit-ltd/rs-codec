@@ -148,6 +148,12 @@ fn test_convert_error_accessors_mapping_and_validation() {
         TranscodeConvertError::<&str, &str, char>::unencodable(7, 'q')
             .map_value(|value| value as u32),
     );
+    assert_eq!(
+        TranscodeConvertError::<&str, &str, u32>::unencodable_without_context(
+            8
+        ),
+        no_context.map_value(|value: char| value as u32),
+    );
 
     let encode_failure = TranscodeEncodeError::Failure(
         TranscodeFailure::invalid_output_index(3, 1),
@@ -172,6 +178,13 @@ fn test_convert_error_accessors_mapping_and_validation() {
         Convert::<char>::encode_domain_finish("encode finish"),
         Convert::<char>::from_encode_error_with_value(
             TranscodeEncodeError::<&str, char>::domain_finish("encode finish"),
+            'z',
+        ),
+    );
+    assert_eq!(
+        Convert::<char>::unencodable(9, 'x'),
+        Convert::<char>::from_encode_error_with_value(
+            TranscodeEncodeError::<&str, char>::unencodable(9, 'x'),
             'z',
         ),
     );

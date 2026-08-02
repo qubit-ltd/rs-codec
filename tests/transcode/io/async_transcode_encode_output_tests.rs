@@ -229,6 +229,179 @@ impl TranscodeEncoder for CapacityFailingEncoder {
     type EncodeError = ();
 }
 
+#[derive(Debug, Default)]
+struct FailingEncoder;
+
+impl Transcoder for FailingEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Err(TranscodeEncodeError::domain_main((), 0))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for FailingEncoder {
+    type EncodeError = ();
+}
+
+#[derive(Debug, Default)]
+struct NeedInputEncoder;
+
+impl Transcoder for NeedInputEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for NeedInputEncoder {
+    type EncodeError = ();
+}
+
+#[derive(Debug, Default)]
+struct LifecycleFailingEncoder {
+    fail_reset: bool,
+    fail_finish: bool,
+    huge_reset_bound: bool,
+    huge_finish_bound: bool,
+    overflow_reset_bound: bool,
+    overflow_finish_bound: bool,
+}
+
+impl Transcoder for LifecycleFailingEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), char>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        if self.overflow_reset_bound {
+            Err(CapacityError::OutputLengthOverflow)
+        } else if self.huge_reset_bound {
+            Ok(usize::MAX)
+        } else {
+            Ok(1)
+        }
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        if self.fail_reset {
+            Err(TranscodeEncodeError::domain_reset(()))
+        } else {
+            Ok(0)
+        }
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[char],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::complete(0, 0))
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        if self.overflow_finish_bound {
+            Err(CapacityError::OutputLengthOverflow)
+        } else if self.huge_finish_bound {
+            Ok(usize::MAX)
+        } else {
+            Ok(1)
+        }
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        if self.fail_finish {
+            Err(TranscodeEncodeError::domain_finish(()))
+        } else {
+            Ok(0)
+        }
+    }
+}
+
+impl TranscodeEncoder for LifecycleFailingEncoder {
+    type EncodeError = ();
+}
+
 #[test]
 fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending()
 -> io::Result<()> {
@@ -402,6 +575,100 @@ fn test_async_transcode_encode_output_maps_capacity_errors() -> io::Result<()> {
         1,
     ))
     .expect_err("impossible spare capacity must fail");
+    assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = FailingEncoder;
+    let error = complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))
+    .expect_err("encoder errors must cross the asynchronous I/O boundary");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = NeedInputEncoder;
+    let error = complete(output.transcode_async(
+        &mut encoder,
+        &mut map_error,
+        &['a'],
+        0,
+        1,
+    ))
+    .expect_err("encoder NeedInput must be rejected");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    Ok(())
+}
+
+/// Verifies lifecycle capacity and domain errors cross the async boundary.
+#[test]
+fn test_async_transcode_encode_output_maps_lifecycle_errors() -> io::Result<()>
+{
+    let mut map_error = |_| io::Error::other("lifecycle failure");
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        overflow_reset_bound: true,
+        ..Default::default()
+    };
+    let error = complete(output.reset_async(&mut encoder, &mut map_error))
+        .expect_err("reset capacity failure must be mapped");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        fail_reset: true,
+        ..Default::default()
+    };
+    let error = complete(output.reset_async(&mut encoder, &mut map_error))
+        .expect_err("reset domain failure must be mapped");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        overflow_finish_bound: true,
+        ..Default::default()
+    };
+    let error = complete(output.finish_async(&mut encoder, &mut map_error))
+        .expect_err("finish capacity failure must be mapped");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        fail_finish: true,
+        ..Default::default()
+    };
+    let error = complete(output.finish_async(&mut encoder, &mut map_error))
+        .expect_err("finish domain failure must be mapped");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        huge_reset_bound: true,
+        ..Default::default()
+    };
+    let error = complete(output.reset_async(&mut encoder, &mut map_error))
+        .expect_err("impossible reset storage must be rejected");
+    assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
+
+    let mut output =
+        AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
+    let mut encoder = LifecycleFailingEncoder {
+        huge_finish_bound: true,
+        ..Default::default()
+    };
+    let error = complete(output.finish_async(&mut encoder, &mut map_error))
+        .expect_err("impossible finish storage must be rejected");
     assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
     Ok(())
 }
