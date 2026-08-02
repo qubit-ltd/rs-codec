@@ -6,13 +6,16 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::io::{
-    Cursor,
-    Error,
-    ErrorKind,
-    Seek,
-    SeekFrom,
-    Write,
+use std::{
+    io::{
+        Cursor,
+        Error,
+        ErrorKind,
+        Seek,
+        SeekFrom,
+        Write,
+    },
+    num::NonZeroUsize,
 };
 
 use qubit_codec::{
@@ -33,6 +36,42 @@ fn try_with_capacity_allocates_encode_buffer() {
         .expect("encode buffer should allocate");
 
     assert!(output.spare_capacity() >= 1);
+    assert!(
+        TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), usize::MAX)
+            .is_err()
+    );
+}
+
+#[derive(Debug, Default)]
+struct HugeEncodeBoundCodec;
+
+impl Codec for HugeEncodeBoundCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = usize::MAX;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        Ok((input[input_index], crate::nz(1)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("allocation failure prevents encoding")
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -717,6 +756,83 @@ impl Transcoder for NeedInputEncoder {
     }
 
     noop_finish!(u16);
+}
+
+#[derive(Clone, Copy, Debug)]
+enum HugeBoundPhase {
+    Reset,
+    NeedOutput,
+    Finish,
+}
+
+#[derive(Debug)]
+struct HugeBoundEncoder {
+    phase: HugeBoundPhase,
+}
+
+impl Transcoder for HugeBoundEncoder {
+    type Input = u32;
+    type Output = u16;
+    type Error = TranscodeEncodeError<PairEncodeError, u32>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(match self.phase {
+            HugeBoundPhase::Reset => usize::MAX,
+            _ => 0,
+        })
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("huge reset bound prevents reset")
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        if matches!(self.phase, HugeBoundPhase::NeedOutput) {
+            output[output_index] = input[input_index] as u16;
+            return Ok(TranscodeProgress::need_output(
+                NonZeroUsize::new(usize::MAX).expect("non-zero maximum"),
+                1,
+                1,
+            ));
+        }
+        Ok(TranscodeProgress::complete(1, 0))
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(match self.phase {
+            HugeBoundPhase::Finish => usize::MAX,
+            _ => 0,
+        })
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        unreachable!("huge finish bound prevents finish")
+    }
+}
+
+impl TranscodeEncoder for HugeBoundEncoder {
+    type EncodeError = PairEncodeError;
 }
 
 #[cfg(debug_assertions)]
@@ -1553,6 +1669,19 @@ fn test_buffered_encode_output_exposes_spare_buffer_api() {
     assert_eq!(&[0x00aa, 0x00bb], output.inner().units.as_slice());
 }
 
+/// Verifies that an impossible spare-capacity request is mapped to I/O.
+#[test]
+fn test_buffered_encode_output_maps_spare_allocation_failure() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 1);
+
+    let error = output
+        .ensure_spare_capacity(usize::MAX)
+        .expect_err("an impossible allocation should fail");
+
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
 #[test]
 fn test_buffered_encode_output_transcode_flushes_when_spare_is_empty() {
     let output = UnitOutput::default();
@@ -1764,6 +1893,49 @@ fn test_buffered_encode_output_write_encoded_grows_persistent_buffer() {
 
     assert_eq!(&[0x0002, 0x0001], output.inner().units.as_slice());
     assert!(output.spare_capacity() >= 2);
+}
+
+#[test]
+fn test_buffered_encode_output_maps_codec_bound_allocation_failure() {
+    let mut output = TranscodeEncodeOutput::with_capacity(Vec::<u8>::new(), 1);
+    let mut codec = HugeEncodeBoundCodec;
+    let error = output
+        .write_encoded_with(&mut codec, &1, |_| Error::other("codec error"))
+        .expect_err("an impossible codec bound must fail allocation");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+#[test]
+fn test_buffered_encode_output_maps_lifecycle_allocation_failures() {
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 1);
+    let mut reset_encoder = HugeBoundEncoder {
+        phase: HugeBoundPhase::Reset,
+    };
+    let error = output
+        .reset(&mut reset_encoder, &mut map_error)
+        .expect_err("reset allocation failure must be mapped");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 1);
+    let mut transcode_encoder = HugeBoundEncoder {
+        phase: HugeBoundPhase::NeedOutput,
+    };
+    let error = output
+        .transcode(&mut transcode_encoder, &mut map_error, &[1], 0, 1)
+        .expect_err("required output allocation failure must be mapped");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+
+    let mut output =
+        TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 1);
+    let mut finish_encoder = HugeBoundEncoder {
+        phase: HugeBoundPhase::Finish,
+    };
+    let error = output
+        .finish(&mut finish_encoder, &mut map_error)
+        .expect_err("finish allocation failure must be mapped");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
 }
 
 #[test]

@@ -474,6 +474,17 @@ fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api(
     assert_eq!(2, progress.written());
     assert_eq!([4, 5], output);
 
+    converter
+        .reset(&mut [], 0)
+        .expect("reset before EOF transcode");
+    let progress = converter
+        .transcode_eof(&[6], 0, &mut output, 0)
+        .expect("inherent EOF transcode should forward to the engine");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([7, 5], output);
+
     converter.reset(&mut [], 0).expect("reset");
     assert_eq!(Ok(0), converter.finish(&mut output, 0));
     converter
@@ -522,6 +533,21 @@ fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
     assert_eq!(1, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([7, 8], output);
+
+    <Converter as Transcoder>::reset(&mut converter, &mut output, 0)
+        .expect("reset before trait EOF transcode");
+    let progress = <Converter as Transcoder>::transcode_eof(
+        &mut converter,
+        &[9],
+        0,
+        &mut output,
+        0,
+    )
+    .expect("trait EOF transcode should forward to the adapter");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(2, progress.written());
+    assert_eq!([9, 10], output);
 
     <Converter as Transcoder>::reset(&mut converter, &mut output, 0)
         .expect("reset");
