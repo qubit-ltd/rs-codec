@@ -871,6 +871,22 @@ fn test_codec_value_encoder_encode_into_rejects_bound_overflow() {
 }
 
 #[test]
+fn test_codec_value_encoder_reports_allocation_failure() {
+    let mut encoder =
+        CodecValueEncoder::<AppendOverflowCodec>::new(AppendOverflowCodec);
+
+    let error = ValueEncoder::<u8>::encode(&mut encoder, &7)
+        .expect_err("unrepresentable allocation should be reported");
+
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::allocation_failed()
+        ),
+        error
+    );
+}
+
+#[test]
 fn test_codec_value_encoder_encode_into_rejects_target_len_overflow() {
     let mut encoder =
         CodecValueEncoder::<AppendOverflowCodec>::new(AppendOverflowCodec);
