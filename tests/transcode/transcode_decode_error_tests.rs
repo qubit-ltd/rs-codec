@@ -14,7 +14,8 @@ struct DomainError;
 
 #[test]
 fn test_decode_error_wraps_framework_and_domain_errors() {
-    let failure = TranscodeDecodeError::<DomainError>::invalid_input_index(3, 1);
+    let failure =
+        TranscodeDecodeError::<DomainError>::Failure(TranscodeFailure::invalid_input_index(3, 1));
     assert_eq!(
         TranscodeDecodeError::Failure(TranscodeFailure::InvalidInputIndex {
             index: 3,
@@ -35,12 +36,11 @@ fn test_decode_error_wraps_framework_and_domain_errors() {
 
 #[test]
 fn test_decode_error_maps_decode_failure() {
-    let incomplete = DecodeFailure::<DomainError>::Incomplete {
-        source: None,
-        required_total: crate::nz(4),
-    };
+    let incomplete = DecodeFailure::<DomainError>::incomplete(crate::nz(4));
     assert_eq!(
-        TranscodeDecodeError::incomplete_input(2, 4, 1),
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(2, 4, 1)
+        ),
         TranscodeDecodeError::from_decode_failure(incomplete, 2, 1),
     );
 
@@ -52,8 +52,18 @@ fn test_decode_error_maps_decode_failure() {
 }
 
 #[test]
+fn test_decode_error_preserves_incomplete_domain_source_at_eof() {
+    let incomplete = DecodeFailure::incomplete_with_source(DomainError, crate::nz(4));
+
+    assert_eq!(
+        TranscodeDecodeError::domain_main(DomainError, 2),
+        TranscodeDecodeError::from_decode_failure(incomplete, 2, 1),
+    );
+}
+
+#[test]
 fn test_decode_error_accessors_mapping_and_validation() {
-    let failure = TranscodeDecodeError::<&str>::invalid_output_index(3, 1);
+    let failure = TranscodeDecodeError::Failure(TranscodeFailure::invalid_output_index(3, 1));
     let domain = TranscodeDecodeError::<&str>::domain_main("decode", 2);
 
     assert!(!failure.is_domain());
@@ -78,7 +88,7 @@ fn test_decode_error_accessors_mapping_and_validation() {
     assert_eq!(None, failure.domain_ref());
 
     assert_eq!(
-        TranscodeDecodeError::<usize>::invalid_output_index(3, 1),
+        TranscodeDecodeError::Failure(TranscodeFailure::invalid_output_index(3, 1)),
         failure.map_domain(str::len),
     );
     assert_eq!(
@@ -87,31 +97,33 @@ fn test_decode_error_accessors_mapping_and_validation() {
     );
 
     assert_eq!(
-        Ok(()),
-        TranscodeDecodeError::<&str>::ensure_input_index(2, 2)
+        Ok::<(), TranscodeDecodeError<&str>>(()),
+        TranscodeFailure::ensure_input_index(2, 2).map_err(TranscodeDecodeError::<&str>::from)
     );
     assert!(matches!(
-        TranscodeDecodeError::<&str>::ensure_input_index(2, 3),
+        TranscodeFailure::ensure_input_index(2, 3).map_err(TranscodeDecodeError::<&str>::from),
         Err(TranscodeDecodeError::Failure(
             TranscodeFailure::InvalidInputIndex { .. }
         ))
     ));
     assert_eq!(
-        Ok(()),
-        TranscodeDecodeError::<&str>::ensure_min_input(3, 1, 2)
+        Ok::<(), TranscodeDecodeError<&str>>(()),
+        TranscodeFailure::ensure_min_input(3, 1, 2).map_err(TranscodeDecodeError::<&str>::from)
     );
     assert!(matches!(
-        TranscodeDecodeError::<&str>::ensure_min_input(3, 2, 2),
+        TranscodeFailure::ensure_min_input(3, 2, 2).map_err(TranscodeDecodeError::<&str>::from),
         Err(TranscodeDecodeError::Failure(
             TranscodeFailure::IncompleteInput { .. }
         ))
     ));
     assert_eq!(
-        Ok(()),
-        TranscodeDecodeError::<&str>::ensure_no_trailing_input(2, 2),
+        Ok::<(), TranscodeDecodeError<&str>>(()),
+        TranscodeFailure::ensure_no_trailing_input(2, 2)
+            .map_err(TranscodeDecodeError::<&str>::from),
     );
     assert!(matches!(
-        TranscodeDecodeError::<&str>::ensure_no_trailing_input(1, 2),
+        TranscodeFailure::ensure_no_trailing_input(1, 2)
+            .map_err(TranscodeDecodeError::<&str>::from),
         Err(TranscodeDecodeError::Failure(
             TranscodeFailure::TrailingInput { .. }
         ))
@@ -123,14 +135,17 @@ fn test_decode_error_accessors_mapping_and_validation() {
                 input_len: 2,
             },
         )),
-        TranscodeDecodeError::<&str>::ensure_no_trailing_input(3, 2),
+        TranscodeFailure::ensure_no_trailing_input(3, 2)
+            .map_err(TranscodeDecodeError::<&str>::from),
     );
     assert_eq!(
-        Ok(()),
-        TranscodeDecodeError::<&str>::ensure_output_range(4, 1, 2, 2)
+        Ok::<(), TranscodeDecodeError<&str>>(()),
+        TranscodeFailure::ensure_output_range(4, 1, 2, 2)
+            .map_err(TranscodeDecodeError::<&str>::from)
     );
     assert!(matches!(
-        TranscodeDecodeError::<&str>::ensure_output_range(4, 1, 1, 2),
+        TranscodeFailure::ensure_output_range(4, 1, 1, 2)
+            .map_err(TranscodeDecodeError::<&str>::from),
         Err(TranscodeDecodeError::Failure(
             TranscodeFailure::InsufficientOutput { .. }
         ))

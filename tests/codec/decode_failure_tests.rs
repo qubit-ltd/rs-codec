@@ -55,13 +55,7 @@ fn test_decode_failure_reports_incomplete_control_flow() {
     let required_total = crate::nz(3);
     let failure = DecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
-    assert_eq!(
-        DecodeFailure::Incomplete {
-            source: None,
-            required_total,
-        },
-        failure,
-    );
+    assert_eq!(DecodeFailure::incomplete(required_total), failure,);
     assert_eq!(Some(required_total), failure.required_total());
     assert_eq!(None, failure.invalid_source());
     assert_eq!(None, failure.consumed_units());
@@ -73,10 +67,7 @@ fn test_decode_failure_preserves_incomplete_domain_error() {
     let failure = DecodeFailure::incomplete_with_source(DomainDecodeError, required_total);
 
     assert_eq!(
-        DecodeFailure::Incomplete {
-            source: Some(DomainDecodeError),
-            required_total,
-        },
+        DecodeFailure::incomplete_with_source(DomainDecodeError, required_total),
         failure,
     );
     assert_eq!(Some(&DomainDecodeError), failure.incomplete_source());
@@ -88,13 +79,7 @@ fn test_decode_failure_reports_invalid_domain_error() {
     let consumed = crate::nz(2);
     let failure = DecodeFailure::invalid(DomainDecodeError, consumed);
 
-    assert_eq!(
-        DecodeFailure::Invalid {
-            source: DomainDecodeError,
-            consumed: Some(consumed),
-        },
-        failure
-    );
+    assert_eq!(DecodeFailure::invalid(DomainDecodeError, consumed), failure);
     assert_eq!(None, failure.required_total());
     assert_eq!(Some(&DomainDecodeError), failure.invalid_source());
     assert_eq!(Some(consumed), failure.consumed_units());
@@ -104,13 +89,7 @@ fn test_decode_failure_reports_invalid_domain_error() {
 fn test_decode_failure_reports_invalid_unknown_consumption() {
     let failure = DecodeFailure::invalid_unknown(DomainDecodeError);
 
-    assert_eq!(
-        DecodeFailure::Invalid {
-            source: DomainDecodeError,
-            consumed: None,
-        },
-        failure
-    );
+    assert_eq!(DecodeFailure::invalid_unknown(DomainDecodeError), failure);
     assert_eq!(None, failure.required_total());
     assert_eq!(Some(&DomainDecodeError), failure.invalid_source());
     assert_eq!(None, failure.consumed_units());

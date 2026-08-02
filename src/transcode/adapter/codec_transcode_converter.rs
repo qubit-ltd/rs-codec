@@ -74,6 +74,53 @@ where
         }
     }
 
+    /// Returns a shared reference to the source codec.
+    #[inline(always)]
+    #[must_use]
+    pub fn source_codec(&self) -> &D {
+        self.engine.source_codec()
+    }
+
+    /// Returns a mutable reference to the source codec.
+    ///
+    /// Mutating a codec during an active stream can invalidate that stream's
+    /// assumptions; reset the adapter before continuing with the new codec
+    /// configuration.
+    #[inline(always)]
+    #[must_use]
+    pub fn source_codec_mut(&mut self) -> &mut D {
+        self.engine.source_codec_mut()
+    }
+
+    /// Returns a shared reference to the target codec.
+    #[inline(always)]
+    #[must_use]
+    pub fn target_codec(&self) -> &E {
+        self.engine.target_codec()
+    }
+
+    /// Returns a mutable reference to the target codec.
+    ///
+    /// Mutating a codec during an active stream can invalidate that stream's
+    /// assumptions; reset the adapter before continuing with the new codec
+    /// configuration.
+    #[inline(always)]
+    #[must_use]
+    pub fn target_codec_mut(&mut self) -> &mut E {
+        self.engine.target_codec_mut()
+    }
+
+    /// Consumes the adapter and returns its source and target codecs.
+    ///
+    /// Any buffered lifecycle state, pending value, and internal hooks are
+    /// discarded.
+    #[inline(always)]
+    #[must_use]
+    pub fn into_codecs(self) -> (D, E) {
+        let (source, target, _, _) = self.engine.into_parts();
+        (source, target)
+    }
+
     /// Returns an upper bound for target units produced from `input_len` units.
     ///
     /// This concrete adapter method is available even when `D::Value` does not

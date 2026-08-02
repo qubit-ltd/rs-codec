@@ -22,7 +22,16 @@ fn test_capacity_errors_map_to_framework_failures() {
     let convert: TranscodeConvertError<DomainError, DomainError, char> =
         CapacityError::OutputLengthOverflow.into();
 
-    assert_eq!(TranscodeDecodeError::output_length_overflow(), decode);
-    assert_eq!(TranscodeEncodeError::output_length_overflow(), encode);
-    assert_eq!(TranscodeConvertError::output_length_overflow(), convert);
+    assert_eq!(
+        TranscodeDecodeError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        decode,
+    );
+    assert_eq!(
+        TranscodeEncodeError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        encode,
+    );
+    assert_eq!(
+        TranscodeConvertError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        convert,
+    );
 }

@@ -24,6 +24,7 @@ use core::num::NonZeroUsize;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
+    #[non_exhaustive]
     Incomplete {
         /// Codec-specific context for the incomplete prefix, when available.
         ///
@@ -41,6 +42,7 @@ pub enum DecodeFailure<E> {
     },
 
     /// The input is invalid for the codec.
+    #[non_exhaustive]
     Invalid {
         /// Codec-specific invalid-input error.
         source: E,

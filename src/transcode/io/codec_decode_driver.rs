@@ -46,7 +46,6 @@ where
         self.input
             .try_reserve_capacity(min_units_per_value)
             .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
-
         loop {
             let available =
                 self.prepare_buffered_window(min_units_per_value, max_units_per_value)?;
@@ -61,12 +60,28 @@ where
                 Ok((value, consumed)) => {
                     return self.accept(value, consumed, available);
                 }
-                Err(DecodeFailure::Incomplete { required_total, .. }) => {
+                Err(DecodeFailure::Incomplete {
+                    source,
+                    required_total,
+                }) => {
                     assert!(
                         required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                         "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                     );
-                    self.refill_after_incomplete(required_total, available)?;
+                    if !self.refill_after_incomplete(required_total, available)? {
+                        let available = self.input.unread_len();
+                        // SAFETY: `available` is the current unread length.
+                        unsafe {
+                            self.input.consume(available);
+                        }
+                        return match source {
+                            Some(source) => Err(map_error(source)),
+                            None => Err(Error::new(
+                                ErrorKind::UnexpectedEof,
+                                "failed to decode complete value",
+                            )),
+                        };
+                    }
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
                     return self.reject::<C, M>(source, consumed, available, map_error);
@@ -128,7 +143,7 @@ where
         &mut self,
         required_total: NonZeroUsize,
         available: usize,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let required_total = required_total.get();
         if available >= required_total {
             return Err(Error::new(
@@ -139,18 +154,7 @@ where
         self.input
             .try_reserve_capacity(required_total)
             .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
-        if !self.input.fill_until(required_total)? {
-            let available = self.input.unread_len();
-            // SAFETY: `available` is the current unread length.
-            unsafe {
-                self.input.consume(available);
-            }
-            return Err(Error::new(
-                ErrorKind::UnexpectedEof,
-                "failed to decode complete value",
-            ));
-        }
-        Ok(())
+        self.input.fill_until(required_total)
     }
 
     /// Rejects invalid codec input and applies its consumption hint.

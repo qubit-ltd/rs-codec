@@ -59,7 +59,9 @@ fn test_transcoder_default_method_returns_fixed_transcode_error() {
         .expect_err("overflow should be returned as transcode error");
 
     assert_eq!(
-        TranscodeDecodeError::insufficient_output(0, usize::MAX, 0),
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0)
+        ),
         error
     );
 }
@@ -77,7 +79,7 @@ impl Transcoder for CopyTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -106,7 +108,7 @@ impl Transcoder for CopyTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -130,7 +132,7 @@ impl Transcoder for FinishingTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         self.suffix_index = 0;
         Ok(0)
     }
@@ -148,7 +150,11 @@ impl Transcoder for FinishingTranscoder {
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         let suffix = *b"!\n";
         let required = suffix.len() - self.suffix_index;
-        Self::Error::ensure_output_capacity(output.len(), output_index, required)?;
+        qubit_codec::TranscodeFailure::ensure_output_capacity(
+            output.len(),
+            output_index,
+            required,
+        )?;
         let mut written = 0;
         while self.suffix_index < suffix.len() {
             output[output_index + written] = suffix[self.suffix_index];
@@ -183,7 +189,7 @@ impl Transcoder for PreflightTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_capacity(output.len(), output_index, 1)?;
+        qubit_codec::TranscodeFailure::ensure_output_capacity(output.len(), output_index, 1)?;
         self.reset_calls += 1;
         output[output_index] = b'^';
         Ok(1)
@@ -200,7 +206,7 @@ impl Transcoder for PreflightTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -218,7 +224,7 @@ impl Transcoder for PairTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -251,7 +257,7 @@ impl Transcoder for PairTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -269,7 +275,7 @@ impl Transcoder for UnderestimatingTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -284,7 +290,7 @@ impl Transcoder for UnderestimatingTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -302,7 +308,7 @@ impl Transcoder for PartialCompleteTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -313,7 +319,7 @@ impl Transcoder for PartialCompleteTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Self::Error::ensure_transcode_indices(
+        qubit_codec::TranscodeFailure::ensure_transcode_indices(
             input.len(),
             input_index,
             output.len(),
@@ -324,7 +330,7 @@ impl Transcoder for PartialCompleteTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -342,7 +348,7 @@ impl Transcoder for OverreportingCompleteTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -357,7 +363,7 @@ impl Transcoder for OverreportingCompleteTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -477,7 +483,7 @@ impl Transcoder for OverflowBoundTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -543,7 +549,7 @@ impl Transcoder for FailingTranscoder {
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         if matches!(self.failure, FailurePoint::Reset) {
             Err(TranscodeDecodeError::domain_reset("reset"))
         } else {
@@ -566,7 +572,7 @@ impl Transcoder for FailingTranscoder {
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         if matches!(self.failure, FailurePoint::Finish) {
             Err(TranscodeDecodeError::domain_finish("finish"))
         } else {
@@ -688,7 +694,12 @@ fn test_transcoder_transcode_complete_into_preflights_total_capacity_before_rese
 
     assert_eq!(0, transcoder.reset_calls);
     assert_eq!(original, output);
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 4, 3), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 4, 3)
+        ),
+        error,
+    );
 }
 
 /// Verifies that reset-bound overflow is reported before reset is called.
@@ -707,7 +718,12 @@ fn test_transcoder_transcode_complete_into_checks_reset_bound_before_reset() {
 
     assert_eq!(0, transcoder.reset_calls);
     assert_eq!(original, output);
-    assert_eq!(TranscodeDecodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 /// Verifies that the exact complete-stream bound admits the full lifecycle.
@@ -748,11 +764,15 @@ fn test_transcoder_transcode_complete_into_reports_stage_errors() {
         ),
         (
             FailurePoint::TranscodeBound,
-            TranscodeDecodeError::output_length_overflow(),
+            qubit_codec::TranscodeDecodeError::Failure(
+                qubit_codec::TranscodeFailure::output_length_overflow(),
+            ),
         ),
         (
             FailurePoint::FinishBound,
-            TranscodeDecodeError::output_length_overflow(),
+            qubit_codec::TranscodeDecodeError::Failure(
+                qubit_codec::TranscodeFailure::output_length_overflow(),
+            ),
         ),
         (
             FailurePoint::Transcode,
@@ -783,7 +803,12 @@ fn test_transcoder_transcode_complete_into_reports_insufficient_output() {
         .transcode_complete_into(b"abc", &mut output)
         .expect_err("complete transcode requires five output units");
 
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 5, 4), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 5, 4)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -795,7 +820,12 @@ fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
         .transcode_complete_into(b"a", &mut output)
         .expect_err("runtime need-output status should be an output error");
 
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -807,7 +837,12 @@ fn test_transcoder_transcode_complete_into_reports_trailing_input() {
         .transcode_complete_into(b"ab", &mut output)
         .expect_err("Complete must consume all complete input");
 
-    assert_eq!(TranscodeDecodeError::trailing_input(1, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(qubit_codec::TranscodeFailure::trailing_input(
+            1, 1
+        )),
+        error,
+    );
 }
 
 #[test]
@@ -860,7 +895,12 @@ fn test_transcoder_transcode_complete_into_reports_remaining_bound_overflow() {
         .transcode_complete_into(b"", &mut output)
         .expect_err("transcode plus finish bound overflows");
 
-    assert_eq!(TranscodeDecodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -872,7 +912,12 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .transcode_complete_into(b"abc", &mut output)
         .expect_err("odd-length complete input is incomplete");
 
-    assert_eq!(TranscodeDecodeError::incomplete_input(2, 2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(2, 2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -884,7 +929,12 @@ fn test_transcoder_explicit_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error
+    );
 }
 
 #[test]
@@ -898,7 +948,12 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
         .finish(&mut output, 0)
         .expect_err("finish should reject partial output capacity");
 
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 2, 1)
+        ),
+        error,
+    );
     assert_eq!([0], output);
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 

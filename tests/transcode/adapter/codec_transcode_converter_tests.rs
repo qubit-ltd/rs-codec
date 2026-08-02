@@ -67,6 +67,20 @@ impl Codec for VariableByteDecoder {
     }
 }
 
+#[test]
+fn test_codec_transcode_converter_exposes_codec_accessors() {
+    let mut converter = CodecTranscodeConverter::new(VariableByteDecoder, PairByteEncoder);
+
+    assert_eq!(&VariableByteDecoder, converter.source_codec());
+    assert_eq!(&PairByteEncoder, converter.target_codec());
+    *converter.source_codec_mut() = VariableByteDecoder;
+    *converter.target_codec_mut() = PairByteEncoder;
+    assert_eq!(
+        (VariableByteDecoder, PairByteEncoder),
+        converter.into_codecs(),
+    );
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct PairByteEncoder;
 
@@ -702,12 +716,22 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
     let error = converter
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
-    assert_eq!(TranscodeConvertError::invalid_input_index(2, 1), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        ),
+        error
+    );
 
     let error = converter
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
-    assert_eq!(TranscodeConvertError::invalid_output_index(3, 2), error);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(3, 2)
+        ),
+        error
+    );
 }
 
 #[test]
@@ -847,5 +871,10 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .finish(&mut output, 4)
         .expect_err("finish should reject insufficient output");
 
-    assert_eq!(TranscodeConvertError::insufficient_output(4, 2, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(4, 2, 0)
+        ),
+        error,
+    );
 }

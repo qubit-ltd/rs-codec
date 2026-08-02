@@ -153,20 +153,21 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         consumed: crate::nz(1),
     };
     let _: EncodeUnencodableActionOf<EchoCodec> = EncodeUnencodableAction::Replace { value: 1 };
-    let _: TranscodeDecodeErrorOf<EchoCodec> = TranscodeDecodeError::incomplete_input(0, 1, 0);
+    let _: TranscodeDecodeErrorOf<EchoCodec> =
+        TranscodeDecodeError::Failure(qubit_codec::TranscodeFailure::incomplete_input(0, 1, 0));
     let _: TranscodeEncodeErrorOf<EchoCodec> = TranscodeEncodeError::unencodable_without_context(0);
     let _: TranscodeConvertErrorOf<EchoCodec, EchoCodec> =
-        TranscodeConvertError::invalid_input_index(1, 0);
+        TranscodeConvertError::Failure(qubit_codec::TranscodeFailure::invalid_input_index(1, 0));
     assert_eq!(
-        TranscodeConvertError::<
-            core::convert::Infallible,
-            core::convert::Infallible,
-            u8,
-        >::invalid_output_index(1, 0),
-        TranscodeConvertError::invalid_output_index(1, 0),
+        TranscodeConvertError::<core::convert::Infallible, core::convert::Infallible, u8>::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        TranscodeConvertError::Failure(qubit_codec::TranscodeFailure::invalid_output_index(1, 0)),
     );
 
-    let decode_error = TranscodeDecodeError::<core::convert::Infallible>::incomplete_input(0, 2, 1);
+    let decode_error = TranscodeDecodeError::<core::convert::Infallible>::Failure(
+        qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1),
+    );
     assert!(matches!(
         decode_error,
         TranscodeDecodeError::Failure(TranscodeFailure::IncompleteInput {
