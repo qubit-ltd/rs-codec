@@ -6,7 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{Codec, CodecTranscodeEncoder, TranscodeEncodeError, Transcoder};
+use qubit_codec::{
+    Codec,
+    CodecTranscodeEncoder,
+    TranscodeEncodeError,
+    Transcoder,
+};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -37,7 +42,10 @@ impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -83,7 +91,10 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -118,7 +129,10 @@ impl Codec for OverreportingEncodeCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -151,8 +165,11 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
 }
 
 #[test]
-#[should_panic(expected = "Codec::encode wrote a different length than Codec::encode_len")]
-fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width() {
+#[should_panic(
+    expected = "Codec::encode wrote a different length than Codec::encode_len"
+)]
+fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width()
+ {
     let mut encoder = CodecTranscodeEncoder::new(OverreportingEncodeCodec);
     let mut reset_output = [];
     encoder

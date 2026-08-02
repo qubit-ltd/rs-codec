@@ -7,7 +7,10 @@
 // =============================================================================
 use core::num::NonZeroUsize;
 
-use super::{TranscodeContractError, TranscodeStatus};
+use super::{
+    TranscodeContractError,
+    TranscodeStatus,
+};
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
@@ -36,7 +39,11 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[inline(always)]
     #[must_use]
-    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
+    pub const fn new(
+        status: TranscodeStatus,
+        read: usize,
+        written: usize,
+    ) -> Self {
         Self {
             status,
             read,
@@ -75,7 +82,11 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_input(required: NonZeroUsize, read: usize, written: usize) -> Self {
+    pub const fn need_input(
+        required: NonZeroUsize,
+        read: usize,
+        written: usize,
+    ) -> Self {
         Self::new(TranscodeStatus::need_input(required), read, written)
     }
 
@@ -93,7 +104,11 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_output(required: NonZeroUsize, read: usize, written: usize) -> Self {
+    pub const fn need_output(
+        required: NonZeroUsize,
+        read: usize,
+        written: usize,
+    ) -> Self {
         Self::new(TranscodeStatus::need_output(required), read, written)
     }
 
@@ -238,10 +253,12 @@ impl TranscodeProgress {
         match self.status {
             TranscodeStatus::Complete => {
                 if self.read != available_input {
-                    return Err(TranscodeContractError::CompleteWithRemainingInput {
-                        read: self.read,
-                        available: available_input,
-                    });
+                    return Err(
+                        TranscodeContractError::CompleteWithRemainingInput {
+                            read: self.read,
+                            available: available_input,
+                        },
+                    );
                 }
                 Ok(())
             }

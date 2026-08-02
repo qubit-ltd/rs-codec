@@ -6,9 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use core::{convert::Infallible, num::NonZeroUsize};
+use core::{
+    convert::Infallible,
+    num::NonZeroUsize,
+};
 
-use qubit_codec::{Codec, DecodeFailure};
+use qubit_codec::{
+    Codec,
+    DecodeFailure,
+};
 
 /// Stateless one-byte codec shared by transcode integration tests.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

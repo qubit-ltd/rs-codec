@@ -10,10 +10,16 @@
 use core::fmt;
 
 use super::{
-    super::engine::TranscodeConvertEngine, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks,
+    super::engine::TranscodeConvertEngine,
+    CodecTranscodeDecodeHooks,
+    CodecTranscodeEncodeHooks,
 };
 use crate::{
-    CapacityError, Codec, TranscodeConvertErrorOf, TranscodeConverter, TranscodeProgress,
+    CapacityError,
+    Codec,
+    TranscodeConvertErrorOf,
+    TranscodeConverter,
+    TranscodeProgress,
     Transcoder,
 };
 
@@ -43,7 +49,12 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>,
+    engine: TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >,
 }
 
 impl<D, E> CodecTranscodeConverter<D, E>
@@ -135,7 +146,10 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -303,7 +317,10 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
@@ -386,7 +403,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     #[inline(always)]
@@ -397,7 +420,13 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        CodecTranscodeConverter::transcode_eof(self, input, input_index, output, output_index)
+        CodecTranscodeConverter::transcode_eof(
+            self,
+            input,
+            input_index,
+            output,
+            output_index,
+        )
     }
 
     /// Finishes internally retained output after EOF.
@@ -439,7 +468,12 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: Default,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///
@@ -458,7 +492,12 @@ impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: fmt::Debug,
+    TranscodeConvertEngine<
+        D,
+        E,
+        CodecTranscodeDecodeHooks,
+        CodecTranscodeEncodeHooks,
+    >: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///

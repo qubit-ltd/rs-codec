@@ -35,3 +35,11 @@ fn test_transcode_failure_output_range_validation() {
         TranscodeFailure::ensure_output_range(4, 1, 2, 3),
     );
 }
+
+#[test]
+fn test_transcode_failure_reports_allocation_failure() {
+    let error = TranscodeFailure::allocation_failed();
+
+    assert_eq!(TranscodeFailure::AllocationFailed, error);
+    assert_eq!("output allocation failed", error.to_string());
+}

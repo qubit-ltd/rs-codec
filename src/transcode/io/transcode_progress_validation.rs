@@ -7,9 +7,16 @@
 // =============================================================================
 //! Validation shared by transcode I/O adapters.
 
-use std::io::{Error, ErrorKind, Result};
+use std::io::{
+    Error,
+    ErrorKind,
+    Result,
+};
 
-use crate::{TranscodeProgress, TranscodeStatus};
+use crate::{
+    TranscodeProgress,
+    TranscodeStatus,
+};
 
 /// Validates a decoder progress report before the input adapter commits it.
 pub(super) fn validate_decode_progress(

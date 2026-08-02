@@ -8,12 +8,22 @@
 
 #![no_main]
 
-use core::{convert::Infallible, num::NonZeroUsize};
+use core::{
+    convert::Infallible,
+    num::NonZeroUsize,
+};
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::{
-    Codec, DecodeFailure, TranscodeDecodeErrorOf,
-    engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks},
+    Codec,
+    DecodeFailure,
+    TranscodeDecodeErrorOf,
+    engine::{
+        DecodeContext,
+        DecodeInvalidAction,
+        TranscodeDecodeEngine,
+        TranscodeDecodeHooks,
+    },
 };
 
 const MAX_INPUT_LEN: usize = 4 * 1024;
@@ -23,22 +33,44 @@ fuzz_target!(|data: &[u8]| {
     let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, RejectingHooks);
     let mut input_index = 0;
     let mut output = [0_u8; 31];
+    let mut decoded = Vec::with_capacity(data.len());
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .unwrap_or_else(|error| panic!("prefix codec reset is infallible: {error}"));
+    decoder.reset(&mut reset_output, 0).unwrap_or_else(|error| {
+        panic!("prefix codec reset is infallible: {error}")
+    });
 
     while input_index < data.len() {
         let progress = decoder
             .transcode(&data[input_index..], 0, &mut output, 0)
-            .unwrap_or_else(|error| panic!("prefix codec is infallible: {error}"));
+            .unwrap_or_else(|error| {
+                panic!("prefix codec is infallible: {error}")
+            });
+        progress
+            .validate(0, data.len() - input_index, 0, output.len())
+            .unwrap_or_else(|error| {
+                panic!("engine returned invalid progress: {error}")
+            });
         input_index += progress.read();
-        if progress.is_need_input() || progress.is_need_output() {
+        decoded.extend_from_slice(&output[..progress.written()]);
+        assert_eq!(decoded.as_slice(), &data[..input_index]);
+        if progress.is_need_input() {
             break;
         }
     }
 
-    assert!(input_index <= data.len());
+    assert_eq!(decoded.as_slice(), &data[..input_index]);
+    if input_index < data.len() {
+        assert_eq!(&[0xfe], &data[input_index..]);
+    } else {
+        let mut finish_output = [];
+        let written =
+            decoder
+                .finish(&mut finish_output, 0)
+                .unwrap_or_else(|error| {
+                    panic!("prefix codec finish is infallible: {error}")
+                });
+        assert_eq!(0, written);
+    }
 });
 
 #[derive(Default)]
@@ -87,7 +119,8 @@ impl TranscodeDecodeHooks<PrefixCodec> for RejectingHooks {
         error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+    ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>>
+    {
         match *error {}
     }
 }

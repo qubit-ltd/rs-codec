@@ -6,13 +6,17 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{CodecTranscodeConverter, TranscodeStatus};
+use qubit_codec::{
+    CodecTranscodeConverter,
+    TranscodeStatus,
+};
 
 use crate::common::IdentityCodec;
 
 #[test]
 fn test_convert_state_reports_completed_cursor_progress() {
-    let mut converter = CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
+    let mut converter =
+        CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
     let mut reset_output = [];
     converter
         .reset(&mut reset_output, 0)

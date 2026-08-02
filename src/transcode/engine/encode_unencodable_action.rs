@@ -10,7 +10,8 @@
 use crate::Codec;
 
 /// Unencodable-value action for a codec-backed encode hook.
-pub type EncodeUnencodableActionOf<C> = EncodeUnencodableAction<<C as Codec>::Value>;
+pub type EncodeUnencodableActionOf<C> =
+    EncodeUnencodableAction<<C as Codec>::Value>;
 
 /// Action selected after a codec reports an unencodable input value.
 ///

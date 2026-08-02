@@ -100,6 +100,9 @@ reset(output) -> 反复 transcode(...) -> 处理 EOF 尾部 -> finish(output)
 `AsyncTranscodeDecodeStep::Progress`）已经提交，不会在同一次调用中再次 await；调用方
 应按返回计数推进游标，EOF 由显式的 `AsyncTranscodeDecodeStep::EndOfInput` 表示。
 
+异步 bridge 也要求底层 transcoder 在第一次进度调用前以及每个流完成后重新调用
+`reset`。
+
 ## 边界与保证
 
 - 本库不实现具体二进制格式、字符集、Base64、hex、percent encoding 或

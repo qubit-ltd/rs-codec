@@ -24,14 +24,13 @@ use crate::TranscodeFailure;
 ///
 /// Lifecycle rules:
 ///
-/// - `transcode` is rejected when the engine is `Uninitialized`, `Finished`,
-///   or `Poisoned`.
+/// - `transcode` is rejected when the engine is `Uninitialized`, `Finished`, or
+///   `Poisoned`.
 /// - `finish` is rejected when the engine is `Uninitialized`, `Finished`, or
 ///   `Poisoned`.
 /// - reset preflight never changes the phase.
 /// - starting reset or finish marks the engine `Poisoned`; success commits the
 ///   corresponding `Fresh` or `Finished` phase.
-///
 #[derive(Debug, Default)]
 pub(crate) struct LifecycleGuard {
     /// Current lifecycle phase.
