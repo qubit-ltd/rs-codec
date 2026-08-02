@@ -2,9 +2,8 @@
 
 [English](user_guide.md) · [README](../README.zh_CN.md) · [API 文档](https://docs.rs/qubit-codec)
 
-本手册适用于 `qubit-codec` 0.11 及 Rust 1.94 以上版本，面向需要把逻辑 value
-转换为编码 unit，或在调用方管理的缓冲区中转换编码 unit 的 codec crate 与 adapter
-作者。它不定义具体线格式或字符集。
+本手册记录 `qubit-codec` 0.11，面向需要把逻辑 value 转换为编码 unit，或在调用方
+管理的缓冲区中转换编码 unit 的 codec crate 与 adapter 作者。它不定义具体线格式或字符集。
 
 ## 手册目标与读者
 
@@ -41,10 +40,16 @@ ValueEncoder / ValueDecoder  reset -> transcode* -> finish
 
 ## 场景：以两个层次发布一个 codec
 
-假定你的 crate 有一个局部 value codec，并有两种调用方：一种持有完整输入并需要自有
-输出，另一种提供可复用缓冲区。先实现 `Codec`，再用 `CodecValueEncoder` /
-`CodecValueDecoder` 服务前者，用 `CodecTranscodeEncoder` /
-`CodecTranscodeDecoder` 服务严格的缓冲转换。
+假定格式 crate 已有 `MyCodec`，其实现 `Codec<Value = u8, Unit = u8>`。一种调用方持有
+完整 value 并需要自有输出，另一种调用方需要用可复用缓冲区处理多个 value。两个路径
+都使用同一 codec。自有输出路径构造
+`CodecValueEncoder::new(MyCodec::default())`，调用 `ValueEncoder::encode`；缓冲区路径
+构造 `CodecTranscodeEncoder::new(MyCodec::default())`，通过
+`Transcoder::max_total_output_len` 获取上界，分配对应数量的 unit，再调用
+`Transcoder::transcode_complete_into`。两个路径返回的 slice 应包含相同编码 unit。
+
+格式 crate 提供具体 codec 与错误类型；关键结果是两个路径共享同一 codec 契约，格式
+crate 不需要重复实现游标和容量逻辑。
 
 unit-to-unit 转换使用 `CodecTranscodeConverter` 构建严格的 decode-encode 管线；
 只有 decode 或 encode 侧确实需要策略决策时，才使用
