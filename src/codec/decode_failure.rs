@@ -25,6 +25,13 @@ use core::num::NonZeroUsize;
 pub enum DecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
     Incomplete {
+        /// Codec-specific context for the incomplete prefix, when available.
+        ///
+        /// Stream drivers may ignore this field while retrying input. Once the
+        /// stream reaches EOF, adapters can use it to preserve detailed
+        /// diagnostics instead of reconstructing an error from the length
+        /// bound alone.
+        source: Option<E>,
         /// Current non-zero minimum total units required before retrying from
         /// the value start.
         ///
@@ -58,7 +65,32 @@ impl<E> DecodeFailure<E> {
     #[inline(always)]
     #[must_use]
     pub const fn incomplete(required_total: NonZeroUsize) -> Self {
-        Self::Incomplete { required_total }
+        Self::Incomplete {
+            source: None,
+            required_total,
+        }
+    }
+
+    /// Creates an incomplete-input decode failure with codec-specific context.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Codec-specific error describing the visible incomplete
+    ///   prefix.
+    /// - `required_total`: Current non-zero minimum units required before
+    ///   retrying from the value start.
+    ///
+    /// # Returns
+    ///
+    /// Returns an incomplete decode failure retaining `source` for adapters
+    /// that need detailed EOF diagnostics.
+    #[inline(always)]
+    #[must_use]
+    pub const fn incomplete_with_source(source: E, required_total: NonZeroUsize) -> Self {
+        Self::Incomplete {
+            source: Some(source),
+            required_total,
+        }
     }
 
     /// Creates an invalid-input decode failure with a consumption hint.
@@ -110,7 +142,22 @@ impl<E> DecodeFailure<E> {
     #[must_use]
     pub const fn required_total(&self) -> Option<NonZeroUsize> {
         match self {
-            Self::Incomplete { required_total } => Some(*required_total),
+            Self::Incomplete { required_total, .. } => Some(*required_total),
+            Self::Invalid { .. } => None,
+        }
+    }
+
+    /// Borrows the codec-specific error retained for an incomplete prefix.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(source)` when the codec supplied incomplete-input context,
+    /// or `None` when the failure only carries the retry bound.
+    #[inline(always)]
+    #[must_use]
+    pub const fn incomplete_source(&self) -> Option<&E> {
+        match self {
+            Self::Incomplete { source, .. } => source.as_ref(),
             Self::Invalid { .. } => None,
         }
     }

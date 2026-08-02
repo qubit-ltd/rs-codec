@@ -36,6 +36,7 @@ fn test_decode_error_wraps_framework_and_domain_errors() {
 #[test]
 fn test_decode_error_maps_decode_failure() {
     let incomplete = DecodeFailure::<DomainError>::Incomplete {
+        source: None,
         required_total: crate::nz(4),
     };
     assert_eq!(
