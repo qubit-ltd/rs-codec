@@ -7,18 +7,10 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-codec` 是 Rust codec 的领域无关基础层，清晰划分单值编码、自有值便捷 API
-和调用方管理缓冲区的流式转换。它面向 codec 与 adapter 作者；具体二进制格式、字符集
-和文本格式由相邻 crate 提供。
-
-## 为什么需要这个库
-
-一个格式 crate 往往从处理单个值的 `Codec` 开始，例如定宽标量或单个字符；随后又需要
-自有输出的便捷 API、缓冲流 adapter 或畸形输入策略。若每层都重新实现游标处理与 EOF
-行为，契约很容易产生分歧。
-
-本库提供共享契约和 adapter，让格式 crate 将格式规则留在自身，同时复用经过检查的
-转换机制。
+`qubit-codec` 为 Rust codec 与 adapter 作者提供一套统一契约，覆盖单值 codec、
+自有输出便捷 API 和调用方管理缓冲区的流式转换。格式 crate 只需保留自己的二进制、
+文本或字符集规则，即可复用本库经过检查的容量管理、显式生命周期和支持策略扩展的
+转换循环。
 
 ## 安装
 
@@ -27,100 +19,121 @@
 qubit-codec = "0.11"
 ```
 
-默认 feature 集为空。只有使用 `qubit-io` bridge 类型时才启用 `io`：
+默认 feature 集为空。只有使用 `qubit-io` 缓冲 bridge 时才启用 `io`：
 
 ```toml
 [dependencies]
 qubit-codec = { version = "0.11", features = ["io"] }
 ```
 
+最低支持的 Rust 版本为 1.94。
+
 ## 快速开始
 
-若格式的合理单位是完整输入，而非单个值，应直接实现 `ValueEncoder`。这比把没有
-明确单值 quantum 的格式强行套进 `Codec` 更合适。
+先根据格式特点选择最小够用的公开契约：
+
+| 格式需求 | 起点 |
+| --- | --- |
+| 一个有意义的逻辑 value 对应若干编码 unit | 实现 `Codec` |
+| 只有完整输入才构成有意义的操作 | 直接实现 `ValueEncoder` / `ValueDecoder` |
+| 已有 `Codec`，需要自有输出 | 使用 `CodecValueEncoder` / `CodecValueDecoder` |
+| 已有 `Codec`，需要严格的缓冲流 | 使用 `CodecTranscode*` adapter |
+| 非法或不可编码 value 需要策略 | 使用 transcode engine 与 hooks |
+| EOF 或 framing 行为不适合现有 engine | 实现 `Transcoder` |
+
+例如，一个提供定宽大端 `u16` codec 的 crate 只需实现一次 `Codec`，随后便能提供
+自有输出操作，无需重复容量和生命周期处理：
 
 ```rust
-use qubit_codec::ValueEncoder;
+use core::{convert::Infallible, num::NonZeroUsize};
+use qubit_codec::{Codec, CodecValueEncoder, DecodeFailure, ValueEncoder};
 
-struct PrefixEncoder;
+#[derive(Default)]
+struct U16BeCodec;
 
-impl ValueEncoder<str> for PrefixEncoder {
-    type Output = String;
-    type Error = core::convert::Infallible;
+impl Codec for U16BeCodec {
+    type Value = u16;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
-    fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
-        Ok(format!("encoded:{input}"))
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u16, NonZeroUsize), DecodeFailure<Infallible>> {
+        debug_assert!(input_index + 2 <= input.len());
+        let value = u16::from_be_bytes([
+            input[input_index],
+            input[input_index + 1],
+        ]);
+        Ok((value, NonZeroUsize::new(2).expect("two is non-zero")))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u16,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Infallible> {
+        debug_assert!(output_index + 2 <= output.len());
+        output[output_index..output_index + 2]
+            .copy_from_slice(&value.to_be_bytes());
+        Ok(2)
     }
 }
 
-let mut encoder = PrefixEncoder;
-let output = encoder.encode("codec")?;
-assert_eq!("encoded:codec", output);
-
-# Ok::<(), core::convert::Infallible>(())
+let mut encoder = CodecValueEncoder::new(U16BeCodec);
+let bytes = encoder.encode(&0x1234).expect("encoding is infallible");
+assert_eq!(vec![0x12, 0x34], bytes);
 ```
 
-如果格式确实有局部的值边界，应实现 `Codec`，再选择现成 adapter：
-`CodecValueEncoder` 或 `CodecValueDecoder` 用于自有单值输出；
-`CodecTranscodeEncoder`、`CodecTranscodeDecoder` 或
-`CodecTranscodeConverter` 用于严格的调用方缓冲区转换。
+[用户手册](doc/user_guide.zh_CN.md)沿用这一场景，继续讲解自有输出 decode、调用方
+缓冲区流式转换、不完整输入、生命周期输出与策略 hooks。
 
-若 codec 会从 `decode_reset` 或 `decode_finish` 产出 value，严格单值 decode 会有意
-拒绝该 codec。此时应使用 `CodecValueDecoder` 的 `decode_lifecycle` 或
-`decode_lifecycle_with_scratch`；参见[生命周期感知 decode 示例](examples/decode_lifecycle.rs)。
+## 为什么需要这个项目
+
+一个格式 crate 通常从 value-to-unit 操作开始，随后逐步增加自有输出 helper、流式
+adapter、畸形输入策略和 I/O 集成。若每层各自实现下标、容量、EOF 以及 reset/finish
+行为，同一格式很容易产生互不兼容的契约。`qubit-codec` 统一这些机制，同时让领域规则
+留在拥有它们的格式 crate 中。
 
 ## 核心能力
 
 | 需求 | 公开 API |
 | --- | --- |
-| 在调用方缓冲区上处理一个值或 codec quantum | `Codec` 和 `DecodeFailure` |
+| 底层 value/unit 契约 | `Codec`、`DecodeFailure` |
 | 自有完整值转换 | `ValueEncoder`、`ValueDecoder`、`CodecValueEncoder`、`CodecValueDecoder` |
-| 严格的缓冲 encode、decode 或 unit 转换 | `TranscodeEncoder`、`TranscodeDecoder`、`TranscodeConverter` 和 `CodecTranscode*` adapter |
-| 带策略的缓冲转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 及其 hooks |
-| 调用方管理的流生命周期 | `Transcoder`、`TranscodeProgress` 和 `TranscodeStatus` |
-| 共享字节序元数据 | `ByteOrder`、`ByteOrderSpec`、`BigEndian`、`LittleEndian` 和 `NativeEndian` |
-| `qubit-io` 缓冲桥接 | 启用 `io` feature 后的 `TranscodeDecodeInput`、`TranscodeEncodeOutput` 和部分 I/O 的 `AsyncTranscodeDecodeInput` / `AsyncTranscodeEncodeOutput` |
-
-流式转换的生命周期是显式的：
-
-```text
-reset(output) -> 反复 transcode(...) -> 处理 EOF 尾部 -> finish(output)
-```
-
-内置 transcode engine 新建时处于未初始化状态，第一次成功操作必须是 `reset`；
-`finish` 成功后，再次使用实例前也必须先调用 `reset`。自定义 `Transcoder` 实现也
-必须遵守同一契约；trait 无法拦截用户自定义方法内部的任意状态变更。
-
-`Complete` 表示本次 `transcode` 从请求下标开始消费了全部可见输入。`NeedInput`
-把不完整尾部保留给调用方，以便重试或显式做 EOF 决策；`NeedOutput` 表示必须扩展或
-排空输出缓冲区后才能继续。
-
-异步 bridge 直接暴露相同的进度：每次 `poll_transcode` 或 `transcode_async` 在完成
-必要的 I/O 准备后至多调用一次 transcoder。返回的 `TranscodeProgress`（或
-`AsyncTranscodeDecodeStep::Progress`）已经提交，不会在同一次调用中再次 await；调用方
-应按返回计数推进游标，EOF 由显式的 `AsyncTranscodeDecodeStep::EndOfInput` 表示。
-
-异步 bridge 也要求底层 transcoder 在第一次进度调用前以及每个流完成后重新调用
-`reset`。
+| 严格的调用方缓冲区转换 | `Transcoder`、`CodecTranscodeEncoder`、`CodecTranscodeDecoder`、`CodecTranscodeConverter` |
+| 带策略的转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 与 hooks |
+| 进度与背压 | `TranscodeProgress`、`TranscodeStatus` |
+| 运行时或静态字节序 | `ByteOrder`、`ByteOrderSpec`、`BigEndian`、`LittleEndian`、`NativeEndian` |
+| 启用 `io` 后的 `qubit-io` bridge | 同步及部分 I/O 异步 transcode input/output adapter |
 
 ## 边界与保证
 
 - 本库不实现具体二进制格式、字符集、Base64、hex、percent encoding 或
-  `std::io` reader/writer extension。
-- `Codec::decode` 通过 `DecodeFailure` 区分可见输入不完整与 codec-domain 非法
-  输入；不完整前缀不等同于 EOF 决策。
-- 对同一 value 和 codec 状态，`Codec::encode_len` 必须与成功的
-  `Codec::encode` 精确一致，包括有意的零输出缓冲。
-- `Transcoder` 的容量上界必须覆盖每种可达瞬态，而不是仅覆盖当前状态；`finish`
-  不会收到调用方持有的不完整输入尾部。
-- 自有输出 adapter 可能为返回的 `Vec` 分配内存。流式 API 使用调用方提供的缓冲区；
-  `io` feature 会增加 `qubit-io` bridge 类型。
+  `std::io` extension。
+- `Codec::decode` 通过 `DecodeFailure` 区分可见输入不完整与领域输入非法；不完整
+  前缀本身不是 EOF 决策。
+- 在相同状态下，`Codec::encode_len` 必须等于随后成功的 `Codec::encode` 写入量，
+  包括有意的零输出缓冲。
+- `Transcoder` 遵循 `reset -> transcode/transcode_eof -> finish`。`NeedInput`
+  将尾部留给调用方；`NeedOutput` 要求更多目标容量；`Complete` 表示所有可见输入均
+  已消费。
+- 容量上界必须覆盖所有可达瞬态。自有输出 adapter 可能分配内存；流式 API 使用
+  调用方提供的缓冲区。
 
 ## 延伸阅读
 
-- [用户手册](doc/user_guide.zh_CN.md)：抽象选择、生命周期规则、错误与实现清单。
+- [用户手册](doc/user_guide.zh_CN.md)：实现 codec、暴露 adapter、驱动流并诊断失败。
 - [English user guide](doc/user_guide.md)
 - [API 文档](https://docs.rs/qubit-codec)
+- [生命周期感知 decode 示例](examples/decode_lifecycle.rs)
 - [English README](README.md)
 
 ## 测试
