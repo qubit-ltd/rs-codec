@@ -24,7 +24,7 @@ impl Transcoder for ByteToWord {
     }
 
     fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -45,7 +45,7 @@ impl Transcoder for ByteToWord {
     }
 
     fn finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
-        Self::Error::ensure_output_index(output.len(), output_index)?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }

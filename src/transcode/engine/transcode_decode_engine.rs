@@ -657,7 +657,10 @@ where
                     Some(consumed_value),
                 ))
             }
-            Err(DecodeFailure::Incomplete { required_total, .. }) => {
+            Err(DecodeFailure::Incomplete {
+                source,
+                required_total,
+            }) => {
                 assert!(
                     required_total.get() > context.available(),
                     "Codec::decode incomplete required_total must exceed available input",
@@ -667,12 +670,18 @@ where
                     "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                 );
                 if end_of_input {
-                    Err(TranscodeFailure::incomplete_input(
-                        context.input_index(),
-                        required_total.get(),
-                        context.available(),
-                    )
-                    .into())
+                    match source {
+                        Some(source) => Err(TranscodeDecodeError::domain_main(
+                            source,
+                            context.input_index(),
+                        )),
+                        None => Err(TranscodeFailure::incomplete_input(
+                            context.input_index(),
+                            required_total.get(),
+                            context.available(),
+                        )
+                        .into()),
+                    }
                 } else {
                     Ok((DecodeOutcome::need_input(required_total), None))
                 }

@@ -179,10 +179,7 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
-            TranscodeEncodeError::<PairEncodeError, u32>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };
@@ -195,10 +192,7 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
-            TranscodeEncodeError::<PairEncodeError, u32>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };

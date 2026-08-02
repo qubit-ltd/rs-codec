@@ -41,54 +41,6 @@ pub enum TranscodeEncodeError<E, V> {
 }
 
 impl<E, V> TranscodeEncodeError<E, V> {
-    /// Creates an invalid-input-index framework error.
-    #[inline(always)]
-    pub const fn invalid_input_index(index: usize, input_len: usize) -> Self {
-        Self::Failure(TranscodeFailure::invalid_input_index(index, input_len))
-    }
-
-    /// Creates an invalid-output-index framework error.
-    #[inline(always)]
-    pub const fn invalid_output_index(index: usize, output_len: usize) -> Self {
-        Self::Failure(TranscodeFailure::invalid_output_index(index, output_len))
-    }
-
-    /// Creates an insufficient-output framework error.
-    #[inline(always)]
-    pub const fn insufficient_output(
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
-        Self::Failure(TranscodeFailure::insufficient_output(
-            output_index,
-            required,
-            available,
-        ))
-    }
-
-    /// Creates an output-length-overflow framework error.
-    #[inline(always)]
-    pub const fn output_length_overflow() -> Self {
-        Self::Failure(TranscodeFailure::output_length_overflow())
-    }
-
-    /// Creates an incomplete-input framework error.
-    #[inline(always)]
-    pub const fn incomplete_input(input_index: usize, required: usize, available: usize) -> Self {
-        Self::Failure(TranscodeFailure::incomplete_input(
-            input_index,
-            required,
-            available,
-        ))
-    }
-
-    /// Creates a trailing-input framework error.
-    #[inline(always)]
-    pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
-        Self::Failure(TranscodeFailure::trailing_input(consumed, remaining))
-    }
-
     /// Creates a reset-phase domain-specific transcode error.
     #[inline(always)]
     pub const fn domain_reset(source: E) -> Self {
@@ -202,35 +154,6 @@ impl<E, V> TranscodeEncodeError<E, V> {
             },
             Self::Domain(error) => TranscodeEncodeError::Domain(error),
         }
-    }
-
-    /// Ensures the output index is valid.
-    #[inline]
-    pub fn ensure_output_index(output_len: usize, output_index: usize) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_index(output_len, output_index).map_err(Self::from)
-    }
-
-    /// Ensures input and output indices are valid.
-    #[inline]
-    pub fn ensure_transcode_indices(
-        input_len: usize,
-        input_index: usize,
-        output_len: usize,
-        output_index: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_transcode_indices(input_len, input_index, output_len, output_index)
-            .map_err(Self::from)
-    }
-
-    /// Ensures output capacity is sufficient.
-    #[inline]
-    pub fn ensure_output_capacity(
-        output_len: usize,
-        output_index: usize,
-        required: usize,
-    ) -> Result<(), Self> {
-        TranscodeFailure::ensure_output_capacity(output_len, output_index, required)
-            .map_err(Self::from)
     }
 }
 

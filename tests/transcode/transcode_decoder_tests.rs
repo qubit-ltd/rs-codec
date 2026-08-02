@@ -28,10 +28,7 @@ impl Transcoder for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
-        TranscodeDecodeError::<core::convert::Infallible>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -56,10 +53,7 @@ impl Transcoder for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
-        TranscodeDecodeError::<core::convert::Infallible>::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }

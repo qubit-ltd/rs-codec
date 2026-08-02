@@ -59,6 +59,30 @@ where
         Self { codec }
     }
 
+    /// Returns a shared reference to the wrapped codec.
+    #[inline(always)]
+    #[must_use]
+    pub const fn codec(&self) -> &C {
+        &self.codec
+    }
+
+    /// Returns a mutable reference to the wrapped codec.
+    ///
+    /// The next value operation starts a fresh codec lifecycle, so mutations
+    /// are applied to the following operation.
+    #[inline(always)]
+    #[must_use]
+    pub fn codec_mut(&mut self) -> &mut C {
+        &mut self.codec
+    }
+
+    /// Consumes the adapter and returns its wrapped codec.
+    #[inline(always)]
+    #[must_use]
+    pub fn into_codec(self) -> C {
+        self.codec
+    }
+
     /// Decodes exactly one encoded value from `input`.
     ///
     /// # Parameters

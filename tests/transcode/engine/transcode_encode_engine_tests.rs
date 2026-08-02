@@ -628,7 +628,12 @@ fn test_buffered_encode_engine_delegates_finish_to_hooks() {
     let error = encoder
         .finish(&mut [], 0)
         .expect_err("finish should reject insufficient output before calling hooks");
-    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
     assert_eq!(Ok(1), encoder.max_finish_output_len());
 
     let written = encoder
@@ -774,7 +779,12 @@ fn test_buffered_encode_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -791,7 +801,12 @@ fn test_buffered_encode_engine_default_finish_reports_output_index_beyond_buffer
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -865,7 +880,12 @@ fn test_buffered_encode_engine_reports_output_index_beyond_buffer() {
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(TranscodeEncodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1000,7 +1020,12 @@ fn test_buffered_encode_engine_uses_hooks_for_invalid_input_index() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should be rejected");
 
-    assert_eq!(TranscodeEncodeError::invalid_input_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        ),
+        error,
+    );
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -1166,7 +1191,12 @@ fn test_buffered_encode_engine_reset_rejects_insufficient_output() {
         .reset(&mut output, 0)
         .expect_err("reset should reject insufficient output capacity");
 
-    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1178,7 +1208,12 @@ fn test_buffered_encode_engine_reset_reports_output_index_beyond_buffer() {
         .reset(&mut output, 2)
         .expect_err("reset should reject an out-of-range output index");
 
-    assert_eq!(TranscodeEncodeError::invalid_output_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1287,7 +1322,12 @@ fn test_buffered_encode_engine_failed_reset_preserves_finished_state() {
     let error = engine
         .reset(&mut [], 0)
         .expect_err("reset should reject insufficient output");
-    assert_eq!(TranscodeEncodeError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        qubit_codec::TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error
+    );
     assert_eq!(
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::TranscodeAfterFinish,

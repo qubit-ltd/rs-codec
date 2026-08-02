@@ -51,6 +51,33 @@ where
             engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
+
+    /// Returns a shared reference to the wrapped codec.
+    #[inline(always)]
+    #[must_use]
+    pub fn codec(&self) -> &C {
+        self.engine.codec()
+    }
+
+    /// Returns a mutable reference to the wrapped codec.
+    ///
+    /// Mutating a codec during an active stream can invalidate that stream's
+    /// assumptions; reset the adapter before continuing with the new codec
+    /// configuration.
+    #[inline(always)]
+    #[must_use]
+    pub fn codec_mut(&mut self) -> &mut C {
+        self.engine.codec_mut()
+    }
+
+    /// Consumes the adapter and returns its wrapped codec.
+    ///
+    /// Any buffered lifecycle state and internal hooks are discarded.
+    #[inline(always)]
+    #[must_use]
+    pub fn into_codec(self) -> C {
+        self.engine.into_parts().0
+    }
 }
 
 impl<C> Transcoder for CodecTranscodeEncoder<C>
