@@ -330,13 +330,17 @@ where
         unsafe {
             this.output.advance(progress.written());
         }
-        this.required_spare = match progress.status() {
-            TranscodeStatus::NeedOutput { required, .. } => required.get(),
-            TranscodeStatus::Complete => 1,
-            TranscodeStatus::NeedInput { .. } => {
-                unreachable!("validated encoder progress cannot need input");
-            }
-        };
+        this.required_spare =
+            if let TranscodeStatus::NeedOutput { required, .. } =
+                progress.status()
+            {
+                required.get()
+            } else {
+                // `validate_encode_progress` rejects `NeedInput` before this
+                // point.
+                debug_assert!(progress.is_complete());
+                1
+            };
         Poll::Ready(Ok(progress))
     }
 
