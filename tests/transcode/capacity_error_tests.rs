@@ -7,7 +7,10 @@
 // =============================================================================
 
 use qubit_codec::{
-    CapacityError, TranscodeConvertError, TranscodeDecodeError, TranscodeEncodeError,
+    CapacityError,
+    TranscodeConvertError,
+    TranscodeDecodeError,
+    TranscodeEncodeError,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -16,22 +19,29 @@ struct DomainError;
 
 #[test]
 fn test_capacity_errors_map_to_framework_failures() {
-    let decode: TranscodeDecodeError<DomainError> = CapacityError::OutputLengthOverflow.into();
+    let decode: TranscodeDecodeError<DomainError> =
+        CapacityError::OutputLengthOverflow.into();
     let encode: TranscodeEncodeError<DomainError, char> =
         CapacityError::OutputLengthOverflow.into();
     let convert: TranscodeConvertError<DomainError, DomainError, char> =
         CapacityError::OutputLengthOverflow.into();
 
     assert_eq!(
-        TranscodeDecodeError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
         decode,
     );
     assert_eq!(
-        TranscodeEncodeError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        TranscodeEncodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
         encode,
     );
     assert_eq!(
-        TranscodeConvertError::Failure(qubit_codec::TranscodeFailure::output_length_overflow()),
+        TranscodeConvertError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
         convert,
     );
 }

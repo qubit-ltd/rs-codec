@@ -69,7 +69,9 @@ impl<'a, Value, Unit> EncodeAttempt<'a, Value, Unit> {
 
     /// Returns all mutable engine state for the encode operation.
     #[inline(always)]
-    pub(in crate::transcode) fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
+    pub(in crate::transcode) fn into_parts(
+        self,
+    ) -> (&'a Value, usize, &'a mut [Unit], usize) {
         (self.value, self.input_index, self.output, self.output_index)
     }
 }

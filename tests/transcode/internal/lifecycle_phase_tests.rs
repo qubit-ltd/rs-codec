@@ -7,7 +7,11 @@
 // =============================================================================
 
 use qubit_codec::{
-    CodecTranscodeDecoder, TranscodeDecodeError, TranscodeFailure, TranscodeStatus, Transcoder,
+    CodecTranscodeDecoder,
+    TranscodeDecodeError,
+    TranscodeFailure,
+    TranscodeStatus,
+    Transcoder,
 };
 
 use crate::common::IdentityCodec;

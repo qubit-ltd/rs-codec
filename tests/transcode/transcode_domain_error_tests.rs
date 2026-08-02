@@ -11,7 +11,8 @@ use qubit_codec::TranscodeDomainError;
 #[test]
 fn test_domain_error_accessors_and_mapping_cover_all_phases() {
     let reset = TranscodeDomainError::reset("reset");
-    let main = TranscodeDomainError::main_with_consumed("main", 4, Some(crate::nz(2)));
+    let main =
+        TranscodeDomainError::main_with_consumed("main", 4, Some(crate::nz(2)));
     let finish = TranscodeDomainError::finish("finish");
 
     assert_eq!("reset", *reset.source());
