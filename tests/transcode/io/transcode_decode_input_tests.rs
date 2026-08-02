@@ -1044,6 +1044,73 @@ fn map_codec_error(error: PairDecodeError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
+#[derive(Debug, Default)]
+struct HugeMinimumCodec;
+
+impl Codec for HugeMinimumCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = ();
+    type EncodeError = ();
+
+    const MIN_UNITS_PER_VALUE: usize = usize::MAX;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = usize::MAX;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = usize::MAX;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        unreachable!("the minimum-width reserve must fail first");
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("decode-only coverage fixture");
+    }
+}
+
+#[derive(Debug, Default)]
+struct HugeIncompleteCodec;
+
+impl Codec for HugeIncompleteCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = ();
+    type EncodeError = ();
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = usize::MAX;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = usize::MAX;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
+        Err(DecodeFailure::incomplete(
+            core::num::NonZeroUsize::new(usize::MAX)
+                .expect("usize::MAX is non-zero"),
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("decode-only coverage fixture");
+    }
+}
+
 fn decode_with<I, D>(
     input: &mut TranscodeDecodeInput<I>,
     decoder: &mut D,
@@ -1779,6 +1846,105 @@ fn test_buffered_decode_input_exposes_buffer_capacity_and_fill_until() {
         .expect("fill should read buffered units");
     assert!(filled);
     assert_eq!(2, input.unread_len());
+}
+
+/// Verifies that an explicit refill can grow the owned decode buffer.
+#[test]
+fn test_buffered_decode_input_fill_until_grows_buffer() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![0x0001, 0x0002]]),
+        1,
+    );
+
+    assert!(input.fill_until(2).expect("refill should grow the buffer"));
+    assert_eq!(&[0x0001, 0x0002], input.unread());
+
+    let mut input =
+        TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![]), 1);
+    let error = input
+        .fill_until(usize::MAX)
+        .expect_err("an impossible refill should fail");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+}
+
+/// Verifies one-step decoding and the clean-EOF result of the input adapter.
+#[test]
+fn test_buffered_decode_input_transcode_step_reports_progress_and_eof() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![0x0001, 0x0002]]),
+        2,
+    );
+    let mut decoder = PairDecoder;
+    let mut mapper = map_error;
+    let mut output = [0_u32; 1];
+
+    assert_eq!(
+        Some(TranscodeProgress::complete(2, 1)),
+        input
+            .transcode_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+            .expect("one-step decode should succeed"),
+    );
+    assert_eq!([0x0001_0002], output);
+    assert_eq!(
+        None,
+        input
+            .transcode_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+            .expect("clean EOF should return no step"),
+    );
+
+    assert_eq!(
+        Some(TranscodeProgress::complete(0, 0)),
+        input
+            .transcode_step(&mut decoder, &mut mapper, &mut output, 0, 0)
+            .expect("zero-count step should complete immediately"),
+    );
+
+    let error = input
+        .transcode_step(&mut decoder, &mut mapper, &mut output, 2, 1)
+        .expect_err("an invalid step output range should fail");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+/// Verifies that a decoder reset rejects an undersized output range.
+#[test]
+fn test_buffered_decode_input_reset_rejects_insufficient_bound() {
+    let input =
+        TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![]), 1);
+    let mut decoder = ResetDecoder::default();
+    let mut mapper = map_error;
+    let error = input
+        .reset(&mut decoder, &mut mapper, &mut [], 0, 0)
+        .expect_err("reset should require its declared output bound");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("insufficient output"));
+
+    let mut output = [0_u32; 1];
+    let error = input
+        .reset(&mut decoder, &mut mapper, &mut output, 2, 0)
+        .expect_err("an invalid reset output range should fail");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+/// Verifies that allocation failures from the private codec driver are mapped.
+#[test]
+fn test_buffered_decode_input_maps_codec_driver_allocation_failures() {
+    let mut minimum_input = TranscodeDecodeInput::new(Cursor::new(vec![1_u8]));
+    let error = minimum_input
+        .read_decoded_with(&mut HugeMinimumCodec, |_| {
+            Error::new(ErrorKind::InvalidData, "unused codec error")
+        })
+        .expect_err("minimum-width allocation should fail");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+
+    let mut incomplete_input =
+        TranscodeDecodeInput::new(Cursor::new(vec![1_u8]));
+    let error = incomplete_input
+        .read_decoded_with(&mut HugeIncompleteCodec, |_| {
+            Error::new(ErrorKind::InvalidData, "unused codec error")
+        })
+        .expect_err("incomplete refill allocation should fail");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
 }
 
 #[test]

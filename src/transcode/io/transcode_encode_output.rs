@@ -466,18 +466,15 @@ where
                 self.output.advance(written);
             }
             read_total += read;
-            match progress.status() {
-                TranscodeStatus::Complete => return Ok(read_total),
-                TranscodeStatus::NeedOutput { required, .. } => {
-                    required_spare = required;
-                    if read_total == count {
-                        self.ensure_transcode_spare_capacity(required)?;
-                    }
-                }
-                TranscodeStatus::NeedInput { .. } => {
-                    unreachable!(
-                        "validated encoder progress cannot need input"
-                    );
+            if progress.is_complete() {
+                return Ok(read_total);
+            }
+            if let TranscodeStatus::NeedOutput { required, .. } =
+                progress.status()
+            {
+                required_spare = required;
+                if read_total == count {
+                    self.ensure_transcode_spare_capacity(required)?;
                 }
             }
         }

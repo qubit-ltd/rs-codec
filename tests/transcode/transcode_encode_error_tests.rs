@@ -58,6 +58,7 @@ fn test_encode_error_accessors_mapping_and_validation() {
     assert_eq!(None, failure.domain_ref());
     assert_eq!(None, failure.unencodable_ref());
     assert_eq!(Some((8, None)), no_context.unencodable_ref());
+    assert_eq!(None, domain.unencodable_ref());
 
     assert_eq!(
         TranscodeEncodeError::Failure(TranscodeFailure::incomplete_input(

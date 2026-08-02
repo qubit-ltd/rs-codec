@@ -320,6 +320,27 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     assert_eq!([9], output);
 }
 
+/// Verifies that the adapter's EOF entry point applies codec EOF policy.
+#[test]
+fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
+    let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut output = [0_u8; 1];
+
+    decoder
+        .reset(&mut [], 0)
+        .expect("reset before EOF transcode");
+    let error = decoder
+        .transcode_eof(&[0x80], 0, &mut output, 0)
+        .expect_err("an incomplete EOF value should be rejected");
+
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        ),
+        error,
+    );
+}
+
 #[test]
 fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);

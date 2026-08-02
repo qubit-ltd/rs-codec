@@ -351,6 +351,81 @@ impl Transcoder for PairTranscoder {
 }
 
 #[derive(Default)]
+struct NeedInputEofTranscoder;
+
+impl Transcoder for NeedInputEofTranscoder {
+    type Input = u8;
+    type Output = u8;
+    infallible_transcoder_error!();
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        let available = input.len() - input_index;
+        if available == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        output[output_index] = input[input_index];
+        Ok(TranscodeProgress::new(
+            TranscodeStatus::NeedInput {
+                required: qubit_codec::nz(2),
+            },
+            1,
+            1,
+        ))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.transcode(input, input_index, output, output_index)
+    }
+
+    fn finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        qubit_codec::TranscodeFailure::ensure_output_index(
+            output.len(),
+            output_index,
+        )?;
+        Ok(0)
+    }
+}
+
+#[derive(Default)]
 struct UnderestimatingTranscoder;
 
 impl Transcoder for UnderestimatingTranscoder {
@@ -1112,6 +1187,27 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
     assert_eq!(
         qubit_codec::TranscodeDecodeError::Failure(
             qubit_codec::TranscodeFailure::incomplete_input(2, 2, 1)
+        ),
+        error,
+    );
+
+    let error = PairTranscoder
+        .transcode_eof(b"a", 0, &mut [], 0)
+        .expect_err("the default EOF policy should reject incomplete input");
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        ),
+        error,
+    );
+
+    let mut transcoder = NeedInputEofTranscoder;
+    let error = transcoder
+        .transcode_complete_into(b"a", &mut [0])
+        .expect_err("EOF progress that remains incomplete must be rejected");
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::incomplete_input(1, 2, 0)
         ),
         error,
     );

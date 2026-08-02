@@ -72,6 +72,76 @@ impl Codec for SingleByteCodec {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct HugeDecodeResetAllocationCodec;
+
+impl Codec for HugeDecodeResetAllocationCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = usize::MAX;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("allocation failure prevents encoding")
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct HugeDecodeFinishAllocationCodec;
+
+impl Codec for HugeDecodeFinishAllocationCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = usize::MAX;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        unreachable!("allocation failure prevents encoding")
+    }
+}
+
 #[test]
 fn test_codec_value_decoder_exposes_codec_accessors() {
     let mut decoder = CodecValueDecoder::new(SingleByteCodec);
@@ -79,6 +149,25 @@ fn test_codec_value_decoder_exposes_codec_accessors() {
     assert_eq!(&SingleByteCodec, decoder.codec());
     *decoder.codec_mut() = SingleByteCodec;
     assert_eq!(SingleByteCodec, decoder.into_codec());
+}
+
+#[test]
+fn test_codec_value_decoder_maps_decode_lifecycle_allocation_failures() {
+    let error = CodecValueDecoder::new(HugeDecodeResetAllocationCodec)
+        .decode_lifecycle(&[1])
+        .expect_err("reset lifecycle allocation failure must be reported");
+    assert_eq!(
+        TranscodeDecodeError::Failure(TranscodeFailure::allocation_failed()),
+        error,
+    );
+
+    let error = CodecValueDecoder::new(HugeDecodeFinishAllocationCodec)
+        .decode_lifecycle(&[1])
+        .expect_err("finish lifecycle allocation failure must be reported");
+    assert_eq!(
+        TranscodeDecodeError::Failure(TranscodeFailure::allocation_failed()),
+        error,
+    );
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
