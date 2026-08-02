@@ -87,6 +87,40 @@ impl Codec for FixedPairCodec {
     }
 }
 
+#[derive(Debug, Default)]
+struct ContextualIncompleteReadCodec;
+
+impl Codec for ContextualIncompleteReadCodec {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u16],
+        _input_index: usize,
+    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Err(DecodeFailure::incomplete_with_source(
+            PairDecodeError::BadInputIndex,
+            crate::nz(2),
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u32,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(1)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 enum DecodeLifecycleMode {
     #[default]
@@ -214,10 +248,7 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-            TranscodeDecodeError::<PairDecodeError>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };
@@ -230,10 +261,7 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-            TranscodeDecodeError::<PairDecodeError>::ensure_output_index(
-                output.len(),
-                output_index,
-            )?;
+            qubit_codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
             Ok(0)
         }
     };
@@ -623,11 +651,7 @@ impl Transcoder for TwoUnitFinishDecoder {
         output: &mut [u32],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-        TranscodeDecodeError::<PairDecodeError>::ensure_output_capacity(
-            output.len(),
-            output_index,
-            2,
-        )?;
+        qubit_codec::TranscodeFailure::ensure_output_capacity(output.len(), output_index, 2)?;
         output[output_index] = 0xaaaa;
         output[output_index + 1] = 0xbbbb;
         Ok(2)
@@ -1785,6 +1809,21 @@ fn test_buffered_decode_input_read_decoded_reports_unexpected_eof() {
         .expect_err("empty input should fail before a complete value");
 
     assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+}
+
+#[test]
+fn test_buffered_decode_input_maps_incomplete_source_at_eof() {
+    let input = ChunkedInput::new(vec![vec![0x0001]]);
+    let mut input = TranscodeDecodeInput::with_capacity(input, 1);
+    let mut codec = ContextualIncompleteReadCodec;
+
+    let error = input
+        .read_decoded_with(&mut codec, map_codec_error)
+        .expect_err("EOF should preserve the codec incomplete source");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!("bad input index", error.to_string());
+    assert!(input.unread().is_empty());
 }
 
 #[test]

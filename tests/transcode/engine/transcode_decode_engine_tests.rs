@@ -53,7 +53,10 @@ impl Codec for PrefixCodec {
         let first = unsafe { *input.as_ptr().add(input_index) };
         match first {
             0xfe if input.len() - input_index < 2 => {
-                Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
+                Err(qubit_codec::DecodeFailure::incomplete_with_source(
+                    PrefixDecodeError::Invalid { consumed: 1 },
+                    crate::nz(2),
+                ))
             }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
@@ -772,7 +775,12 @@ fn test_transcode_decode_engine_reports_finish_bound_overflow() {
     let error = decoder
         .finish(&mut output, 0)
         .expect_err("finish should report capacity overflow before writing");
-    assert_eq!(TranscodeDecodeError::output_length_overflow(), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::output_length_overflow()
+        ),
+        error
+    );
 }
 
 #[test]
@@ -855,7 +863,12 @@ fn test_transcode_decode_engine_delegates_finish_to_hooks() {
     let error = decoder
         .finish(&mut [], 0)
         .expect_err("finish should reject insufficient output before calling hooks");
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error,
+    );
     assert_eq!(Ok(1), decoder.max_finish_output_len());
 
     let written = decoder
@@ -912,7 +925,12 @@ fn test_transcode_decode_engine_finish_reports_output_index_beyond_buffer() {
         .finish(&mut output, 1)
         .expect_err("out-of-range finish output index should be rejected");
 
-    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -929,7 +947,12 @@ fn test_transcode_decode_engine_default_finish_reports_output_index_beyond_buffe
         .finish(&mut output, 1)
         .expect_err("default finish should reject out-of-range output index");
 
-    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -979,6 +1002,22 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
     assert_eq!(2, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([7], output);
+}
+
+#[test]
+fn test_transcode_decode_engine_preserves_incomplete_source_at_eof() {
+    let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
+    decoder.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [0_u8; 1];
+
+    let error = decoder
+        .transcode_eof(&[0xfe], 0, &mut output, 0)
+        .expect_err("EOF must expose the codec incomplete source");
+
+    assert_eq!(
+        TranscodeDecodeError::domain_main(PrefixDecodeError::Invalid { consumed: 1 }, 0,),
+        error,
+    );
 }
 
 #[test]
@@ -1196,7 +1235,12 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() 
         .transcode(&[1], 0, &mut output, 1)
         .expect_err("out-of-range output index should fail");
 
-    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1257,7 +1301,12 @@ fn test_transcode_decode_engine_uses_hooks_for_invalid_input_index() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should be rejected");
 
-    assert_eq!(TranscodeDecodeError::invalid_input_index(2, 1), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1483,7 +1532,12 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
         .reset(&mut [], 1)
         .expect_err("reset should reject invalid output index");
 
-    assert_eq!(TranscodeDecodeError::invalid_output_index(1, 0), error,);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        ),
+        error,
+    );
 }
 
 #[test]
@@ -1549,7 +1603,12 @@ fn test_transcode_decode_engine_configurable_reset_supports_success_and_capacity
     let error = decoder
         .reset(&mut [], 0)
         .expect_err("reset should enforce its declared output bound");
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error
+    );
 }
 
 // ============================================================================
@@ -1702,7 +1761,12 @@ fn test_transcode_decode_engine_failed_reset_preserves_finished_state() {
     let error = engine
         .reset(&mut [], 0)
         .expect_err("reset should reject insufficient output");
-    assert_eq!(TranscodeDecodeError::insufficient_output(0, 1, 0), error);
+    assert_eq!(
+        qubit_codec::TranscodeDecodeError::Failure(
+            qubit_codec::TranscodeFailure::insufficient_output(0, 1, 0)
+        ),
+        error
+    );
     assert_eq!(
         Err(TranscodeDecodeError::Failure(
             TranscodeFailure::TranscodeAfterFinish,
