@@ -61,7 +61,7 @@ where
                 Ok((value, consumed)) => {
                     return self.accept(value, consumed, available);
                 }
-                Err(DecodeFailure::Incomplete { required_total }) => {
+                Err(DecodeFailure::Incomplete { required_total, .. }) => {
                     assert!(
                         required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                         "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
