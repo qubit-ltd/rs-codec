@@ -2,10 +2,9 @@
 
 [中文](user_guide.zh_CN.md) · [README](../README.md) · [API documentation](https://docs.rs/qubit-codec)
 
-This guide covers `qubit-codec` 0.11 for Rust 1.94 and later. It is for codec
-and adapter authors who need to convert logical values into encoded units, or
-convert encoded units through caller-managed buffers. It does not define a wire
-format or character set.
+This guide documents `qubit-codec` 0.11 for codec and adapter authors who need
+to convert logical values into encoded units, or convert encoded units through
+caller-managed buffers. It does not define a wire format or character set.
 
 ## Purpose and Audience
 
@@ -46,11 +45,20 @@ number or character codec normally starts with `Codec`.
 
 ## Scenario: Publish One Codec at Two Levels
 
-Suppose your crate has a local-value codec and two consumers: one owns a
-complete input and wants owned output; the other supplies reusable buffers.
-Implement `Codec` first, then expose `CodecValueEncoder` /
-`CodecValueDecoder` for the first consumer and `CodecTranscodeEncoder` /
-`CodecTranscodeDecoder` for the strict buffered path.
+Suppose a format crate already has `MyCodec`, an implementation of
+`Codec<Value = u8, Unit = u8>`. One caller owns a complete value and wants an
+owned result; another caller processes many values with a reusable buffer.
+Expose both paths from the same codec. The owned path constructs
+`CodecValueEncoder::new(MyCodec::default())` and calls the
+`ValueEncoder::encode` method. The buffered path constructs
+`CodecTranscodeEncoder::new(MyCodec::default())`, obtains a bound with
+`Transcoder::max_total_output_len`, allocates that many units, and calls
+`Transcoder::transcode_complete_into`. The two returned slices must contain the
+same encoded units.
+
+The format crate supplies its concrete codec and error type; the important
+result is that both paths share the same codec contract and do not duplicate
+cursor or capacity logic.
 
 For unit-to-unit conversion, use `CodecTranscodeConverter` for a strict
 decode-plus-encode pipeline. Use `engine::TranscodeConvertEngine` only when
