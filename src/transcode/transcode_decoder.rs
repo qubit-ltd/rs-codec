@@ -7,7 +7,10 @@
 // =============================================================================
 //! Semantic marker trait for buffered decoders.
 
-use super::{TranscodeDecodeError, Transcoder};
+use super::{
+    TranscodeDecodeError,
+    Transcoder,
+};
 
 /// Decodes encoded units into logical values over caller-provided buffers.
 ///
@@ -18,7 +21,9 @@ use super::{TranscodeDecodeError, Transcoder};
 ///
 /// The word "buffered" describes the caller-managed buffer and progress model.
 /// It does not require the implementor to own an internal buffer.
-pub trait TranscodeDecoder: Transcoder<Error = TranscodeDecodeError<Self::DecodeError>> {
+pub trait TranscodeDecoder:
+    Transcoder<Error = TranscodeDecodeError<Self::DecodeError>>
+{
     /// Domain error type produced by decode internals.
     type DecodeError;
 }

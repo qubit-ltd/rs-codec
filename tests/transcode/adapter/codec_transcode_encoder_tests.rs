@@ -8,8 +8,13 @@
 //! Tests for the codec-backed buffered encoder adapter.
 
 use qubit_codec::{
-    CapacityError, Codec, CodecTranscodeEncoder, TranscodeEncodeError, TranscodeEncoder,
-    TranscodeStatus, Transcoder,
+    CapacityError,
+    Codec,
+    CodecTranscodeEncoder,
+    TranscodeEncodeError,
+    TranscodeEncoder,
+    TranscodeStatus,
+    Transcoder,
 };
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -31,7 +36,10 @@ impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -93,7 +101,10 @@ impl Codec for VariableWidthCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -144,7 +155,10 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<
+        (u8, core::num::NonZeroUsize),
+        qubit_codec::DecodeFailure<Self::DecodeError>,
+    > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -171,7 +185,10 @@ impl Codec for RejectOddCodec {
 
 #[test]
 fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
-    fn assert_transcode_encoder<T: TranscodeEncoder<Input = u8, Output = u8>>() {}
+    fn assert_transcode_encoder<
+        T: TranscodeEncoder<Input = u8, Output = u8>,
+    >() {
+    }
 
     assert_transcode_encoder::<CodecTranscodeEncoder<PairByteCodec>>();
 

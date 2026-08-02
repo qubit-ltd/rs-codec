@@ -88,16 +88,10 @@ use super::decode_failure::DecodeFailure;
 /// and [`decode`](Self::decode) without rebuilding subslices or repeating
 /// bounds checks for every value. The `safe_vs_unchecked` benchmark in
 /// `benches/transcode.rs` compares the same 64 KiB copy loop in release mode.
-/// In the current local run, safe indexing measured about 1.81 µs (33.7 GiB/s)
-/// while explicit `get_unchecked` measured about 1.67 µs (36.6 GiB/s), an
-/// approximately 8% throughput difference. The emitted assembly also retained
-/// a `panic_bounds_check` path for the safe loop because the function type does
-/// not express that the input and output slices have equal lengths; the
-/// unchecked loop had no such loop-side panic path.
-///
-/// These figures are workload- and toolchain-specific, so callers should use
+/// Its result is workload- and toolchain-specific, so callers should use
 /// checked adapters unless they can establish the documented preconditions at
-/// a trusted boundary. Codec implementations should keep the unchecked
+/// a trusted boundary. Measure representative codec workloads before choosing
+/// an unchecked entry point. Codec implementations should keep the unchecked
 /// methods small and use `debug_assert!` for those assumptions.
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
@@ -485,7 +479,8 @@ pub trait Codec {
         &mut self,
         input: &[Self::Unit],
         input_index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>>
+    {
         // SAFETY: `decode_eof` has the same preconditions as `decode`.
         unsafe { self.decode(input, input_index) }
     }

@@ -7,8 +7,15 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
-use super::super::engine::{EncodeContext, EncodeUnencodableAction, TranscodeEncodeHooks};
-use crate::{Codec, TranscodeEncodeErrorOf};
+use super::super::engine::{
+    EncodeContext,
+    EncodeUnencodableAction,
+    TranscodeEncodeHooks,
+};
+use crate::{
+    Codec,
+    TranscodeEncodeErrorOf,
+};
 
 /// Policy hooks for [`crate::CodecTranscodeEncoder`].
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -24,7 +31,8 @@ where
         &mut self,
         _codec: &mut C,
         _context: &EncodeContext<'_, C::Value>,
-    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>> {
+    ) -> Result<EncodeUnencodableAction<C::Value>, TranscodeEncodeErrorOf<C>>
+    {
         Ok(EncodeUnencodableAction::Reject)
     }
 }

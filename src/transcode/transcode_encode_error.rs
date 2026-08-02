@@ -10,7 +10,8 @@
 use thiserror::Error;
 
 use super::{
-    capacity_error::CapacityError, transcode_domain_error::TranscodeDomainError,
+    capacity_error::CapacityError,
+    transcode_domain_error::TranscodeDomainError,
     transcode_failure::TranscodeFailure,
 };
 use crate::Codec;
@@ -120,7 +121,9 @@ impl<E, V> TranscodeEncodeError<E, V> {
     #[must_use]
     pub const fn unencodable_ref(&self) -> Option<(usize, Option<&V>)> {
         match self {
-            Self::Unencodable { input_index, value } => Some((*input_index, value.as_ref())),
+            Self::Unencodable { input_index, value } => {
+                Some((*input_index, value.as_ref()))
+            }
             Self::Failure(_) | Self::Domain(_) => None,
         }
     }
@@ -136,7 +139,9 @@ impl<E, V> TranscodeEncodeError<E, V> {
             Self::Unencodable { input_index, value } => {
                 TranscodeEncodeError::Unencodable { input_index, value }
             }
-            Self::Domain(error) => TranscodeEncodeError::Domain(error.map_source(f)),
+            Self::Domain(error) => {
+                TranscodeEncodeError::Domain(error.map_source(f))
+            }
         }
     }
 
@@ -148,10 +153,12 @@ impl<E, V> TranscodeEncodeError<E, V> {
     {
         match self {
             Self::Failure(failure) => TranscodeEncodeError::Failure(failure),
-            Self::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
-                input_index,
-                value: value.map(f),
-            },
+            Self::Unencodable { input_index, value } => {
+                TranscodeEncodeError::Unencodable {
+                    input_index,
+                    value: value.map(f),
+                }
+            }
             Self::Domain(error) => TranscodeEncodeError::Domain(error),
         }
     }

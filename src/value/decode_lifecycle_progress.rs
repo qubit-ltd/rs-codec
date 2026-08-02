@@ -36,7 +36,11 @@ impl<V> DecodeLifecycleProgress<V> {
     ///
     /// Returns completed lifecycle progress.
     #[inline(always)]
-    pub(crate) const fn new(value: V, reset_written: usize, finish_written: usize) -> Self {
+    pub(crate) const fn new(
+        value: V,
+        reset_written: usize,
+        finish_written: usize,
+    ) -> Self {
         Self {
             value,
             reset_written,

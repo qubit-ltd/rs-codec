@@ -10,7 +10,11 @@
 use core::num::NonZeroUsize;
 
 use super::super::{
-    engine::{DecodeContext, DecodeOutcome, EncodeOutcome},
+    engine::{
+        DecodeContext,
+        DecodeOutcome,
+        EncodeOutcome,
+    },
     transcode_progress::TranscodeProgress,
 };
 use super::transcode_state::TranscodeState;
@@ -48,7 +52,12 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(input, input_index, output, output_index),
+            state: TranscodeState::new(
+                input,
+                input_index,
+                output,
+                output_index,
+            ),
         }
     }
 
@@ -212,7 +221,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
-    pub(crate) fn need_input_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
+    pub(crate) fn need_input_progress(
+        &self,
+        required: NonZeroUsize,
+    ) -> TranscodeProgress {
         self.state.need_input_progress(required)
     }
 
@@ -227,7 +239,10 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
-    pub(crate) fn need_output_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
+    pub(crate) fn need_output_progress(
+        &self,
+        required: NonZeroUsize,
+    ) -> TranscodeProgress {
         self.state.need_output_progress(required)
     }
 
@@ -260,7 +275,9 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
                 self.advance_input(read.get());
                 None
             }
-            DecodeOutcome::NeedInput { required } => Some(self.need_input_progress(required)),
+            DecodeOutcome::NeedInput { required } => {
+                Some(self.need_input_progress(required))
+            }
         }
     }
 

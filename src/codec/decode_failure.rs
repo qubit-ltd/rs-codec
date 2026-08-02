@@ -88,7 +88,10 @@ impl<E> DecodeFailure<E> {
     /// that need detailed EOF diagnostics.
     #[inline(always)]
     #[must_use]
-    pub const fn incomplete_with_source(source: E, required_total: NonZeroUsize) -> Self {
+    pub const fn incomplete_with_source(
+        source: E,
+        required_total: NonZeroUsize,
+    ) -> Self {
         Self::Incomplete {
             source: Some(source),
             required_total,
