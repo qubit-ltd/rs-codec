@@ -7,6 +7,7 @@
 // =============================================================================
 
 mod decode_context;
+mod decode_incomplete_action;
 mod decode_invalid_action;
 mod decode_outcome;
 mod encode_context;
@@ -19,6 +20,10 @@ mod transcode_encode_engine;
 mod transcode_encode_hooks;
 
 pub use decode_context::DecodeContext;
+pub use decode_incomplete_action::{
+    DecodeIncompleteAction,
+    DecodeIncompleteActionOf,
+};
 pub use decode_invalid_action::{
     DecodeInvalidAction,
     DecodeInvalidActionOf,

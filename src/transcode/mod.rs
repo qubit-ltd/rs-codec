@@ -34,6 +34,8 @@ pub use adapter::{
 pub use capacity_error::CapacityError;
 pub use engine::{
     DecodeContext,
+    DecodeIncompleteAction,
+    DecodeIncompleteActionOf,
     DecodeInvalidAction,
     DecodeInvalidActionOf,
     EncodeContext,

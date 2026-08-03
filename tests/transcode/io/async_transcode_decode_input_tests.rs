@@ -181,6 +181,59 @@ impl Transcoder for PairDecoder {
     }
 }
 
+#[derive(Debug, Default)]
+struct EofTailDecoder;
+
+impl Transcoder for EofTailDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, qubit_codec::CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        output[output_index] = u16::from(input[input_index]);
+        Ok(TranscodeProgress::complete(1, 1))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
 /// Decoder with observable lifecycle output.
 #[derive(Debug, Default)]
 struct LifecycleDecoder;
@@ -627,6 +680,33 @@ fn test_async_transcode_decode_input_reads_and_reports_eof() -> io::Result<()> {
             1,
         ))?,
     );
+    Ok(())
+}
+
+#[test]
+fn test_async_transcode_decode_input_transcode_eof_step_consumes_buffered_tail()
+-> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(
+        ChunkedAsyncInput::new(vec![0x5a], 1),
+        1,
+    );
+    assert!(complete(input.fill_more_async())?);
+    let mut decoder = EofTailDecoder;
+    let mut map_error =
+        |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    let progress = input.transcode_eof_step(
+        &mut decoder,
+        &mut map_error,
+        &mut output,
+        0,
+        1,
+    )?;
+
+    assert_eq!(TranscodeProgress::complete(1, 1), progress);
+    assert_eq!([0x5a], output);
+    assert_eq!(0, input.unread_len());
     Ok(())
 }
 
