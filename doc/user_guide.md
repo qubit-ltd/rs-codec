@@ -2,7 +2,7 @@
 
 [中文](user_guide.zh_CN.md) · [README](../README.md) · [API documentation](https://docs.rs/qubit-codec)
 
-This guide covers `qubit-codec` 0.10 and Rust 1.94 or later. It is written for
+This guide covers `qubit-codec` 0.11 and Rust 1.94 or later. It is written for
 authors of codec and adapter crates—not for application developers looking for
 a concrete file format or character set implementation.
 
@@ -121,7 +121,7 @@ not reimplement capacity or lifecycle code.
 
 ```toml
 [dependencies]
-qubit-codec = "0.10"
+qubit-codec = "0.11"
 ```
 
 The default feature set is empty. The scenario above needs no feature. Enable
@@ -129,7 +129,7 @@ The default feature set is empty. The scenario above needs no feature. Enable
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.10", features = ["io"] }
+qubit-codec = { version = "0.11", features = ["io"] }
 ```
 
 ## Core Workflow
@@ -270,12 +270,38 @@ loop and implement hooks:
 
 - `TranscodeEncodeEngine` with `TranscodeEncodeHooks` handles unencodable
   values and encode reset/finish policy.
-- `TranscodeDecodeEngine` with `TranscodeDecodeHooks` handles invalid input.
+- `TranscodeDecodeEngine` with `TranscodeDecodeHooks` handles invalid input
+  and incomplete input after EOF.
 - `TranscodeConvertEngine` composes decode and encode engines with both hook
   sets.
 
 Use a custom `Transcoder` for delayed framing, bespoke stream state, or EOF
 behavior that cannot be expressed by a codec plus hooks.
+
+### EOF-incomplete decode policy
+
+Call `transcode_eof` only after the input source has confirmed EOF. For a
+`TranscodeDecodeEngine`, its hook then receives
+`handle_incomplete_decode`. The default action is `Reject`; it preserves a
+codec-domain incomplete error when one is available and otherwise reports the
+framework's `TranscodeFailure::IncompleteInput`.
+
+Hooks that intentionally recover can return one of the other public actions:
+
+```rust
+use qubit_codec::engine::DecodeIncompleteAction;
+
+let skip = DecodeIncompleteAction::<char>::Skip;
+let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
+```
+
+`Skip` consumes the whole remaining tail without producing a value. `Emit`
+also consumes that tail and writes one replacement value, so the caller must
+provide an output slot. The hook receives `Some(source)` when the codec was
+called and reported incomplete input, and `None` when the tail was shorter than
+`Codec::MIN_UNITS_PER_VALUE`. Format crates can therefore apply one explicit
+EOF policy to both cases without treating an open-stream `NeedInput` as an
+error.
 
 ### Byte order and I/O
 
@@ -285,11 +311,11 @@ These types describe byte-order policy; they do not implement a concrete
 integer codec.
 
 With feature `io`, `TranscodeDecodeInput` and `TranscodeEncodeOutput` bridge
-buffered `qubit-io` traits. `AsyncTranscodeDecodeInput` and
-`AsyncTranscodeEncodeOutput` support partial I/O. Each async call performs at
-most one transcoder invocation after required I/O preparation; returned
-progress is already committed. Decoder EOF is the explicit
-`AsyncTranscodeDecodeStep::EndOfInput`.
+buffered `qubit-io` traits. `TranscodeDecodeInput::transcode` applies
+`transcode_eof` to a retained tail after a refill confirms EOF. For explicit
+stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async
+counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call
+`AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
 
 ## Errors and Diagnostics
 
