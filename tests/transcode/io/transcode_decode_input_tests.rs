@@ -102,6 +102,59 @@ impl Codec for FixedPairCodec {
 }
 
 #[derive(Debug, Default)]
+struct EofTailDecoder;
+
+impl Transcoder for EofTailDecoder {
+    type Input = u16;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(
+        &self,
+        input_len: usize,
+    ) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(
+        &mut self,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u16],
+        _input_index: usize,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(crate::nz(2), 0, 0))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        output[output_index] = u32::from(input[input_index]);
+        Ok(TranscodeProgress::complete(1, 1))
+    }
+
+    fn finish(
+        &mut self,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Default)]
 struct ContextualIncompleteReadCodec;
 
 impl Codec for ContextualIncompleteReadCodec {
@@ -1636,18 +1689,15 @@ fn test_buffered_decode_input_reports_refill_errors_after_need_input() {
 }
 
 #[test]
-fn test_buffered_decode_input_returns_partial_values_before_incomplete_eof() {
+fn test_buffered_decode_input_reports_incomplete_eof_after_partial_output() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003]]);
     let mut decoder = PairDecoder;
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
-    let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("partial value should be returned before EOF error");
-    assert_eq!(1, read);
+    let error = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
+        .expect_err("incomplete EOF tail should be reported by the decoder");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
     assert_eq!(0x0001_0002, output[0]);
-    let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("incomplete EOF tail should stay buffered");
-    assert_eq!(0, read);
     assert_eq!(1, input.unread_len());
 }
 
@@ -1657,12 +1707,8 @@ fn test_buffered_decode_input_consumes_incomplete_tail() {
     let mut decoder = PairDecoder;
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
-    let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("partial value should be returned before EOF");
-    assert_eq!(1, read);
-    let read = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("incomplete EOF tail should stay buffered");
-    assert_eq!(0, read);
+    let _ = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
+        .expect_err("incomplete EOF tail should stay buffered after rejection");
     assert_eq!(1, input.unread_len());
 
     input.consume(1);
@@ -1679,9 +1725,7 @@ fn test_buffered_decode_input_consume_available_discards_tail() {
     let mut input = TranscodeDecodeInput::with_capacity(input, 3);
     let mut output = [0_u32; 2];
     let _ = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("partial value should be returned before EOF");
-    let _ = decode_with(&mut input, &mut decoder, &mut output, 0, 2)
-        .expect("incomplete EOF tail should stay buffered");
+        .expect_err("incomplete EOF tail should stay buffered after rejection");
 
     let available = input.unread_len();
     input.consume(available);
@@ -1903,6 +1947,26 @@ fn test_buffered_decode_input_transcode_step_reports_progress_and_eof() {
         .transcode_step(&mut decoder, &mut mapper, &mut output, 2, 1)
         .expect_err("an invalid step output range should fail");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_decode_input_transcode_eof_step_consumes_buffered_tail() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![0x1234]]),
+        1,
+    );
+    assert!(input.fill_until(1).expect("buffer the EOF tail"));
+    let mut decoder = EofTailDecoder;
+    let mut mapper = map_error;
+    let mut output = [0_u32; 1];
+
+    let progress = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+        .expect("EOF step should decode and consume the buffered tail");
+
+    assert_eq!(TranscodeProgress::complete(1, 1), progress);
+    assert_eq!([0x1234], output);
+    assert_eq!(0, input.unread_len());
 }
 
 /// Verifies that a decoder reset rejects an undersized output range.

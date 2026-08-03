@@ -107,6 +107,8 @@ mod value;
 pub mod engine {
     pub use crate::transcode::{
         DecodeContext,
+        DecodeIncompleteAction,
+        DecodeIncompleteActionOf,
         DecodeInvalidAction,
         DecodeInvalidActionOf,
         EncodeContext,

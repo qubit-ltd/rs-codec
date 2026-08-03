@@ -388,6 +388,62 @@ where
         Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(progress)))
     }
 
+    /// Performs one decode step after the caller has established EOF.
+    ///
+    /// This method performs no I/O. It passes the current unread buffer to
+    /// [`Transcoder::transcode_eof`], validates progress, and commits consumed
+    /// source units before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid output-range errors, or decoder errors mapped by
+    /// `map_error`.
+    pub fn transcode_eof_step<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<TranscodeProgress>
+    where
+        D: Transcoder<Input = I::Item, Output = Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        let output_end = UncheckedSlice::checked_range_end(
+            output.len(),
+            output_index,
+            count,
+            "decoded EOF output range exceeds destination buffer",
+        )?;
+        if count == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if self.unread_len() == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        let available_input = self.unread_len();
+        let progress = decoder
+            .transcode_eof(
+                self.unread(),
+                0,
+                &mut output[..output_end],
+                output_index,
+            )
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
+            })?;
+        self.consume(progress.read());
+        Ok(progress)
+    }
+
     /// Decodes one cancellation-safe progress step into an indexed output
     /// range.
     ///

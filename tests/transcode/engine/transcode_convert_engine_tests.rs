@@ -15,6 +15,7 @@ use std::rc::Rc;
 
 use qubit_codec::engine::{
     DecodeContext,
+    DecodeIncompleteAction,
     DecodeInvalidAction,
     EncodeContext,
     EncodeUnencodableAction,
@@ -37,6 +38,9 @@ use qubit_codec::{
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SourceCodec;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct ShortSourceCodec;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct TargetCodec;
@@ -98,6 +102,39 @@ impl Codec for SourceCodec {
         unsafe {
             *output.get_unchecked_mut(output_index) = *value;
         }
+        Ok(1)
+    }
+}
+
+impl Codec for ShortSourceCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = EngineError;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
+    {
+        Ok((
+            input[input_index].wrapping_add(input[input_index + 1]),
+            crate::nz(2),
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
         Ok(1)
     }
 }
@@ -524,6 +561,55 @@ impl TranscodeDecodeHooks<SourceCodec> for StrictDecodeHooks {
             EngineError::Decode | EngineError::Encode => {
                 unreachable!("SourceCodec should not produce decode errors")
             }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EofIncompleteMode {
+    Emit,
+    Skip,
+    Reject,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct EofIncompleteDecodeHooks {
+    mode: EofIncompleteMode,
+}
+
+impl TranscodeDecodeHooks<ShortSourceCodec> for EofIncompleteDecodeHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut ShortSourceCodec,
+        _error: &EngineError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<ShortSourceCodec>,
+    > {
+        Ok(DecodeInvalidAction::Reject)
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut ShortSourceCodec,
+        source: Option<&EngineError>,
+        required_total: NonZeroUsize,
+        context: DecodeContext,
+    ) -> Result<
+        DecodeIncompleteAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<ShortSourceCodec>,
+    > {
+        assert_eq!(None, source);
+        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(1, context.available());
+        match self.mode {
+            EofIncompleteMode::Emit => {
+                Ok(DecodeIncompleteAction::Emit { value: 77 })
+            }
+            EofIncompleteMode::Skip => Ok(DecodeIncompleteAction::Skip),
+            EofIncompleteMode::Reject => Ok(DecodeIncompleteAction::Reject),
         }
     }
 }
@@ -1155,6 +1241,76 @@ fn test_transcode_convert_engine_exposes_codecs_hooks_and_parts() {
     assert_eq!(TargetCodec, target);
     assert_eq!(StrictDecodeHooks, decode_hooks);
     assert_eq!(StrictEncodeHooks, encode_hooks);
+}
+
+#[test]
+fn test_transcode_convert_engine_applies_incomplete_eof_replacement() {
+    let mut engine = TranscodeConvertEngine::new(
+        ShortSourceCodec,
+        TargetCodec,
+        EofIncompleteDecodeHooks {
+            mode: EofIncompleteMode::Emit,
+        },
+        StrictEncodeHooks,
+    );
+    engine.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [0_u8; 1];
+
+    let progress = engine
+        .transcode_eof(&[0x5a], 0, &mut output, 0)
+        .expect("EOF replacement should pass through the target encoder");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([77], output);
+}
+
+#[test]
+fn test_transcode_convert_engine_skips_incomplete_eof_tail() {
+    let mut engine = TranscodeConvertEngine::new(
+        ShortSourceCodec,
+        TargetCodec,
+        EofIncompleteDecodeHooks {
+            mode: EofIncompleteMode::Skip,
+        },
+        StrictEncodeHooks,
+    );
+    engine.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [];
+
+    let progress = engine
+        .transcode_eof(&[0x5a], 0, &mut output, 0)
+        .expect("EOF skip should consume the tail");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
+}
+
+#[test]
+fn test_transcode_convert_engine_rejects_incomplete_eof_tail() {
+    let mut engine = TranscodeConvertEngine::new(
+        ShortSourceCodec,
+        TargetCodec,
+        EofIncompleteDecodeHooks {
+            mode: EofIncompleteMode::Reject,
+        },
+        StrictEncodeHooks,
+    );
+    engine.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [];
+
+    let error = engine
+        .transcode_eof(&[0x5a], 0, &mut output, 0)
+        .expect_err("default EOF policy should reject the tail");
+
+    assert_eq!(
+        TranscodeConvertError::Failure(TranscodeFailure::incomplete_input(
+            0, 2, 1
+        )),
+        error,
+    );
 }
 
 fn new_error_path_engine(

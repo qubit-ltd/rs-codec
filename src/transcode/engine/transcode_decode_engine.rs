@@ -16,6 +16,7 @@ use super::super::internal::{
 };
 use super::{
     DecodeContext,
+    DecodeIncompleteAction,
     DecodeInvalidAction,
     DecodeOutcome,
     TranscodeDecodeHooks,
@@ -51,8 +52,9 @@ use crate::{
 /// The engine stops before reading an incomplete value when fewer than
 /// [`Codec::MIN_UNITS_PER_VALUE`] units are available. For variable-width
 /// codecs, the codec may still return an incomplete decode error after that
-/// minimum is satisfied; the engine converts that failure directly into
-/// [`crate::TranscodeStatus::NeedInput`].
+/// minimum is satisfied. Both conditions return
+/// [`crate::TranscodeStatus::NeedInput`] while the stream is open; at EOF the
+/// hook selects whether to reject, skip, or replace the remaining tail.
 ///
 /// For strict decoding that wraps codec errors, use
 /// [`crate::CodecTranscodeDecoder`]. Use `TranscodeDecodeEngine` directly when
@@ -497,7 +499,57 @@ where
             let context = state.context();
             let available = context.available();
             if available < min_units_len {
-                return Ok(state.need_input_progress_with(min_units));
+                if !end_of_input {
+                    return Ok(state.need_input_progress_with(min_units));
+                }
+                match self.hooks.handle_incomplete_decode(
+                    &mut self.codec,
+                    None,
+                    min_units,
+                    context,
+                )? {
+                    DecodeIncompleteAction::Reject => {
+                        return Err(TranscodeFailure::incomplete_input(
+                            context.input_index(),
+                            min_units.get(),
+                            available,
+                        )
+                        .into());
+                    }
+                    DecodeIncompleteAction::Skip => {
+                        let read = NonZeroUsize::new(available).expect(
+                            "incomplete decode tail must contain source units",
+                        );
+                        if let Some(progress) = state
+                            .apply_decode_outcome(DecodeOutcome::skipped(read))
+                        {
+                            return Ok(progress);
+                        }
+                        continue;
+                    }
+                    DecodeIncompleteAction::Emit { value } => {
+                        if state.needs_output() {
+                            return Ok(state.need_output_progress());
+                        }
+                        let output_index = state.output_cursor();
+                        // SAFETY: `needs_output()` returned false, so the
+                        // output cursor points at a writable initialized slot.
+                        unsafe {
+                            *state
+                                .output_mut()
+                                .get_unchecked_mut(output_index) = value;
+                        }
+                        let read = NonZeroUsize::new(available).expect(
+                            "incomplete decode tail must contain source units",
+                        );
+                        if let Some(progress) = state.apply_decode_outcome(
+                            DecodeOutcome::emitted(read, NonZeroUsize::MIN),
+                        ) {
+                            return Ok(progress);
+                        }
+                        continue;
+                    }
+                }
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
@@ -666,9 +718,48 @@ where
         F: FnOnce(C::Value, usize) -> R,
     {
         debug_assert!(
-            context.available() >= C::MIN_UNITS_PER_VALUE,
-            "decode_one requires at least Codec::MIN_UNITS_PER_VALUE input units",
+            context.available() > 0,
+            "decode_one requires at least one source input unit",
         );
+
+        if context.available() < C::MIN_UNITS_PER_VALUE {
+            let required_total = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE)
+                .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+            if !end_of_input {
+                return Ok((DecodeOutcome::need_input(required_total), None));
+            }
+            return match self.hooks.handle_incomplete_decode(
+                &mut self.codec,
+                None,
+                required_total,
+                context,
+            )? {
+                DecodeIncompleteAction::Reject => {
+                    Err(TranscodeFailure::incomplete_input(
+                        context.input_index(),
+                        required_total.get(),
+                        context.available(),
+                    )
+                    .into())
+                }
+                DecodeIncompleteAction::Skip => {
+                    let read = NonZeroUsize::new(context.available()).expect(
+                        "incomplete decode tail must contain source units",
+                    );
+                    Ok((DecodeOutcome::skipped(read), None))
+                }
+                DecodeIncompleteAction::Emit { value } => {
+                    let read = NonZeroUsize::new(context.available()).expect(
+                        "incomplete decode tail must contain source units",
+                    );
+                    let consumed_value = consume(value, context.input_index());
+                    Ok((
+                        DecodeOutcome::emitted(read, NonZeroUsize::MIN),
+                        Some(consumed_value),
+                    ))
+                }
+            };
+        }
 
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
         // units available from `context.input_index()`.
@@ -707,8 +798,19 @@ where
                     required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                     "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                 );
-                if end_of_input {
-                    match source {
+                if !end_of_input {
+                    return Ok((
+                        DecodeOutcome::need_input(required_total),
+                        None,
+                    ));
+                }
+                match self.hooks.handle_incomplete_decode(
+                    &mut self.codec,
+                    source.as_ref(),
+                    required_total,
+                    context,
+                )? {
+                    DecodeIncompleteAction::Reject => match source {
                         Some(source) => Err(TranscodeDecodeError::domain_main(
                             source,
                             context.input_index(),
@@ -719,9 +821,22 @@ where
                             context.available(),
                         )
                         .into()),
+                    },
+                    DecodeIncompleteAction::Skip => {
+                        let read = NonZeroUsize::new(context.available())
+                            .expect("incomplete decode tail must contain source units");
+                        Ok((DecodeOutcome::skipped(read), None))
                     }
-                } else {
-                    Ok((DecodeOutcome::need_input(required_total), None))
+                    DecodeIncompleteAction::Emit { value } => {
+                        let read = NonZeroUsize::new(context.available())
+                            .expect("incomplete decode tail must contain source units");
+                        let consumed_value =
+                            consume(value, context.input_index());
+                        Ok((
+                            DecodeOutcome::emitted(read, NonZeroUsize::MIN),
+                            Some(consumed_value),
+                        ))
+                    }
                 }
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {

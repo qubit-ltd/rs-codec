@@ -709,7 +709,7 @@ where
         let min_input_len = min_input_units.get();
         while state.has_input() {
             let available = state.available_input();
-            if available < min_input_len {
+            if available < min_input_len && !end_of_input {
                 return Ok(state.need_input_progress(min_input_units));
             }
 

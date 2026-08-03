@@ -233,6 +233,62 @@ where
         Ok(Some(progress))
     }
 
+    /// Performs one decode step after the caller has established EOF.
+    ///
+    /// This method does not read from the wrapped input. It passes the current
+    /// unread buffer to [`Transcoder::transcode_eof`], validates the returned
+    /// progress, and commits consumed source units before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid output-range errors, or decoder errors mapped by
+    /// `map_error`.
+    pub fn transcode_eof_step<D, M, Value>(
+        &mut self,
+        decoder: &mut D,
+        map_error: &mut M,
+        output: &mut [Value],
+        output_index: usize,
+        count: usize,
+    ) -> Result<TranscodeProgress>
+    where
+        D: Transcoder<Input = I::Item, Output = Value>,
+        M: FnMut(D::Error) -> Error,
+    {
+        let output_end = UncheckedSlice::checked_range_end(
+            output.len(),
+            output_index,
+            count,
+            "decoded EOF output range exceeds destination buffer",
+        )?;
+        if count == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if self.unread_len() == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        let available_input = self.unread_len();
+        let progress = decoder
+            .transcode_eof(
+                self.unread(),
+                0,
+                &mut output[..output_end],
+                output_index,
+            )
+            .map_err(&mut *map_error)
+            .and_then(|progress| {
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
+            })?;
+        self.consume(progress.read());
+        Ok(progress)
+    }
+
     /// Consumes unread units from the current buffer window.
     ///
     /// # Parameters
@@ -608,9 +664,9 @@ where
     ///
     /// # Returns
     ///
-    /// The number of values written. Incomplete EOF tails are left buffered
-    /// and reported as `Ok(written)`, so callers can apply their own EOF
-    /// policy.
+    /// The number of values written. Once a refill confirms EOF, any retained
+    /// tail is passed to [`Transcoder::transcode_eof`] before this method
+    /// returns.
     ///
     /// # Errors
     ///
@@ -673,6 +729,15 @@ where
                     if self.fill_until(required.get())? {
                         continue;
                     }
+                    let remaining_output = count - written_total;
+                    let eof_progress = self.transcode_eof_step(
+                        decoder,
+                        map_error,
+                        output,
+                        output_index + written_total,
+                        remaining_output,
+                    )?;
+                    written_total += eof_progress.written();
                     return Ok(written_total);
                 }
             }
