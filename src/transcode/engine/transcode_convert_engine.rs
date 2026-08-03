@@ -352,6 +352,58 @@ where
         self.encode_engine.codec_mut()
     }
 
+    /// Returns the decode hooks used by this engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the decode hooks owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub const fn decode_hooks(&self) -> &DH {
+        self.decode_engine.hooks()
+    }
+
+    /// Returns the decode hooks mutably.
+    ///
+    /// Mutating the returned hooks does not reset the converter or clear a
+    /// pending value. The replacement hooks must continue to satisfy their
+    /// global output-capacity contract for every reachable converter state.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the decode hooks owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn decode_hooks_mut(&mut self) -> &mut DH {
+        self.decode_engine.hooks_mut()
+    }
+
+    /// Returns the encode hooks used by this engine.
+    ///
+    /// # Returns
+    ///
+    /// Returns a shared reference to the encode hooks owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub const fn encode_hooks(&self) -> &EH {
+        self.encode_engine.hooks()
+    }
+
+    /// Returns the encode hooks mutably.
+    ///
+    /// Mutating the returned hooks does not reset the converter or clear a
+    /// pending value. The replacement hooks must continue to satisfy their
+    /// global output-capacity contract for every reachable converter state.
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to the encode hooks owned by this engine.
+    #[inline(always)]
+    #[must_use]
+    pub fn encode_hooks_mut(&mut self) -> &mut EH {
+        self.encode_engine.hooks_mut()
+    }
+
     /// Consumes the engine and returns its codecs and hooks.
     ///
     /// Any pending value and lifecycle state owned by the converter are
