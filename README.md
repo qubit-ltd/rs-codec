@@ -17,7 +17,7 @@ policy-ready conversion loops.
 
 ```toml
 [dependencies]
-qubit-codec = "0.10"
+qubit-codec = "0.11"
 ```
 
 The default feature set is empty. Enable `io` only for the `qubit-io` buffered
@@ -25,7 +25,7 @@ bridges:
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.10", features = ["io"] }
+qubit-codec = { version = "0.11", features = ["io"] }
 ```
 
 The minimum supported Rust version is 1.94.
@@ -114,7 +114,7 @@ mechanics shared while leaving domain rules in the format crate that owns them.
 | Low-level value/unit contract | `Codec`, `DecodeFailure` |
 | Owned whole-value conversion | `ValueEncoder`, `ValueDecoder`, `CodecValueEncoder`, `CodecValueDecoder` |
 | Strict caller-buffered conversion | `Transcoder`, `CodecTranscodeEncoder`, `CodecTranscodeDecoder`, `CodecTranscodeConverter` |
-| Policy-aware conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and hooks |
+| Policy-aware conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and hooks including `DecodeIncompleteAction` |
 | Progress and backpressure | `TranscodeProgress`, `TranscodeStatus` |
 | Runtime or static byte order | `ByteOrder`, `ByteOrderSpec`, `BigEndian`, `LittleEndian`, `NativeEndian` |
 | `qubit-io` bridges with `io` | Sync and partial-I/O async transcode input/output adapters |
@@ -131,6 +131,8 @@ mechanics shared while leaving domain rules in the format crate that owns them.
 - A `Transcoder` follows `reset -> transcode/transcode_eof -> finish`.
   `NeedInput` leaves its tail with the caller; `NeedOutput` requires more
   destination capacity; `Complete` means all visible input was consumed.
+- `TranscodeDecodeHooks::handle_incomplete_decode` lets decode engines choose
+  `Reject`, `Skip`, or `Emit` for an incomplete tail only after EOF is known.
 - Capacity bounds must cover every reachable transient state. Owned adapters
   may allocate; streaming APIs use caller-provided buffers.
 

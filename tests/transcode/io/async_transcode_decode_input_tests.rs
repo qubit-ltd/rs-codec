@@ -707,6 +707,31 @@ fn test_async_transcode_decode_input_transcode_eof_step_consumes_buffered_tail()
     assert_eq!(TranscodeProgress::complete(1, 1), progress);
     assert_eq!([0x5a], output);
     assert_eq!(0, input.unread_len());
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input.transcode_eof_step(
+            &mut decoder,
+            &mut map_error,
+            &mut output,
+            0,
+            0,
+        )?,
+    );
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input.transcode_eof_step(
+            &mut decoder,
+            &mut map_error,
+            &mut output,
+            0,
+            1,
+        )?,
+    );
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut map_error, &mut output, 1, 1)
+        .expect_err("invalid EOF output range must fail");
+    assert_eq!(io::ErrorKind::InvalidInput, error.kind());
     Ok(())
 }
 
@@ -738,6 +763,19 @@ fn test_async_transcode_decode_input_maps_refill_errors() -> io::Result<()> {
     let mut input = AsyncTranscodeDecodeInput::new(FailingAsyncInput);
     let error = complete(input.fill_more_async())
         .expect_err("input failure must be preserved");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+
+    let mut input = AsyncTranscodeDecodeInput::new(FailingAsyncInput);
+    let mut decoder = PairDecoder;
+    let mut output = [0_u16; 1];
+    let error = complete(input.transcode_async(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        0,
+        1,
+    ))
+    .expect_err("decode refill failure must be preserved");
     assert_eq!(io::ErrorKind::Other, error.kind());
 
     let mut input =
