@@ -1143,8 +1143,12 @@ fn test_transcode_convert_engine_exposes_codecs_hooks_and_parts() {
 
     assert_eq!(&SourceCodec, engine.source_codec());
     assert_eq!(&TargetCodec, engine.target_codec());
+    assert_eq!(&StrictDecodeHooks, engine.decode_hooks());
+    assert_eq!(&StrictEncodeHooks, engine.encode_hooks());
     *engine.source_codec_mut() = SourceCodec;
     *engine.target_codec_mut() = TargetCodec;
+    *engine.decode_hooks_mut() = StrictDecodeHooks;
+    *engine.encode_hooks_mut() = StrictEncodeHooks;
 
     let (source, target, decode_hooks, encode_hooks) = engine.into_parts();
     assert_eq!(SourceCodec, source);
