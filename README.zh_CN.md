@@ -16,14 +16,14 @@
 
 ```toml
 [dependencies]
-qubit-codec = "0.10"
+qubit-codec = "0.11"
 ```
 
 默认 feature 集为空。只有使用 `qubit-io` 缓冲 bridge 时才启用 `io`：
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.10", features = ["io"] }
+qubit-codec = { version = "0.11", features = ["io"] }
 ```
 
 最低支持的 Rust 版本为 1.94。
@@ -109,7 +109,7 @@ adapter、畸形输入策略和 I/O 集成。若每层各自实现下标、容�
 | 底层 value/unit 契约 | `Codec`、`DecodeFailure` |
 | 自有完整值转换 | `ValueEncoder`、`ValueDecoder`、`CodecValueEncoder`、`CodecValueDecoder` |
 | 严格的调用方缓冲区转换 | `Transcoder`、`CodecTranscodeEncoder`、`CodecTranscodeDecoder`、`CodecTranscodeConverter` |
-| 带策略的转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 与 hooks |
+| 带策略的转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 与 hooks（包括 `DecodeIncompleteAction`）|
 | 进度与背压 | `TranscodeProgress`、`TranscodeStatus` |
 | 运行时或静态字节序 | `ByteOrder`、`ByteOrderSpec`、`BigEndian`、`LittleEndian`、`NativeEndian` |
 | 启用 `io` 后的 `qubit-io` bridge | 同步及部分 I/O 异步 transcode input/output adapter |
@@ -125,6 +125,8 @@ adapter、畸形输入策略和 I/O 集成。若每层各自实现下标、容�
 - `Transcoder` 遵循 `reset -> transcode/transcode_eof -> finish`。`NeedInput`
   将尾部留给调用方；`NeedOutput` 要求更多目标容量；`Complete` 表示所有可见输入均
   已消费。
+- `TranscodeDecodeHooks::handle_incomplete_decode` 仅在确认 EOF 后为不完整尾部选择
+  `Reject`、`Skip` 或 `Emit`。
 - 容量上界必须覆盖所有可达瞬态。自有输出 adapter 可能分配内存；流式 API 使用
   调用方提供的缓冲区。
 

@@ -2,7 +2,7 @@
 
 [English](user_guide.md) · [README](../README.zh_CN.md) · [API 文档](https://docs.rs/qubit-codec)
 
-本手册适用于 `qubit-codec` 0.10 和 Rust 1.94 及以上版本，面向 codec 与 adapter
+本手册适用于 `qubit-codec` 0.11 和 Rust 1.94 及以上版本，面向 codec 与 adapter
 crate 作者，而不是寻找某种具体文件格式或字符集实现的应用开发者。
 
 ## 手册目标与读者
@@ -112,7 +112,7 @@ checked adapter 随即提供两个发布层次；格式 crate 无需重复实现
 
 ```toml
 [dependencies]
-qubit-codec = "0.10"
+qubit-codec = "0.11"
 ```
 
 默认 feature 集为空，上述场景不需要任何 feature。只有使用 `qubit-io` bridge 时才
@@ -120,7 +120,7 @@ qubit-codec = "0.10"
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.10", features = ["io"] }
+qubit-codec = { version = "0.11", features = ["io"] }
 ```
 
 ## 核心工作流
@@ -250,11 +250,33 @@ unit-to-value 使用 `CodecTranscodeDecoder`；严格的 decode-encode 管线使
 
 - `TranscodeEncodeEngine` 与 `TranscodeEncodeHooks` 处理不可编码 value 以及 encode
   reset/finish 策略；
-- `TranscodeDecodeEngine` 与 `TranscodeDecodeHooks` 处理非法输入；
+- `TranscodeDecodeEngine` 与 `TranscodeDecodeHooks` 处理非法输入，以及 EOF 后的
+  不完整输入；
 - `TranscodeConvertEngine` 用两组 hooks 组合 decode 与 encode engine。
 
 对于 codec 与 hooks 无法表达的延迟 framing、专用流状态或 EOF 行为，应实现自定义
 `Transcoder`。
+
+### EOF 不完整 decode 策略
+
+只有在输入源确认 EOF 后才调用 `transcode_eof`。对于
+`TranscodeDecodeEngine`，它随后会调用 hook 的
+`handle_incomplete_decode`。默认动作为 `Reject`：若 codec 提供不完整输入的领域错误，
+该错误会被保留；否则返回框架错误 `TranscodeFailure::IncompleteInput`。
+
+需要恢复的 hook 可返回其他公开动作：
+
+```rust
+use qubit_codec::engine::DecodeIncompleteAction;
+
+let skip = DecodeIncompleteAction::<char>::Skip;
+let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
+```
+
+`Skip` 会消费整个剩余尾部但不产生 value。`Emit` 同样消费整个尾部，并写入一个替代
+value，因此调用方必须提供一个输出槽位。若 codec 已被调用并报告输入不完整，hook 收到
+`Some(source)`；若尾部短于 `Codec::MIN_UNITS_PER_VALUE`，则收到 `None`。因此格式
+crate 可以为两种情形应用同一个明确的 EOF 策略，而无需把开放流中的 `NeedInput` 视为错误。
 
 ### 字节序与 I/O
 
@@ -262,9 +284,11 @@ unit-to-value 使用 `CodecTranscodeDecoder`；严格的 decode-encode 管线使
 `LittleEndian` 或 `NativeEndian`。这些类型描述字节序策略，但不实现具体整数 codec。
 
 启用 `io` feature 后，`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 桥接缓冲式
-`qubit-io` trait；`AsyncTranscodeDecodeInput` 与 `AsyncTranscodeEncodeOutput` 支持
-部分 I/O。每次异步调用在必要的 I/O 准备后至多调用一次 transcoder，返回的 progress
-已经提交。decoder EOF 由显式的 `AsyncTranscodeDecodeStep::EndOfInput` 表示。
+`qubit-io` trait。`TranscodeDecodeInput::transcode` 在 refill 确认 EOF 后，会将保留
+尾部交给 `transcode_eof`；需要显式逐步控制时使用
+`TranscodeDecodeInput::transcode_eof_step`。异步对应物会报告
+`AsyncTranscodeDecodeStep::EndOfInput`，随后在 `finish` 前调用
+`AsyncTranscodeDecodeInput::transcode_eof_step`。
 
 ## 错误与诊断
 

@@ -1960,6 +1960,13 @@ fn test_buffered_decode_input_transcode_eof_step_consumes_buffered_tail() {
     let mut mapper = map_error;
     let mut output = [0_u32; 1];
 
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 0)
+            .expect("zero-count EOF step should complete immediately"),
+    );
+
     let progress = input
         .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
         .expect("EOF step should decode and consume the buffered tail");
@@ -1967,6 +1974,36 @@ fn test_buffered_decode_input_transcode_eof_step_consumes_buffered_tail() {
     assert_eq!(TranscodeProgress::complete(1, 1), progress);
     assert_eq!([0x1234], output);
     assert_eq!(0, input.unread_len());
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+            .expect("empty EOF step should complete immediately"),
+    );
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 1, 1)
+        .expect_err("invalid EOF output range must fail");
+    assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_decode_input_transcode_uses_eof_for_a_short_tail() {
+    let mut input = TranscodeDecodeInput::with_capacity(
+        ChunkedInput::new(vec![vec![0x1234]]),
+        1,
+    );
+    let mut decoder = EofTailDecoder;
+    let mut mapper = map_error;
+    let mut output = [0_u32; 1];
+
+    assert_eq!(
+        1,
+        input
+            .transcode(&mut decoder, &mut mapper, &mut output, 0, 1)
+            .expect("streaming transcode should resolve the EOF tail"),
+    );
+    assert_eq!([0x1234], output);
 }
 
 /// Verifies that a decoder reset rejects an undersized output range.
