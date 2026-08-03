@@ -8,7 +8,10 @@
 
 use std::{
     io::Cursor,
-    io::{Error, ErrorKind},
+    io::{
+        Error,
+        ErrorKind,
+    },
 };
 
 use core::num::NonZeroUsize;
@@ -136,7 +139,9 @@ fn test_codec_decode_driver_rejects_satisfied_eof_incomplete_hint() {
 
     let error = input
         .read_decoded_with(&mut codec, Error::other)
-        .expect_err("EOF codec must not report an already satisfied incomplete hint");
+        .expect_err(
+            "EOF codec must not report an already satisfied incomplete hint",
+        );
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("available window"));
