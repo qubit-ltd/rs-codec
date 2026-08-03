@@ -11,6 +11,7 @@ use core::num::NonZeroUsize;
 
 use super::{
     decode_context::DecodeContext,
+    decode_incomplete_action::DecodeIncompleteAction,
     decode_invalid_action::DecodeInvalidAction,
 };
 use crate::{
@@ -28,20 +29,21 @@ use crate::{
 /// Implement this trait when a buffered decoder needs policy decisions after
 /// the low-level codec reports an error. The engine handles input/output cursor
 /// bookkeeping, output-capacity checks, and successful one-value decodes; hooks
-/// decide whether invalid input should be skipped, replaced, or returned as an
-/// error.
+/// decide whether invalid or EOF-incomplete input should be skipped, replaced,
+/// or returned as an error.
 ///
 /// The hook receives a [`DecodeContext`] with absolute input/output cursors, so
 /// errors can include useful positions without duplicating engine arithmetic.
 /// Stateful hooks may also use [`finish_hooks`](Self::finish_hooks) to emit
-/// final values after the caller has supplied all input and handled any
-/// incomplete tail.
+/// final values after the caller has supplied all input and completed EOF
+/// decoding.
 ///
 /// # Example
 ///
 /// This hook replaces malformed units with `b'?'` and otherwise lets the engine
-/// keep decoding. Incomplete input is reported by
-/// [`crate::DecodeFailure`] before policy hooks are called.
+/// keep decoding. At EOF, implementations may also override
+/// [`Self::handle_incomplete_decode`] to repair or discard a trailing partial
+/// value.
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;
@@ -226,6 +228,41 @@ where
         consumed: Option<NonZeroUsize>,
         context: DecodeContext,
     ) -> Result<DecodeInvalidAction<C::Value>, TranscodeDecodeErrorOf<C>>;
+
+    /// Handles a codec value left incomplete after end of input.
+    ///
+    /// The engine calls this method only from `transcode_eof`. `source` is the
+    /// codec-domain context attached to [`crate::DecodeFailure::Incomplete`],
+    /// or `None` when the engine stopped before calling the codec because the
+    /// available tail is shorter than [`Codec::MIN_UNITS_PER_VALUE`].
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Low-level codec owned by the engine.
+    /// - `source`: Optional domain error explaining the incomplete tail.
+    /// - `required_total`: Minimum source units required to retry decoding.
+    /// - `context`: Decode attempt context.
+    ///
+    /// # Returns
+    ///
+    /// Returns the EOF policy action. `Skip` and `Emit` consume every source
+    /// unit available in `context`; `Emit` additionally requires one writable
+    /// output slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::TranscodeDecodeError`] when policy evaluation fails.
+    #[inline(always)]
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut C,
+        _source: Option<&C::DecodeError>,
+        _required_total: NonZeroUsize,
+        _context: DecodeContext,
+    ) -> Result<DecodeIncompleteAction<C::Value>, TranscodeDecodeErrorOf<C>>
+    {
+        Ok(DecodeIncompleteAction::Reject)
+    }
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///

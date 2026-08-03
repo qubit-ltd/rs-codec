@@ -62,7 +62,7 @@ where
             .try_reserve_capacity(min_units_per_value)
             .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
         loop {
-            let available = self.prepare_buffered_window(
+            let (available, end_of_input) = self.prepare_buffered_window(
                 min_units_per_value,
                 max_units_per_value,
             )?;
@@ -70,8 +70,13 @@ where
             debug_assert!(units.len() >= min_units_per_value);
             let decode_result = unsafe {
                 // SAFETY: `min_units_per_value <= units.len()` guarantees
-                // `decode` preconditions for this slice.
-                codec.decode(units, 0)
+                // the selected decode entry point's preconditions for this
+                // slice.
+                if end_of_input {
+                    codec.decode_eof(units, 0)
+                } else {
+                    codec.decode(units, 0)
+                }
             };
             match decode_result {
                 Ok((value, consumed)) => {
@@ -85,10 +90,14 @@ where
                         required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                         "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                     );
-                    if !self
-                        .refill_after_incomplete(required_total, available)?
-                    {
+                    if end_of_input {
                         let available = self.input.unread_len();
+                        if required_total.get() <= available {
+                            return Err(Error::new(
+                                ErrorKind::InvalidData,
+                                "codec reported incomplete input within available window",
+                            ));
+                        }
                         // SAFETY: `available` is the current unread length.
                         unsafe {
                             self.input.consume(available);
@@ -100,6 +109,56 @@ where
                                 "failed to decode complete value",
                             )),
                         };
+                    }
+                    if !self
+                        .refill_after_incomplete(required_total, available)?
+                    {
+                        let available = self.input.unread_len();
+                        let units = &self.input.unread()[..available];
+                        let eof_result = unsafe {
+                            // SAFETY: the original decode established that at
+                            // least the codec minimum units remain available.
+                            codec.decode_eof(units, 0)
+                        };
+                        match eof_result {
+                            Ok((value, consumed)) => {
+                                return self.accept(value, consumed, available);
+                            }
+                            Err(DecodeFailure::Invalid {
+                                source,
+                                consumed,
+                            }) => {
+                                return self.reject::<C, M>(
+                                    source, consumed, available, map_error,
+                                );
+                            }
+                            Err(DecodeFailure::Incomplete {
+                                source,
+                                required_total,
+                            }) => {
+                                assert!(
+                                    required_total.get()
+                                        <= C::MAX_DECODE_UNITS_PER_VALUE,
+                                    "Codec::decode_eof incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
+                                );
+                                if required_total.get() <= available {
+                                    return Err(Error::new(
+                                        ErrorKind::InvalidData,
+                                        "codec reported incomplete input within available window",
+                                    ));
+                                }
+                                unsafe {
+                                    self.input.consume(available);
+                                }
+                                return match source {
+                                    Some(source) => Err(map_error(source)),
+                                    None => Err(Error::new(
+                                        ErrorKind::UnexpectedEof,
+                                        "failed to decode complete value",
+                                    )),
+                                };
+                            }
+                        }
                     }
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
@@ -116,11 +175,15 @@ where
         &mut self,
         min_units_per_value: usize,
         max_units_per_value: usize,
-    ) -> Result<usize> {
+    ) -> Result<(usize, bool)> {
+        let mut end_of_input = false;
         let available = self.input.unread_len();
         if available < min_units_per_value
             && !self.input.fill_until(min_units_per_value)?
         {
+            end_of_input = true;
+        }
+        if self.input.unread_len() < min_units_per_value {
             let available = self.input.unread_len();
             // SAFETY: `available` is the current unread length.
             unsafe {
@@ -134,10 +197,14 @@ where
 
         if self.input.unread_len() < max_units_per_value
             && max_units_per_value <= self.input.capacity()
+            && !self.input.fill_until(max_units_per_value)?
         {
-            let _ = self.input.fill_until(max_units_per_value)?;
+            end_of_input = true;
         }
-        Ok(self.input.unread_len().min(max_units_per_value))
+        Ok((
+            self.input.unread_len().min(max_units_per_value),
+            end_of_input,
+        ))
     }
 
     /// Accepts a decoded value and consumes its source units.

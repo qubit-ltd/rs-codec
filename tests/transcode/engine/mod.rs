@@ -7,6 +7,7 @@
 // =============================================================================
 
 mod decode_context_tests;
+mod decode_incomplete_action_tests;
 mod decode_invalid_action_tests;
 mod decode_outcome_tests;
 mod encode_context_tests;

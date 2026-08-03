@@ -15,6 +15,7 @@ use std::rc::Rc;
 
 use qubit_codec::engine::{
     DecodeContext,
+    DecodeIncompleteAction,
     DecodeInvalidAction,
     TranscodeDecodeEngine,
     TranscodeDecodeHooks,
@@ -438,6 +439,40 @@ impl TranscodeDecodeHooks<PrefixCodec> for ReplacingHooks {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct EofReplacingHooks;
+
+impl TranscodeDecodeHooks<PrefixCodec> for EofReplacingHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        _error: &PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
+    > {
+        Ok(DecodeInvalidAction::Reject)
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        source: Option<&PrefixDecodeError>,
+        required_total: NonZeroUsize,
+        context: DecodeContext,
+    ) -> Result<
+        DecodeIncompleteAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
+    > {
+        assert_eq!(Some(&PrefixDecodeError::Invalid { consumed: 1 }), source,);
+        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(1, context.available());
+        Ok(DecodeIncompleteAction::Emit { value: 99 })
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct OverconsumingHooks;
 
 impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
@@ -816,6 +851,40 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct EofSkippingHooks;
+
+impl TranscodeDecodeHooks<MinTwoCodec> for EofSkippingHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut MinTwoCodec,
+        _error: &PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<
+        DecodeInvalidAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<MinTwoCodec>,
+    > {
+        Ok(DecodeInvalidAction::Reject)
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut MinTwoCodec,
+        source: Option<&PrefixDecodeError>,
+        required_total: NonZeroUsize,
+        context: DecodeContext,
+    ) -> Result<
+        DecodeIncompleteAction<u8>,
+        qubit_codec::TranscodeDecodeErrorOf<MinTwoCodec>,
+    > {
+        assert_eq!(None, source);
+        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(1, context.available());
+        Ok(DecodeIncompleteAction::Skip)
+    }
+}
+
 #[test]
 fn test_transcode_decode_engine_exposes_codec_hooks_and_parts() {
     let mut engine = TranscodeDecodeEngine::new(PrefixCodec, ReplacingHooks);
@@ -1116,6 +1185,78 @@ fn test_transcode_decode_engine_preserves_incomplete_source_at_eof() {
         ),
         error,
     );
+}
+
+#[test]
+fn test_transcode_decode_engine_applies_emit_policy_to_incomplete_eof() {
+    let mut decoder =
+        TranscodeDecodeEngine::new(PrefixCodec, EofReplacingHooks);
+    decoder.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [0_u8; 1];
+
+    let progress = decoder
+        .transcode_eof(&[0xfe], 0, &mut output, 0)
+        .expect("EOF incomplete policy should emit replacement");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([99], output);
+}
+
+#[test]
+fn test_transcode_decode_engine_applies_skip_policy_to_short_eof_tail() {
+    let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, EofSkippingHooks);
+    decoder.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [];
+
+    let progress = decoder
+        .transcode_eof(&[7], 0, &mut output, 0)
+        .expect("EOF short-tail policy should skip input");
+
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
+}
+
+#[test]
+fn test_transcode_decode_engine_rejects_short_eof_tail_by_default() {
+    let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
+    decoder.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [];
+
+    let error = decoder
+        .transcode_eof(&[7], 0, &mut output, 0)
+        .expect_err("default incomplete policy should reject the EOF tail");
+
+    assert_eq!(
+        TranscodeDecodeError::Failure(TranscodeFailure::incomplete_input(
+            0, 2, 1
+        )),
+        error,
+    );
+}
+
+#[test]
+fn test_transcode_decode_engine_keeps_incomplete_eof_tail_when_emit_needs_output()
+ {
+    let mut decoder =
+        TranscodeDecodeEngine::new(PrefixCodec, EofReplacingHooks);
+    decoder.reset(&mut [], 0).expect("initialize stream");
+    let mut output = [];
+
+    let progress = decoder
+        .transcode_eof(&[0xfe], 0, &mut output, 0)
+        .expect("replacement should wait for output capacity");
+
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            required: NonZeroUsize::MIN,
+        },
+        progress.status(),
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]
