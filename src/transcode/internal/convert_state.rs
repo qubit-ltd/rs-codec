@@ -218,7 +218,8 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///   bound.
     /// # Returns
     ///
-    /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedInput`].
+    /// Returns [`TranscodeProgress`] with
+    /// [`crate::TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
     pub(crate) fn need_input_progress(
@@ -236,7 +237,8 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     ///   position.
     /// # Returns
     ///
-    /// Returns [`TranscodeProgress`] with [`TranscodeStatus::NeedOutput`].
+    /// Returns [`TranscodeProgress`] with
+    /// [`crate::TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
     pub(crate) fn need_output_progress(
