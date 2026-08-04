@@ -188,10 +188,10 @@ where
     ///
     /// `D::Value: Default` is required so the engine can allocate scratch
     /// storage for any stream-start values the source decoder emits through
-    /// [`Codec::decode_reset`](crate::Codec::decode_reset) before they are
+    /// [`Codec::decode_reset`] before they are
     /// piped through the target encoder. Stateless decoders never reach the
     /// allocating path; the bound is consulted only when
-    /// [`Codec::MAX_DECODE_RESET_VALUES`](crate::Codec::MAX_DECODE_RESET_VALUES)
+    /// [`Codec::MAX_DECODE_RESET_VALUES`]
     /// is non-zero.
     ///
     /// # Parameters
