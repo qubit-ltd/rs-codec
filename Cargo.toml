@@ -1,6 +1,6 @@
 [package]
 name = "qubit-codec"
-version = "0.11.0"
+version = "0.11.1"
 edition = "2024"
 rust-version = "1.94"
 autotests = false
@@ -18,12 +18,11 @@ include = [
     "/LICENSE",
     "/README.md",
     "/README.zh_CN.md",
-    "/benches/**",
-    "/doc/**/user_guide*.md",
-    "/examples/**",
-    "/resources/**",
     "/src/**",
+    "/doc/**",
+    "/examples/**",
     "/tests/**",
+    "/benches/**",
 ]
 
 [package.metadata.rs-ci]
