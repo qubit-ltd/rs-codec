@@ -181,7 +181,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// # Returns
     ///
-    /// Returns progress with [`TranscodeStatus::NeedOutput`].
+    /// Returns progress with [`crate::TranscodeStatus::NeedOutput`].
     #[inline(always)]
     pub(in crate::transcode) fn need_output_progress(
         &self,

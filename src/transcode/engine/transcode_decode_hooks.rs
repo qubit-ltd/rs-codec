@@ -266,7 +266,7 @@ where
 
     /// Runs hook-owned cleanup as part of stream reset.
     ///
-    /// Called before [`Codec::decode_reset`](crate::Codec::decode_reset)
+    /// Called before [`Codec::decode_reset`]
     /// writes its own reset output. Stateless hooks may use the default no-op.
     ///
     /// # Parameters
@@ -284,7 +284,7 @@ where
     /// `output_index`. Implementations must not write beyond that declared
     /// final-output bound.
     ///
-    /// Called after [`Codec::decode_finish`](crate::Codec::decode_finish) has
+    /// Called after [`Codec::decode_finish`] has
     /// written its own finish output.
     ///
     /// # Parameters
