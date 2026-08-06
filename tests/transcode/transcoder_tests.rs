@@ -132,7 +132,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(read, written))
         } else {
             let status = TranscodeStatus::NeedOutput {
-                required: crate::nz(1),
+                required: crate::nonzero(1),
             };
             Ok(TranscodeProgress::new(status, read, written))
         }
@@ -324,7 +324,7 @@ impl Transcoder for PairTranscoder {
             }
             return Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedInput {
-                    required: crate::nz(2),
+                    required: crate::nonzero(2),
                 },
                 complete_len,
                 complete_len / 2,
@@ -395,7 +395,7 @@ impl Transcoder for NeedInputEofTranscoder {
         output[output_index] = input[input_index];
         Ok(TranscodeProgress::new(
             TranscodeStatus::NeedInput {
-                required: qubit_codec::nz(2),
+                required: qubit_utils::nonzero(2),
             },
             1,
             1,

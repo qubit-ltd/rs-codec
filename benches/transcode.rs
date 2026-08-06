@@ -126,7 +126,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(count, count))
         } else {
             Ok(TranscodeProgress::need_output(
-                qubit_codec::nz(1),
+                qubit_utils::nonzero(1),
                 count,
                 count,
             ))

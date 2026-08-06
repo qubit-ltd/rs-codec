@@ -208,7 +208,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -260,7 +260,7 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );

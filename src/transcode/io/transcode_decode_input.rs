@@ -23,8 +23,8 @@ use qubit_io::{
     BufferedInput,
     Input,
     Seekable,
-    UncheckedSlice,
 };
+use qubit_utils::UncheckedSlice;
 
 use crate::{
     Codec,

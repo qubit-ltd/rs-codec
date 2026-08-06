@@ -71,13 +71,13 @@ impl Codec for PrefixCodec {
             0xfe if input.len() - input_index < 2 => {
                 Err(qubit_codec::DecodeFailure::incomplete_with_source(
                     PrefixDecodeError::Invalid { consumed: 1 },
-                    crate::nz(2),
+                    crate::nonzero(2),
                 ))
             }
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(input_index + 1) };
-                Ok((value, crate::nz(2)))
+                Ok((value, crate::nonzero(2)))
             }
             0xff => Err(qubit_codec::DecodeFailure::invalid(
                 PrefixDecodeError::Invalid { consumed: 1 },
@@ -123,7 +123,9 @@ impl Codec for EofAwarePrefixCodec {
     ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
     {
         if input[input_index] == 0xfe && input.len() - input_index == 1 {
-            return Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)));
+            return Err(qubit_codec::DecodeFailure::incomplete(
+                crate::nonzero(2),
+            ));
         }
         Ok((input[input_index], NonZeroUsize::MIN))
     }
@@ -238,7 +240,7 @@ impl Codec for HintOnlyCodec {
         match input[input_index] {
             0xaa => Err(qubit_codec::DecodeFailure::invalid(
                 HintOnlyDecodeError::Invalid,
-                crate::nz(2),
+                crate::nonzero(2),
             )),
             value => Ok((value, NonZeroUsize::MIN)),
         }
@@ -321,7 +323,7 @@ impl Codec for OverlongIncompleteCodec {
         _input_index: usize,
     ) -> Result<(u8, NonZeroUsize), qubit_codec::DecodeFailure<Self::DecodeError>>
     {
-        Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
+        Err(qubit_codec::DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -466,7 +468,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for EofReplacingHooks {
         qubit_codec::TranscodeDecodeErrorOf<PrefixCodec>,
     > {
         assert_eq!(Some(&PrefixDecodeError::Invalid { consumed: 1 }), source,);
-        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(crate::nonzero(2), required_total);
         assert_eq!(1, context.available());
         Ok(DecodeIncompleteAction::Emit { value: 99 })
     }
@@ -879,7 +881,7 @@ impl TranscodeDecodeHooks<MinTwoCodec> for EofSkippingHooks {
         qubit_codec::TranscodeDecodeErrorOf<MinTwoCodec>,
     > {
         assert_eq!(None, source);
-        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(crate::nonzero(2), required_total);
         assert_eq!(1, context.available());
         Ok(DecodeIncompleteAction::Skip)
     }
@@ -1151,7 +1153,7 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
 
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -1295,7 +1297,7 @@ fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_ta
 
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -1320,7 +1322,7 @@ fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output()
 
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -1364,7 +1366,7 @@ fn test_transcode_decode_engine_reports_need_output_before_policy_emit() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -1472,7 +1474,7 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input()
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -2285,7 +2287,7 @@ fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
         TranscodeDecodeError::domain_main_with_consumed(
             PrefixDecodeError::Invalid { consumed: 1 },
             0,
-            Some(crate::nz(1)),
+            Some(crate::nonzero(1)),
         ),
         error,
     );

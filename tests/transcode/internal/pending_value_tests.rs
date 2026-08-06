@@ -28,7 +28,7 @@ fn test_pending_value_retains_source_position_when_output_is_short() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );

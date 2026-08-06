@@ -7,7 +7,7 @@
 // =============================================================================
 
 mod identity_codec;
-mod nz;
+mod nonzero;
 
 pub(crate) use identity_codec::IdentityCodec;
-pub(crate) use nz::nz;
+pub(crate) use nonzero::nonzero;

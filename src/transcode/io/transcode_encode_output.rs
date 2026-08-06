@@ -26,8 +26,8 @@ use qubit_io::{
     BufferedOutput,
     Output,
     Seekable,
-    UncheckedSlice,
 };
+use qubit_utils::UncheckedSlice;
 
 use crate::{
     CapacityError,

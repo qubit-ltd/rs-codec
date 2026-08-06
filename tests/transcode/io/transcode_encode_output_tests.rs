@@ -61,7 +61,7 @@ impl Codec for HugeEncodeBoundCodec {
         input_index: usize,
     ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Ok((input[input_index], crate::nz(1)))
+        Ok((input[input_index], crate::nonzero(1)))
     }
 
     unsafe fn encode(
@@ -135,7 +135,7 @@ impl Codec for CompleteEncodeLifecycleCodec {
         input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
+        Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn encode(
@@ -194,7 +194,7 @@ impl Codec for ResetWidthCodec {
         input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
+        Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn encode(
@@ -301,7 +301,7 @@ impl Transcoder for PairEncoder {
             }
             if output_index + written + 2 > output.len() {
                 return Ok(TranscodeProgress::need_output(
-                    crate::nz(2),
+                    crate::nonzero(2),
                     read,
                     written,
                 ));
@@ -416,7 +416,7 @@ impl Transcoder for FinishEncoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
+            return Ok(TranscodeProgress::need_output(crate::nonzero(1), 0, 0));
         }
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::complete(1, 1))
@@ -752,7 +752,7 @@ impl Transcoder for NeedInputEncoder {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_input(crate::nz(2), 0, 0))
+        Ok(TranscodeProgress::need_input(crate::nonzero(2), 0, 0))
     }
 
     noop_finish!(u16);
@@ -865,7 +865,7 @@ impl Transcoder for NeedOutputAfterReadEncoder {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_output(crate::nz(1), 1, 0))
+        Ok(TranscodeProgress::need_output(crate::nonzero(1), 1, 0))
     }
 
     noop_finish!(u16);
@@ -900,7 +900,7 @@ impl Transcoder for NeedOutputAfterWriteEncoder {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
         output[output_index] = input[input_index] as u16;
-        Ok(TranscodeProgress::need_output(crate::nz(1), 1, 1))
+        Ok(TranscodeProgress::need_output(crate::nonzero(1), 1, 1))
     }
 
     noop_finish!(u16);
@@ -935,7 +935,7 @@ impl Transcoder for NeedOutputAfterReadPastCapacityEncoder {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
         output[output_index] = input[input_index] as u16;
-        Ok(TranscodeProgress::need_output(crate::nz(2), 1, 1))
+        Ok(TranscodeProgress::need_output(crate::nonzero(2), 1, 1))
     }
 
     noop_finish!(u16);
@@ -978,17 +978,21 @@ impl Transcoder for PrefixBeforeReadEncoder {
         }
         if !self.emitted_prefix {
             if output_index == output.len() {
-                return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
+                return Ok(TranscodeProgress::need_output(
+                    crate::nonzero(1),
+                    0,
+                    0,
+                ));
             }
             output[output_index] = 0xaaaa;
             self.emitted_prefix = true;
-            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 1));
+            return Ok(TranscodeProgress::need_output(crate::nonzero(1), 0, 1));
         }
         if input_index == input.len() {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0));
+            return Ok(TranscodeProgress::need_output(crate::nonzero(1), 0, 0));
         }
         output[output_index] = input[input_index] as u16;
         Ok(TranscodeProgress::complete(1, 1))
@@ -1096,7 +1100,7 @@ impl Transcoder for OverflowingNeedOutputEncoder {
         if input_index > input.len() {
             return Err(domain(PairEncodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_output(crate::nz(1), 0, 0))
+        Ok(TranscodeProgress::need_output(crate::nonzero(1), 0, 0))
     }
 
     noop_finish!(u16);
@@ -1823,7 +1827,7 @@ impl Codec for ScriptedEncodeCodec {
         input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
+        Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn encode(
@@ -2034,7 +2038,7 @@ impl Codec for OverflowEncodeBoundCodec {
         input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Ok((u32::from(input[input_index]), crate::nz(1)))
+        Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn encode(

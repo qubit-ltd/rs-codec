@@ -30,7 +30,7 @@ fn test_encode_state_stops_before_input_when_output_is_full() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );

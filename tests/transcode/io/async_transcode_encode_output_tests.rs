@@ -151,7 +151,7 @@ impl Transcoder for CopyEncoder {
             Ok(TranscodeProgress::complete(written, written))
         } else {
             Ok(TranscodeProgress::need_output(
-                qubit_codec::nz(1),
+                qubit_utils::nonzero(1),
                 written,
                 written,
             ))
@@ -305,7 +305,7 @@ impl Transcoder for NeedInputEncoder {
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0))
+        Ok(TranscodeProgress::need_input(qubit_utils::nonzero(2), 0, 0))
     }
 
     fn finish(
@@ -414,7 +414,7 @@ fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending(
 
     complete(output.reset_async(&mut encoder, &mut map_error))?;
     assert_eq!(
-        TranscodeProgress::need_output(qubit_codec::nz(1), 1, 1),
+        TranscodeProgress::need_output(qubit_utils::nonzero(1), 1, 1),
         complete(output.transcode_async(
             &mut encoder,
             &mut map_error,
@@ -464,7 +464,7 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending()
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(progress)) => {
             assert_eq!(
-                TranscodeProgress::need_output(qubit_codec::nz(1), 1, 1),
+                TranscodeProgress::need_output(qubit_utils::nonzero(1), 1, 1),
                 progress,
             );
         }

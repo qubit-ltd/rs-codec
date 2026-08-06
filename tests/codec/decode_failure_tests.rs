@@ -58,7 +58,7 @@ impl Codec for PlainCodec {
 
 #[test]
 fn test_decode_failure_reports_incomplete_control_flow() {
-    let required_total = crate::nz(3);
+    let required_total = crate::nonzero(3);
     let failure =
         DecodeFailure::<DomainDecodeError>::incomplete(required_total);
 
@@ -70,7 +70,7 @@ fn test_decode_failure_reports_incomplete_control_flow() {
 
 #[test]
 fn test_decode_failure_preserves_incomplete_domain_error() {
-    let required_total = crate::nz(3);
+    let required_total = crate::nonzero(3);
     let failure = DecodeFailure::incomplete_with_source(
         DomainDecodeError,
         required_total,
@@ -89,7 +89,7 @@ fn test_decode_failure_preserves_incomplete_domain_error() {
 
 #[test]
 fn test_decode_failure_reports_invalid_domain_error() {
-    let consumed = crate::nz(2);
+    let consumed = crate::nonzero(2);
     let failure = DecodeFailure::invalid(DomainDecodeError, consumed);
 
     assert_eq!(DecodeFailure::invalid(DomainDecodeError, consumed), failure);

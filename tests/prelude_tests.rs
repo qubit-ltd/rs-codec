@@ -206,7 +206,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     assert_eq!(TranscodeStatus::Complete, progress.status());
     let _: DecodeInvalidActionOf<EchoCodec> = DecodeInvalidAction::Emit {
         value: 1,
-        consumed: crate::nz(1),
+        consumed: crate::nonzero(1),
     };
     let _: EncodeUnencodableActionOf<EchoCodec> =
         EncodeUnencodableAction::Replace { value: 1 };

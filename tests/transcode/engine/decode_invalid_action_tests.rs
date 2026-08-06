@@ -12,20 +12,20 @@ use qubit_codec::engine::DecodeInvalidAction;
 fn test_decode_invalid_action_variants_are_public() {
     assert_eq!(
         DecodeInvalidAction::<u8>::Skip {
-            consumed: crate::nz(1),
+            consumed: crate::nonzero(1),
         },
         DecodeInvalidAction::Skip {
-            consumed: crate::nz(1),
+            consumed: crate::nonzero(1),
         },
     );
     assert_eq!(
         DecodeInvalidAction::Emit {
             value: 7_u8,
-            consumed: crate::nz(1),
+            consumed: crate::nonzero(1),
         },
         DecodeInvalidAction::Emit {
             value: 7,
-            consumed: crate::nz(1),
+            consumed: crate::nonzero(1),
         },
     );
 }

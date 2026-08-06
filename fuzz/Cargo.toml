@@ -10,7 +10,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-qubit-codec = { path = "..", version = "0.11", features = ["io"] }
+qubit-utils = { path = "../../rs-utils", version = "0.2" }
+qubit-codec = { path = "..", version = "0.12", features = ["io"] }
 
 [[bin]]
 name = "transcode_encode_output_lifecycle"

@@ -113,7 +113,7 @@ impl Transcoder for MarkerDecoder {
         }
         if output_index == output.len() {
             return Ok(TranscodeProgress::need_output(
-                qubit_codec::nz(1),
+                qubit_utils::nonzero(1),
                 0,
                 0,
             ));

@@ -157,11 +157,15 @@ impl Transcoder for PairDecoder {
         let available_input = input.len() - input_index;
         let available_output = output.len() - output_index;
         if available_input < 2 {
-            return Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0));
+            return Ok(TranscodeProgress::need_input(
+                qubit_utils::nonzero(2),
+                0,
+                0,
+            ));
         }
         if available_output == 0 {
             return Ok(TranscodeProgress::need_output(
-                qubit_codec::nz(1),
+                qubit_utils::nonzero(1),
                 0,
                 0,
             ));
@@ -211,7 +215,7 @@ impl Transcoder for EofTailDecoder {
         _output: &mut [u16],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(qubit_codec::nz(2), 0, 0))
+        Ok(TranscodeProgress::need_input(qubit_utils::nonzero(2), 0, 0))
     }
 
     fn transcode_eof(
@@ -458,7 +462,7 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix()
 
     assert_eq!(
         AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(
-            qubit_codec::nz(2),
+            qubit_utils::nonzero(2),
             0,
             0,
         )),

@@ -10,9 +10,8 @@
 mod byte_order;
 mod codec;
 mod common;
-mod nz_tests;
 mod prelude_tests;
 mod transcode;
 mod value;
 
-pub(crate) use common::nz;
+pub(crate) use common::nonzero;

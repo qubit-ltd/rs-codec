@@ -113,7 +113,7 @@ impl Transcoder for MarkerEncoder {
             return Ok(TranscodeProgress::complete(copied, copied));
         }
         Ok(TranscodeProgress::need_output(
-            qubit_codec::nz(1),
+            qubit_utils::nonzero(1),
             copied,
             copied,
         ))

@@ -43,7 +43,8 @@ fn test_decode_error_wraps_framework_and_domain_errors() {
 
 #[test]
 fn test_decode_error_maps_decode_failure() {
-    let incomplete = DecodeFailure::<DomainError>::incomplete(crate::nz(4));
+    let incomplete =
+        DecodeFailure::<DomainError>::incomplete(crate::nonzero(4));
     assert_eq!(
         qubit_codec::TranscodeDecodeError::Failure(
             qubit_codec::TranscodeFailure::incomplete_input(2, 4, 1)
@@ -51,12 +52,12 @@ fn test_decode_error_maps_decode_failure() {
         TranscodeDecodeError::from_decode_failure(incomplete, 2, 1),
     );
 
-    let invalid = DecodeFailure::invalid(DomainError, crate::nz(1));
+    let invalid = DecodeFailure::invalid(DomainError, crate::nonzero(1));
     assert_eq!(
         TranscodeDecodeError::domain_main_with_consumed(
             DomainError,
             5,
-            Some(crate::nz(1)),
+            Some(crate::nonzero(1)),
         ),
         TranscodeDecodeError::from_decode_failure(invalid, 5, 3),
     );
@@ -65,7 +66,7 @@ fn test_decode_error_maps_decode_failure() {
 #[test]
 fn test_decode_error_preserves_incomplete_domain_source_at_eof() {
     let incomplete =
-        DecodeFailure::incomplete_with_source(DomainError, crate::nz(4));
+        DecodeFailure::incomplete_with_source(DomainError, crate::nonzero(4));
 
     assert_eq!(
         TranscodeDecodeError::domain_main(DomainError, 2),

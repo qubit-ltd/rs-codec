@@ -124,7 +124,7 @@ impl Codec for ShortSourceCodec {
     {
         Ok((
             input[input_index].wrapping_add(input[input_index + 1]),
-            crate::nz(2),
+            crate::nonzero(2),
         ))
     }
 
@@ -602,7 +602,7 @@ impl TranscodeDecodeHooks<ShortSourceCodec> for EofIncompleteDecodeHooks {
         qubit_codec::TranscodeDecodeErrorOf<ShortSourceCodec>,
     > {
         assert_eq!(None, source);
-        assert_eq!(crate::nz(2), required_total);
+        assert_eq!(crate::nonzero(2), required_total);
         assert_eq!(1, context.available());
         match self.mode {
             EofIncompleteMode::Emit => {
@@ -1622,7 +1622,7 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -1651,7 +1651,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
         .expect("conversion should retain decoded value when output is empty");
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -1662,7 +1662,7 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
     );
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );

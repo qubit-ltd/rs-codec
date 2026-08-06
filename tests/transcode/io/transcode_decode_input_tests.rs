@@ -82,11 +82,11 @@ impl Codec for FixedPairCodec {
     {
         let available = input.len().saturating_sub(input_index);
         if available < 2 {
-            return Err(DecodeFailure::incomplete(crate::nz(2)));
+            return Err(DecodeFailure::incomplete(crate::nonzero(2)));
         }
         let high = input[input_index] as u32;
         let low = input[input_index + 1] as u32;
-        Ok(((high << 16) | low, crate::nz(2)))
+        Ok(((high << 16) | low, crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -131,7 +131,7 @@ impl Transcoder for EofTailDecoder {
         _output: &mut [u32],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(crate::nz(2), 0, 0))
+        Ok(TranscodeProgress::need_input(crate::nonzero(2), 0, 0))
     }
 
     fn transcode_eof(
@@ -175,7 +175,7 @@ impl Codec for ContextualIncompleteReadCodec {
     {
         Err(DecodeFailure::incomplete_with_source(
             PairDecodeError::BadInputIndex,
-            crate::nz(2),
+            crate::nonzero(2),
         ))
     }
 
@@ -243,7 +243,7 @@ impl Codec for DecodeLifecycleCodec {
     {
         assert_eq!(1, self.state, "decode must run after reset");
         self.state = 2;
-        Ok((u32::from(input[input_index]), crate::nz(1)))
+        Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn decode_finish(
@@ -299,7 +299,7 @@ impl Codec for NonDefaultValueCodec {
         (Self::Value, core::num::NonZeroUsize),
         DecodeFailure<Self::DecodeError>,
     > {
-        Ok((NonDefaultValue(input[input_index]), crate::nz(1)))
+        Ok((NonDefaultValue(input[input_index]), crate::nonzero(1)))
     }
 
     unsafe fn encode(
@@ -406,7 +406,7 @@ impl Transcoder for PairDecoder {
         while input_index + read + 1 < input.len() {
             if output_index + written == output.len() {
                 return Ok(TranscodeProgress::need_output(
-                    crate::nz(1),
+                    crate::nonzero(1),
                     read,
                     written,
                 ));
@@ -421,7 +421,11 @@ impl Transcoder for PairDecoder {
         if available == 0 {
             Ok(TranscodeProgress::complete(read, written))
         } else {
-            Ok(TranscodeProgress::need_input(crate::nz(2), read, written))
+            Ok(TranscodeProgress::need_input(
+                crate::nonzero(2),
+                read,
+                written,
+            ))
         }
     }
 
@@ -946,7 +950,7 @@ impl Transcoder for OverflowingNeedInputDecoder {
         if input_index > input.len() {
             return Err(domain(PairDecodeError::BadInputIndex));
         }
-        Ok(TranscodeProgress::need_input(crate::nz(1), 0, 0))
+        Ok(TranscodeProgress::need_input(crate::nonzero(1), 0, 0))
     }
 
     noop_finish!(u32);
@@ -2094,7 +2098,7 @@ impl Codec for InvalidPairReadCodec {
         let _ = input[input_index];
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
-            crate::nz(1),
+            crate::nonzero(1),
         ))
     }
 
@@ -2132,12 +2136,12 @@ impl Codec for GrowingPairReadCodec {
     {
         let available = input.len().saturating_sub(input_index);
         if !self.pass && available < 4 {
-            return Err(DecodeFailure::incomplete(crate::nz(4)));
+            return Err(DecodeFailure::incomplete(crate::nonzero(4)));
         }
         self.pass = true;
         let high = input[input_index] as u32;
         let low = input[input_index + 1] as u32;
-        Ok(((high << 16) | low, crate::nz(2)))
+        Ok(((high << 16) | low, crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -2292,11 +2296,11 @@ impl Codec for PartialWindowIncompleteCodec {
     {
         let available = input.len().saturating_sub(input_index);
         if available < 4 {
-            return Err(DecodeFailure::incomplete(crate::nz(4)));
+            return Err(DecodeFailure::incomplete(crate::nonzero(4)));
         }
         let high = input[input_index] as u32;
         let low = input[input_index + 1] as u32;
-        Ok(((high << 16) | low, crate::nz(2)))
+        Ok(((high << 16) | low, crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -2329,7 +2333,7 @@ impl Codec for OverlongIncompleteReadCodec {
         _input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Err(DecodeFailure::incomplete(crate::nz(3)))
+        Err(DecodeFailure::incomplete(crate::nonzero(3)))
     }
 
     unsafe fn encode(
@@ -2422,24 +2426,24 @@ impl Codec for ScratchGrowingReadCodec {
         let available = input.len().saturating_sub(input_index);
         match self.mode {
             ScratchReadMode::GrowThenSucceed if available < 3 => {
-                return Err(DecodeFailure::incomplete(crate::nz(3)));
+                return Err(DecodeFailure::incomplete(crate::nonzero(3)));
             }
             ScratchReadMode::StuckIncomplete => {
-                return Err(DecodeFailure::incomplete(crate::nz(2)));
+                return Err(DecodeFailure::incomplete(crate::nonzero(2)));
             }
             ScratchReadMode::Overconsume => {
-                return Ok((0, crate::nz(5)));
+                return Ok((0, crate::nonzero(5)));
             }
             ScratchReadMode::Invalid => {
                 return Err(DecodeFailure::invalid(
                     PairDecodeError::BadInputIndex,
-                    crate::nz(1),
+                    crate::nonzero(1),
                 ));
             }
             ScratchReadMode::InvalidOverconsume => {
                 return Err(DecodeFailure::invalid(
                     PairDecodeError::BadInputIndex,
-                    crate::nz(5),
+                    crate::nonzero(5),
                 ));
             }
             ScratchReadMode::InvalidUnknown => {
@@ -2451,7 +2455,7 @@ impl Codec for ScratchGrowingReadCodec {
         }
         let high = input[input_index] as u32;
         let low = input[input_index + 1] as u32;
-        Ok(((high << 16) | low, crate::nz(2)))
+        Ok(((high << 16) | low, crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -2501,9 +2505,9 @@ impl Codec for ScratchByteCodec {
     {
         let available = input.len().saturating_sub(input_index);
         if available < 3 {
-            return Err(DecodeFailure::incomplete(crate::nz(3)));
+            return Err(DecodeFailure::incomplete(crate::nonzero(3)));
         }
-        Ok((input[input_index], crate::nz(2)))
+        Ok((input[input_index], crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -3021,7 +3025,7 @@ impl Codec for AlwaysIncompleteReadCodec {
         _input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Err(DecodeFailure::incomplete(crate::nz(4)))
+        Err(DecodeFailure::incomplete(crate::nonzero(4)))
     }
 
     unsafe fn encode(
@@ -3054,7 +3058,7 @@ impl Codec for StuckIncompleteReadCodec {
         _input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Err(DecodeFailure::incomplete(crate::nz(2)))
+        Err(DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -3196,7 +3200,7 @@ impl Codec for ImpossibleIncompleteMainLoopCodec {
         _input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Err(DecodeFailure::incomplete(crate::nz(2)))
+        Err(DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -3313,7 +3317,7 @@ impl Codec for IncompleteBeyondBufferReadCodec {
         _input_index: usize,
     ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
     {
-        Err(DecodeFailure::incomplete(crate::nz(4)))
+        Err(DecodeFailure::incomplete(crate::nonzero(4)))
     }
 
     unsafe fn encode(

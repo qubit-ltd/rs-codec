@@ -53,7 +53,7 @@ fn test_convert_error_accessors_mapping_and_validation() {
     let decode_consumed: Convert = Convert::decode_domain_main_with_consumed(
         "decode",
         3,
-        Some(crate::nz(1)),
+        Some(crate::nonzero(1)),
     );
     let decode_finish: Convert = Convert::decode_domain_finish("decode finish");
     let encode_reset: Convert = Convert::encode_domain_reset("encode reset");
@@ -206,7 +206,7 @@ fn test_convert_error_accessors_mapping_and_validation() {
         Convert::<char>::decode_domain_main_with_consumed(
             "decode",
             3,
-            Some(crate::nz(1))
+            Some(crate::nonzero(1))
         )
     );
 

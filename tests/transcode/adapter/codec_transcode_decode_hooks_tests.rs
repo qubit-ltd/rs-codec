@@ -130,7 +130,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         TranscodeDecodeError::domain_main_with_consumed(
             InvalidByteError,
             0,
-            Some(crate::nz(1)),
+            Some(crate::nonzero(1)),
         ),
         error,
     );

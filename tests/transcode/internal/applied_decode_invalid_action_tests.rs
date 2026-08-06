@@ -10,7 +10,7 @@ use qubit_codec::engine::DecodeInvalidAction;
 
 #[test]
 fn test_decode_invalid_actions_preserve_consumption_and_replacement() {
-    let consumed = crate::nz(2);
+    let consumed = crate::nonzero(2);
     let skip = DecodeInvalidAction::<u8>::Skip { consumed };
     let replacement = DecodeInvalidAction::Emit {
         value: b'?',

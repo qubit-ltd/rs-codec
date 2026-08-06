@@ -27,8 +27,8 @@ use qubit_io::{
     AsyncBufferedOutput,
     AsyncOutput,
     Buffer,
-    UncheckedSlice,
 };
+use qubit_utils::UncheckedSlice;
 
 use crate::{
     CapacityError,

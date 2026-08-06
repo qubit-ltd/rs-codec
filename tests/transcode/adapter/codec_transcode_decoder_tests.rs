@@ -45,7 +45,7 @@ impl Codec for VariableByteCodec {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(DecodeFailure::incomplete(crate::nz(2)))
+                    Err(DecodeFailure::incomplete(crate::nonzero(2)))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
@@ -112,7 +112,7 @@ impl Codec for FixedPairCodec {
 
         Ok((
             input[input_index].wrapping_add(input[input_index + 1]),
-            crate::nz(2),
+            crate::nonzero(2),
         ))
     }
 
@@ -240,7 +240,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -265,7 +265,7 @@ fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(1),
+            required: crate::nonzero(1),
         },
         progress.status(),
     );
@@ -304,7 +304,7 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
         .expect("incomplete codec failure should request more input");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -422,7 +422,7 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
         .expect("partial input should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -452,7 +452,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         TranscodeDecodeError::domain_main_with_consumed(
             TestDecodeError::Invalid,
             0,
-            Some(crate::nz(1)),
+            Some(crate::nonzero(1)),
         ),
         error,
     );

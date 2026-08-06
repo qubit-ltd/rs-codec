@@ -47,7 +47,9 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(qubit_codec::DecodeFailure::incomplete(crate::nz(2)))
+                    Err(qubit_codec::DecodeFailure::incomplete(crate::nonzero(
+                        2,
+                    )))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
@@ -586,7 +588,7 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity()
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -659,7 +661,7 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
         .expect("strict converter should classify incomplete input");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -696,7 +698,7 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
 
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -724,7 +726,7 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
 
     assert_eq!(
         TranscodeStatus::NeedOutput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
@@ -830,7 +832,7 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         TranscodeConvertError::decode_domain_main_with_consumed(
             TestDecodeError::Invalid { consumed: 1 },
             0,
-            Some(crate::nz(1)),
+            Some(crate::nonzero(1)),
         ),
         error,
     );
@@ -904,7 +906,7 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
         .expect("partial value should not be retained");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: crate::nz(2),
+            required: crate::nonzero(2),
         },
         progress.status(),
     );
