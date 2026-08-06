@@ -11,32 +11,15 @@ use core::fmt;
 use std::{
     collections::TryReserveError,
     future::poll_fn,
-    io::{
-        Error,
-        ErrorKind,
-        Result,
-    },
+    io::{Error, ErrorKind, Result},
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
-use qubit_io::{
-    AsyncBufferedOutput,
-    AsyncOutput,
-    Buffer,
-};
-use qubit_utils::UncheckedSlice;
+use qubit_io::{AsyncBufferedOutput, AsyncOutput, Buffer};
+use qubit_utils::SliceRange;
 
-use crate::{
-    CapacityError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
+use crate::{CapacityError, TranscodeEncoder, TranscodeProgress, TranscodeStatus, Transcoder};
 
 use super::transcode_progress_validation::validate_encode_progress;
 
@@ -224,8 +207,7 @@ where
             .max_reset_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .reset(units, output_index)
@@ -276,7 +258,7 @@ where
         E: TranscodeEncoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
     {
-        let input_end = UncheckedSlice::checked_range_end(
+        let input_end = SliceRange::checked_range_end(
             input.len(),
             input_index,
             count,
@@ -294,21 +276,16 @@ where
             }
         };
         let required_spare = this.required_spare.max(per_value);
-        let required_capacity =
-            this.output.pending_len().saturating_add(required_spare);
-        if let Err(error) = this.output.try_reserve_capacity(required_capacity)
-        {
+        let required_capacity = this.output.pending_len().saturating_add(required_spare);
+        if let Err(error) = this.output.try_reserve_capacity(required_capacity) {
             return Poll::Ready(Err(allocation_to_io_error(error)));
         }
-        match Pin::new(&mut this.output)
-            .poll_ensure_spare_capacity(cx, required_spare)
-        {
+        match Pin::new(&mut this.output).poll_ensure_spare_capacity(cx, required_spare) {
             Poll::Ready(Ok(())) => {}
             Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
             Poll::Pending => return Poll::Pending,
         }
-        let (units, output_index, available_output) =
-            this.output.spare_raw_parts_mut();
+        let (units, output_index, available_output) = this.output.spare_raw_parts_mut();
         let progress = encoder
             .transcode(input, input_index, units, output_index)
             .map_err(&mut *map_error)
@@ -331,9 +308,7 @@ where
             this.output.advance(progress.written());
         }
         this.required_spare =
-            if let TranscodeStatus::NeedOutput { required, .. } =
-                progress.status()
-            {
+            if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
                 required.get()
             } else {
                 // `validate_encode_progress` rejects `NeedInput` before this
@@ -363,14 +338,7 @@ where
         M: FnMut(E::Error) -> Error,
     {
         poll_fn(|cx| {
-            Pin::new(&mut *self).poll_transcode(
-                cx,
-                encoder,
-                map_error,
-                input,
-                input_index,
-                count,
-            )
+            Pin::new(&mut *self).poll_transcode(cx, encoder, map_error, input, input_index, count)
         })
         .await
     }
@@ -405,8 +373,7 @@ where
             .max_finish_output_len()
             .map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
-        let (units, output_index, available) =
-            self.output.spare_raw_parts_mut();
+        let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
         let written = encoder
             .finish(units, output_index)
@@ -421,10 +388,7 @@ where
 
     /// Reserves enough total buffer capacity and makes `count` spare slots
     /// available for one transcoder operation.
-    async fn ensure_spare_capacity_async(
-        &mut self,
-        count: usize,
-    ) -> Result<()> {
+    async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
         let required_capacity = self.output.pending_len().saturating_add(count);
         self.output
             .try_reserve_capacity(required_capacity)

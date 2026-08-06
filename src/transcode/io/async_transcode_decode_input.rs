@@ -11,30 +11,15 @@ use core::fmt;
 use std::{
     collections::TryReserveError,
     future::poll_fn,
-    io::{
-        Error,
-        ErrorKind,
-        Result,
-    },
+    io::{Error, ErrorKind, Result},
     pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 
-use qubit_io::{
-    AsyncBufferedInput,
-    AsyncInput,
-    Buffer,
-};
-use qubit_utils::UncheckedSlice;
+use qubit_io::{AsyncBufferedInput, AsyncInput, Buffer};
+use qubit_utils::SliceRange;
 
-use crate::{
-    CapacityError,
-    TranscodeProgress,
-    Transcoder,
-};
+use crate::{CapacityError, TranscodeProgress, Transcoder};
 
 use super::{
     async_transcode_decode_step::AsyncTranscodeDecodeStep,
@@ -170,12 +155,7 @@ where
     /// The caller must guarantee that the indexed range fits in output, does
     /// not overflow, holds no overlapping unread units, and count is no
     /// greater than the unread unit count.
-    pub unsafe fn copy_unread_to(
-        &self,
-        output: &mut [I::Item],
-        output_index: usize,
-        count: usize,
-    ) {
+    pub unsafe fn copy_unread_to(&self, output: &mut [I::Item], output_index: usize, count: usize) {
         // SAFETY: The caller upholds the delegated buffer-copy contract.
         unsafe {
             self.input.copy_unread_to(output, output_index, count);
@@ -212,7 +192,7 @@ where
         let required = decoder
             .max_reset_output_len()
             .map_err(capacity_to_io_error)?;
-        let output_end = UncheckedSlice::checked_range_end(
+        let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -257,7 +237,7 @@ where
         let required = decoder
             .max_finish_output_len()
             .map_err(capacity_to_io_error)?;
-        let output_end = UncheckedSlice::checked_range_end(
+        let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -341,7 +321,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let output_end = UncheckedSlice::checked_range_end(
+        let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -358,9 +338,7 @@ where
             match Pin::new(&mut this.input).poll_fill_more(cx) {
                 Poll::Ready(Ok(true)) => {}
                 Poll::Ready(Ok(false)) => {
-                    return Poll::Ready(Ok(
-                        AsyncTranscodeDecodeStep::EndOfInput,
-                    ));
+                    return Poll::Ready(Ok(AsyncTranscodeDecodeStep::EndOfInput));
                 }
                 Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
                 Poll::Pending => return Poll::Pending,
@@ -372,13 +350,7 @@ where
             .transcode(this.unread(), 0, output, output_index)
             .map_err(&mut *map_error)
             .and_then(|progress| {
-                validate_decode_progress(
-                    progress,
-                    0,
-                    available_input,
-                    output_index,
-                    count,
-                )
+                validate_decode_progress(progress, 0, available_input, output_index, count)
             });
         let progress = match progress {
             Ok(progress) => progress,
@@ -410,7 +382,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let output_end = UncheckedSlice::checked_range_end(
+        let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
             count,
@@ -424,21 +396,10 @@ where
         }
         let available_input = self.unread_len();
         let progress = decoder
-            .transcode_eof(
-                self.unread(),
-                0,
-                &mut output[..output_end],
-                output_index,
-            )
+            .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
             .and_then(|progress| {
-                validate_decode_progress(
-                    progress,
-                    0,
-                    available_input,
-                    output_index,
-                    count,
-                )
+                validate_decode_progress(progress, 0, available_input, output_index, count)
             })?;
         self.consume(progress.read());
         Ok(progress)
@@ -463,14 +424,7 @@ where
         M: FnMut(D::Error) -> Error,
     {
         poll_fn(|cx| {
-            Pin::new(&mut *self).poll_transcode(
-                cx,
-                decoder,
-                map_error,
-                output,
-                output_index,
-                count,
-            )
+            Pin::new(&mut *self).poll_transcode(cx, decoder, map_error, output, output_index, count)
         })
         .await
     }
@@ -502,9 +456,7 @@ where
         count: usize,
     ) -> Poll<Result<usize>> {
         // SAFETY: Pinning this wrapper pins its buffered input field.
-        let input = unsafe {
-            Pin::new_unchecked(&mut self.as_mut().get_unchecked_mut().input)
-        };
+        let input = unsafe { Pin::new_unchecked(&mut self.as_mut().get_unchecked_mut().input) };
         // SAFETY: The caller upholds the delegated indexed-read contract.
         unsafe { input.poll_read_unchecked(cx, output, index, count) }
     }
