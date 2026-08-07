@@ -32,8 +32,8 @@
 //! - [`ValueEncoder`] and [`ValueDecoder`] for whole-value convenience APIs.
 //! - [`ByteOrder`], [`ByteOrderSpec`], [`BigEndian`], [`LittleEndian`], and
 //!   [`NativeEndian`] for shared byte-order metadata.
-//! - `qubit_utils::nonzero()` for checked
-//!   `NonZeroUsize` construction shared by codec implementations.
+//! - `qubit_utils::nonzero()` for checked `NonZeroUsize` construction shared by
+//!   codec implementations.
 //!
 //! Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 //! `qubit-codec-text`, and `qubit-codec-misc`.

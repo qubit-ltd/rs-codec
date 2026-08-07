@@ -9,14 +9,36 @@
 
 use core::fmt;
 use std::collections::TryReserveError;
-use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::io::{
+    Error,
+    ErrorKind,
+    Read,
+    Result,
+    Seek,
+    SeekFrom,
+};
 
-use qubit_io::{Buffer, BufferedInput, Input, Seekable};
-use qubit_utils::{SliceRange, UncheckedSlice};
+use qubit_io::{
+    Buffer,
+    BufferedInput,
+    Input,
+    Seekable,
+};
+use qubit_utils::{
+    SliceRange,
+    UncheckedSlice,
+    allocation_error,
+};
 
 use crate::{
-    Codec, DecodeLifecycleOutput, DecodeLifecycleProgress, TranscodeFailure, TranscodeProgress,
-    TranscodeStatus, Transcoder, codec::assert_unit_bounds,
+    Codec,
+    DecodeLifecycleOutput,
+    DecodeLifecycleProgress,
+    TranscodeFailure,
+    TranscodeProgress,
+    TranscodeStatus,
+    Transcoder,
+    codec::assert_unit_bounds,
 };
 
 use super::codec_decode_driver::CodecDecodeDriver;
@@ -158,7 +180,7 @@ where
         if count > self.input.capacity() {
             self.input
                 .try_reserve_capacity(count)
-                .map_err(allocation_to_io_error)?;
+                .map_err(allocation_error)?;
         }
         self.input.fill_until(count)
     }
@@ -195,10 +217,21 @@ where
         }
         let available_input = self.unread_len();
         let progress = decoder
-            .transcode(self.unread(), 0, &mut output[..output_end], output_index)
+            .transcode(
+                self.unread(),
+                0,
+                &mut output[..output_end],
+                output_index,
+            )
             .map_err(&mut *map_error)
             .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
             })?;
         self.consume(progress.read());
         Ok(Some(progress))
@@ -240,10 +273,21 @@ where
         }
         let available_input = self.unread_len();
         let progress = decoder
-            .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
+            .transcode_eof(
+                self.unread(),
+                0,
+                &mut output[..output_end],
+                output_index,
+            )
             .map_err(&mut *map_error)
             .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
+                validate_decode_progress(
+                    progress,
+                    0,
+                    available_input,
+                    output_index,
+                    count,
+                )
             })?;
         self.consume(progress.read());
         Ok(progress)
@@ -283,12 +327,23 @@ where
     /// a valid range inside `output`, that the addition does not overflow, that
     /// `count <= self.unread_len()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
-    pub unsafe fn copy_unread_to(&self, output: &mut [I::Item], output_index: usize, count: usize) {
+    pub unsafe fn copy_unread_to(
+        &self,
+        output: &mut [I::Item],
+        output_index: usize,
+        count: usize,
+    ) {
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
         let unread = self.unread();
         unsafe {
-            UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
+            UncheckedSlice::copy_nonoverlapping(
+                unread,
+                0,
+                output,
+                output_index,
+                count,
+            );
         }
     }
 
@@ -368,15 +423,23 @@ where
     ///
     /// Panics when the codec reports more reset or finish values than its
     /// declared bounds.
-    pub fn read_decoded_with<C, M>(&mut self, codec: &mut C, map_error: M) -> Result<C::Value>
+    pub fn read_decoded_with<C, M>(
+        &mut self,
+        codec: &mut C,
+        map_error: M,
+    ) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()
             .map_err(|error| Error::new(ErrorKind::Unsupported, error))?;
-        let progress =
-            self.read_decoded_lifecycle_with_scratch_impl(codec, &mut [], &mut [], map_error)?;
+        let progress = self.read_decoded_lifecycle_with_scratch_impl(
+            codec,
+            &mut [],
+            &mut [],
+            map_error,
+        )?;
         let (value, reset_written, finish_written) = progress.into_parts();
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
@@ -423,7 +486,8 @@ where
         let mut reset_output = Vec::new();
         reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish_output = Vec::new();
-        finish_output.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
+        finish_output
+            .resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let progress = self.read_decoded_lifecycle_with_scratch_impl(
             codec,
             &mut reset_output,
@@ -480,7 +544,12 @@ where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
-        self.read_decoded_lifecycle_with_scratch_impl(codec, reset_output, finish_output, map_error)
+        self.read_decoded_lifecycle_with_scratch_impl(
+            codec,
+            reset_output,
+            finish_output,
+            map_error,
+        )
     }
 
     fn read_decoded_lifecycle_with_scratch_impl<C, M>(
@@ -518,7 +587,8 @@ where
             "Codec::decode_reset wrote beyond its reset bound",
         );
 
-        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
+        let value = CodecDecodeDriver::new(&mut self.input)
+            .read_one(codec, &mut map_error)?;
 
         let finish_written = unsafe {
             // SAFETY: The finish output length check above reserves the
@@ -813,9 +883,4 @@ where
 /// Converts a capacity planning failure into an I/O error.
 fn capacity_to_io_error(error: crate::CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
-}
-
-/// Converts an allocation failure into an I/O boundary error.
-fn allocation_to_io_error(error: std::collections::TryReserveError) -> Error {
-    Error::new(ErrorKind::OutOfMemory, error)
 }

@@ -23,6 +23,7 @@ use crate::{
     Codec,
     DecodeFailure,
 };
+use qubit_utils::allocation_error;
 
 /// Drives one codec decode operation against persistent buffered input.
 pub(super) struct CodecDecodeDriver<'a, I>
@@ -60,7 +61,7 @@ where
             C::MAX_DECODE_UNITS_PER_VALUE.max(min_units_per_value);
         self.input
             .try_reserve_capacity(min_units_per_value)
-            .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
+            .map_err(allocation_error)?;
         loop {
             let (available, end_of_input) = self.prepare_buffered_window(
                 min_units_per_value,
@@ -243,7 +244,7 @@ where
         }
         self.input
             .try_reserve_capacity(required_total)
-            .map_err(|error| Error::new(ErrorKind::OutOfMemory, error))?;
+            .map_err(allocation_error)?;
         self.input.fill_until(required_total)
     }
 

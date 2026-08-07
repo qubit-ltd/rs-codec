@@ -8,6 +8,7 @@
 //! Value encoder adapter backed by a low-level codec.
 
 use core::fmt;
+use qubit_utils::try_reserve_vec;
 
 use super::ValueEncoder;
 use crate::{
@@ -133,8 +134,7 @@ where
         let target_len = original_len
             .checked_add(units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
-        output
-            .try_reserve(units)
+        try_reserve_vec(output, units)
             .map_err(|_| TranscodeFailure::allocation_failed())?;
         output.resize_with(target_len, C::Unit::default);
 

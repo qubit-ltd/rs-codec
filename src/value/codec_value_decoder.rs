@@ -8,6 +8,7 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use core::fmt;
+use qubit_utils::try_reserve_vec;
 
 use super::{
     DecodeLifecycleOutput,
@@ -167,13 +168,11 @@ where
         C::Value: Default,
     {
         let mut reset = Vec::new();
-        reset
-            .try_reserve(C::MAX_DECODE_RESET_VALUES)
+        try_reserve_vec(&mut reset, C::MAX_DECODE_RESET_VALUES)
             .map_err(|_| TranscodeFailure::allocation_failed())?;
         reset.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish = Vec::new();
-        finish
-            .try_reserve(C::MAX_DECODE_FINISH_VALUES)
+        try_reserve_vec(&mut finish, C::MAX_DECODE_FINISH_VALUES)
             .map_err(|_| TranscodeFailure::allocation_failed())?;
         finish.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let (value, reset_written, finish_written) = self
