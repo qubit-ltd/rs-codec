@@ -37,7 +37,7 @@ io = ["dep:qubit-io"]
 
 [dependencies]
 thiserror = "2.0"
-qubit-utils = { path = "../rs-utils", version = "0.2" }
+qubit-utils = "0.2"
 
 qubit-io = { version = "0.15", path = "../rs-io", optional = true }
 
