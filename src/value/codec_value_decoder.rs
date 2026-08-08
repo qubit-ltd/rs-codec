@@ -8,20 +8,17 @@
 //! Value decoder adapter backed by a low-level codec.
 
 use core::fmt;
+
 use qubit_utils::try_reserve_vec;
 
-use super::{
-    DecodeLifecycleOutput,
-    DecodeLifecycleProgress,
-    ValueDecoder,
-};
-use crate::{
-    Codec,
-    TranscodeDecodeErrorOf,
-    TranscodeFailure,
-    codec::assert_unit_bounds,
-    value::codec_value_lifecycle::decode_exact_complete_value,
-};
+use super::DecodeLifecycleOutput;
+use super::DecodeLifecycleProgress;
+use super::ValueDecoder;
+use crate::Codec;
+use crate::TranscodeDecodeErrorOf;
+use crate::TranscodeFailure;
+use crate::codec::assert_unit_bounds;
+use crate::value::codec_value_lifecycle::decode_exact_complete_value;
 
 /// Decodes one encoded unit slice into one owned value by using a [`Codec`].
 ///

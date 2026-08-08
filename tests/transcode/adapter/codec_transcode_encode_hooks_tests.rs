@@ -6,12 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    Codec,
-    CodecTranscodeEncoder,
-    TranscodeEncodeError,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::Transcoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
@@ -44,7 +43,7 @@ impl Codec for ResetFailCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -93,7 +92,7 @@ impl Codec for RejectOddCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -131,7 +130,7 @@ impl Codec for OverreportingEncodeCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }

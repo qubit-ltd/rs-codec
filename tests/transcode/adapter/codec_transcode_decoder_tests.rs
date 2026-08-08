@@ -7,15 +7,14 @@
 // =============================================================================
 //! Tests for the codec-backed buffered decoder adapter.
 
-use qubit_codec::{
-    Codec,
-    CodecTranscodeDecoder,
-    DecodeFailure,
-    TranscodeDecodeError,
-    TranscodeDecoder,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeDecoder;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeDecoder;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::Transcoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableByteCodec;
@@ -334,8 +333,8 @@ fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
         .expect_err("an incomplete EOF value should be rejected");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::incomplete_input(0, 2, 1)
         ),
         error,
     );
@@ -356,8 +355,8 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::invalid_output_index(1, 0)
         ),
         error
     );
@@ -378,8 +377,8 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .expect_err("out-of-range input index should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::invalid_input_index(2, 1)
         ),
         error
     );
@@ -400,8 +399,8 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::invalid_output_index(1, 0)
         ),
         error
     );

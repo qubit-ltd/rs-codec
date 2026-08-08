@@ -6,11 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::engine::{
-    EncodeContext,
-    EncodeUnencodableAction,
-    TranscodeEncodeHooks,
-};
+use qubit_codec as codec;
+use qubit_codec::engine::EncodeContext;
+use qubit_codec::engine::EncodeUnencodableAction;
+use qubit_codec::engine::TranscodeEncodeHooks;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -19,7 +18,7 @@ struct UnitCodec;
 #[error("encode failed")]
 struct UnitEncodeError;
 
-impl qubit_codec::Codec for UnitCodec {
+impl codec::Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
@@ -39,7 +38,7 @@ impl qubit_codec::Codec for UnitCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -73,7 +72,7 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
         _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeErrorOf<UnitCodec>,
+        codec::TranscodeEncodeErrorOf<UnitCodec>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }

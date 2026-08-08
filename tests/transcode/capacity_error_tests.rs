@@ -6,12 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeConvertError,
-    TranscodeDecodeError,
-    TranscodeEncodeError,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeConvertError;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeEncodeError;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain error")]
@@ -28,19 +27,19 @@ fn test_capacity_errors_map_to_framework_failures() {
 
     assert_eq!(
         TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::output_length_overflow()
+            codec::TranscodeFailure::output_length_overflow()
         ),
         decode,
     );
     assert_eq!(
         TranscodeEncodeError::Failure(
-            qubit_codec::TranscodeFailure::output_length_overflow()
+            codec::TranscodeFailure::output_length_overflow()
         ),
         encode,
     );
     assert_eq!(
         TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::output_length_overflow()
+            codec::TranscodeFailure::output_length_overflow()
         ),
         convert,
     );

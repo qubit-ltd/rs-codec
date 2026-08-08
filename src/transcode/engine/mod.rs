@@ -20,21 +20,15 @@ mod transcode_encode_engine;
 mod transcode_encode_hooks;
 
 pub use decode_context::DecodeContext;
-pub use decode_incomplete_action::{
-    DecodeIncompleteAction,
-    DecodeIncompleteActionOf,
-};
-pub use decode_invalid_action::{
-    DecodeInvalidAction,
-    DecodeInvalidActionOf,
-};
+pub use decode_incomplete_action::DecodeIncompleteAction;
+pub use decode_incomplete_action::DecodeIncompleteActionOf;
+pub use decode_invalid_action::DecodeInvalidAction;
+pub use decode_invalid_action::DecodeInvalidActionOf;
 pub(crate) use decode_outcome::DecodeOutcome;
 pub use encode_context::EncodeContext;
 pub(crate) use encode_outcome::EncodeOutcome;
-pub use encode_unencodable_action::{
-    EncodeUnencodableAction,
-    EncodeUnencodableActionOf,
-};
+pub use encode_unencodable_action::EncodeUnencodableAction;
+pub use encode_unencodable_action::EncodeUnencodableActionOf;
 pub use transcode_convert_engine::TranscodeConvertEngine;
 pub use transcode_decode_engine::TranscodeDecodeEngine;
 pub use transcode_decode_hooks::TranscodeDecodeHooks;

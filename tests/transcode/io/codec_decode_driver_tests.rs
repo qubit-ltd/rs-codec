@@ -6,21 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    io::Cursor,
-    io::{
-        Error,
-        ErrorKind,
-    },
-};
-
 use core::num::NonZeroUsize;
+use std::io::Cursor;
+use std::io::Error;
+use std::io::ErrorKind;
 
-use qubit_codec::{
-    Codec,
-    DecodeFailure,
-    TranscodeDecodeInput,
-};
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDecodeInput;
+use qubit_utils as utils_crate;
 
 use crate::common::IdentityCodec;
 
@@ -58,7 +52,7 @@ impl Codec for EofAwareShortCodec {
         input_index: usize,
     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
-        Err(DecodeFailure::incomplete(qubit_utils::nonzero(3)))
+        Err(DecodeFailure::incomplete(utils_crate::nonzero(3)))
     }
 
     unsafe fn decode_eof(
@@ -111,7 +105,7 @@ impl Codec for InvalidEofIncompleteHintCodec {
         _input: &[u8],
         _input_index: usize,
     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Err(DecodeFailure::incomplete(qubit_utils::nonzero(2)))
+        Err(DecodeFailure::incomplete(utils_crate::nonzero(2)))
     }
 
     unsafe fn decode_eof(
@@ -119,7 +113,7 @@ impl Codec for InvalidEofIncompleteHintCodec {
         _input: &[u8],
         _input_index: usize,
     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Err(DecodeFailure::incomplete(qubit_utils::nonzero(1)))
+        Err(DecodeFailure::incomplete(utils_crate::nonzero(1)))
     }
 
     unsafe fn encode(

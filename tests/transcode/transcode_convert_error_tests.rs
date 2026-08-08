@@ -6,12 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    TranscodeConvertError,
-    TranscodeDecodeError,
-    TranscodeEncodeError,
-    TranscodeFailure,
-};
+use qubit_codec::TranscodeConvertError;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeFailure;
 
 #[test]
 fn test_convert_error_from_decode_and_encode_errors() {

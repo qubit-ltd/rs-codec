@@ -9,14 +9,12 @@
 
 use super::super::engine::TranscodeDecodeEngine;
 use super::CodecTranscodeDecodeHooks;
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeErrorOf,
-    TranscodeDecoder,
-    TranscodeProgress,
-    Transcoder,
-};
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeDecodeErrorOf;
+use crate::TranscodeDecoder;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 
 /// Decodes encoded units into caller-provided value buffers by using a
 /// [`Codec`].

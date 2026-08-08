@@ -7,46 +7,33 @@
 // =============================================================================
 //! Buffered output driver that encodes values into units.
 
-use core::{
-    fmt,
-    num::NonZeroUsize,
-};
+use core::fmt;
+use core::num::NonZeroUsize;
 use std::collections::TryReserveError;
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-    Seek,
-    SeekFrom,
-    Write,
-};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::Write;
 
-use qubit_io::{
-    Buffer,
-    BufferedOutput,
-    Output,
-    Seekable,
-};
-use qubit_utils::{
-    SliceRange,
-    allocation_error,
-};
-
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeStatus,
-    Transcoder,
-    value::codec_value_lifecycle::{
-        encode_complete_value_into_reserved,
-        max_complete_encode_units,
-    },
-};
+use qubit_io::Buffer;
+use qubit_io::BufferedOutput;
+use qubit_io::Output;
+use qubit_io::Seekable;
+use qubit_utils::SliceRange;
+use qubit_utils::allocation_error;
 
 use super::transcode_progress_validation::validate_encode_progress;
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeEncodeError;
+use crate::TranscodeEncodeErrorOf;
+use crate::TranscodeEncoder;
+use crate::TranscodeStatus;
+use crate::Transcoder;
+use crate::value::codec_value_lifecycle::encode_complete_value_into_reserved;
+use crate::value::codec_value_lifecycle::max_complete_encode_units;
 
 /// Encodes an [`Output`] value stream into an [`Output`] unit stream.
 ///

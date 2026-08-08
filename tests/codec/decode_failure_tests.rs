@@ -8,10 +8,8 @@
 
 use core::num::NonZeroUsize;
 
-use qubit_codec::{
-    Codec,
-    DecodeFailure,
-};
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct DomainDecodeError;

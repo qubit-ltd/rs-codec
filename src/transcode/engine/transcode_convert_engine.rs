@@ -13,30 +13,24 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    convert_state::ConvertState,
-    encode_attempt::EncodeAttempt,
-    lifecycle_guard::LifecycleGuard,
-    pending_value::PendingValue,
-    pending_value_slot::PendingValueSlot,
-};
-use super::{
-    TranscodeDecodeHooks,
-    TranscodeEncodeHooks,
-    transcode_decode_engine::TranscodeDecodeEngine,
-    transcode_encode_engine::TranscodeEncodeEngine,
-};
+use super::super::internal::convert_state::ConvertState;
+use super::super::internal::encode_attempt::EncodeAttempt;
+use super::super::internal::lifecycle_guard::LifecycleGuard;
+use super::super::internal::pending_value::PendingValue;
+use super::super::internal::pending_value_slot::PendingValueSlot;
+use super::TranscodeDecodeHooks;
+use super::TranscodeEncodeHooks;
+use super::transcode_decode_engine::TranscodeDecodeEngine;
+use super::transcode_encode_engine::TranscodeEncodeEngine;
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeConvertError;
+use crate::TranscodeConvertErrorOf;
+use crate::TranscodeConverter;
+use crate::TranscodeFailure;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 use crate::codec::assert_unit_bounds;
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeConvertError,
-    TranscodeConvertErrorOf,
-    TranscodeConverter,
-    TranscodeFailure,
-    TranscodeProgress,
-    Transcoder,
-};
 
 /// Adds two independent target-output capacity bounds.
 fn add_convert_output_bounds(

@@ -8,41 +8,26 @@
 //! Buffered asynchronous input driver that decodes units into values.
 
 use core::fmt;
-use std::{
-    collections::TryReserveError,
-    future::poll_fn,
-    io::{
-        Error,
-        ErrorKind,
-        Result,
-    },
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
-};
+use std::collections::TryReserveError;
+use std::future::poll_fn;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
-use qubit_io::{
-    AsyncBufferedInput,
-    AsyncInput,
-    Buffer,
-};
-use qubit_utils::{
-    SliceRange,
-    allocation_error,
-};
+use qubit_io::AsyncBufferedInput;
+use qubit_io::AsyncInput;
+use qubit_io::Buffer;
+use qubit_utils::SliceRange;
+use qubit_utils::allocation_error;
 
-use crate::{
-    CapacityError,
-    TranscodeProgress,
-    Transcoder,
-};
-
-use super::{
-    async_transcode_decode_step::AsyncTranscodeDecodeStep,
-    transcode_progress_validation::validate_decode_progress,
-};
+use super::async_transcode_decode_step::AsyncTranscodeDecodeStep;
+use super::transcode_progress_validation::validate_decode_progress;
+use crate::CapacityError;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 
 /// Decodes an asynchronous unit stream into values.
 ///

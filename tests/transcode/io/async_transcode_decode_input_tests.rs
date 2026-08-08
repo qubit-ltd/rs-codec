@@ -6,25 +6,21 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
-};
+use std::future::Future;
+use std::io;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
-use qubit_codec::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeDecodeStep,
-    TranscodeDecodeError,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::AsyncTranscodeDecodeInput;
+use qubit_codec::AsyncTranscodeDecodeStep;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
 use qubit_io::AsyncInput;
+use qubit_utils as utils_crate;
 
 /// Domain error type required by the transcode decoder contract.
 #[derive(Debug, thiserror::Error)]
@@ -133,7 +129,7 @@ impl Transcoder for PairDecoder {
     fn max_transcode_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    ) -> Result<usize, codec::CapacityError> {
         Ok(input_len / 2)
     }
 
@@ -158,14 +154,14 @@ impl Transcoder for PairDecoder {
         let available_output = output.len() - output_index;
         if available_input < 2 {
             return Ok(TranscodeProgress::need_input(
-                qubit_utils::nonzero(2),
+                utils_crate::nonzero(2),
                 0,
                 0,
             ));
         }
         if available_output == 0 {
             return Ok(TranscodeProgress::need_output(
-                qubit_utils::nonzero(1),
+                utils_crate::nonzero(1),
                 0,
                 0,
             ));
@@ -196,7 +192,7 @@ impl Transcoder for EofTailDecoder {
     fn max_transcode_output_len(
         &self,
         input_len: usize,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    ) -> Result<usize, codec::CapacityError> {
         Ok(input_len)
     }
 
@@ -215,7 +211,7 @@ impl Transcoder for EofTailDecoder {
         _output: &mut [u16],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(qubit_utils::nonzero(2), 0, 0))
+        Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0))
     }
 
     fn transcode_eof(
@@ -250,13 +246,11 @@ impl Transcoder for LifecycleDecoder {
     fn max_transcode_output_len(
         &self,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    ) -> Result<usize, codec::CapacityError> {
         Ok(0)
     }
 
-    fn max_reset_output_len(
-        &self,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_reset_output_len(&self) -> Result<usize, codec::CapacityError> {
         Ok(1)
     }
 
@@ -279,9 +273,7 @@ impl Transcoder for LifecycleDecoder {
         Ok(TranscodeProgress::complete(input_index, output_index))
     }
 
-    fn max_finish_output_len(
-        &self,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    fn max_finish_output_len(&self) -> Result<usize, codec::CapacityError> {
         Ok(1)
     }
 
@@ -307,14 +299,12 @@ impl Transcoder for CapacityFailingDecoder {
     fn max_transcode_output_len(
         &self,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    ) -> Result<usize, codec::CapacityError> {
         Ok(0)
     }
 
-    fn max_reset_output_len(
-        &self,
-    ) -> Result<usize, qubit_codec::CapacityError> {
-        Err(qubit_codec::CapacityError::OutputLengthOverflow)
+    fn max_reset_output_len(&self) -> Result<usize, codec::CapacityError> {
+        Err(codec::CapacityError::OutputLengthOverflow)
     }
 
     fn reset(
@@ -335,10 +325,8 @@ impl Transcoder for CapacityFailingDecoder {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
-    fn max_finish_output_len(
-        &self,
-    ) -> Result<usize, qubit_codec::CapacityError> {
-        Err(qubit_codec::CapacityError::OutputLengthOverflow)
+    fn max_finish_output_len(&self) -> Result<usize, codec::CapacityError> {
+        Err(codec::CapacityError::OutputLengthOverflow)
     }
 
     fn finish(
@@ -363,7 +351,7 @@ impl Transcoder for NoProgressDecoder {
     fn max_transcode_output_len(
         &self,
         _input_len: usize,
-    ) -> Result<usize, qubit_codec::CapacityError> {
+    ) -> Result<usize, codec::CapacityError> {
         Ok(0)
     }
 
@@ -419,7 +407,7 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
     assert!(matches!(
         first,
         AsyncTranscodeDecodeStep::Progress(progress)
-            if matches!(progress.status(), qubit_codec::TranscodeStatus::NeedInput { .. })
+            if matches!(progress.status(), codec::TranscodeStatus::NeedInput { .. })
     ));
     assert!(complete(input.fill_until_async(2))?);
     let step = complete(input.transcode_async(
@@ -462,7 +450,7 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix()
 
     assert_eq!(
         AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(
-            qubit_utils::nonzero(2),
+            utils_crate::nonzero(2),
             0,
             0,
         )),

@@ -6,28 +6,23 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    io::{
-        Cursor,
-        Error,
-        ErrorKind,
-        Seek,
-        SeekFrom,
-        Write,
-    },
-    num::NonZeroUsize,
-};
+use std::io::Cursor;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::Write;
+use std::num::NonZeroUsize;
 
-use qubit_codec::{
-    CapacityError,
-    Codec,
-    DecodeFailure,
-    TranscodeEncodeError,
-    TranscodeEncodeOutput,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeEncodeOutput;
+use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
 use qubit_io::Output;
 
 #[test]
@@ -235,7 +230,7 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
-            qubit_codec::TranscodeFailure::ensure_output_index(
+            codec::TranscodeFailure::ensure_output_index(
                 output.len(),
                 output_index,
             )?;
@@ -251,7 +246,7 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
-            qubit_codec::TranscodeFailure::ensure_output_index(
+            codec::TranscodeFailure::ensure_output_index(
                 output.len(),
                 output_index,
             )?;

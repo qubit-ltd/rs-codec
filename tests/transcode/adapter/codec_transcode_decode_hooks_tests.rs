@@ -6,12 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    Codec,
-    CodecTranscodeDecoder,
-    TranscodeDecodeError,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeDecoder;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::Transcoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
@@ -40,7 +39,7 @@ impl Codec for FlushFailCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -89,10 +88,10 @@ impl Codec for InvalidByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         if input[input_index] == 0xff {
-            Err(qubit_codec::DecodeFailure::invalid(
+            Err(codec::DecodeFailure::invalid(
                 InvalidByteError,
                 core::num::NonZeroUsize::MIN,
             ))

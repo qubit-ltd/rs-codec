@@ -7,17 +7,15 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
-use qubit_codec::{
-    Codec,
-    CodecValueDecoder,
-    TranscodeDecodeError,
-    TranscodeFailure,
-    ValueDecoder,
-};
-use std::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use qubit_codec as codec;
+use qubit_codec::Codec;
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeFailure;
+use qubit_codec::ValueDecoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
@@ -40,14 +38,14 @@ impl Codec for SingleByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
         if value == 0xff {
-            Err(qubit_codec::DecodeFailure::invalid(
+            Err(codec::DecodeFailure::invalid(
                 TestDecodeError::Invalid { consumed: 1 },
                 core::num::NonZeroUsize::MIN,
             ))
@@ -92,7 +90,7 @@ impl Codec for HugeDecodeResetAllocationCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -127,7 +125,7 @@ impl Codec for HugeDecodeFinishAllocationCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -191,7 +189,7 @@ impl Codec for FixedPairCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index + 1 < input.len());
 
@@ -236,7 +234,7 @@ impl Codec for OverconsumingCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -285,7 +283,7 @@ impl Codec for OverreportingDecodeResetCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -322,7 +320,7 @@ impl Codec for OverreportingDecodeFinishCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -390,7 +388,7 @@ impl Codec for ResetFailDecodeCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -427,9 +425,9 @@ impl Codec for IncompleteDecodeCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
-        Err(qubit_codec::DecodeFailure::incomplete(crate::nonzero(2)))
+        Err(codec::DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
     unsafe fn encode(
@@ -464,9 +462,9 @@ impl Codec for ContextualIncompleteDecodeCodec {
         _input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
-        Err(qubit_codec::DecodeFailure::incomplete_with_source(
+        Err(codec::DecodeFailure::incomplete_with_source(
             TestDecodeError::Invalid { consumed: 1 },
             crate::nonzero(2),
         ))
@@ -506,7 +504,7 @@ impl Codec for FinishFailStatelessCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -559,7 +557,7 @@ impl Codec for FinishFailStatefulCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -612,7 +610,7 @@ impl Codec for StatefulLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
@@ -677,7 +675,7 @@ impl Codec for ResetSensitiveLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
@@ -740,7 +738,7 @@ impl Codec for CountingFinishCodec {
         input_index: usize,
     ) -> Result<
         (CountingFinishValue, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((
             CountingFinishValue(input[input_index]),
@@ -937,8 +935,8 @@ fn test_codec_value_decoder_reports_too_short_input_before_main_decode_call() {
         .expect_err("one byte is incomplete");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::incomplete_input(0, 2, 1)
         ),
         error,
     );
@@ -953,8 +951,8 @@ fn test_codec_value_decoder_wraps_codec_incomplete_failure() {
         .expect_err("codec-reported incomplete input should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::incomplete_input(0, 2, 1)
         ),
         error,
     );
@@ -986,8 +984,8 @@ fn test_codec_value_decoder_rejects_trailing_input() {
         .expect_err("trailing input should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeDecodeError::Failure(
-            qubit_codec::TranscodeFailure::trailing_input(1, 1)
+        codec::TranscodeDecodeError::Failure(
+            codec::TranscodeFailure::trailing_input(1, 1)
         ),
         error,
     );

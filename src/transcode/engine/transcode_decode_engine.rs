@@ -9,30 +9,24 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    applied_decode_invalid_action::AppliedDecodeInvalidAction,
-    decode_state::DecodeState,
-    lifecycle_guard::LifecycleGuard,
-};
-use super::{
-    DecodeContext,
-    DecodeIncompleteAction,
-    DecodeInvalidAction,
-    DecodeOutcome,
-    TranscodeDecodeHooks,
-};
+use super::super::internal::applied_decode_invalid_action::AppliedDecodeInvalidAction;
+use super::super::internal::decode_state::DecodeState;
+use super::super::internal::lifecycle_guard::LifecycleGuard;
+use super::DecodeContext;
+use super::DecodeIncompleteAction;
+use super::DecodeInvalidAction;
+use super::DecodeOutcome;
+use super::TranscodeDecodeHooks;
+use crate::CapacityError;
+use crate::Codec;
+use crate::DecodeFailure;
+use crate::TranscodeDecodeError;
+use crate::TranscodeDecodeErrorOf;
+use crate::TranscodeDecoder;
+use crate::TranscodeFailure;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 use crate::codec::assert_unit_bounds;
-use crate::{
-    CapacityError,
-    Codec,
-    DecodeFailure,
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-    TranscodeDecoder,
-    TranscodeFailure,
-    TranscodeProgress,
-    Transcoder,
-};
 
 /// Reusable buffered decoding engine for codec-backed decoders.
 ///

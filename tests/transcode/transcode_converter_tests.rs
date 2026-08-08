@@ -7,13 +7,12 @@
 // =============================================================================
 //! Tests for the semantic transcode converter marker trait.
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeConvertError,
-    TranscodeConverter,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeConvertError;
+use qubit_codec::TranscodeConverter;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
 
 #[derive(Default)]
 struct ByteToWord;
@@ -39,7 +38,7 @@ impl Transcoder for ByteToWord {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
+        codec::TranscodeFailure::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -67,7 +66,7 @@ impl Transcoder for ByteToWord {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<usize, Self::Error> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
+        codec::TranscodeFailure::ensure_output_index(
             output.len(),
             output_index,
         )?;

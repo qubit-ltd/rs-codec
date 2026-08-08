@@ -7,24 +7,22 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::io::{
-    Cursor,
-    Error,
-    ErrorKind,
-    Read,
-    Seek,
-    SeekFrom,
-};
+use std::io::Cursor;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Seek;
+use std::io::SeekFrom;
 
-use qubit_codec::{
-    CapacityError,
-    Codec,
-    DecodeFailure,
-    TranscodeDecodeError,
-    TranscodeDecodeInput,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeDecodeInput;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
+use qubit_io as io_crate;
 use qubit_io::Input;
 
 #[test]
@@ -320,7 +318,7 @@ macro_rules! noop_reset {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-            qubit_codec::TranscodeFailure::ensure_output_index(
+            codec::TranscodeFailure::ensure_output_index(
                 output.len(),
                 output_index,
             )?;
@@ -336,7 +334,7 @@ macro_rules! noop_finish {
             output: &mut [$output],
             output_index: usize,
         ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-            qubit_codec::TranscodeFailure::ensure_output_index(
+            codec::TranscodeFailure::ensure_output_index(
                 output.len(),
                 output_index,
             )?;
@@ -774,7 +772,7 @@ impl Transcoder for TwoUnitFinishDecoder {
         output: &mut [u32],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<PairDecodeError>> {
-        qubit_codec::TranscodeFailure::ensure_output_capacity(
+        codec::TranscodeFailure::ensure_output_capacity(
             output.len(),
             output_index,
             2,
@@ -1049,7 +1047,7 @@ impl Input for FailingSeekInput {
     }
 }
 
-impl qubit_io::Seekable for FailingSeekInput {
+impl io_crate::Seekable for FailingSeekInput {
     type Unit = u8;
 
     fn seek_to(&mut self, _position: SeekFrom) -> std::io::Result<u64> {

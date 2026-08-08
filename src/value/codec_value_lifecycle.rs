@@ -7,16 +7,14 @@
 // =============================================================================
 //! Internal helpers for complete single-value codec lifecycles.
 
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeFailure,
-    codec::assert_unit_bounds,
-};
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeDecodeError;
+use crate::TranscodeDecodeErrorOf;
+use crate::TranscodeEncodeError;
+use crate::TranscodeEncodeErrorOf;
+use crate::TranscodeFailure;
+use crate::codec::assert_unit_bounds;
 
 /// Returns the conservative maximum unit count for a complete encode lifecycle.
 ///

@@ -6,26 +6,21 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::{
-    future::Future,
-    io,
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-        Waker,
-    },
-};
+use std::future::Future;
+use std::io;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
-use qubit_codec::{
-    AsyncTranscodeEncodeOutput,
-    CapacityError,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec::AsyncTranscodeEncodeOutput;
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
 use qubit_io::AsyncOutput;
+use qubit_utils as utils_crate;
 
 #[derive(Debug)]
 struct ChunkedAsyncOutput {
@@ -151,7 +146,7 @@ impl Transcoder for CopyEncoder {
             Ok(TranscodeProgress::complete(written, written))
         } else {
             Ok(TranscodeProgress::need_output(
-                qubit_utils::nonzero(1),
+                utils_crate::nonzero(1),
                 written,
                 written,
             ))
@@ -305,7 +300,7 @@ impl Transcoder for NeedInputEncoder {
         _output: &mut [u8],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(qubit_utils::nonzero(2), 0, 0))
+        Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0))
     }
 
     fn finish(
@@ -414,7 +409,7 @@ fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending(
 
     complete(output.reset_async(&mut encoder, &mut map_error))?;
     assert_eq!(
-        TranscodeProgress::need_output(qubit_utils::nonzero(1), 1, 1),
+        TranscodeProgress::need_output(utils_crate::nonzero(1), 1, 1),
         complete(output.transcode_async(
             &mut encoder,
             &mut map_error,
@@ -464,7 +459,7 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending()
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(progress)) => {
             assert_eq!(
-                TranscodeProgress::need_output(qubit_utils::nonzero(1), 1, 1),
+                TranscodeProgress::need_output(utils_crate::nonzero(1), 1, 1),
                 progress,
             );
         }

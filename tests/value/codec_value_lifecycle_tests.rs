@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    CodecValueDecoder,
-    CodecValueEncoder,
-    ValueEncoder,
-};
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::CodecValueEncoder;
+use qubit_codec::ValueEncoder;
 
 use crate::common::IdentityCodec;
 

@@ -9,16 +9,12 @@
 
 use core::num::NonZeroUsize;
 
-use super::{
-    decode_context::DecodeContext,
-    decode_incomplete_action::DecodeIncompleteAction,
-    decode_invalid_action::DecodeInvalidAction,
-};
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeDecodeErrorOf,
-};
+use super::decode_context::DecodeContext;
+use super::decode_incomplete_action::DecodeIncompleteAction;
+use super::decode_invalid_action::DecodeInvalidAction;
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeDecodeErrorOf;
 
 /// Policy hooks for [`crate::engine::TranscodeDecodeEngine`].
 ///

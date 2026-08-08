@@ -7,10 +7,8 @@
 // =============================================================================
 use core::num::NonZeroUsize;
 
-use super::{
-    TranscodeContractError,
-    TranscodeStatus,
-};
+use super::TranscodeContractError;
+use super::TranscodeStatus;
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.

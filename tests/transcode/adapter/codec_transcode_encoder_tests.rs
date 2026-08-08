@@ -7,15 +7,14 @@
 // =============================================================================
 //! Tests for the codec-backed buffered encoder adapter.
 
-use qubit_codec::{
-    CapacityError,
-    Codec,
-    CodecTranscodeEncoder,
-    TranscodeEncodeError,
-    TranscodeEncoder,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::Transcoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
@@ -38,7 +37,7 @@ impl Codec for PairByteCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -103,7 +102,7 @@ impl Codec for VariableWidthCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -157,7 +156,7 @@ impl Codec for RejectOddCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -304,8 +303,8 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeEncodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        codec::TranscodeEncodeError::Failure(
+            codec::TranscodeFailure::invalid_output_index(1, 0)
         ),
         error
     );
@@ -326,8 +325,8 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        qubit_codec::TranscodeEncodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+        codec::TranscodeEncodeError::Failure(
+            codec::TranscodeFailure::invalid_output_index(1, 0)
         ),
         error
     );
@@ -348,8 +347,8 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .expect_err("invalid input index should fail");
 
     assert_eq!(
-        qubit_codec::TranscodeEncodeError::Failure(
-            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        codec::TranscodeEncodeError::Failure(
+            codec::TranscodeFailure::invalid_input_index(2, 1)
         ),
         error
     );

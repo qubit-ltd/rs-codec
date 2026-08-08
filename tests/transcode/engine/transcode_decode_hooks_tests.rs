@@ -8,12 +8,11 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_codec as codec;
 use qubit_codec::TranscodeDecodeError;
-use qubit_codec::engine::{
-    DecodeContext,
-    DecodeInvalidAction,
-    TranscodeDecodeHooks,
-};
+use qubit_codec::engine::DecodeContext;
+use qubit_codec::engine::DecodeInvalidAction;
+use qubit_codec::engine::TranscodeDecodeHooks;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct UnitCodec;
@@ -22,7 +21,7 @@ struct UnitCodec;
 #[error("decode failed")]
 struct UnitDecodeError;
 
-impl qubit_codec::Codec for UnitCodec {
+impl codec::Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = UnitDecodeError;
@@ -40,7 +39,7 @@ impl qubit_codec::Codec for UnitCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -66,10 +65,8 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         error: &UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<
-        DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeErrorOf<UnitCodec>,
-    > {
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<UnitCodec>>
+    {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }
 }
@@ -77,7 +74,7 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct WideUnitCodec;
 
-impl qubit_codec::Codec for WideUnitCodec {
+impl codec::Codec for WideUnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = UnitDecodeError;
@@ -93,7 +90,7 @@ impl qubit_codec::Codec for WideUnitCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((
             input[input_index],
@@ -124,7 +121,7 @@ impl TranscodeDecodeHooks<WideUnitCodec> for WideDefaultOnlyHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeErrorOf<WideUnitCodec>,
+        codec::TranscodeDecodeErrorOf<WideUnitCodec>,
     > {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }

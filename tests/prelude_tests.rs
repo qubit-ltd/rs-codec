@@ -6,45 +6,42 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::engine::{
-    DecodeContext,
-    DecodeInvalidAction,
-    DecodeInvalidActionOf,
-    EncodeContext,
-    EncodeUnencodableAction,
-    EncodeUnencodableActionOf,
-    TranscodeConvertEngine,
-    TranscodeDecodeEngine,
-    TranscodeDecodeHooks,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
-};
-use qubit_codec::{
-    BigEndian,
-    ByteOrder,
-    ByteOrderSpec,
-    Codec,
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-    CodecValueDecoder,
-    CodecValueEncoder,
-    NativeEndian,
-    TranscodeConvertError,
-    TranscodeConvertErrorOf,
-    TranscodeConverter,
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-    TranscodeDecoder,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeFailure,
-    TranscodeProgress,
-    TranscodeStatus,
-    ValueDecoder,
-    ValueEncoder,
-};
+use qubit_codec as codec;
+use qubit_codec::BigEndian;
+use qubit_codec::ByteOrder;
+use qubit_codec::ByteOrderSpec;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeConverter;
+use qubit_codec::CodecTranscodeDecoder;
+use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::CodecValueEncoder;
+use qubit_codec::NativeEndian;
+use qubit_codec::TranscodeConvertError;
+use qubit_codec::TranscodeConvertErrorOf;
+use qubit_codec::TranscodeConverter;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeDecodeErrorOf;
+use qubit_codec::TranscodeDecoder;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeEncodeErrorOf;
+use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeFailure;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::ValueDecoder;
+use qubit_codec::ValueEncoder;
+use qubit_codec::engine::DecodeContext;
+use qubit_codec::engine::DecodeInvalidAction;
+use qubit_codec::engine::DecodeInvalidActionOf;
+use qubit_codec::engine::EncodeContext;
+use qubit_codec::engine::EncodeUnencodableAction;
+use qubit_codec::engine::EncodeUnencodableActionOf;
+use qubit_codec::engine::TranscodeConvertEngine;
+use qubit_codec::engine::TranscodeDecodeEngine;
+use qubit_codec::engine::TranscodeDecodeHooks;
+use qubit_codec::engine::TranscodeEncodeEngine;
+use qubit_codec::engine::TranscodeEncodeHooks;
 
 #[derive(Default)]
 struct EchoCodec;
@@ -85,7 +82,7 @@ impl Codec for EchoCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -121,7 +118,7 @@ impl TranscodeDecodeHooks<EchoCodec> for EchoDecodeHooks {
         _context: DecodeContext,
     ) -> Result<
         DecodeInvalidAction<u8>,
-        qubit_codec::TranscodeDecodeError<core::convert::Infallible>,
+        codec::TranscodeDecodeError<core::convert::Infallible>,
     > {
         match *error {}
     }
@@ -136,7 +133,7 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
         _context: &EncodeContext<'_, u8>,
     ) -> Result<
         EncodeUnencodableAction<u8>,
-        qubit_codec::TranscodeEncodeError<core::convert::Infallible, u8>,
+        codec::TranscodeEncodeError<core::convert::Infallible, u8>,
     > {
         Ok(EncodeUnencodableAction::Reject)
     }
@@ -211,30 +208,28 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let _: EncodeUnencodableActionOf<EchoCodec> =
         EncodeUnencodableAction::Replace { value: 1 };
     let _: TranscodeDecodeErrorOf<EchoCodec> = TranscodeDecodeError::Failure(
-        qubit_codec::TranscodeFailure::incomplete_input(0, 1, 0),
+        codec::TranscodeFailure::incomplete_input(0, 1, 0),
     );
     let _: TranscodeEncodeErrorOf<EchoCodec> =
         TranscodeEncodeError::unencodable_without_context(0);
     let _: TranscodeConvertErrorOf<EchoCodec, EchoCodec> =
         TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::invalid_input_index(1, 0),
+            codec::TranscodeFailure::invalid_input_index(1, 0),
         );
     assert_eq!(
         TranscodeConvertError::<
             core::convert::Infallible,
             core::convert::Infallible,
             u8,
-        >::Failure(qubit_codec::TranscodeFailure::invalid_output_index(
-            1, 0
-        )),
+        >::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(1, 0)
+            codec::TranscodeFailure::invalid_output_index(1, 0)
         ),
     );
 
     let decode_error =
         TranscodeDecodeError::<core::convert::Infallible>::Failure(
-            qubit_codec::TranscodeFailure::incomplete_input(0, 2, 1),
+            codec::TranscodeFailure::incomplete_input(0, 2, 1),
         );
     assert!(matches!(
         decode_error,

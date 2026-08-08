@@ -7,10 +7,8 @@
 // =============================================================================
 //! Tests owned single-value decode lifecycle output.
 
-use qubit_codec::{
-    CodecValueDecoder,
-    DecodeLifecycleOutput,
-};
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::DecodeLifecycleOutput;
 
 use super::codec_value_decoder_tests::ResetSensitiveLifecycleCodec;
 

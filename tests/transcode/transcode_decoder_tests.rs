@@ -7,13 +7,12 @@
 // =============================================================================
 //! Tests for the semantic transcode decoder marker trait.
 
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeDecoder,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeDecoder;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
 
 #[derive(Default)]
 struct ByteToChar;
@@ -35,7 +34,7 @@ impl Transcoder for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
+        codec::TranscodeFailure::ensure_output_index(
             output.len(),
             output_index,
         )?;
@@ -66,7 +65,7 @@ impl Transcoder for ByteToChar {
         output: &mut [char],
         output_index: usize,
     ) -> Result<usize, TranscodeDecodeError<core::convert::Infallible>> {
-        qubit_codec::TranscodeFailure::ensure_output_index(
+        codec::TranscodeFailure::ensure_output_index(
             output.len(),
             output_index,
         )?;

@@ -9,13 +9,11 @@
 
 use thiserror::Error;
 
-use super::{
-    capacity_error::CapacityError,
-    transcode_decode_error::TranscodeDecodeError,
-    transcode_domain_error::TranscodeDomainError,
-    transcode_encode_error::TranscodeEncodeError,
-    transcode_failure::TranscodeFailure,
-};
+use super::capacity_error::CapacityError;
+use super::transcode_decode_error::TranscodeDecodeError;
+use super::transcode_domain_error::TranscodeDomainError;
+use super::transcode_encode_error::TranscodeEncodeError;
+use super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 
 /// Convert transcode error for a codec-backed converter.

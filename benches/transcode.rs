@@ -7,35 +7,28 @@
 // =============================================================================
 //! Baseline benchmarks for the generic `Transcoder` lifecycle.
 
-use std::{
-    convert::Infallible,
-    hint::black_box,
-    time::Duration,
-};
+use std::convert::Infallible;
+use std::hint::black_box;
+use std::time::Duration;
 
-use criterion::{
-    BenchmarkGroup,
-    Criterion,
-    Throughput,
-    criterion_group,
-    criterion_main,
-    measurement::WallTime,
-};
-use qubit_codec::{
-    CapacityError,
-    Codec,
-    CodecTranscodeDecoder,
-    DecodeFailure,
-    TranscodeDecodeError,
-    TranscodeProgress,
-    Transcoder,
-    engine::{
-        DecodeContext,
-        DecodeInvalidAction,
-        TranscodeDecodeEngine,
-        TranscodeDecodeHooks,
-    },
-};
+use criterion::BenchmarkGroup;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::criterion_group;
+use criterion::criterion_main;
+use criterion::measurement::WallTime;
+use qubit_codec::CapacityError;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeDecoder;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
+use qubit_codec::engine::DecodeContext;
+use qubit_codec::engine::DecodeInvalidAction;
+use qubit_codec::engine::TranscodeDecodeEngine;
+use qubit_codec::engine::TranscodeDecodeHooks;
+use qubit_utils as utils_crate;
 
 const FIXTURE_LEN: usize = 64 * 1024;
 const SAMPLE_SIZE: usize = 20;
@@ -126,7 +119,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(count, count))
         } else {
             Ok(TranscodeProgress::need_output(
-                qubit_utils::nonzero(1),
+                utils_crate::nonzero(1),
                 count,
                 count,
             ))

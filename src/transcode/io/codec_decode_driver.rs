@@ -8,22 +8,16 @@
 //! Private driver for decoding one codec value from buffered input.
 
 use core::num::NonZeroUsize;
-use std::io::{
-    Error,
-    ErrorKind,
-    Result,
-};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
 
-use qubit_io::{
-    BufferedInput,
-    Input,
-};
-
-use crate::{
-    Codec,
-    DecodeFailure,
-};
+use qubit_io::BufferedInput;
+use qubit_io::Input;
 use qubit_utils::allocation_error;
+
+use crate::Codec;
+use crate::DecodeFailure;
 
 /// Drives one codec decode operation against persistent buffered input.
 pub(super) struct CodecDecodeDriver<'a, I>

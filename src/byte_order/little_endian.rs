@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use super::{
-    ByteOrder,
-    ByteOrderSpec,
-};
+use super::ByteOrder;
+use super::ByteOrderSpec;
 
 /// Type-level marker for little-endian byte order.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

@@ -7,15 +7,14 @@
 // =============================================================================
 //! Tests for the codec-backed buffered converter adapter.
 
-use qubit_codec::{
-    CapacityError,
-    Codec,
-    CodecTranscodeConverter,
-    TranscodeConvertError,
-    TranscodeConverter,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_codec as codec;
+use qubit_codec::CapacityError;
+use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeConverter;
+use qubit_codec::TranscodeConvertError;
+use qubit_codec::TranscodeConverter;
+use qubit_codec::TranscodeStatus;
+use qubit_codec::Transcoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct VariableByteDecoder;
@@ -38,7 +37,7 @@ impl Codec for VariableByteDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -47,16 +46,14 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(qubit_codec::DecodeFailure::incomplete(crate::nonzero(
-                        2,
-                    )))
+                    Err(codec::DecodeFailure::incomplete(crate::nonzero(2)))
                 } else {
                     Ok((input[input_index + 1], unsafe {
                         core::num::NonZeroUsize::new_unchecked(2)
                     }))
                 }
             }
-            0xff => Err(qubit_codec::DecodeFailure::invalid(
+            0xff => Err(codec::DecodeFailure::invalid(
                 TestDecodeError::Invalid { consumed: 1 },
                 core::num::NonZeroUsize::MIN,
             )),
@@ -113,7 +110,7 @@ impl Codec for PairByteEncoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -158,7 +155,7 @@ impl Codec for FlushFailDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -205,7 +202,7 @@ impl Codec for ResetFailEncoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
@@ -250,7 +247,7 @@ impl Codec for MinTwoDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index + 1 < input.len());
 
@@ -304,7 +301,7 @@ impl Codec for FlushValueDecoder {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -359,7 +356,7 @@ impl Codec for NonDefaultDecoder {
         input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -407,7 +404,7 @@ impl Codec for NonDefaultEncoder {
         input_index: usize,
     ) -> Result<
         (NonDefaultValue, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -795,8 +792,8 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
     assert_eq!(
-        qubit_codec::TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::invalid_input_index(2, 1)
+        codec::TranscodeConvertError::Failure(
+            codec::TranscodeFailure::invalid_input_index(2, 1)
         ),
         error
     );
@@ -805,8 +802,8 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
     assert_eq!(
-        qubit_codec::TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::invalid_output_index(3, 2)
+        codec::TranscodeConvertError::Failure(
+            codec::TranscodeFailure::invalid_output_index(3, 2)
         ),
         error
     );
@@ -951,8 +948,8 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .expect_err("finish should reject insufficient output");
 
     assert_eq!(
-        qubit_codec::TranscodeConvertError::Failure(
-            qubit_codec::TranscodeFailure::insufficient_output(4, 2, 0)
+        codec::TranscodeConvertError::Failure(
+            codec::TranscodeFailure::insufficient_output(4, 2, 0)
         ),
         error,
     );

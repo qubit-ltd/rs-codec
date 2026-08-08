@@ -5,12 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use super::{
-    capacity_error::CapacityError,
-    transcode_failure::TranscodeFailure,
-    transcode_progress::TranscodeProgress,
-    transcode_status::TranscodeStatus,
-};
+use super::capacity_error::CapacityError;
+use super::transcode_failure::TranscodeFailure;
+use super::transcode_progress::TranscodeProgress;
+use super::transcode_status::TranscodeStatus;
 
 /// Validates one-shot transcode progress and returns completed output length.
 ///

@@ -8,40 +8,27 @@
 //! Buffered asynchronous output driver for streaming transcoders.
 
 use core::fmt;
-use std::{
-    collections::TryReserveError,
-    future::poll_fn,
-    io::{
-        Error,
-        ErrorKind,
-        Result,
-    },
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
-};
+use std::collections::TryReserveError;
+use std::future::poll_fn;
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Result;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
 
-use qubit_io::{
-    AsyncBufferedOutput,
-    AsyncOutput,
-    Buffer,
-};
-use qubit_utils::{
-    SliceRange,
-    allocation_error,
-};
-
-use crate::{
-    CapacityError,
-    TranscodeEncoder,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
+use qubit_io::AsyncBufferedOutput;
+use qubit_io::AsyncOutput;
+use qubit_io::Buffer;
+use qubit_utils::SliceRange;
+use qubit_utils::allocation_error;
 
 use super::transcode_progress_validation::validate_encode_progress;
+use crate::CapacityError;
+use crate::TranscodeEncoder;
+use crate::TranscodeProgress;
+use crate::TranscodeStatus;
+use crate::Transcoder;
 
 /// Buffers asynchronous transcoder output while preserving pending units.
 ///

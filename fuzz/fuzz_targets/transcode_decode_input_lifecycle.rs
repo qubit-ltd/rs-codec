@@ -12,14 +12,13 @@ use core::convert::Infallible;
 use std::io::Cursor;
 
 use libfuzzer_sys::fuzz_target;
-use qubit_codec::{
-    CapacityError,
-    TranscodeDecodeError,
-    TranscodeDecodeInput,
-    TranscodeDecoder,
-    TranscodeProgress,
-    Transcoder,
-};
+use qubit_codec::CapacityError;
+use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeDecodeInput;
+use qubit_codec::TranscodeDecoder;
+use qubit_codec::TranscodeProgress;
+use qubit_codec::Transcoder;
+use qubit_utils as utils_crate;
 
 const RESET: u8 = 0xa2;
 const FINISH: u8 = 0xf2;
@@ -113,7 +112,7 @@ impl Transcoder for MarkerDecoder {
         }
         if output_index == output.len() {
             return Ok(TranscodeProgress::need_output(
-                qubit_utils::nonzero(1),
+                utils_crate::nonzero(1),
                 0,
                 0,
             ));

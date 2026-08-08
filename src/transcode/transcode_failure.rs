@@ -9,12 +9,9 @@
 
 use thiserror::Error;
 
-use crate::{
-    Codec,
-    codec::assert_unit_bounds,
-};
-
 use super::capacity_error::CapacityError;
+use crate::Codec;
+use crate::codec::assert_unit_bounds;
 
 /// Framework-level failure reported by a transcode operation.
 ///

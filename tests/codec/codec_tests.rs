@@ -7,6 +7,7 @@
 // =============================================================================
 //! Tests for the low-level codec trait.
 
+use qubit_codec as codec;
 use qubit_codec::Codec;
 
 #[derive(Default)]
@@ -30,7 +31,7 @@ impl Codec for ByteIncrementCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         debug_assert!(input_index < input.len());
 
@@ -85,7 +86,7 @@ impl Codec for StatefulLifecycleCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
@@ -219,7 +220,7 @@ impl Codec for BufferedEncodeCodec {
         input_index: usize,
     ) -> Result<
         (u8, core::num::NonZeroUsize),
-        qubit_codec::DecodeFailure<Self::DecodeError>,
+        codec::DecodeFailure<Self::DecodeError>,
     > {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }

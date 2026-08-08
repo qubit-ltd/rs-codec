@@ -7,10 +7,8 @@
 // =============================================================================
 //! Tests scratch-backed single-value decode lifecycle progress.
 
-use qubit_codec::{
-    CodecValueDecoder,
-    DecodeLifecycleProgress,
-};
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::DecodeLifecycleProgress;
 
 use super::codec_value_decoder_tests::ResetSensitiveLifecycleCodec;
 

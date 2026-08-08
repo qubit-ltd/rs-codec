@@ -8,16 +8,12 @@
 
 //! Shows why codecs with decode lifecycle output need a lifecycle-aware facade.
 
-use core::{
-    convert::Infallible,
-    num::NonZeroUsize,
-};
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
 
-use qubit_codec::{
-    Codec,
-    CodecValueDecoder,
-    DecodeFailure,
-};
+use qubit_codec::Codec;
+use qubit_codec::CodecValueDecoder;
+use qubit_codec::DecodeFailure;
 
 const RESET_MARKER: u8 = 0xfe;
 const FINISH_MARKER: u8 = 0xff;

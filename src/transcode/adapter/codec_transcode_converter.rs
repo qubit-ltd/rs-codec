@@ -9,19 +9,15 @@
 
 use core::fmt;
 
-use super::{
-    super::engine::TranscodeConvertEngine,
-    CodecTranscodeDecodeHooks,
-    CodecTranscodeEncodeHooks,
-};
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeConvertErrorOf,
-    TranscodeConverter,
-    TranscodeProgress,
-    Transcoder,
-};
+use super::super::engine::TranscodeConvertEngine;
+use super::CodecTranscodeDecodeHooks;
+use super::CodecTranscodeEncodeHooks;
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeConvertErrorOf;
+use crate::TranscodeConverter;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 
 /// Converts source units to target units through a decoded value by using
 /// codecs.

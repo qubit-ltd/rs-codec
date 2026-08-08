@@ -8,23 +8,17 @@
 
 #![no_main]
 
-use core::{
-    convert::Infallible,
-    num::NonZeroUsize,
-};
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
 
 use libfuzzer_sys::fuzz_target;
-use qubit_codec::{
-    Codec,
-    DecodeFailure,
-    TranscodeDecodeErrorOf,
-    engine::{
-        DecodeContext,
-        DecodeInvalidAction,
-        TranscodeDecodeEngine,
-        TranscodeDecodeHooks,
-    },
-};
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDecodeErrorOf;
+use qubit_codec::engine::DecodeContext;
+use qubit_codec::engine::DecodeInvalidAction;
+use qubit_codec::engine::TranscodeDecodeEngine;
+use qubit_codec::engine::TranscodeDecodeHooks;
 
 const MAX_INPUT_LEN: usize = 4 * 1024;
 

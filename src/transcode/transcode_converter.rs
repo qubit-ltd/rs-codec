@@ -7,10 +7,8 @@
 // =============================================================================
 //! Semantic marker trait for buffered converters.
 
-use super::{
-    TranscodeConvertError,
-    Transcoder,
-};
+use super::TranscodeConvertError;
+use super::Transcoder;
 
 /// Converts encoded units of one representation into encoded units of another.
 ///

@@ -9,14 +9,10 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::{
-    engine::{
-        DecodeContext,
-        DecodeOutcome,
-        EncodeOutcome,
-    },
-    transcode_progress::TranscodeProgress,
-};
+use super::super::engine::DecodeContext;
+use super::super::engine::DecodeOutcome;
+use super::super::engine::EncodeOutcome;
+use super::super::transcode_progress::TranscodeProgress;
 use super::transcode_state::TranscodeState;
 
 /// Mutable state for one buffered conversion call.

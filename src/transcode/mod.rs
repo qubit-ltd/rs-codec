@@ -26,51 +26,43 @@ mod transcode_progress;
 mod transcode_status;
 mod transcoder;
 
-pub use adapter::{
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-};
+pub use adapter::CodecTranscodeConverter;
+pub use adapter::CodecTranscodeDecoder;
+pub use adapter::CodecTranscodeEncoder;
 pub use capacity_error::CapacityError;
-pub use engine::{
-    DecodeContext,
-    DecodeIncompleteAction,
-    DecodeIncompleteActionOf,
-    DecodeInvalidAction,
-    DecodeInvalidActionOf,
-    EncodeContext,
-    EncodeUnencodableAction,
-    EncodeUnencodableActionOf,
-    TranscodeConvertEngine,
-    TranscodeDecodeEngine,
-    TranscodeDecodeHooks,
-    TranscodeEncodeEngine,
-    TranscodeEncodeHooks,
-};
+pub use engine::DecodeContext;
+pub use engine::DecodeIncompleteAction;
+pub use engine::DecodeIncompleteActionOf;
+pub use engine::DecodeInvalidAction;
+pub use engine::DecodeInvalidActionOf;
+pub use engine::EncodeContext;
+pub use engine::EncodeUnencodableAction;
+pub use engine::EncodeUnencodableActionOf;
+pub use engine::TranscodeConvertEngine;
+pub use engine::TranscodeDecodeEngine;
+pub use engine::TranscodeDecodeHooks;
+pub use engine::TranscodeEncodeEngine;
+pub use engine::TranscodeEncodeHooks;
 #[cfg(feature = "io")]
-pub use io::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeDecodeStep,
-    AsyncTranscodeEncodeOutput,
-    TranscodeDecodeInput,
-    TranscodeEncodeOutput,
-};
+pub use io::AsyncTranscodeDecodeInput;
+#[cfg(feature = "io")]
+pub use io::AsyncTranscodeDecodeStep;
+#[cfg(feature = "io")]
+pub use io::AsyncTranscodeEncodeOutput;
+#[cfg(feature = "io")]
+pub use io::TranscodeDecodeInput;
+#[cfg(feature = "io")]
+pub use io::TranscodeEncodeOutput;
 pub use transcode_contract_error::TranscodeContractError;
-pub use transcode_convert_error::{
-    TranscodeConvertError,
-    TranscodeConvertErrorOf,
-};
+pub use transcode_convert_error::TranscodeConvertError;
+pub use transcode_convert_error::TranscodeConvertErrorOf;
 pub use transcode_converter::TranscodeConverter;
-pub use transcode_decode_error::{
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-};
+pub use transcode_decode_error::TranscodeDecodeError;
+pub use transcode_decode_error::TranscodeDecodeErrorOf;
 pub use transcode_decoder::TranscodeDecoder;
 pub use transcode_domain_error::TranscodeDomainError;
-pub use transcode_encode_error::{
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-};
+pub use transcode_encode_error::TranscodeEncodeError;
+pub use transcode_encode_error::TranscodeEncodeErrorOf;
 pub use transcode_encoder::TranscodeEncoder;
 pub use transcode_failure::TranscodeFailure;
 pub use transcode_progress::TranscodeProgress;

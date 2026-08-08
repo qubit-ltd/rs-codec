@@ -7,10 +7,8 @@
 // =============================================================================
 //! Semantic marker trait for buffered encoders.
 
-use super::{
-    TranscodeEncodeError,
-    Transcoder,
-};
+use super::TranscodeEncodeError;
+use super::Transcoder;
 
 /// Encodes logical values into encoded units over caller-provided buffers.
 ///

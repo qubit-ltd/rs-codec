@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    AsyncTranscodeDecodeStep,
-    TranscodeProgress,
-};
+use qubit_codec::AsyncTranscodeDecodeStep;
+use qubit_codec::TranscodeProgress;
 
 /// Verifies the decode-step result preserves its committed progress.
 #[test]

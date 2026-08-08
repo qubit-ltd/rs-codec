@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec::{
-    TranscodeDomainError,
-    TranscodeEncodeError,
-    TranscodeFailure,
-};
+use qubit_codec::TranscodeDomainError;
+use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeFailure;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain error")]

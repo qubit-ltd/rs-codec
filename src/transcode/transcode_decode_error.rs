@@ -11,15 +11,11 @@ use core::num::NonZeroUsize;
 
 use thiserror::Error;
 
-use super::{
-    capacity_error::CapacityError,
-    transcode_domain_error::TranscodeDomainError,
-    transcode_failure::TranscodeFailure,
-};
-use crate::{
-    Codec,
-    DecodeFailure,
-};
+use super::capacity_error::CapacityError;
+use super::transcode_domain_error::TranscodeDomainError;
+use super::transcode_failure::TranscodeFailure;
+use crate::Codec;
+use crate::DecodeFailure;
 
 /// Decode transcode error for a codec-backed decoder.
 pub type TranscodeDecodeErrorOf<C> =

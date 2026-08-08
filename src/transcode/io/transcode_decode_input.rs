@@ -9,40 +9,31 @@
 
 use core::fmt;
 use std::collections::TryReserveError;
-use std::io::{
-    Error,
-    ErrorKind,
-    Read,
-    Result,
-    Seek,
-    SeekFrom,
-};
+use std::io::Error;
+use std::io::ErrorKind;
+use std::io::Read;
+use std::io::Result;
+use std::io::Seek;
+use std::io::SeekFrom;
 
-use qubit_io::{
-    Buffer,
-    BufferedInput,
-    Input,
-    Seekable,
-};
-use qubit_utils::{
-    SliceRange,
-    UncheckedSlice,
-    allocation_error,
-};
-
-use crate::{
-    Codec,
-    DecodeLifecycleOutput,
-    DecodeLifecycleProgress,
-    TranscodeFailure,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-    codec::assert_unit_bounds,
-};
+use qubit_io::Buffer;
+use qubit_io::BufferedInput;
+use qubit_io::Input;
+use qubit_io::Seekable;
+use qubit_utils::SliceRange;
+use qubit_utils::UncheckedSlice;
+use qubit_utils::allocation_error;
 
 use super::codec_decode_driver::CodecDecodeDriver;
 use super::transcode_progress_validation::validate_decode_progress;
+use crate::Codec;
+use crate::DecodeLifecycleOutput;
+use crate::DecodeLifecycleProgress;
+use crate::TranscodeFailure;
+use crate::TranscodeProgress;
+use crate::TranscodeStatus;
+use crate::Transcoder;
+use crate::codec::assert_unit_bounds;
 
 /// Decodes an [`Input`] unit stream into an [`Input`] value stream.
 ///

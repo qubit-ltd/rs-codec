@@ -9,27 +9,21 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::internal::{
-    encode_attempt::EncodeAttempt,
-    encode_state::EncodeState,
-    lifecycle_guard::LifecycleGuard,
-};
-use super::{
-    EncodeOutcome,
-    EncodeUnencodableAction,
-    TranscodeEncodeHooks,
-};
+use super::super::internal::encode_attempt::EncodeAttempt;
+use super::super::internal::encode_state::EncodeState;
+use super::super::internal::lifecycle_guard::LifecycleGuard;
+use super::EncodeOutcome;
+use super::EncodeUnencodableAction;
+use super::TranscodeEncodeHooks;
+use crate::CapacityError;
+use crate::Codec;
+use crate::TranscodeEncodeError;
+use crate::TranscodeEncodeErrorOf;
+use crate::TranscodeEncoder;
+use crate::TranscodeFailure;
+use crate::TranscodeProgress;
+use crate::Transcoder;
 use crate::codec::assert_unit_bounds;
-use crate::{
-    CapacityError,
-    Codec,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeFailure,
-    TranscodeProgress,
-    Transcoder,
-};
 
 /// Reusable buffered encoding engine for codec-backed encoders.
 ///

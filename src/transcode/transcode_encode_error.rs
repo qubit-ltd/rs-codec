@@ -9,11 +9,9 @@
 
 use thiserror::Error;
 
-use super::{
-    capacity_error::CapacityError,
-    transcode_domain_error::TranscodeDomainError,
-    transcode_failure::TranscodeFailure,
-};
+use super::capacity_error::CapacityError;
+use super::transcode_domain_error::TranscodeDomainError;
+use super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 
 /// Encode transcode error for a codec-backed encoder.

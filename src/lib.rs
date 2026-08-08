@@ -104,68 +104,60 @@ mod value;
 
 /// Policy-aware transcode engines, hooks, contexts, and policy actions.
 pub mod engine {
-    pub use crate::transcode::{
-        DecodeContext,
-        DecodeIncompleteAction,
-        DecodeIncompleteActionOf,
-        DecodeInvalidAction,
-        DecodeInvalidActionOf,
-        EncodeContext,
-        EncodeUnencodableAction,
-        EncodeUnencodableActionOf,
-        TranscodeConvertEngine,
-        TranscodeDecodeEngine,
-        TranscodeDecodeHooks,
-        TranscodeEncodeEngine,
-        TranscodeEncodeHooks,
-    };
+    pub use crate::transcode::DecodeContext;
+    pub use crate::transcode::DecodeIncompleteAction;
+    pub use crate::transcode::DecodeIncompleteActionOf;
+    pub use crate::transcode::DecodeInvalidAction;
+    pub use crate::transcode::DecodeInvalidActionOf;
+    pub use crate::transcode::EncodeContext;
+    pub use crate::transcode::EncodeUnencodableAction;
+    pub use crate::transcode::EncodeUnencodableActionOf;
+    pub use crate::transcode::TranscodeConvertEngine;
+    pub use crate::transcode::TranscodeDecodeEngine;
+    pub use crate::transcode::TranscodeDecodeHooks;
+    pub use crate::transcode::TranscodeEncodeEngine;
+    pub use crate::transcode::TranscodeEncodeHooks;
 }
 
-pub use byte_order::{
-    BigEndian,
-    ByteOrder,
-    ByteOrderSpec,
-    LittleEndian,
-    NativeEndian,
-};
-pub use codec::{
-    Codec,
-    DecodeFailure,
-};
+pub use byte_order::BigEndian;
+pub use byte_order::ByteOrder;
+pub use byte_order::ByteOrderSpec;
+pub use byte_order::LittleEndian;
+pub use byte_order::NativeEndian;
+pub use codec::Codec;
+pub use codec::DecodeFailure;
 #[cfg(feature = "io")]
-pub use transcode::{
-    AsyncTranscodeDecodeInput,
-    AsyncTranscodeDecodeStep,
-    AsyncTranscodeEncodeOutput,
-    TranscodeDecodeInput,
-    TranscodeEncodeOutput,
-};
-pub use transcode::{
-    CapacityError,
-    CodecTranscodeConverter,
-    CodecTranscodeDecoder,
-    CodecTranscodeEncoder,
-    TranscodeContractError,
-    TranscodeConvertError,
-    TranscodeConvertErrorOf,
-    TranscodeConverter,
-    TranscodeDecodeError,
-    TranscodeDecodeErrorOf,
-    TranscodeDecoder,
-    TranscodeDomainError,
-    TranscodeEncodeError,
-    TranscodeEncodeErrorOf,
-    TranscodeEncoder,
-    TranscodeFailure,
-    TranscodeProgress,
-    TranscodeStatus,
-    Transcoder,
-};
-pub use value::{
-    CodecValueDecoder,
-    CodecValueEncoder,
-    DecodeLifecycleOutput,
-    DecodeLifecycleProgress,
-    ValueDecoder,
-    ValueEncoder,
-};
+pub use transcode::AsyncTranscodeDecodeInput;
+#[cfg(feature = "io")]
+pub use transcode::AsyncTranscodeDecodeStep;
+#[cfg(feature = "io")]
+pub use transcode::AsyncTranscodeEncodeOutput;
+pub use transcode::CapacityError;
+pub use transcode::CodecTranscodeConverter;
+pub use transcode::CodecTranscodeDecoder;
+pub use transcode::CodecTranscodeEncoder;
+pub use transcode::TranscodeContractError;
+pub use transcode::TranscodeConvertError;
+pub use transcode::TranscodeConvertErrorOf;
+pub use transcode::TranscodeConverter;
+pub use transcode::TranscodeDecodeError;
+pub use transcode::TranscodeDecodeErrorOf;
+#[cfg(feature = "io")]
+pub use transcode::TranscodeDecodeInput;
+pub use transcode::TranscodeDecoder;
+pub use transcode::TranscodeDomainError;
+pub use transcode::TranscodeEncodeError;
+pub use transcode::TranscodeEncodeErrorOf;
+#[cfg(feature = "io")]
+pub use transcode::TranscodeEncodeOutput;
+pub use transcode::TranscodeEncoder;
+pub use transcode::TranscodeFailure;
+pub use transcode::TranscodeProgress;
+pub use transcode::TranscodeStatus;
+pub use transcode::Transcoder;
+pub use value::CodecValueDecoder;
+pub use value::CodecValueEncoder;
+pub use value::DecodeLifecycleOutput;
+pub use value::DecodeLifecycleProgress;
+pub use value::ValueDecoder;
+pub use value::ValueEncoder;
