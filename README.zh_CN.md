@@ -16,14 +16,14 @@
 
 ```toml
 [dependencies]
-qubit-codec = "0.12"
+qubit-codec = "0.13"
 ```
 
 默认 feature 集为空。只有使用 `qubit-io` 缓冲 bridge 时才启用 `io`：
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.12", features = ["io"] }
+qubit-codec = { version = "0.13", features = ["io"] }
 ```
 
 最低支持的 Rust 版本为 1.94。
