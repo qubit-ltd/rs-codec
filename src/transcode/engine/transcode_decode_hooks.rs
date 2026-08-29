@@ -158,11 +158,7 @@ where
     /// be represented as `usize`.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(
-        &self,
-        _codec: &C,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -255,8 +251,7 @@ where
         _source: Option<&C::DecodeError>,
         _required_total: NonZeroUsize,
         _context: DecodeContext,
-    ) -> Result<DecodeIncompleteAction<C::Value>, TranscodeDecodeErrorOf<C>>
-    {
+    ) -> Result<DecodeIncompleteAction<C::Value>, TranscodeDecodeErrorOf<C>> {
         Ok(DecodeIncompleteAction::Reject)
     }
 

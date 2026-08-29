@@ -110,11 +110,7 @@ where
         .checked_add(C::MAX_ENCODE_FINISH_UNITS)
         .ok_or(CapacityError::OutputLengthOverflow)?;
     let value_index = output_index + reset_written;
-    TranscodeFailure::ensure_output_capacity(
-        output.len(),
-        value_index,
-        value_and_finish,
-    )?;
+    TranscodeFailure::ensure_output_capacity(output.len(), value_index, value_and_finish)?;
     let value_written = unsafe {
         // SAFETY: The capacity check above leaves the reset-state exact value
         // width writable after reset output, and the reset-state domain check
@@ -178,16 +174,8 @@ where
     C: Codec,
 {
     assert_unit_bounds::<C>();
-    TranscodeFailure::ensure_output_capacity(
-        reset_output.len(),
-        0,
-        C::MAX_DECODE_RESET_VALUES,
-    )?;
-    TranscodeFailure::ensure_output_capacity(
-        finish_output.len(),
-        0,
-        C::MAX_DECODE_FINISH_VALUES,
-    )?;
+    TranscodeFailure::ensure_output_capacity(reset_output.len(), 0, C::MAX_DECODE_RESET_VALUES)?;
+    TranscodeFailure::ensure_output_capacity(finish_output.len(), 0, C::MAX_DECODE_FINISH_VALUES)?;
     let reset_written = unsafe {
         // SAFETY: The capacity check above reserves the codec's declared
         // decode-reset output bound.
@@ -205,9 +193,7 @@ where
         // required by `Codec::decode_eof` at index 0.
         codec.decode_eof(input, 0)
     }
-    .map_err(|failure| {
-        TranscodeDecodeError::from_decode_failure(failure, 0, input.len())
-    })?;
+    .map_err(|failure| TranscodeDecodeError::from_decode_failure(failure, 0, input.len()))?;
     assert!(
         consumed.get() <= input.len(),
         "Codec::decode consumed beyond available input",

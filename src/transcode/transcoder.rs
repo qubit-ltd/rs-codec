@@ -44,31 +44,22 @@ fn complete_progress_written(
 ) -> Result<usize, TranscodeFailure> {
     assert!(
         progress
-            .validate(
-                0,
-                input_len,
-                output_index,
-                output_len.saturating_sub(output_index),
-            )
+            .validate(0, input_len, output_index, output_len.saturating_sub(output_index),)
             .is_ok(),
         "Transcoder::transcode returned invalid progress",
     );
     match progress.status() {
         TranscodeStatus::Complete => Ok(progress.written()),
-        TranscodeStatus::NeedOutput { required } => {
-            Err(TranscodeFailure::insufficient_output(
-                output_index + progress.written(),
-                required.get(),
-                output_len - output_index - progress.written(),
-            ))
-        }
-        TranscodeStatus::NeedInput { required } => {
-            Err(TranscodeFailure::incomplete_input(
-                progress.read(),
-                required.get(),
-                input_len - progress.read(),
-            ))
-        }
+        TranscodeStatus::NeedOutput { required } => Err(TranscodeFailure::insufficient_output(
+            output_index + progress.written(),
+            required.get(),
+            output_len - output_index - progress.written(),
+        )),
+        TranscodeStatus::NeedInput { required } => Err(TranscodeFailure::incomplete_input(
+            progress.read(),
+            required.get(),
+            input_len - progress.read(),
+        )),
     }
 }
 
@@ -86,13 +77,8 @@ fn complete_progress_written(
 /// # Errors
 ///
 /// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
-fn add_output_bounds(
-    first: usize,
-    second: usize,
-) -> Result<usize, CapacityError> {
-    first
-        .checked_add(second)
-        .ok_or(CapacityError::OutputLengthOverflow)
+fn add_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
+    first.checked_add(second).ok_or(CapacityError::OutputLengthOverflow)
 }
 
 /// Adds the reset, transcode, and finish output-capacity bounds.
@@ -111,11 +97,7 @@ fn add_output_bounds(
 ///
 /// Returns [`CapacityError::OutputLengthOverflow`] when either addition
 /// overflows.
-fn sum_output_bounds(
-    reset: usize,
-    transcode: usize,
-    finish: usize,
-) -> Result<usize, CapacityError> {
+fn sum_output_bounds(reset: usize, transcode: usize, finish: usize) -> Result<usize, CapacityError> {
     let before_finish = add_output_bounds(reset, transcode)?;
     add_output_bounds(before_finish, finish)
 }
@@ -353,10 +335,7 @@ pub trait Transcoder {
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError>;
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
     /// stream.
@@ -378,10 +357,7 @@ pub trait Transcoder {
     /// capacity arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
-    fn max_total_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;
         let finish = self.max_finish_output_len()?;
@@ -432,11 +408,7 @@ pub trait Transcoder {
     ///
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when reset itself fails.
-    fn reset(
-        &mut self,
-        output: &mut [Self::Output],
-        output_index: usize,
-    ) -> Result<usize, Self::Error>;
+    fn reset(&mut self, output: &mut [Self::Output], output_index: usize) -> Result<usize, Self::Error>;
 
     /// Converts available input units into output units.
     ///
@@ -501,17 +473,14 @@ pub trait Transcoder {
         output: &mut [Self::Output],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        let progress =
-            self.transcode(input, input_index, output, output_index)?;
+        let progress = self.transcode(input, input_index, output, output_index)?;
         match progress.status() {
-            TranscodeStatus::NeedInput { required } => {
-                Err(TranscodeFailure::incomplete_input(
-                    input_index + progress.read(),
-                    required.get(),
-                    input.len() - input_index - progress.read(),
-                )
-                .into())
-            }
+            TranscodeStatus::NeedInput { required } => Err(TranscodeFailure::incomplete_input(
+                input_index + progress.read(),
+                required.get(),
+                input.len() - input_index - progress.read(),
+            )
+            .into()),
             _ => Ok(progress),
         }
     }
@@ -633,11 +602,7 @@ pub trait Transcoder {
     /// Returns contract errors (`invalid_output_index`, `insufficient_output`)
     /// when capacity checks fail, or policy errors when finish itself
     /// fails.
-    fn finish(
-        &mut self,
-        output: &mut [Self::Output],
-        output_index: usize,
-    ) -> Result<usize, Self::Error>;
+    fn finish(&mut self, output: &mut [Self::Output], output_index: usize) -> Result<usize, Self::Error>;
 
     /// Runs a complete one-shot `reset -> transcode -> finish` stream.
     ///
@@ -685,26 +650,14 @@ pub trait Transcoder {
         input: &[Self::Input],
         output: &mut [Self::Output],
     ) -> Result<usize, Self::Error> {
-        let reset_required = self
-            .max_reset_output_len()
-            .map_err(TranscodeFailure::from)?;
+        let reset_required = self.max_reset_output_len().map_err(TranscodeFailure::from)?;
         let transcode_required = self
             .max_transcode_output_len(input.len())
             .map_err(TranscodeFailure::from)?;
-        let finish_required = self
-            .max_finish_output_len()
-            .map_err(TranscodeFailure::from)?;
-        let total_required = sum_output_bounds(
-            reset_required,
-            transcode_required,
-            finish_required,
-        )
-        .map_err(TranscodeFailure::from)?;
-        TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            0,
-            total_required,
-        )?;
+        let finish_required = self.max_finish_output_len().map_err(TranscodeFailure::from)?;
+        let total_required =
+            sum_output_bounds(reset_required, transcode_required, finish_required).map_err(TranscodeFailure::from)?;
+        TranscodeFailure::ensure_output_capacity(output.len(), 0, total_required)?;
 
         let reset_written = self.reset(output, 0)?;
         assert!(
@@ -718,15 +671,10 @@ pub trait Transcoder {
         let mut output_cursor = reset_written;
 
         let progress = self.transcode_eof(input, 0, output, output_cursor)?;
-        let transcode_written = complete_progress_written(
-            progress,
-            input.len(),
-            output_cursor,
-            output.len(),
-        )?;
-        output_cursor = output_cursor.checked_add(transcode_written).expect(
-            "Transcoder::transcode write count overflowed the output cursor",
-        );
+        let transcode_written = complete_progress_written(progress, input.len(), output_cursor, output.len())?;
+        output_cursor = output_cursor
+            .checked_add(transcode_written)
+            .expect("Transcoder::transcode write count overflowed the output cursor");
 
         let finish_available = output.len() - output_cursor;
         let finish_written = self.finish(output, output_cursor)?;
@@ -738,9 +686,9 @@ pub trait Transcoder {
             finish_written <= finish_available,
             "Transcoder::finish wrote beyond available output",
         );
-        output_cursor = output_cursor.checked_add(finish_written).expect(
-            "Transcoder::finish write count overflowed the output cursor",
-        );
+        output_cursor = output_cursor
+            .checked_add(finish_written)
+            .expect("Transcoder::finish write count overflowed the output cursor");
         Ok(output_cursor)
     }
 }

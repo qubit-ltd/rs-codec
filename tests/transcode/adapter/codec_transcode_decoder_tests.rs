@@ -35,8 +35,7 @@ impl Codec for VariableByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -105,8 +104,7 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((
@@ -147,8 +145,7 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -162,11 +159,7 @@ impl Codec for FlushFailCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
         Err("flush failure")
     }
 }
@@ -190,8 +183,7 @@ impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -205,21 +197,14 @@ impl Codec for ResetFailCodec {
         Ok(1)
     }
 
-    unsafe fn decode_reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
         Err("reset failure")
     }
 }
 
 #[test]
 fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
-    fn assert_transcode_decoder<
-        T: TranscodeDecoder<Input = u8, Output = u8>,
-    >() {
-    }
+    fn assert_transcode_decoder<T: TranscodeDecoder<Input = u8, Output = u8>>() {}
 
     assert_transcode_decoder::<CodecTranscodeDecoder<VariableByteCodec>>();
 
@@ -227,9 +212,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
 
     let mut reset_output = [];
 
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -252,9 +235,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
 fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -292,9 +273,7 @@ fn test_codec_transcode_decoder_reports_bounds_and_resets_state() {
 fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -325,17 +304,13 @@ fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut output = [0_u8; 1];
 
-    decoder
-        .reset(&mut [], 0)
-        .expect("reset before EOF transcode");
+    decoder.reset(&mut [], 0).expect("reset before EOF transcode");
     let error = decoder
         .transcode_eof(&[0x80], 0, &mut output, 0)
         .expect_err("an incomplete EOF value should be rejected");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::incomplete_input(0, 2, 1)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1)),
         error,
     );
 }
@@ -344,9 +319,7 @@ fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
 fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -355,9 +328,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -366,9 +337,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
 fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -377,9 +346,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .expect_err("out-of-range input index should fail");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::invalid_input_index(2, 1)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
         error
     );
 }
@@ -388,9 +355,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
 fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -399,9 +364,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -410,9 +373,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
 fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
     let mut decoder = CodecTranscodeDecoder::new(FixedPairCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -437,9 +398,7 @@ fn test_codec_transcode_decoder_finish_does_not_handle_input_tail() {
 fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -448,11 +407,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         .expect_err("invalid input should fail");
 
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(
-            TestDecodeError::Invalid,
-            0,
-            Some(crate::nonzero(1)),
-        ),
+        TranscodeDecodeError::domain_main_with_consumed(TestDecodeError::Invalid, 0, Some(crate::nonzero(1)),),
         error,
     );
 }
@@ -461,9 +416,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
 fn test_codec_transcode_decoder_wraps_decode_finish_error() {
     let mut decoder = CodecTranscodeDecoder::new(FlushFailCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 

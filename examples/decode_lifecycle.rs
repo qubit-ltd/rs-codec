@@ -70,20 +70,12 @@ impl Codec for MarkerCodec {
         Ok(1)
     }
 
-    unsafe fn decode_reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
         output[output_index] = RESET_MARKER;
         Ok(1)
     }
 
-    unsafe fn decode_finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
         output[output_index] = FINISH_MARKER;
         Ok(1)
     }

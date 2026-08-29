@@ -11,14 +11,8 @@ use qubit_codec::engine::DecodeIncompleteAction;
 
 #[test]
 fn test_decode_incomplete_action_variants_are_public() {
-    assert_eq!(
-        DecodeIncompleteAction::<u8>::Reject,
-        DecodeIncompleteAction::Reject,
-    );
-    assert_eq!(
-        DecodeIncompleteAction::<u8>::Skip,
-        DecodeIncompleteAction::Skip,
-    );
+    assert_eq!(DecodeIncompleteAction::<u8>::Reject, DecodeIncompleteAction::Reject,);
+    assert_eq!(DecodeIncompleteAction::<u8>::Skip, DecodeIncompleteAction::Skip,);
     assert_eq!(
         DecodeIncompleteAction::Emit { value: 7_u8 },
         DecodeIncompleteAction::Emit { value: 7 },

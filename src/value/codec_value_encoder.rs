@@ -131,17 +131,10 @@ where
         let target_len = original_len
             .checked_add(units)
             .ok_or(CapacityError::OutputLengthOverflow)?;
-        try_reserve_vec(output, units)
-            .map_err(|_| TranscodeFailure::allocation_failed())?;
+        try_reserve_vec(output, units).map_err(|_| TranscodeFailure::allocation_failed())?;
         output.resize_with(target_len, C::Unit::default);
 
-        match encode_complete_value_into_reserved(
-            &mut self.codec,
-            input,
-            output,
-            original_len,
-            units,
-        ) {
+        match encode_complete_value_into_reserved(&mut self.codec, input, output, original_len, units) {
             Ok(written) => {
                 output.truncate(original_len + written);
                 Ok(written)
@@ -183,10 +176,7 @@ where
     /// Panics when the wrapped codec reports more reset or finish output than
     /// its declared bounds, or a value width different from
     /// [`Codec::encode_len`].
-    fn encode(
-        &mut self,
-        input: &C::Value,
-    ) -> Result<Self::Output, Self::Error> {
+    fn encode(&mut self, input: &C::Value) -> Result<Self::Output, Self::Error> {
         let mut output = Vec::new();
         self.encode_into(input, &mut output)?;
         Ok(output)

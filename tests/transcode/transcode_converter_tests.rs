@@ -20,28 +20,14 @@ struct ByteToWord;
 impl Transcoder for ByteToWord {
     type Input = u8;
     type Output = u16;
-    type Error = TranscodeConvertError<
-        core::convert::Infallible,
-        core::convert::Infallible,
-        u8,
-    >;
+    type Error = TranscodeConvertError<core::convert::Infallible, core::convert::Infallible, u8>;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u16],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -61,15 +47,8 @@ impl Transcoder for ByteToWord {
         Ok(TranscodeProgress::complete(count, count))
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u16],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }

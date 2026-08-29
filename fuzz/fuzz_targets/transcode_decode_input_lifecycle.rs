@@ -27,12 +27,9 @@ const MAX_INPUT_LEN: usize = 4 * 1024;
 
 fuzz_target!(|data: &[u8]| {
     let data = &data[..data.len().min(MAX_INPUT_LEN)];
-    let mut input =
-        TranscodeDecodeInput::with_capacity(Cursor::new(data.to_vec()), 1);
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(data.to_vec()), 1);
     let mut decoder = MarkerDecoder;
-    let mut mapper = |_error: TranscodeDecodeError<Infallible>| {
-        std::io::Error::other("marker decoder cannot fail")
-    };
+    let mut mapper = |_error: TranscodeDecodeError<Infallible>| std::io::Error::other("marker decoder cannot fail");
     let mut lifecycle = Vec::new();
     let mut decoded = Vec::new();
 
@@ -40,23 +37,17 @@ fuzz_target!(|data: &[u8]| {
         match action % 3 {
             0 => {
                 let mut output = [0_u8; 1];
-                let written = input
-                    .reset(&mut decoder, &mut mapper, &mut output, 0, 1)
-                    .unwrap();
+                let written = input.reset(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap();
                 lifecycle.extend_from_slice(&output[..written]);
             }
             1 => {
                 let mut output = [0_u8; 1];
-                let written = input
-                    .transcode(&mut decoder, &mut mapper, &mut output, 0, 1)
-                    .unwrap();
+                let written = input.transcode(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap();
                 decoded.extend_from_slice(&output[..written]);
             }
             _ => {
                 let mut output = [0_u8; 1];
-                let written = input
-                    .finish(&mut decoder, &mut mapper, &mut output, 0, 1)
-                    .unwrap();
+                let written = input.finish(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap();
                 lifecycle.extend_from_slice(&output[..written]);
             }
         }
@@ -64,11 +55,7 @@ fuzz_target!(|data: &[u8]| {
 
     assert!(decoded.len() <= data.len());
     assert_eq!(&data[..decoded.len()], decoded.as_slice());
-    assert!(
-        lifecycle
-            .iter()
-            .all(|unit| *unit == RESET || *unit == FINISH)
-    );
+    assert!(lifecycle.iter().all(|unit| *unit == RESET || *unit == FINISH));
     let (_inner, unread) = input.into_parts();
     assert!(unread.available() <= 1);
 });
@@ -80,10 +67,7 @@ impl Transcoder for MarkerDecoder {
     type Output = u8;
     type Error = TranscodeDecodeError<Infallible>;
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
@@ -92,11 +76,7 @@ impl Transcoder for MarkerDecoder {
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(1)
     }
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, output: &mut [u8], index: usize) -> Result<usize, Self::Error> {
         output[index] = RESET;
         Ok(1)
     }
@@ -111,20 +91,12 @@ impl Transcoder for MarkerDecoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(
-                utils_crate::nonzero(1),
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
         }
         output[output_index] = input[input_index];
         Ok(TranscodeProgress::complete(1, 1))
     }
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, output: &mut [u8], index: usize) -> Result<usize, Self::Error> {
         output[index] = FINISH;
         Ok(1)
     }

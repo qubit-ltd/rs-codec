@@ -17,11 +17,7 @@ use qubit_codec::TranscodeContractError;
 fn test_transcode_contract_error_display_formats_all_variants() {
     assert_eq!(
         "transcoder consumed 3 units but only 2 were available",
-        TranscodeContractError::OverRead {
-            read: 3,
-            available: 2,
-        }
-        .to_string(),
+        TranscodeContractError::OverRead { read: 3, available: 2 }.to_string(),
     );
     assert_eq!(
         "transcoder wrote 5 units but only 4 output slots were available",
@@ -33,11 +29,7 @@ fn test_transcode_contract_error_display_formats_all_variants() {
     );
     assert_eq!(
         "transcoder progress overflow: index 7 plus advanced 8",
-        TranscodeContractError::ProgressIndexOverflow {
-            index: 7,
-            advanced: 8,
-        }
-        .to_string(),
+        TranscodeContractError::ProgressIndexOverflow { index: 7, advanced: 8 }.to_string(),
     );
     assert_eq!(
         "transcoder reported required 2 with available 2",
@@ -49,20 +41,13 @@ fn test_transcode_contract_error_display_formats_all_variants() {
     );
     assert_eq!(
         "transcoder reported Complete after consuming 1 of 2 available input units",
-        TranscodeContractError::CompleteWithRemainingInput {
-            read: 1,
-            available: 2,
-        }
-        .to_string(),
+        TranscodeContractError::CompleteWithRemainingInput { read: 1, available: 2 }.to_string(),
     );
 }
 
 #[test]
 fn test_transcode_contract_error_is_copy_hashable_and_has_no_source() {
-    let error = TranscodeContractError::OverRead {
-        read: 3,
-        available: 2,
-    };
+    let error = TranscodeContractError::OverRead { read: 3, available: 2 };
     let copied = error;
     assert_eq!(error, copied);
     assert!(error.source().is_none());

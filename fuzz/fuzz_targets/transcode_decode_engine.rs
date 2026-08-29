@@ -29,21 +29,17 @@ fuzz_target!(|data: &[u8]| {
     let mut output = [0_u8; 31];
     let mut decoded = Vec::with_capacity(data.len());
     let mut reset_output = [];
-    decoder.reset(&mut reset_output, 0).unwrap_or_else(|error| {
-        panic!("prefix codec reset is infallible: {error}")
-    });
+    decoder
+        .reset(&mut reset_output, 0)
+        .unwrap_or_else(|error| panic!("prefix codec reset is infallible: {error}"));
 
     while input_index < data.len() {
         let progress = decoder
             .transcode(&data[input_index..], 0, &mut output, 0)
-            .unwrap_or_else(|error| {
-                panic!("prefix codec is infallible: {error}")
-            });
+            .unwrap_or_else(|error| panic!("prefix codec is infallible: {error}"));
         progress
             .validate(0, data.len() - input_index, 0, output.len())
-            .unwrap_or_else(|error| {
-                panic!("engine returned invalid progress: {error}")
-            });
+            .unwrap_or_else(|error| panic!("engine returned invalid progress: {error}"));
         input_index += progress.read();
         decoded.extend_from_slice(&output[..progress.written()]);
         assert_eq!(decoded.as_slice(), &data[..input_index]);
@@ -57,12 +53,9 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(&[0xfe], &data[input_index..]);
     } else {
         let mut finish_output = [];
-        let written =
-            decoder
-                .finish(&mut finish_output, 0)
-                .unwrap_or_else(|error| {
-                    panic!("prefix codec finish is infallible: {error}")
-                });
+        let written = decoder
+            .finish(&mut finish_output, 0)
+            .unwrap_or_else(|error| panic!("prefix codec finish is infallible: {error}"));
         assert_eq!(0, written);
     }
 });
@@ -113,8 +106,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for RejectingHooks {
         error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>>
-    {
+    ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
         match *error {}
     }
 }

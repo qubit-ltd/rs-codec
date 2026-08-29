@@ -23,8 +23,7 @@ impl ValueDecoder<str> for StringDecoder {
 
 #[test]
 fn test_decoder_trait_dispatches_to_implementor() {
-    let decoded = ValueDecoder::<str>::decode(&mut StringDecoder, "text")
-        .expect("decoding should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&mut StringDecoder, "text").expect("decoding should be infallible");
 
     assert_eq!("text", decoded);
 }
@@ -43,8 +42,8 @@ impl ValueDecoder<str> for LowercaseCodec {
 
 #[test]
 fn test_codec_types_can_be_used_through_decoder_trait() {
-    let decoded = ValueDecoder::<str>::decode(&mut LowercaseCodec, "ABC")
-        .expect("lowercase decoding should be infallible");
+    let decoded =
+        ValueDecoder::<str>::decode(&mut LowercaseCodec, "ABC").expect("lowercase decoding should be infallible");
 
     assert_eq!("abc", decoded);
 }

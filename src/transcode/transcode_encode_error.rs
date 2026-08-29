@@ -15,8 +15,7 @@ use super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 
 /// Encode transcode error for a codec-backed encoder.
-pub type TranscodeEncodeErrorOf<C> =
-    TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
+pub type TranscodeEncodeErrorOf<C> = TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
 
 /// Error reported by an encode-oriented transcode operation.
 #[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
@@ -119,9 +118,7 @@ impl<E, V> TranscodeEncodeError<E, V> {
     #[must_use]
     pub const fn unencodable_ref(&self) -> Option<(usize, Option<&V>)> {
         match self {
-            Self::Unencodable { input_index, value } => {
-                Some((*input_index, value.as_ref()))
-            }
+            Self::Unencodable { input_index, value } => Some((*input_index, value.as_ref())),
             Self::Failure(_) | Self::Domain(_) => None,
         }
     }
@@ -134,12 +131,8 @@ impl<E, V> TranscodeEncodeError<E, V> {
     {
         match self {
             Self::Failure(failure) => TranscodeEncodeError::Failure(failure),
-            Self::Unencodable { input_index, value } => {
-                TranscodeEncodeError::Unencodable { input_index, value }
-            }
-            Self::Domain(error) => {
-                TranscodeEncodeError::Domain(error.map_source(f))
-            }
+            Self::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable { input_index, value },
+            Self::Domain(error) => TranscodeEncodeError::Domain(error.map_source(f)),
         }
     }
 
@@ -151,12 +144,10 @@ impl<E, V> TranscodeEncodeError<E, V> {
     {
         match self {
             Self::Failure(failure) => TranscodeEncodeError::Failure(failure),
-            Self::Unencodable { input_index, value } => {
-                TranscodeEncodeError::Unencodable {
-                    input_index,
-                    value: value.map(f),
-                }
-            }
+            Self::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable {
+                input_index,
+                value: value.map(f),
+            },
             Self::Domain(error) => TranscodeEncodeError::Domain(error),
         }
     }

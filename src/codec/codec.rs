@@ -479,8 +479,7 @@ pub trait Codec {
         &mut self,
         input: &[Self::Unit],
         input_index: usize,
-    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>>
-    {
+    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         // SAFETY: `decode_eof` has the same preconditions as `decode`.
         unsafe { self.decode(input, input_index) }
     }

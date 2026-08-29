@@ -40,11 +40,7 @@ impl<V> DecodeLifecycleOutput<V> {
     /// Returns output preserving all three lifecycle phases.
     #[inline(always)]
     pub(crate) fn new(reset: Vec<V>, value: V, finish: Vec<V>) -> Self {
-        Self {
-            reset,
-            value,
-            finish,
-        }
+        Self { reset, value, finish }
     }
 
     /// Returns values emitted while resetting decode state.

@@ -28,10 +28,7 @@ fn test_transcoder_progress_exposes_status_and_counts() {
         required: crate::nonzero(3),
     };
     let need_input = TranscodeProgress::new(status, 1, 2);
-    assert_eq!(
-        TranscodeStatus::need_input(crate::nonzero(3)),
-        need_input.status()
-    );
+    assert_eq!(TranscodeStatus::need_input(crate::nonzero(3)), need_input.status());
     assert_eq!(1, need_input.read());
     assert_eq!(2, need_input.written());
 
@@ -46,10 +43,7 @@ fn test_transcoder_progress_exposes_status_and_counts() {
         required: crate::nonzero(8),
     };
     let need_output = TranscodeProgress::new(status, 5, 6);
-    assert_eq!(
-        TranscodeStatus::need_output(crate::nonzero(8)),
-        need_output.status()
-    );
+    assert_eq!(TranscodeStatus::need_output(crate::nonzero(8)), need_output.status());
     assert_eq!(5, need_output.read());
     assert_eq!(6, need_output.written());
 }
@@ -57,18 +51,12 @@ fn test_transcoder_progress_exposes_status_and_counts() {
 #[test]
 fn test_transcoder_progress_constructors_create_expected_progress() {
     let need_input = TranscodeProgress::need_input(crate::nonzero(2), 5, 6);
-    assert_eq!(
-        TranscodeStatus::need_input(crate::nonzero(2)),
-        need_input.status()
-    );
+    assert_eq!(TranscodeStatus::need_input(crate::nonzero(2)), need_input.status());
     assert_eq!(5, need_input.read());
     assert_eq!(6, need_input.written());
 
     let need_output = TranscodeProgress::need_output(crate::nonzero(3), 8, 9);
-    assert_eq!(
-        TranscodeStatus::need_output(crate::nonzero(3)),
-        need_output.status()
-    );
+    assert_eq!(TranscodeStatus::need_output(crate::nonzero(3)), need_output.status());
     assert_eq!(8, need_output.read());
     assert_eq!(9, need_output.written());
 }
@@ -107,10 +95,7 @@ fn test_transcoder_progress_validate_accepts_consistent_progress() {
 fn test_transcoder_progress_validate_rejects_counter_bounds() {
     let progress = TranscodeProgress::complete(3, 1);
     assert_eq!(
-        Err(TranscodeContractError::OverRead {
-            read: 3,
-            available: 2,
-        }),
+        Err(TranscodeContractError::OverRead { read: 3, available: 2 }),
         progress.validate(0, 2, 0, 1),
     );
 
@@ -129,10 +114,7 @@ fn test_transcoder_progress_validate_rejects_incomplete_complete() {
     let progress = TranscodeProgress::complete(1, 1);
 
     assert_eq!(
-        Err(TranscodeContractError::CompleteWithRemainingInput {
-            read: 1,
-            available: 2,
-        }),
+        Err(TranscodeContractError::CompleteWithRemainingInput { read: 1, available: 2 }),
         progress.validate(0, 2, 0, 2),
     );
 }

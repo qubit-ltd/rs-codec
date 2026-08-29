@@ -103,10 +103,7 @@ where
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
     #[inline]
-    pub fn try_with_capacity(
-        inner: I,
-        capacity: usize,
-    ) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: I, capacity: usize) -> std::result::Result<Self, TryReserveError> {
         Ok(Self {
             input: BufferedInput::try_with_capacity(inner, capacity)?,
         })
@@ -169,9 +166,7 @@ where
     /// errors from the wrapped input while refilling.
     pub fn fill_until(&mut self, count: usize) -> std::io::Result<bool> {
         if count > self.input.capacity() {
-            self.input
-                .try_reserve_capacity(count)
-                .map_err(allocation_error)?;
+            self.input.try_reserve_capacity(count).map_err(allocation_error)?;
         }
         self.input.fill_until(count)
     }
@@ -208,22 +203,9 @@ where
         }
         let available_input = self.unread_len();
         let progress = decoder
-            .transcode(
-                self.unread(),
-                0,
-                &mut output[..output_end],
-                output_index,
-            )
+            .transcode(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(
-                    progress,
-                    0,
-                    available_input,
-                    output_index,
-                    count,
-                )
-            })?;
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(Some(progress))
     }
@@ -264,22 +246,9 @@ where
         }
         let available_input = self.unread_len();
         let progress = decoder
-            .transcode_eof(
-                self.unread(),
-                0,
-                &mut output[..output_end],
-                output_index,
-            )
+            .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(
-                    progress,
-                    0,
-                    available_input,
-                    output_index,
-                    count,
-                )
-            })?;
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(progress)
     }
@@ -294,10 +263,7 @@ where
     ///
     /// Panics when `count` exceeds [`Self::unread_len`].
     pub fn consume(&mut self, count: usize) {
-        assert!(
-            count <= self.unread_len(),
-            "cannot consume beyond buffered input",
-        );
+        assert!(count <= self.unread_len(), "cannot consume beyond buffered input",);
         // SAFETY: The caller-provided count is within the unread window.
         unsafe {
             self.input.consume(count);
@@ -318,23 +284,12 @@ where
     /// a valid range inside `output`, that the addition does not overflow, that
     /// `count <= self.unread_len()`, and that the destination range does not
     /// overlap with the unread units stored inside this buffer.
-    pub unsafe fn copy_unread_to(
-        &self,
-        output: &mut [I::Item],
-        output_index: usize,
-        count: usize,
-    ) {
+    pub unsafe fn copy_unread_to(&self, output: &mut [I::Item], output_index: usize, count: usize) {
         // SAFETY: The caller guarantees the destination range and non-overlap
         // requirements for the unread copy.
         let unread = self.unread();
         unsafe {
-            UncheckedSlice::copy_nonoverlapping(
-                unread,
-                0,
-                output,
-                output_index,
-                count,
-            );
+            UncheckedSlice::copy_nonoverlapping(unread, 0, output, output_index, count);
         }
     }
 
@@ -414,23 +369,14 @@ where
     ///
     /// Panics when the codec reports more reset or finish values than its
     /// declared bounds.
-    pub fn read_decoded_with<C, M>(
-        &mut self,
-        codec: &mut C,
-        map_error: M,
-    ) -> Result<C::Value>
+    pub fn read_decoded_with<C, M>(&mut self, codec: &mut C, map_error: M) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()
             .map_err(|error| Error::new(ErrorKind::Unsupported, error))?;
-        let progress = self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            &mut [],
-            &mut [],
-            map_error,
-        )?;
+        let progress = self.read_decoded_lifecycle_with_scratch_impl(codec, &mut [], &mut [], map_error)?;
         let (value, reset_written, finish_written) = progress.into_parts();
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
@@ -477,22 +423,13 @@ where
         let mut reset_output = Vec::new();
         reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish_output = Vec::new();
-        finish_output
-            .resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
-        let progress = self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            &mut reset_output,
-            &mut finish_output,
-            map_error,
-        )?;
+        finish_output.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
+        let progress =
+            self.read_decoded_lifecycle_with_scratch_impl(codec, &mut reset_output, &mut finish_output, map_error)?;
         let (value, reset_written, finish_written) = progress.into_parts();
         reset_output.truncate(reset_written);
         finish_output.truncate(finish_written);
-        Ok(DecodeLifecycleOutput::new(
-            reset_output,
-            value,
-            finish_output,
-        ))
+        Ok(DecodeLifecycleOutput::new(reset_output, value, finish_output))
     }
 
     /// Decodes one complete codec lifecycle into separate caller storage.
@@ -535,12 +472,7 @@ where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
     {
-        self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            reset_output,
-            finish_output,
-            map_error,
-        )
+        self.read_decoded_lifecycle_with_scratch_impl(codec, reset_output, finish_output, map_error)
     }
 
     fn read_decoded_lifecycle_with_scratch_impl<C, M>(
@@ -578,8 +510,7 @@ where
             "Codec::decode_reset wrote beyond its reset bound",
         );
 
-        let value = CodecDecodeDriver::new(&mut self.input)
-            .read_one(codec, &mut map_error)?;
+        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
 
         let finish_written = unsafe {
             // SAFETY: The finish output length check above reserves the
@@ -591,11 +522,7 @@ where
             finish_written <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
         );
-        Ok(DecodeLifecycleProgress::new(
-            value,
-            reset_written,
-            finish_written,
-        ))
+        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
     }
 
     /// Runs decoder reset into an indexed output range.
@@ -623,9 +550,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_reset_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_reset_output_len().map_err(capacity_to_io_error)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -639,9 +564,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .reset(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.reset(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "reset wrote beyond its bound");
         Ok(written)
     }
@@ -774,9 +697,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_finish_output_len().map_err(capacity_to_io_error)?;
         // Validate the caller-supplied count range first (InvalidInput).
         let output_end = SliceRange::checked_range_end(
             output.len(),
@@ -794,9 +715,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .finish(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.finish(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }

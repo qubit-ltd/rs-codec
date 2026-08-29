@@ -37,16 +37,8 @@ impl TranscodeProgress {
     /// Returns a progress value carrying the supplied counters.
     #[inline(always)]
     #[must_use]
-    pub const fn new(
-        status: TranscodeStatus,
-        read: usize,
-        written: usize,
-    ) -> Self {
-        Self {
-            status,
-            read,
-            written,
-        }
+    pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
+        Self { status, read, written }
     }
 
     /// Creates a completed progress value.
@@ -80,11 +72,7 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedInput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_input(
-        required: NonZeroUsize,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn need_input(required: NonZeroUsize, read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::need_input(required), read, written)
     }
 
@@ -102,11 +90,7 @@ impl TranscodeProgress {
     /// Returns a progress value with [`TranscodeStatus::NeedOutput`].
     #[inline(always)]
     #[must_use]
-    pub const fn need_output(
-        required: NonZeroUsize,
-        read: usize,
-        written: usize,
-    ) -> Self {
+    pub const fn need_output(required: NonZeroUsize, read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::need_output(required), read, written)
     }
 
@@ -236,27 +220,25 @@ impl TranscodeProgress {
             });
         }
 
-        input_index.checked_add(self.read).ok_or(
-            TranscodeContractError::ProgressIndexOverflow {
+        input_index
+            .checked_add(self.read)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
                 index: input_index,
                 advanced: self.read,
-            },
-        )?;
-        output_index.checked_add(self.written).ok_or(
-            TranscodeContractError::ProgressIndexOverflow {
+            })?;
+        output_index
+            .checked_add(self.written)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
                 index: output_index,
                 advanced: self.written,
-            },
-        )?;
+            })?;
         match self.status {
             TranscodeStatus::Complete => {
                 if self.read != available_input {
-                    return Err(
-                        TranscodeContractError::CompleteWithRemainingInput {
-                            read: self.read,
-                            available: available_input,
-                        },
-                    );
+                    return Err(TranscodeContractError::CompleteWithRemainingInput {
+                        read: self.read,
+                        available: available_input,
+                    });
                 }
                 Ok(())
             }

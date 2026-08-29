@@ -18,8 +18,7 @@ use crate::Codec;
 use crate::DecodeFailure;
 
 /// Decode transcode error for a codec-backed decoder.
-pub type TranscodeDecodeErrorOf<C> =
-    TranscodeDecodeError<<C as Codec>::DecodeError>;
+pub type TranscodeDecodeErrorOf<C> = TranscodeDecodeError<<C as Codec>::DecodeError>;
 
 /// Error reported by a decode-oriented transcode operation.
 #[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
@@ -70,23 +69,13 @@ impl<E> TranscodeDecodeError<E> {
     /// Converts a low-level decode failure into a decode transcode error.
     #[inline]
     #[must_use]
-    pub fn from_decode_failure(
-        failure: DecodeFailure<E>,
-        input_index: usize,
-        available: usize,
-    ) -> Self {
+    pub fn from_decode_failure(failure: DecodeFailure<E>, input_index: usize, available: usize) -> Self {
         match failure {
             DecodeFailure::Incomplete {
-                source: Some(source),
-                ..
+                source: Some(source), ..
             } => Self::domain_main(source, input_index),
             DecodeFailure::Incomplete { required_total, .. } => {
-                TranscodeFailure::incomplete_input(
-                    input_index,
-                    required_total.get(),
-                    available,
-                )
-                .into()
+                TranscodeFailure::incomplete_input(input_index, required_total.get(), available).into()
             }
             DecodeFailure::Invalid { source, consumed } => {
                 Self::domain_main_with_consumed(source, input_index, consumed)
@@ -138,9 +127,7 @@ impl<E> TranscodeDecodeError<E> {
     {
         match self {
             Self::Failure(failure) => TranscodeDecodeError::Failure(failure),
-            Self::Domain(error) => {
-                TranscodeDecodeError::Domain(error.map_source(f))
-            }
+            Self::Domain(error) => TranscodeDecodeError::Domain(error.map_source(f)),
         }
     }
 }

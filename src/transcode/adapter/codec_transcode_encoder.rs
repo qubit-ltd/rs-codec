@@ -51,10 +51,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeEncodeEngine::new(
-                codec,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeEncodeEngine::new(codec, CodecTranscodeEncodeHooks),
         }
     }
 
@@ -105,10 +102,7 @@ where
     ///
     /// a conservative upper bound for output units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -134,11 +128,7 @@ where
 
     /// Runs before-reset cleanup and emits stream-start output.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
+    fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
 
@@ -168,8 +158,7 @@ where
         output: &mut [C::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeEncodeErrorOf<C>> {
-        self.engine
-            .transcode(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -187,11 +176,7 @@ where
     ///
     /// Returns a finish error if retained output cannot be fully emitted.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [C::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeEncodeErrorOf<C>> {
+    fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }
 }

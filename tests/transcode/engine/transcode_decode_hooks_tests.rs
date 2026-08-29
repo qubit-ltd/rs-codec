@@ -37,10 +37,7 @@ impl codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -65,8 +62,7 @@ impl TranscodeDecodeHooks<UnitCodec> for DefaultOnlyHooks {
         error: &UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<UnitCodec>>
-    {
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<UnitCodec>> {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }
 }
@@ -88,10 +84,7 @@ impl codec::Codec for WideUnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         Ok((
             input[input_index],
             core::num::NonZeroUsize::new(2).expect("two is non-zero"),
@@ -119,10 +112,7 @@ impl TranscodeDecodeHooks<WideUnitCodec> for WideDefaultOnlyHooks {
         error: &UnitDecodeError,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<
-        DecodeInvalidAction<u8>,
-        codec::TranscodeDecodeErrorOf<WideUnitCodec>,
-    > {
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<WideUnitCodec>> {
         Err(TranscodeDecodeError::domain_main(*error, 0))
     }
 }
@@ -133,13 +123,8 @@ fn test_transcode_decode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeDecodeHooks::<UnitCodec>::finish_hooks(
-        &mut hooks,
-        &mut codec,
-        &mut output,
-        0,
-    )
-    .expect("default finish should be a no-op");
+    let written = TranscodeDecodeHooks::<UnitCodec>::finish_hooks(&mut hooks, &mut codec, &mut output, 0)
+        .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }
@@ -153,15 +138,11 @@ fn test_transcode_decode_hooks_default_before_reset_is_noop() {
 }
 
 #[test]
-fn test_transcode_decode_hooks_default_output_bound_covers_replacement_policy()
-{
+fn test_transcode_decode_hooks_default_output_bound_covers_replacement_policy() {
     let hooks = WideDefaultOnlyHooks;
     let codec = WideUnitCodec;
 
-    let bound =
-        TranscodeDecodeHooks::<WideUnitCodec>::max_transcode_output_len(
-            &hooks, &codec, 5,
-        )
+    let bound = TranscodeDecodeHooks::<WideUnitCodec>::max_transcode_output_len(&hooks, &codec, 5)
         .expect("the default output bound should not overflow");
 
     assert_eq!(5, bound);

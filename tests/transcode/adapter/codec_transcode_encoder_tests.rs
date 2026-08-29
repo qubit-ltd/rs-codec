@@ -35,10 +35,7 @@ impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -100,10 +97,7 @@ impl Codec for VariableWidthCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -154,10 +148,7 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -184,10 +175,7 @@ impl Codec for RejectOddCodec {
 
 #[test]
 fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
-    fn assert_transcode_encoder<
-        T: TranscodeEncoder<Input = u8, Output = u8>,
-    >() {
-    }
+    fn assert_transcode_encoder<T: TranscodeEncoder<Input = u8, Output = u8>>() {}
 
     assert_transcode_encoder::<CodecTranscodeEncoder<PairByteCodec>>();
 
@@ -195,9 +183,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
 
     let mut reset_output = [];
 
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 4];
 
@@ -227,9 +213,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
 fn test_codec_transcode_encoder_respects_absolute_indices() {
     let mut encoder = CodecTranscodeEncoder::new(PairByteCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 4];
 
@@ -247,9 +231,7 @@ fn test_codec_transcode_encoder_respects_absolute_indices() {
 fn test_codec_transcode_encoder_reports_partial_output_capacity() {
     let mut encoder = CodecTranscodeEncoder::new(PairByteCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -272,9 +254,7 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
 fn test_codec_transcode_encoder_uses_encode_len_for_output_capacity() {
     let mut encoder = CodecTranscodeEncoder::new(VariableWidthCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -292,9 +272,7 @@ fn test_codec_transcode_encoder_uses_encode_len_for_output_capacity() {
 fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
     let mut encoder = CodecTranscodeEncoder::new(PairByteCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -303,9 +281,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -314,9 +290,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
 fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
     let mut encoder = CodecTranscodeEncoder::new(PairByteCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -325,9 +299,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -336,9 +308,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
 fn test_codec_transcode_encoder_reports_invalid_input_index() {
     let mut encoder = CodecTranscodeEncoder::new(PairByteCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -347,9 +317,7 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .expect_err("invalid input index should fail");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(
-            codec::TranscodeFailure::invalid_input_index(2, 1)
-        ),
+        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
         error
     );
 }
@@ -358,9 +326,7 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
 fn test_codec_transcode_encoder_propagates_encode_error() {
     let mut encoder = CodecTranscodeEncoder::new(RejectOddCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 

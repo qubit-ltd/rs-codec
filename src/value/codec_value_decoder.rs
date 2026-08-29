@@ -119,18 +119,10 @@ where
     ///
     /// Panics when the wrapped codec reports a consumed unit count larger than
     /// the input slice length or [`Codec::MAX_DECODE_UNITS_PER_VALUE`].
-    pub fn decode(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<C::Value, TranscodeDecodeErrorOf<C>> {
+    pub fn decode(&mut self, input: &[C::Unit]) -> Result<C::Value, TranscodeDecodeErrorOf<C>> {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()?;
         let (value, reset_written, finish_written) =
-            decode_exact_complete_value(
-                &mut self.codec,
-                input,
-                &mut [],
-                &mut [],
-            )?;
+            decode_exact_complete_value(&mut self.codec, input, &mut [], &mut [])?;
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
         Ok(value)
@@ -165,12 +157,10 @@ where
         C::Value: Default,
     {
         let mut reset = Vec::new();
-        try_reserve_vec(&mut reset, C::MAX_DECODE_RESET_VALUES)
-            .map_err(|_| TranscodeFailure::allocation_failed())?;
+        try_reserve_vec(&mut reset, C::MAX_DECODE_RESET_VALUES).map_err(|_| TranscodeFailure::allocation_failed())?;
         reset.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish = Vec::new();
-        try_reserve_vec(&mut finish, C::MAX_DECODE_FINISH_VALUES)
-            .map_err(|_| TranscodeFailure::allocation_failed())?;
+        try_reserve_vec(&mut finish, C::MAX_DECODE_FINISH_VALUES).map_err(|_| TranscodeFailure::allocation_failed())?;
         finish.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let (value, reset_written, finish_written) = self
             .decode_lifecycle_with_scratch(input, &mut reset, &mut finish)?
@@ -208,20 +198,10 @@ where
         input: &[C::Unit],
         reset_output: &mut [C::Value],
         finish_output: &mut [C::Value],
-    ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>>
-    {
+    ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>> {
         let (value, reset_written, finish_written) =
-            decode_exact_complete_value(
-                &mut self.codec,
-                input,
-                reset_output,
-                finish_output,
-            )?;
-        Ok(DecodeLifecycleProgress::new(
-            value,
-            reset_written,
-            finish_written,
-        ))
+            decode_exact_complete_value(&mut self.codec, input, reset_output, finish_output)?;
+        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
     }
 }
 
@@ -233,10 +213,7 @@ where
     type Error = TranscodeDecodeErrorOf<C>;
 
     #[inline(always)]
-    fn decode(
-        &mut self,
-        input: &[C::Unit],
-    ) -> Result<Self::Output, Self::Error> {
+    fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         self.decode(input)
     }
 }

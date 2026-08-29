@@ -88,10 +88,7 @@ impl<E> DecodeFailure<E> {
     /// that need detailed EOF diagnostics.
     #[inline(always)]
     #[must_use]
-    pub const fn incomplete_with_source(
-        source: E,
-        required_total: NonZeroUsize,
-    ) -> Self {
+    pub const fn incomplete_with_source(source: E, required_total: NonZeroUsize) -> Self {
         Self::Incomplete {
             source: Some(source),
             required_total,
@@ -129,10 +126,7 @@ impl<E> DecodeFailure<E> {
     #[inline(always)]
     #[must_use]
     pub const fn invalid_unknown(source: E) -> Self {
-        Self::Invalid {
-            source,
-            consumed: None,
-        }
+        Self::Invalid { source, consumed: None }
     }
 
     /// Returns the current minimum input length required before retrying an

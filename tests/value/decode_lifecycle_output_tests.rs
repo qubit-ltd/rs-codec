@@ -14,8 +14,7 @@ use super::codec_value_decoder_tests::ResetSensitiveLifecycleCodec;
 
 #[test]
 fn test_decode_lifecycle_output_preserves_every_phase() {
-    let mut decoder =
-        CodecValueDecoder::new(ResetSensitiveLifecycleCodec::default());
+    let mut decoder = CodecValueDecoder::new(ResetSensitiveLifecycleCodec::default());
 
     let output: DecodeLifecycleOutput<u8> = decoder
         .decode_lifecycle(&[43])

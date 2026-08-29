@@ -40,12 +40,7 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// Returns a read-only encode context.
     #[inline(always)]
     #[must_use]
-    pub const fn new(
-        input_value: &'a Value,
-        input_index: usize,
-        output_index: usize,
-        available_output: usize,
-    ) -> Self {
+    pub const fn new(input_value: &'a Value, input_index: usize, output_index: usize, available_output: usize) -> Self {
         Self {
             input_value,
             input_index,

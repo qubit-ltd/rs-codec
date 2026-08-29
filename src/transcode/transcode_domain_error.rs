@@ -100,11 +100,7 @@ impl<E> TranscodeDomainError<E> {
     /// Returns a main-phase domain error with consumption context.
     #[inline(always)]
     #[must_use]
-    pub const fn main_with_consumed(
-        source: E,
-        input_index: usize,
-        input_consumed: Option<NonZeroUsize>,
-    ) -> Self {
+    pub const fn main_with_consumed(source: E, input_index: usize, input_consumed: Option<NonZeroUsize>) -> Self {
         Self::Main {
             source,
             input_index,
@@ -136,9 +132,7 @@ impl<E> TranscodeDomainError<E> {
     #[must_use]
     pub const fn source(&self) -> &E {
         match self {
-            Self::Reset { source }
-            | Self::Main { source, .. }
-            | Self::Finish { source } => source,
+            Self::Reset { source } | Self::Main { source, .. } | Self::Finish { source } => source,
         }
     }
 
@@ -151,9 +145,7 @@ impl<E> TranscodeDomainError<E> {
     #[must_use]
     pub fn into_source(self) -> E {
         match self {
-            Self::Reset { source }
-            | Self::Main { source, .. }
-            | Self::Finish { source } => source,
+            Self::Reset { source } | Self::Main { source, .. } | Self::Finish { source } => source,
         }
     }
 
@@ -207,9 +199,7 @@ impl<E> TranscodeDomainError<E> {
         F: FnOnce(E) -> T,
     {
         match self {
-            Self::Reset { source } => {
-                TranscodeDomainError::Reset { source: f(source) }
-            }
+            Self::Reset { source } => TranscodeDomainError::Reset { source: f(source) },
             Self::Main {
                 source,
                 input_index,
@@ -219,9 +209,7 @@ impl<E> TranscodeDomainError<E> {
                 input_index,
                 input_consumed,
             },
-            Self::Finish { source } => {
-                TranscodeDomainError::Finish { source: f(source) }
-            }
+            Self::Finish { source } => TranscodeDomainError::Finish { source: f(source) },
         }
     }
 }

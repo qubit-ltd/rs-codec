@@ -35,10 +35,7 @@ impl Codec for VariableByteDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -76,17 +73,13 @@ impl Codec for VariableByteDecoder {
 
 #[test]
 fn test_codec_transcode_converter_exposes_codec_accessors() {
-    let mut converter =
-        CodecTranscodeConverter::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter = CodecTranscodeConverter::new(VariableByteDecoder, PairByteEncoder);
 
     assert_eq!(&VariableByteDecoder, converter.source_codec());
     assert_eq!(&PairByteEncoder, converter.target_codec());
     *converter.source_codec_mut() = VariableByteDecoder;
     *converter.target_codec_mut() = PairByteEncoder;
-    assert_eq!(
-        (VariableByteDecoder, PairByteEncoder),
-        converter.into_codecs(),
-    );
+    assert_eq!((VariableByteDecoder, PairByteEncoder), converter.into_codecs(),);
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -108,10 +101,7 @@ impl Codec for PairByteEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
@@ -153,10 +143,7 @@ impl Codec for FlushFailDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -170,11 +157,7 @@ impl Codec for FlushFailDecoder {
         Ok(1)
     }
 
-    unsafe fn decode_finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
         Err("flush failure")
     }
 }
@@ -200,10 +183,7 @@ impl Codec for ResetFailEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
     }
 
@@ -217,11 +197,7 @@ impl Codec for ResetFailEncoder {
         Ok(1)
     }
 
-    unsafe fn encode_reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::EncodeError> {
         Err("reset failure")
     }
 }
@@ -245,16 +221,12 @@ impl Codec for MinTwoDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
-        Ok((
-            input[input_index].wrapping_add(input[input_index + 1]),
-            unsafe { core::num::NonZeroUsize::new_unchecked(2) },
-        ))
+        Ok((input[input_index].wrapping_add(input[input_index + 1]), unsafe {
+            core::num::NonZeroUsize::new_unchecked(2)
+        }))
     }
 
     unsafe fn encode(
@@ -299,10 +271,7 @@ impl Codec for FlushValueDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (u8, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         Ok((input[input_index], core::num::NonZeroUsize::MIN))
@@ -320,11 +289,7 @@ impl Codec for FlushValueDecoder {
         Ok(1)
     }
 
-    unsafe fn decode_finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
         debug_assert!(output_index < output.len());
 
         output[output_index] = 9;
@@ -354,16 +319,10 @@ impl Codec for NonDefaultDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (NonDefaultValue, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((
-            NonDefaultValue(input[input_index]),
-            core::num::NonZeroUsize::MIN,
-        ))
+        Ok((NonDefaultValue(input[input_index]), core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -402,16 +361,10 @@ impl Codec for NonDefaultEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<
-        (NonDefaultValue, core::num::NonZeroUsize),
-        codec::DecodeFailure<Self::DecodeError>,
-    > {
+    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((
-            NonDefaultValue(input[input_index]),
-            core::num::NonZeroUsize::MIN,
-        ))
+        Ok((NonDefaultValue(input[input_index]), core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -429,35 +382,24 @@ impl Codec for NonDefaultEncoder {
 
 #[test]
 fn test_codec_transcode_converter_supports_debug_and_default() {
-    let converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::default();
+    let converter = CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::default();
 
     assert!(format!("{converter:?}").contains("CodecTranscodeConverter"));
 }
 
 #[test]
-fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api()
- {
-    type Converter =
-        CodecTranscodeConverter<NonDefaultDecoder, NonDefaultEncoder>;
+fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api() {
+    type Converter = CodecTranscodeConverter<NonDefaultDecoder, NonDefaultEncoder>;
 
-    fn assert_transcode_converter<
-        T: TranscodeConverter<Input = u8, Output = u8>,
-    >() {
-    }
+    fn assert_transcode_converter<T: TranscodeConverter<Input = u8, Output = u8>>() {}
 
     assert_transcode_converter::<Converter>();
 
-    let mut converter =
-        CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
+    let mut converter = CodecTranscodeConverter::new(NonDefaultDecoder, NonDefaultEncoder);
 
     let mut reset_output = [];
 
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -473,9 +415,7 @@ fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api(
     assert_eq!(2, progress.written());
     assert_eq!([4, 5], output);
 
-    converter
-        .reset(&mut [], 0)
-        .expect("reset before EOF transcode");
+    converter.reset(&mut [], 0).expect("reset before EOF transcode");
     let progress = converter
         .transcode_eof(&[6], 0, &mut output, 0)
         .expect("inherent EOF transcode should forward to the engine");
@@ -493,89 +433,53 @@ fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api(
     let error = converter
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable non-clone value should retain owned context");
-    assert_eq!(
-        TranscodeConvertError::unencodable(0, NonDefaultValue(13)),
-        error,
-    );
+    assert_eq!(TranscodeConvertError::unencodable(0, NonDefaultValue(13)), error,);
 }
 
 #[test]
 fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
-    type Converter =
-        CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>;
+    type Converter = CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>;
 
     let mut converter = Converter::new(VariableByteDecoder, PairByteEncoder);
-    converter
-        .reset(&mut [], 0)
-        .expect("reset before trait transcode");
+    converter.reset(&mut [], 0).expect("reset before trait transcode");
     let mut output = [0_u8; 2];
 
     assert_eq!(
         Ok(4),
         <Converter as Transcoder>::max_transcode_output_len(&converter, 1)
     );
-    assert_eq!(
-        Ok(2),
-        <Converter as Transcoder>::max_finish_output_len(&converter),
-    );
+    assert_eq!(Ok(2), <Converter as Transcoder>::max_finish_output_len(&converter),);
 
-    let progress = <Converter as Transcoder>::transcode(
-        &mut converter,
-        &[7],
-        0,
-        &mut output,
-        0,
-    )
-    .expect("trait transcoder dispatch should convert through the adapter");
+    let progress = <Converter as Transcoder>::transcode(&mut converter, &[7], 0, &mut output, 0)
+        .expect("trait transcoder dispatch should convert through the adapter");
 
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(1, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([7, 8], output);
 
-    <Converter as Transcoder>::reset(&mut converter, &mut output, 0)
-        .expect("reset before trait EOF transcode");
-    let progress = <Converter as Transcoder>::transcode_eof(
-        &mut converter,
-        &[9],
-        0,
-        &mut output,
-        0,
-    )
-    .expect("trait EOF transcode should forward to the adapter");
+    <Converter as Transcoder>::reset(&mut converter, &mut output, 0).expect("reset before trait EOF transcode");
+    let progress = <Converter as Transcoder>::transcode_eof(&mut converter, &[9], 0, &mut output, 0)
+        .expect("trait EOF transcode should forward to the adapter");
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(1, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([9, 10], output);
 
-    <Converter as Transcoder>::reset(&mut converter, &mut output, 0)
-        .expect("reset");
-    assert_eq!(
-        Ok(0),
-        <Converter as Transcoder>::finish(&mut converter, &mut output, 0),
-    );
+    <Converter as Transcoder>::reset(&mut converter, &mut output, 0).expect("reset");
+    assert_eq!(Ok(0), <Converter as Transcoder>::finish(&mut converter, &mut output, 0),);
 }
 
 #[test]
-fn test_codec_transcode_converter_converts_values_until_output_needs_capacity()
-{
-    fn assert_transcode_converter<
-        T: TranscodeConverter<Input = u8, Output = u8>,
-    >() {
-    }
+fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() {
+    fn assert_transcode_converter<T: TranscodeConverter<Input = u8, Output = u8>>() {}
 
-    assert_transcode_converter::<
-        CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>,
-    >();
+    assert_transcode_converter::<CodecTranscodeConverter<VariableByteDecoder, PairByteEncoder>>();
 
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 4];
 
@@ -597,10 +501,8 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity()
 
 #[test]
 fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(8), converter.max_transcode_output_len(3));
@@ -619,14 +521,10 @@ fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
 
 #[test]
 fn test_codec_transcode_converter_finish_encodes_decode_finish_values() {
-    let mut converter = CodecTranscodeConverter::<
-        FlushValueDecoder,
-        PairByteEncoder,
-    >::new(FlushValueDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<FlushValueDecoder, PairByteEncoder>::new(FlushValueDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -642,14 +540,10 @@ fn test_codec_transcode_converter_finish_encodes_decode_finish_values() {
 
 #[test]
 fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -675,17 +569,10 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
 }
 
 #[test]
-fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_tail()
- {
-    let mut converter =
-        CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
-            MinTwoDecoder,
-            PairByteEncoder,
-        );
+fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_tail() {
+    let mut converter = CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(MinTwoDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -704,16 +591,11 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
 }
 
 #[test]
-fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_short()
- {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_short() {
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -745,24 +627,17 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
 
 #[test]
 fn test_codec_transcode_converter_finish_drains_pending_decoded_value() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut short_output = [0_u8; 1];
 
     let progress = converter
         .transcode(&[7], 0, &mut short_output, 0)
         .expect("short output should retain the decoded value");
-    assert!(matches!(
-        progress.status(),
-        TranscodeStatus::NeedOutput { .. }
-    ));
+    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
     assert_eq!(1, progress.read());
     assert_eq!(0, progress.written());
 
@@ -777,14 +652,10 @@ fn test_codec_transcode_converter_finish_drains_pending_decoded_value() {
 
 #[test]
 fn test_codec_transcode_converter_reports_invalid_indices() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -792,9 +663,7 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         .transcode(&[1], 2, &mut output, 0)
         .expect_err("invalid input index should fail");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(
-            codec::TranscodeFailure::invalid_input_index(2, 1)
-        ),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
         error
     );
 
@@ -802,23 +671,17 @@ fn test_codec_transcode_converter_reports_invalid_indices() {
         .transcode(&[1], 0, &mut output, 3)
         .expect_err("out-of-range output index should fail");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(
-            codec::TranscodeFailure::invalid_output_index(3, 2)
-        ),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::invalid_output_index(3, 2)),
         error
     );
 }
 
 #[test]
 fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -837,22 +700,15 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
     let error = converter
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable value should fail");
-    assert_eq!(
-        TranscodeConvertError::encode_domain_main(TestEncodeError, 0,),
-        error,
-    );
+    assert_eq!(TranscodeConvertError::encode_domain_main(TestEncodeError, 0,), error,);
 }
 
 #[test]
 fn test_codec_transcode_converter_wraps_decode_finish_error() {
-    let mut converter = CodecTranscodeConverter::<
-        FlushFailDecoder,
-        PairByteEncoder,
-    >::new(FlushFailDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<FlushFailDecoder, PairByteEncoder>::new(FlushFailDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 
@@ -860,41 +716,27 @@ fn test_codec_transcode_converter_wraps_decode_finish_error() {
         .finish(&mut output, 0)
         .expect_err("decode flush errors should be flattened");
 
-    assert_eq!(
-        TranscodeConvertError::decode_domain_finish("flush failure"),
-        error,
-    );
+    assert_eq!(TranscodeConvertError::decode_domain_finish("flush failure"), error,);
 }
 
 #[test]
 fn test_codec_transcode_converter_wraps_encode_reset_error() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        ResetFailEncoder,
-    >::new(VariableByteDecoder, ResetFailEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, ResetFailEncoder>::new(VariableByteDecoder, ResetFailEncoder);
     let mut output = [0_u8; 1];
 
     let error = converter
         .reset(&mut output, 0)
         .expect_err("encode reset errors should be flattened");
 
-    assert_eq!(
-        TranscodeConvertError::encode_domain_reset("reset failure"),
-        error,
-    );
+    assert_eq!(TranscodeConvertError::encode_domain_reset("reset failure"), error,);
 }
 
 #[test]
 fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
-    let mut converter =
-        CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(
-            MinTwoDecoder,
-            PairByteEncoder,
-        );
+    let mut converter = CodecTranscodeConverter::<MinTwoDecoder, PairByteEncoder>::new(MinTwoDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 2];
 
@@ -917,10 +759,8 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
 
 #[test]
 fn test_codec_transcode_converter_reports_max_reset_output_len() {
-    let converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
 
     assert_eq!(Ok(0), converter.max_reset_output_len());
     assert_eq!(Ok(0), Transcoder::max_reset_output_len(&converter));
@@ -928,14 +768,10 @@ fn test_codec_transcode_converter_reports_max_reset_output_len() {
 
 #[test]
 fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
-    let mut converter = CodecTranscodeConverter::<
-        VariableByteDecoder,
-        PairByteEncoder,
-    >::new(VariableByteDecoder, PairByteEncoder);
+    let mut converter =
+        CodecTranscodeConverter::<VariableByteDecoder, PairByteEncoder>::new(VariableByteDecoder, PairByteEncoder);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 4];
 
@@ -948,9 +784,7 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .expect_err("finish should reject insufficient output");
 
     assert_eq!(
-        codec::TranscodeConvertError::Failure(
-            codec::TranscodeFailure::insufficient_output(4, 2, 0)
-        ),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(4, 2, 0)),
         error,
     );
 }

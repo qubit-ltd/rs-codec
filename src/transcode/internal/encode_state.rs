@@ -42,12 +42,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         output_index: usize,
     ) -> Self {
         Self {
-            state: TranscodeState::new(
-                input,
-                input_index,
-                output,
-                output_index,
-            ),
+            state: TranscodeState::new(input, input_index, output, output_index),
         }
     }
 
@@ -67,9 +62,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
     #[inline(always)]
-    pub(in crate::transcode) unsafe fn context_unchecked(
-        &mut self,
-    ) -> EncodeAttempt<'_, Value, Unit> {
+    pub(in crate::transcode) unsafe fn context_unchecked(&mut self) -> EncodeAttempt<'_, Value, Unit> {
         let input_index = self.state.input_cursor();
         let output_index = self.state.output_cursor();
         let (input, output) = self.state.input_output_mut();
@@ -98,10 +91,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(
-        &mut self,
-        written: usize,
-    ) {
+    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
         assert!(
             written <= self.available_output(),
             "EncodeOutcome::Consumed wrote beyond available output",
@@ -131,10 +121,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity
     /// counters.
     #[inline(always)]
-    pub(in crate::transcode) fn need_output_progress_with(
-        &self,
-        required: NonZeroUsize,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress_with(&self, required: NonZeroUsize) -> TranscodeProgress {
         self.state.need_output_progress(required)
     }
 
@@ -148,10 +135,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns stop progress when output is insufficient, otherwise `None`.
     #[inline]
-    pub(in crate::transcode) fn apply_encode_outcome(
-        &mut self,
-        outcome: EncodeOutcome,
-    ) -> Option<TranscodeProgress> {
+    pub(in crate::transcode) fn apply_encode_outcome(&mut self, outcome: EncodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             EncodeOutcome::Consumed { written } => {
                 self.accept_written_value(written);

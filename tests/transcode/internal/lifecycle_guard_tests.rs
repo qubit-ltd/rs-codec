@@ -17,15 +17,11 @@ use crate::common::IdentityCodec;
 fn test_lifecycle_guard_rejects_double_finish() {
     let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     assert_eq!(Ok(0), decoder.finish(&mut [], 0));
     assert_eq!(
-        Err(TranscodeDecodeError::Failure(
-            TranscodeFailure::FinishAfterFinish,
-        )),
+        Err(TranscodeDecodeError::Failure(TranscodeFailure::FinishAfterFinish,)),
         decoder.finish(&mut [], 0),
     );
 }

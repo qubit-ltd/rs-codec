@@ -53,10 +53,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
         output: &'a mut [Output],
         output_index: usize,
     ) -> Self {
-        debug_assert!(
-            input_index <= input.len(),
-            "input index must be within the input slice",
-        );
+        debug_assert!(input_index <= input.len(), "input index must be within the input slice",);
 
         Self {
             input,
@@ -96,9 +93,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns the immutable input slice and mutable output slice. This helper
     /// lets callers borrow the two disjoint fields at the same time.
     #[inline(always)]
-    pub(in crate::transcode) fn input_output_mut(
-        &mut self,
-    ) -> (&[Input], &mut [Output]) {
+    pub(in crate::transcode) fn input_output_mut(&mut self) -> (&[Input], &mut [Output]) {
         (self.input, self.output)
     }
 
@@ -239,11 +234,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// - `read`: Number of input units consumed by the last operation.
     /// - `written`: Number of output units written by the last operation.
     #[inline(always)]
-    pub(in crate::transcode) fn advance(
-        &mut self,
-        read: usize,
-        written: usize,
-    ) {
+    pub(in crate::transcode) fn advance(&mut self, read: usize, written: usize) {
         self.advance_input(read);
         self.advance_output(written);
     }
@@ -272,10 +263,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with need-input status.
     #[inline(always)]
     #[must_use]
-    pub(in crate::transcode) fn need_input_progress(
-        &self,
-        required: NonZeroUsize,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_input_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_input(required, self.read(), self.written())
     }
 
@@ -290,10 +278,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with need-output status.
     #[inline(always)]
     #[must_use]
-    pub(in crate::transcode) fn need_output_progress(
-        &self,
-        required: NonZeroUsize,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_output(required, self.read(), self.written())
     }
 }

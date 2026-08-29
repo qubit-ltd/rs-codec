@@ -20,13 +20,7 @@ use super::Transcoder;
 /// unit-to-unit conversion from value-to-unit encoding and unit-to-value
 /// decoding.
 pub trait TranscodeConverter:
-    Transcoder<
-    Error = TranscodeConvertError<
-        Self::DecodeError,
-        Self::EncodeError,
-        Self::Value,
-    >,
->
+    Transcoder<Error = TranscodeConvertError<Self::DecodeError, Self::EncodeError, Self::Value>>
 {
     /// Domain error type produced by source decoding.
     type DecodeError;

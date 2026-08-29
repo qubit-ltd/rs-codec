@@ -13,12 +13,9 @@ use crate::common::IdentityCodec;
 
 #[test]
 fn test_pending_value_retains_source_position_when_output_is_short() {
-    let mut converter =
-        CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
+    let mut converter = CodecTranscodeConverter::new(IdentityCodec, IdentityCodec);
     let mut reset_output = [];
-    converter
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    converter.reset(&mut reset_output, 0).expect("initialize stream");
 
     let progress = converter
         .transcode(&[11], 0, &mut [], 0)

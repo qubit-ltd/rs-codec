@@ -32,18 +32,11 @@ impl Transcoder for MappingTranscoder {
     type Output = u8;
     type Error = TranscodeDecodeError<DomainFailure>;
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(usize::MAX)
     }
 
-    fn reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -57,11 +50,7 @@ impl Transcoder for MappingTranscoder {
         Err(TranscodeDecodeError::domain_main(DomainFailure, 0))
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }
@@ -74,9 +63,7 @@ fn test_transcoder_default_method_returns_fixed_transcode_error() {
         .expect_err("overflow should be returned as transcode error");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0)),
         error
     );
 }
@@ -89,22 +76,12 @@ impl Transcoder for CopyTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -117,9 +94,7 @@ impl Transcoder for CopyTranscoder {
     ) -> Result<TranscodeProgress, Self::Error> {
         let mut read = 0;
         let mut written = 0;
-        while input_index + read < input.len()
-            && output_index + written < output.len()
-        {
+        while input_index + read < input.len() && output_index + written < output.len() {
             output[output_index + written] = input[input_index + read];
             read += 1;
             written += 1;
@@ -134,15 +109,8 @@ impl Transcoder for CopyTranscoder {
         }
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -157,10 +125,7 @@ impl Transcoder for FinishingTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -168,15 +133,8 @@ impl Transcoder for FinishingTranscoder {
         Ok(2)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         self.suffix_index = 0;
         Ok(0)
     }
@@ -191,18 +149,10 @@ impl Transcoder for FinishingTranscoder {
         CopyTranscoder.transcode(input, input_index, output, output_index)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
         let suffix = *b"!\n";
         let required = suffix.len() - self.suffix_index;
-        codec::TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            output_index,
-            required,
-        )?;
+        codec::TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         let mut written = 0;
         while self.suffix_index < suffix.len() {
             output[output_index + written] = suffix[self.suffix_index];
@@ -232,23 +182,12 @@ impl Transcoder for PreflightTranscoder {
         }
     }
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_capacity(
-            output.len(),
-            output_index,
-            1,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_capacity(output.len(), output_index, 1)?;
         self.reset_calls += 1;
         output[output_index] = b'^';
         Ok(1)
@@ -264,15 +203,8 @@ impl Transcoder for PreflightTranscoder {
         CopyTranscoder.transcode(input, input_index, output, output_index)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -285,22 +217,12 @@ impl Transcoder for PairTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len / 2)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -315,8 +237,7 @@ impl Transcoder for PairTranscoder {
         if !available.is_multiple_of(2) {
             let complete_len = available - 1;
             for i in 0..complete_len / 2 {
-                output[output_index + i] =
-                    input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
+                output[output_index + i] = input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
             }
             return Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedInput {
@@ -327,21 +248,13 @@ impl Transcoder for PairTranscoder {
             ));
         }
         for i in 0..available / 2 {
-            output[output_index + i] =
-                input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
+            output[output_index + i] = input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
         }
         Ok(TranscodeProgress::complete(available, available / 2))
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -354,22 +267,12 @@ impl Transcoder for NeedInputEofTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -380,10 +283,7 @@ impl Transcoder for NeedInputEofTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         let available = input.len() - input_index;
         if available == 0 {
             return Ok(TranscodeProgress::complete(0, 0));
@@ -408,15 +308,8 @@ impl Transcoder for NeedInputEofTranscoder {
         self.transcode(input, input_index, output, output_index)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -429,22 +322,12 @@ impl Transcoder for UnderestimatingTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -458,15 +341,8 @@ impl Transcoder for UnderestimatingTranscoder {
         CopyTranscoder.transcode(input, input_index, output, output_index)
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -479,22 +355,12 @@ impl Transcoder for PartialCompleteTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -505,25 +371,13 @@ impl Transcoder for PartialCompleteTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        codec::TranscodeFailure::ensure_transcode_indices(
-            input.len(),
-            input_index,
-            output.len(),
-            output_index,
-        )?;
+        codec::TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
         output[output_index] = input[input_index];
         Ok(TranscodeProgress::complete(1, 1))
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -536,22 +390,12 @@ impl Transcoder for OverreportingCompleteTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -565,15 +409,8 @@ impl Transcoder for OverreportingCompleteTranscoder {
         Ok(TranscodeProgress::complete(0, 1))
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
@@ -586,18 +423,11 @@ impl Transcoder for OverreportingResetTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(1)
     }
 
@@ -611,11 +441,7 @@ impl Transcoder for OverreportingResetTranscoder {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }
@@ -628,18 +454,11 @@ impl Transcoder for OverreportingFinishTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -653,11 +472,7 @@ impl Transcoder for OverreportingFinishTranscoder {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(1)
     }
 }
@@ -670,10 +485,7 @@ impl Transcoder for FinishBeyondAvailableTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -681,11 +493,7 @@ impl Transcoder for FinishBeyondAvailableTranscoder {
         Ok(1)
     }
 
-    fn reset(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
@@ -700,11 +508,7 @@ impl Transcoder for FinishBeyondAvailableTranscoder {
         Ok(TranscodeProgress::complete(0, 1))
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(1)
     }
 }
@@ -717,10 +521,7 @@ impl Transcoder for OverflowBoundTranscoder {
     type Output = u8;
     infallible_transcoder_error!();
 
-    fn max_transcode_output_len(
-        &self,
-        _input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(usize::MAX)
     }
 
@@ -728,15 +529,8 @@ impl Transcoder for OverflowBoundTranscoder {
         Ok(1)
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 
@@ -750,11 +544,7 @@ impl Transcoder for OverflowBoundTranscoder {
         unreachable!("capacity overflow happens before transcode")
     }
 
-    fn finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::Error> {
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
         unreachable!("capacity overflow happens before finish")
     }
 }
@@ -789,10 +579,7 @@ impl Transcoder for FailingTranscoder {
         }
     }
 
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         if matches!(self.failure, FailurePoint::TranscodeBound) {
             Err(CapacityError::OutputLengthOverflow)
         } else {
@@ -808,15 +595,8 @@ impl Transcoder for FailingTranscoder {
         }
     }
 
-    fn reset(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         if matches!(self.failure, FailurePoint::Reset) {
             Err(TranscodeDecodeError::domain_reset("reset"))
         } else {
@@ -838,15 +618,8 @@ impl Transcoder for FailingTranscoder {
         }
     }
 
-    fn finish(
-        &mut self,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::Error> {
-        codec::TranscodeFailure::ensure_output_index(
-            output.len(),
-            output_index,
-        )?;
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         if matches!(self.failure, FailurePoint::Finish) {
             Err(TranscodeDecodeError::domain_finish("finish"))
         } else {
@@ -868,11 +641,7 @@ fn test_transcoder_error_is_domain_error_type() {
 
 #[test]
 fn test_transcoder_error_associated_type_matches_framework_error() {
-    type ResetFn<T> = fn(
-        &mut T,
-        &mut [<T as Transcoder>::Output],
-        usize,
-    ) -> Result<usize, <T as Transcoder>::Error>;
+    type ResetFn<T> = fn(&mut T, &mut [<T as Transcoder>::Output], usize) -> Result<usize, <T as Transcoder>::Error>;
 
     let reset: ResetFn<CopyTranscoder> = <CopyTranscoder as Transcoder>::reset;
 
@@ -927,12 +696,7 @@ fn test_transcoder_capacity_bounds_are_global() {
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
-    assert_eq!(
-        2,
-        transcoder
-            .finish(&mut output, 0)
-            .expect("finish should fit")
-    );
+    assert_eq!(2, transcoder.finish(&mut output, 0).expect("finish should fit"));
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
     assert_eq!(Ok(5), transcoder.max_total_output_len(3));
 }
@@ -957,8 +721,7 @@ fn test_transcoder_total_output_len_reports_component_errors() {
 /// Verifies that full-stream capacity is rejected before reset mutates state
 /// or output.
 #[test]
-fn test_transcoder_transcode_complete_into_preflights_total_capacity_before_reset()
- {
+fn test_transcoder_transcode_complete_into_preflights_total_capacity_before_reset() {
     let mut transcoder = PreflightTranscoder::default();
     let original = [0xaa_u8; 3];
     let mut output = original;
@@ -970,9 +733,7 @@ fn test_transcoder_transcode_complete_into_preflights_total_capacity_before_rese
     assert_eq!(0, transcoder.reset_calls);
     assert_eq!(original, output);
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::insufficient_output(0, 4, 3)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, 4, 3)),
         error,
     );
 }
@@ -994,9 +755,7 @@ fn test_transcoder_transcode_complete_into_checks_reset_bound_before_reset() {
     assert_eq!(0, transcoder.reset_calls);
     assert_eq!(original, output);
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::output_length_overflow()
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
         error
     );
 }
@@ -1033,30 +792,20 @@ fn test_transcoder_transcode_complete_into_runs_reset_transcode_and_finish() {
 #[test]
 fn test_transcoder_transcode_complete_into_reports_stage_errors() {
     for (failure, expected) in [
-        (
-            FailurePoint::Reset,
-            TranscodeDecodeError::domain_reset("reset"),
-        ),
+        (FailurePoint::Reset, TranscodeDecodeError::domain_reset("reset")),
         (
             FailurePoint::TranscodeBound,
-            codec::TranscodeDecodeError::Failure(
-                codec::TranscodeFailure::output_length_overflow(),
-            ),
+            codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
         ),
         (
             FailurePoint::FinishBound,
-            codec::TranscodeDecodeError::Failure(
-                codec::TranscodeFailure::output_length_overflow(),
-            ),
+            codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
         ),
         (
             FailurePoint::Transcode,
             TranscodeDecodeError::domain_main("transcode", 0),
         ),
-        (
-            FailurePoint::Finish,
-            TranscodeDecodeError::domain_finish("finish"),
-        ),
+        (FailurePoint::Finish, TranscodeDecodeError::domain_finish("finish")),
     ] {
         let mut transcoder = FailingTranscoder { failure };
         let mut output = [0_u8; 1];
@@ -1079,9 +828,7 @@ fn test_transcoder_transcode_complete_into_reports_insufficient_output() {
         .expect_err("complete transcode requires five output units");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::insufficient_output(0, 5, 4)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, 5, 4)),
         error,
     );
 }
@@ -1096,9 +843,7 @@ fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
         .expect_err("runtime need-output status should be an output error");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::insufficient_output(0, 1, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0)),
         error,
     );
 }
@@ -1141,8 +886,7 @@ fn test_transcoder_transcode_complete_into_panics_when_finish_overreports() {
 
 #[test]
 #[should_panic(expected = "Transcoder::finish wrote beyond available output")]
-fn test_transcoder_transcode_complete_into_panics_when_finish_exceeds_available_output()
- {
+fn test_transcoder_transcode_complete_into_panics_when_finish_exceeds_available_output() {
     let mut transcoder = FinishBeyondAvailableTranscoder;
     let mut output = [0_u8; 1];
 
@@ -1164,9 +908,7 @@ fn test_transcoder_transcode_complete_into_reports_remaining_bound_overflow() {
         .expect_err("transcode plus finish bound overflows");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::output_length_overflow()
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
         error
     );
 }
@@ -1181,9 +923,7 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .expect_err("odd-length complete input is incomplete");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::incomplete_input(2, 2, 1)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(2, 2, 1)),
         error,
     );
 
@@ -1191,9 +931,7 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .transcode_eof(b"a", 0, &mut [], 0)
         .expect_err("the default EOF policy should reject incomplete input");
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::incomplete_input(0, 2, 1)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1)),
         error,
     );
 
@@ -1202,9 +940,7 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .transcode_complete_into(b"a", &mut [0])
         .expect_err("EOF progress that remains incomplete must be rejected");
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::incomplete_input(1, 2, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(1, 2, 0)),
         error,
     );
 }
@@ -1219,9 +955,7 @@ fn test_transcoder_explicit_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -1238,18 +972,16 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
         .expect_err("finish should reject partial output capacity");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(
-            codec::TranscodeFailure::insufficient_output(0, 2, 1)
-        ),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, 2, 1)),
         error,
     );
     assert_eq!([0], output);
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
 
     let mut output = [0_u8; 2];
-    let written = transcoder.finish(&mut output, 0).expect(
-        "finish should write the whole suffix once capacity is available",
-    );
+    let written = transcoder
+        .finish(&mut output, 0)
+        .expect("finish should write the whole suffix once capacity is available");
 
     assert_eq!(2, written);
     assert_eq!(*b"!\n", output);

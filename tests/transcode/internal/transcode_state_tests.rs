@@ -16,9 +16,7 @@ use crate::common::IdentityCodec;
 fn test_transcode_state_tracks_nonzero_start_indexes() {
     let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 3];
 

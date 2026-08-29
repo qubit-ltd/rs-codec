@@ -45,12 +45,7 @@ where
     E: Codec<Value = D::Value>,
 {
     /// Common buffered converter engine.
-    engine: TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >,
+    engine: TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>,
 }
 
 impl<D, E> CodecTranscodeConverter<D, E>
@@ -72,12 +67,7 @@ where
     #[must_use]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
-            engine: TranscodeConvertEngine::new(
-                decoder,
-                encoder,
-                CodecTranscodeDecodeHooks,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeConvertEngine::new(decoder, encoder, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks),
         }
     }
 
@@ -142,10 +132,7 @@ where
     /// Returns a conservative upper bound for produced target units.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline(always)]
-    pub fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -205,11 +192,7 @@ where
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
-    pub fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>>
+    pub fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -245,8 +228,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        self.engine
-            .transcode(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Converts source units after the caller has established end of input.
@@ -258,8 +240,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        self.engine
-            .transcode_eof(input, input_index, output, output_index)
+        self.engine.transcode_eof(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -313,10 +294,7 @@ where
     ///
     /// Returns a conservative upper bound for produced target units.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
 
@@ -365,11 +343,7 @@ where
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
+    fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -399,13 +373,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        CodecTranscodeConverter::transcode(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+        CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
     }
 
     #[inline(always)]
@@ -416,13 +384,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        CodecTranscodeConverter::transcode_eof(
-            self,
-            input,
-            input_index,
-            output,
-            output_index,
-        )
+        CodecTranscodeConverter::transcode_eof(self, input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -440,11 +402,7 @@ where
     ///
     /// Returns a finish error for pending output that cannot be finalized.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
+    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }
@@ -464,12 +422,7 @@ impl<D, E> Default for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >: Default,
+    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: Default,
 {
     /// Creates a default codec-backed buffered converter.
     ///
@@ -488,12 +441,7 @@ impl<D, E> fmt::Debug for CodecTranscodeConverter<D, E>
 where
     D: Codec,
     E: Codec<Value = D::Value>,
-    TranscodeConvertEngine<
-        D,
-        E,
-        CodecTranscodeDecodeHooks,
-        CodecTranscodeEncodeHooks,
-    >: fmt::Debug,
+    TranscodeConvertEngine<D, E, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks>: fmt::Debug,
 {
     /// Formats the wrapped converter engine for debugging.
     ///

@@ -28,17 +28,12 @@ fn test_encode_error_carries_unencodable_value_context() {
 
 #[test]
 fn test_encode_error_accessors_mapping_and_validation() {
-    let failure = TranscodeEncodeError::<&str, char>::Failure(
-        TranscodeFailure::incomplete_input(1, 2, 0),
-    );
-    let trailing = TranscodeEncodeError::<&str, char>::Failure(
-        TranscodeFailure::trailing_input(1, 1),
-    );
+    let failure = TranscodeEncodeError::<&str, char>::Failure(TranscodeFailure::incomplete_input(1, 2, 0));
+    let trailing = TranscodeEncodeError::<&str, char>::Failure(TranscodeFailure::trailing_input(1, 1));
     let domain = TranscodeEncodeError::<&str, char>::domain_reset("reset");
     let main = TranscodeEncodeError::<&str, char>::domain_main("encode", 3);
     let finish = TranscodeEncodeError::<&str, char>::domain_finish("finish");
-    let no_context =
-        TranscodeEncodeError::<&str, char>::unencodable_without_context(8);
+    let no_context = TranscodeEncodeError::<&str, char>::unencodable_without_context(8);
 
     assert!(!failure.is_domain());
     assert!(domain.is_domain());
@@ -59,9 +54,7 @@ fn test_encode_error_accessors_mapping_and_validation() {
     assert_eq!(None, domain.unencodable_ref());
 
     assert_eq!(
-        TranscodeEncodeError::Failure(TranscodeFailure::incomplete_input(
-            1, 2, 0
-        )),
+        TranscodeEncodeError::Failure(TranscodeFailure::incomplete_input(1, 2, 0)),
         failure.map_domain(str::len),
     );
     assert_eq!(
@@ -78,44 +71,36 @@ fn test_encode_error_accessors_mapping_and_validation() {
     );
     assert_eq!(
         TranscodeEncodeError::Failure(TranscodeFailure::trailing_input(1, 1)),
-        TranscodeEncodeError::<&str, char>::from(
-            TranscodeFailure::trailing_input(1, 1)
-        )
-        .map_value(|value: char| value as u32),
+        TranscodeEncodeError::<&str, char>::from(TranscodeFailure::trailing_input(1, 1))
+            .map_value(|value: char| value as u32),
     );
 
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
-        TranscodeFailure::ensure_output_index(2, 2)
-            .map_err(TranscodeEncodeError::<&str, char>::from)
+        TranscodeFailure::ensure_output_index(2, 2).map_err(TranscodeEncodeError::<&str, char>::from)
     );
     assert!(matches!(
-        TranscodeFailure::ensure_output_index(2, 3)
-            .map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_output_index(2, 3).map_err(TranscodeEncodeError::<&str, char>::from),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InvalidOutputIndex { .. }
         ))
     ));
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
-        TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1,)
-            .map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1,).map_err(TranscodeEncodeError::<&str, char>::from),
     );
     assert!(matches!(
-        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1,)
-            .map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1,).map_err(TranscodeEncodeError::<&str, char>::from),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InvalidInputIndex { .. }
         ))
     ));
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
-        TranscodeFailure::ensure_output_capacity(3, 1, 2,)
-            .map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_output_capacity(3, 1, 2,).map_err(TranscodeEncodeError::<&str, char>::from),
     );
     assert!(matches!(
-        TranscodeFailure::ensure_output_capacity(3, 1, 3,)
-            .map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_output_capacity(3, 1, 3,).map_err(TranscodeEncodeError::<&str, char>::from),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InsufficientOutput { .. }
         ))

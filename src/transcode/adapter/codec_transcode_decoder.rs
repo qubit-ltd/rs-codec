@@ -51,10 +51,7 @@ where
     #[must_use]
     pub fn new(codec: C) -> Self {
         Self {
-            engine: TranscodeDecodeEngine::new(
-                codec,
-                CodecTranscodeDecodeHooks,
-            ),
+            engine: TranscodeDecodeEngine::new(codec, CodecTranscodeDecodeHooks),
         }
     }
 
@@ -105,10 +102,7 @@ where
     ///
     /// Returns a conservative upper bound for decoded values.
     #[inline(always)]
-    fn max_transcode_output_len(
-        &self,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
 
@@ -131,11 +125,7 @@ where
 
     /// Runs before-reset cleanup for decoder state.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
 
@@ -164,8 +154,7 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        self.engine
-            .transcode(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     #[inline(always)]
@@ -176,8 +165,7 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        self.engine
-            .transcode_eof(input, input_index, output, output_index)
+        self.engine.transcode_eof(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -195,11 +183,7 @@ where
     ///
     /// Returns a finish error if finalization cannot complete.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }
 }

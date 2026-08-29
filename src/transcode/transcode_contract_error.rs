@@ -17,9 +17,7 @@ use thiserror::Error;
 #[non_exhaustive]
 pub enum TranscodeContractError {
     /// The transcoder consumed more input units than the caller supplied.
-    #[error(
-        "transcoder consumed {read} units but only {available} were available"
-    )]
+    #[error("transcoder consumed {read} units but only {available} were available")]
     OverRead {
         /// Input units reported as consumed.
         read: usize,
@@ -28,9 +26,7 @@ pub enum TranscodeContractError {
     },
 
     /// The transcoder wrote more output units than the caller supplied.
-    #[error(
-        "transcoder wrote {written} units but only {available} output slots were available"
-    )]
+    #[error("transcoder wrote {written} units but only {available} output slots were available")]
     OverWritten {
         /// Output units reported as written.
         written: usize,
@@ -39,9 +35,7 @@ pub enum TranscodeContractError {
     },
 
     /// Progress could not be represented as an absolute index.
-    #[error(
-        "transcoder progress overflow: index {index} plus advanced {advanced}"
-    )]
+    #[error("transcoder progress overflow: index {index} plus advanced {advanced}")]
     ProgressIndexOverflow {
         /// Absolute index supplied to the transcode call.
         index: usize,
@@ -50,9 +44,7 @@ pub enum TranscodeContractError {
     },
 
     /// A status requested input or output that is already available.
-    #[error(
-        "transcoder reported required {required} with available {available}"
-    )]
+    #[error("transcoder reported required {required} with available {available}")]
     SatisfiedNeed {
         /// Required units reported by the status.
         required: usize,
@@ -61,9 +53,7 @@ pub enum TranscodeContractError {
     },
 
     /// A `Complete` status left visible input unconsumed.
-    #[error(
-        "transcoder reported Complete after consuming {read} of {available} available input units"
-    )]
+    #[error("transcoder reported Complete after consuming {read} of {available} available input units")]
     CompleteWithRemainingInput {
         /// Input units reported as consumed.
         read: usize,
