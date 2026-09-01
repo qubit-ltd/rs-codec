@@ -32,7 +32,7 @@ use crate::TranscodeEncodeErrorOf;
 /// value. Encodable values are encoded directly by the engine with
 /// [`Codec::encode_len`] and [`Codec::encode`].
 ///
-/// # Example
+/// # Examples
 ///
 /// This hook reports unsupported values as adapter-level errors.
 ///

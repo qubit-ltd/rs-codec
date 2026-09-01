@@ -80,7 +80,7 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// a new logical stream and [`Self::finish`] after EOF once any incomplete
 /// source tail has been handled.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// use core::{

@@ -42,6 +42,17 @@ use crate::Transcoder;
 /// # Type Parameters
 ///
 /// * `O` - Wrapped asynchronous unit output.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::AsyncTranscodeEncodeOutput;
+/// use qubit_io::AsyncOutput;
+///
+/// fn make_output<O: AsyncOutput<Item = u8>>(inner: O) -> AsyncTranscodeEncodeOutput<O> {
+///     AsyncTranscodeEncodeOutput::new(inner)
+/// }
+/// ```
 pub struct AsyncTranscodeEncodeOutput<O>
 where
     O: AsyncOutput,

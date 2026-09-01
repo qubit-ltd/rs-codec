@@ -31,6 +31,16 @@ use crate::value::codec_value_lifecycle::decode_exact_complete_value;
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode one value.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{Codec, CodecValueDecoder};
+///
+/// fn make_decoder<C: Codec>(codec: C) -> CodecValueDecoder<C> {
+///     CodecValueDecoder::new(codec)
+/// }
+/// ```
 pub struct CodecValueDecoder<C>
 where
     C: Codec,

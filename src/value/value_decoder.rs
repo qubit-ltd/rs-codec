@@ -12,6 +12,25 @@
 /// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
 /// single-value buffer decoding and [`crate::Transcoder`] for batch
 /// conversion over caller-provided buffers.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueDecoder;
+///
+/// struct Identity;
+/// impl ValueDecoder<str> for Identity {
+///     type Output = String;
+///     type Error = core::convert::Infallible;
+///
+///     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+///         Ok(input.to_owned())
+///     }
+/// }
+///
+/// let mut decoder = Identity;
+/// assert_eq!(decoder.decode("hello").unwrap(), "hello");
+/// ```
 pub trait ValueDecoder<Input: ?Sized> {
     /// Decoded output type.
     type Output;

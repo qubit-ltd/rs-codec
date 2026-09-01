@@ -19,6 +19,16 @@ use super::Transcoder;
 ///
 /// The word "buffered" describes the caller-managed buffer and progress model.
 /// It does not require the implementor to own an internal buffer.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeDecoder;
+///
+/// fn accepts_decoder<D: TranscodeDecoder>(decoder: &D) {
+///     let _ = decoder;
+/// }
+/// ```
 pub trait TranscodeDecoder: Transcoder<Error = TranscodeDecodeError<Self::DecodeError>> {
     /// Domain error type produced by decode internals.
     type DecodeError;

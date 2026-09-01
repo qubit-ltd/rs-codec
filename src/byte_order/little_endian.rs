@@ -10,6 +10,15 @@ use super::ByteOrder;
 use super::ByteOrderSpec;
 
 /// Type-level marker for little-endian byte order.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{ByteOrder, ByteOrderSpec, LittleEndian};
+///
+/// let _: LittleEndian = Default::default();
+/// assert_eq!(LittleEndian::ORDER, ByteOrder::LittleEndian);
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct LittleEndian;
 

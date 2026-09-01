@@ -49,6 +49,16 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// # Type Parameters
 ///
 /// * `O` - Wrapped unit output.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeEncodeOutput;
+/// use std::io::Cursor;
+///
+/// let output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 8);
+/// assert!(output.spare_capacity() >= 8);
+/// ```
 pub struct TranscodeEncodeOutput<O>
 where
     O: Output,

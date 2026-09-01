@@ -37,6 +37,17 @@ use crate::Transcoder;
 /// # Type Parameters
 ///
 /// - `I`: Wrapped asynchronous unit input.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::AsyncTranscodeDecodeInput;
+/// use qubit_io::AsyncInput;
+///
+/// fn make_input<I: AsyncInput<Item = u8>>(inner: I) -> AsyncTranscodeDecodeInput<I> {
+///     AsyncTranscodeDecodeInput::new(inner)
+/// }
+/// ```
 #[must_use]
 pub struct AsyncTranscodeDecodeInput<I>
 where

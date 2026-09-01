@@ -10,6 +10,15 @@ use super::ByteOrder;
 use super::ByteOrderSpec;
 
 /// Type-level marker for native-endian byte order.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{ByteOrder, ByteOrderSpec, NativeEndian};
+///
+/// let _: NativeEndian = Default::default();
+/// assert_eq!(NativeEndian::ORDER, ByteOrder::NativeEndian);
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct NativeEndian;
 

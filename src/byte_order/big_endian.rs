@@ -10,6 +10,15 @@ use super::ByteOrder;
 use super::ByteOrderSpec;
 
 /// Type-level marker for big-endian byte order.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec};
+///
+/// let _: BigEndian = Default::default();
+/// assert_eq!(BigEndian::ORDER, ByteOrder::BigEndian);
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct BigEndian;
 

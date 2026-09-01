@@ -26,6 +26,16 @@ use super::Transcoder;
 /// [`crate::TranscodeStatus::NeedOutput`] when more output capacity is needed;
 /// [`Transcoder::finish`] emits any retained output after the caller has
 /// supplied the complete logical input stream.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeEncoder;
+///
+/// fn accepts_encoder<E: TranscodeEncoder>(encoder: &E) {
+///     let _ = encoder;
+/// }
+/// ```
 pub trait TranscodeEncoder:
     Transcoder<Error = TranscodeEncodeError<Self::EncodeError, <Self as Transcoder>::Input>>
 {

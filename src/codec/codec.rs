@@ -93,6 +93,19 @@ use super::decode_failure::DecodeFailure;
 /// a trusted boundary. Measure representative codec workloads before choosing
 /// an unchecked entry point. Codec implementations should keep the unchecked
 /// methods small and use `debug_assert!` for those assumptions.
+///
+/// # Examples
+///
+/// A caller can inspect a codec's declared unit bounds before allocating a
+/// buffer:
+///
+/// ```
+/// use qubit_codec::Codec;
+///
+/// fn decode_capacity<C: Codec>() -> usize {
+///     C::MAX_DECODE_UNITS_PER_VALUE
+/// }
+/// ```
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
     type Value;

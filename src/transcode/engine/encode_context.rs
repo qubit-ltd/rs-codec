@@ -17,6 +17,16 @@
 /// # Type Parameters
 ///
 /// - `Value`: Logical input value type.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::engine::EncodeContext;
+///
+/// let value = 7_u8;
+/// let context = EncodeContext::new(&value, 0, 0, 1);
+/// assert_eq!(context.input_value(), &7);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct EncodeContext<'a, Value> {
     input_value: &'a Value,

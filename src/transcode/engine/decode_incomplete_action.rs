@@ -21,6 +21,15 @@ pub type DecodeIncompleteActionOf<C> = DecodeIncompleteAction<<C as Codec>::Valu
 /// # Type Parameters
 ///
 /// - `Value`: Decoded output value type.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::engine::DecodeIncompleteAction;
+///
+/// let action = DecodeIncompleteAction::<u8>::Emit { value: b'?' };
+/// assert!(matches!(action, DecodeIncompleteAction::Emit { value: b'?' }));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum DecodeIncompleteAction<Value> {

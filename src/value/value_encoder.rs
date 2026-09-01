@@ -12,6 +12,25 @@
 /// This trait is a convenience-layer API. Use [`crate::Codec`] for low-level
 /// single-value buffer encoding and [`crate::Transcoder`] for batch
 /// conversion over caller-provided buffers.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueEncoder;
+///
+/// struct TextEncoder;
+/// impl ValueEncoder<str> for TextEncoder {
+///     type Output = Vec<u8>;
+///     type Error = core::convert::Infallible;
+///
+///     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+///         Ok(input.as_bytes().to_vec())
+///     }
+/// }
+///
+/// let mut encoder = TextEncoder;
+/// assert_eq!(encoder.encode("hello").unwrap(), b"hello");
+/// ```
 pub trait ValueEncoder<Input: ?Sized> {
     /// Encoded output type.
     type Output;

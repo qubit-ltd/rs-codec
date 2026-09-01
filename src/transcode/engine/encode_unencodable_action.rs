@@ -21,6 +21,15 @@ pub type EncodeUnencodableActionOf<C> = EncodeUnencodableAction<<C as Codec>::Va
 /// # Type Parameters
 ///
 /// - `Value`: Logical input value type accepted by the codec.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::engine::EncodeUnencodableAction;
+///
+/// let action = EncodeUnencodableAction::replace(0_u8);
+/// assert!(matches!(action, EncodeUnencodableAction::Replace { value: 0 }));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum EncodeUnencodableAction<Value> {

@@ -23,6 +23,18 @@ pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
 /// # Type Parameters
 ///
 /// - `Value`: Decoded output value type.
+///
+/// # Examples
+///
+/// ```
+/// use core::num::NonZeroUsize;
+/// use qubit_codec::engine::DecodeInvalidAction;
+///
+/// let action = DecodeInvalidAction::<u8>::Skip {
+///     consumed: NonZeroUsize::new(1).unwrap(),
+/// };
+/// assert!(matches!(action, DecodeInvalidAction::Skip { .. }));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum DecodeInvalidAction<Value> {

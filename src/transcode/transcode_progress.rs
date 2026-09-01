@@ -12,6 +12,17 @@ use super::TranscodeStatus;
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{TranscodeProgress, TranscodeStatus};
+///
+/// let progress = TranscodeProgress::complete(3, 6);
+/// assert_eq!(progress.read(), 3);
+/// assert_eq!(progress.written(), 6);
+/// assert!(matches!(progress.status(), TranscodeStatus::Complete));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TranscodeProgress {
     /// Stop reason reported by the transcoder.

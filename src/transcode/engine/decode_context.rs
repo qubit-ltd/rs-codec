@@ -8,6 +8,15 @@
 //! Decode context passed to buffered decoder policy hooks.
 
 /// Context for one codec decode attempt inside a buffered decoder engine.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::engine::DecodeContext;
+///
+/// let context = DecodeContext::new(0, 0, 0, 0, 2);
+/// assert_eq!(context.available(), 2);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DecodeContext {
     /// Absolute source index where this `transcode` call starts.

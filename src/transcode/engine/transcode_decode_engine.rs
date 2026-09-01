@@ -55,7 +55,7 @@ use crate::codec::assert_unit_bounds;
 /// invalid input should be repaired, skipped, counted, or otherwise handled by
 /// policy.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// use core::num::NonZeroUsize;

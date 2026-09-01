@@ -15,6 +15,15 @@ use crate::ValueCodecRegistrationFactory;
 use crate::ValueCodecRegistryError;
 
 /// An immutable value-codec registry sorted by stable ID.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueCodecRegistry;
+///
+/// let registry = ValueCodecRegistry::empty();
+/// assert!(registry.get("missing.example").is_none());
+/// ```
 #[derive(Debug)]
 pub struct ValueCodecRegistry {
     registrations: Box<[ValueCodecRegistration]>,

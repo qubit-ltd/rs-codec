@@ -10,6 +10,15 @@
 use crate::TranscodeProgress;
 
 /// Result of one cancellation-safe asynchronous decode operation.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::AsyncTranscodeDecodeStep;
+///
+/// let step = AsyncTranscodeDecodeStep::EndOfInput;
+/// assert!(matches!(step, AsyncTranscodeDecodeStep::EndOfInput));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsyncTranscodeDecodeStep {
     /// The wrapped input reached EOF with no unread units.

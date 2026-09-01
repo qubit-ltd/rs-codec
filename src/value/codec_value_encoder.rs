@@ -32,6 +32,16 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to encode one value.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{Codec, CodecValueEncoder};
+///
+/// fn make_encoder<C: Codec>(codec: C) -> CodecValueEncoder<C> {
+///     CodecValueEncoder::new(codec)
+/// }
+/// ```
 pub struct CodecValueEncoder<C> {
     /// Low-level codec used for one-value encoding.
     codec: C,

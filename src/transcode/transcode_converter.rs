@@ -19,6 +19,16 @@ use super::Transcoder;
 /// The trait adds no methods. It exists to make generic bounds distinguish
 /// unit-to-unit conversion from value-to-unit encoding and unit-to-value
 /// decoding.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeConverter;
+///
+/// fn accepts_converter<C: TranscodeConverter>(converter: &C) {
+///     let _ = converter;
+/// }
+/// ```
 pub trait TranscodeConverter:
     Transcoder<Error = TranscodeConvertError<Self::DecodeError, Self::EncodeError, Self::Value>>
 {

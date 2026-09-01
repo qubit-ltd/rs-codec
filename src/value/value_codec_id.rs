@@ -11,6 +11,15 @@ use core::borrow::Borrow;
 use crate::ValueCodecIdError;
 
 /// A validated, process-independent value-codec identifier.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueCodecId;
+///
+/// let id = ValueCodecId::new("example.u16");
+/// assert_eq!(id.as_str(), "example.u16");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ValueCodecId(&'static str);
 

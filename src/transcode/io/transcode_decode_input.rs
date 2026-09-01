@@ -45,6 +45,16 @@ use crate::codec::assert_unit_bounds;
 /// # Type Parameters
 ///
 /// * `I` - Wrapped unit input.
+///
+/// # Examples
+///
+/// ```
+/// use std::io::Cursor;
+/// use qubit_codec::TranscodeDecodeInput;
+///
+/// let input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![1_u8]), 8);
+/// assert!(input.unread_len() <= 8);
+/// ```
 pub struct TranscodeDecodeInput<I>
 where
     I: Input,

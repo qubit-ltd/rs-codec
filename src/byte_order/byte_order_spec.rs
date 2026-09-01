@@ -9,6 +9,14 @@
 use crate::ByteOrder;
 
 /// Describes a type-level byte order.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec};
+///
+/// assert_eq!(BigEndian::ORDER, ByteOrder::BigEndian);
+/// ```
 pub trait ByteOrderSpec: Copy + Default {
     /// Runtime value represented by this type-level byte order.
     const ORDER: ByteOrder;

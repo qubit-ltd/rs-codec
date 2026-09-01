@@ -7,6 +7,15 @@
 // =============================================================================
 
 /// Runtime byte order selector.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ByteOrder;
+///
+/// let order = ByteOrder::BigEndian;
+/// assert_eq!(order, ByteOrder::BigEndian);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ByteOrder {
     /// Big-endian byte order.

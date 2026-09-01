@@ -34,7 +34,7 @@ use crate::TranscodeDecodeErrorOf;
 /// final values after the caller has supplied all input and completed EOF
 /// decoding.
 ///
-/// # Example
+/// # Examples
 ///
 /// This hook replaces malformed units with `b'?'` and otherwise lets the engine
 /// keep decoding. At EOF, implementations may also override

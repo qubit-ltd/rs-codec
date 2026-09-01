@@ -28,6 +28,16 @@ use crate::Transcoder;
 /// # Type Parameters
 ///
 /// - `C`: Low-level codec used to decode values.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::{Codec, CodecTranscodeDecoder};
+///
+/// fn make_decoder<C: Codec>(codec: C) -> CodecTranscodeDecoder<C> {
+///     CodecTranscodeDecoder::new(codec)
+/// }
+/// ```
 #[derive(Debug, Default)]
 pub struct CodecTranscodeDecoder<C> {
     /// Common buffered decoding engine.

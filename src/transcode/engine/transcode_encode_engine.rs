@@ -47,7 +47,7 @@ use crate::codec::assert_unit_bounds;
 /// the encode policy needs custom planning, replacement, skipped values, or
 /// finish-time output.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// use core::{

@@ -8,6 +8,16 @@
 use core::num::NonZeroUsize;
 
 /// Reports why a [`crate::Transcoder`] stopped converting input.
+///
+/// # Examples
+///
+/// ```
+/// use core::num::NonZeroUsize;
+/// use qubit_codec::TranscodeStatus;
+///
+/// let status = TranscodeStatus::need_output(NonZeroUsize::new(2).unwrap());
+/// assert!(matches!(status, TranscodeStatus::NeedOutput { required } if required.get() == 2));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscodeStatus {
     /// All currently supplied input was consumed.

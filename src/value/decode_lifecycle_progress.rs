@@ -12,6 +12,16 @@
 /// # Type Parameters
 ///
 /// - `V`: Logical value type produced by the codec.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::DecodeLifecycleProgress;
+///
+/// fn inspect<V>(progress: &DecodeLifecycleProgress<V>) -> usize {
+///     progress.reset_written() + progress.finish_written()
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[must_use]
 pub struct DecodeLifecycleProgress<V> {
