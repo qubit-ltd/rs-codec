@@ -36,6 +36,7 @@ default = []
 io = ["dep:qubit-io"]
 
 [dependencies]
+inventory = "0.3"
 thiserror = "2.0"
 qubit-utils = "0.3"
 

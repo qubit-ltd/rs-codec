@@ -159,5 +159,20 @@ pub use value::CodecValueDecoder;
 pub use value::CodecValueEncoder;
 pub use value::DecodeLifecycleOutput;
 pub use value::DecodeLifecycleProgress;
+pub use value::ValueCodecDescriptor;
+pub use value::ValueCodecExecutionError;
+pub use value::ValueCodecId;
+pub use value::ValueCodecIdError;
+pub use value::ValueCodecRegistration;
+#[doc(hidden)]
+pub use value::ValueCodecRegistrationFactory;
+pub use value::ValueCodecRegistrationSource;
+pub use value::ValueCodecRegistry;
+pub use value::ValueCodecRegistryError;
 pub use value::ValueDecoder;
 pub use value::ValueEncoder;
+
+#[doc(hidden)]
+pub mod __private {
+    pub use inventory;
+}
