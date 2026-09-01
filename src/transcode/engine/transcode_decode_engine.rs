@@ -442,6 +442,10 @@ where
         self.transcode_with_eof(input, input_index, output, output_index, true)
     }
 
+    /// Runs one decode step with an explicit end-of-input flag.
+    ///
+    /// The helper centralizes lifecycle validation and shared cursor handling
+    /// for the streaming and EOF-aware entry points.
     fn transcode_with_eof(
         &mut self,
         input: &[C::Unit],

@@ -620,6 +620,10 @@ where
         self.transcode_with_eof(input, input_index, output, output_index, true)
     }
 
+    /// Runs one conversion step with an explicit end-of-input flag.
+    ///
+    /// The helper owns the shared lifecycle and cursor checks used by both
+    /// streaming and EOF-aware public entry points.
     fn transcode_with_eof(
         &mut self,
         input: &[D::Unit],
@@ -1051,6 +1055,10 @@ where
         TranscodeConvertEngine::transcode(self, input, input_index, output, output_index)
     }
 
+    /// Transcodes an input segment while marking it as the end of the stream.
+    ///
+    /// This forwarding implementation delegates to the engine's EOF-aware
+    /// operation so decoder state is finalized before conversion completes.
     #[inline(always)]
     fn transcode_eof(
         &mut self,

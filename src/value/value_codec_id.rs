@@ -48,6 +48,7 @@ impl ValueCodecId {
 }
 
 impl Borrow<str> for ValueCodecId {
+    /// Borrows the stable identifier for lookup without allocating.
     fn borrow(&self) -> &str {
         self.0
     }

@@ -212,6 +212,7 @@ where
     type Output = C::Value;
     type Error = TranscodeDecodeErrorOf<C>;
 
+    /// Decodes one value through the owned-value adapter.
     #[inline(always)]
     fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         self.decode(input)

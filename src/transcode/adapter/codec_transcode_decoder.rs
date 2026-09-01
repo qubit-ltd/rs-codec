@@ -157,6 +157,10 @@ where
         self.engine.transcode(input, input_index, output, output_index)
     }
 
+    /// Transcodes an input segment while marking it as the end of the stream.
+    ///
+    /// This forwarding implementation lets the engine apply EOF-specific
+    /// decoder behavior before returning progress to the caller.
     #[inline(always)]
     fn transcode_eof(
         &mut self,

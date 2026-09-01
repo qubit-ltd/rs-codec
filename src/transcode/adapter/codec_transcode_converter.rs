@@ -376,6 +376,10 @@ where
         CodecTranscodeConverter::transcode(self, input, input_index, output, output_index)
     }
 
+    /// Transcodes an input segment while marking it as the end of the stream.
+    ///
+    /// This forwarding implementation delegates to the converter's EOF-aware
+    /// operation so buffered decoder state can be finalized before encoding.
     #[inline(always)]
     fn transcode_eof(
         &mut self,

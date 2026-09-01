@@ -178,6 +178,10 @@ where
         self.output.ensure_spare_capacity(count)
     }
 
+    /// Ensures enough output capacity for one non-zero required unit count.
+    ///
+    /// The non-zero wrapper preserves the engine's progress contract while
+    /// this adapter performs any necessary allocation.
     fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
         self.ensure_spare_capacity(required.get())
     }

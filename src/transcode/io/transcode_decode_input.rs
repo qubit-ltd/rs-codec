@@ -475,6 +475,11 @@ where
         self.read_decoded_lifecycle_with_scratch_impl(codec, reset_output, finish_output, map_error)
     }
 
+    /// Reads and decodes reset, body, and finish output using caller scratch
+    /// buffers.
+    ///
+    /// This internal path keeps lifecycle allocation and error mapping in one
+    /// place for the public convenience methods.
     fn read_decoded_lifecycle_with_scratch_impl<C, M>(
         &mut self,
         codec: &mut C,

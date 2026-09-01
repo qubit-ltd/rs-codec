@@ -91,6 +91,7 @@ impl ValueCodecDescriptor {
 }
 
 impl core::fmt::Debug for ValueCodecDescriptor {
+    /// Formats descriptor metadata without invoking either codec function.
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter
             .debug_struct("ValueCodecDescriptor")
