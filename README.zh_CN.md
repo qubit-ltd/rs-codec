@@ -108,6 +108,7 @@ adapter、畸形输入策略和 I/O 集成。若每层各自实现下标、容�
 | --- | --- |
 | 底层 value/unit 契约 | `Codec`、`DecodeFailure` |
 | 自有完整值转换 | `ValueEncoder`、`ValueDecoder`、`CodecValueEncoder`、`CodecValueDecoder` |
+| 安全类型擦除的完整值查找 | `ValueCodecDescriptor`、`ValueCodecRegistry`、`register_value_codec!` |
 | 严格的调用方缓冲区转换 | `Transcoder`、`CodecTranscodeEncoder`、`CodecTranscodeDecoder`、`CodecTranscodeConverter` |
 | 带策略的转换 | `engine::TranscodeEncodeEngine`、`engine::TranscodeDecodeEngine`、`engine::TranscodeConvertEngine` 与 hooks（包括 `DecodeIncompleteAction`）|
 | 进度与背压 | `TranscodeProgress`、`TranscodeStatus` |
@@ -129,6 +130,8 @@ adapter、畸形输入策略和 I/O 集成。若每层各自实现下标、容�
   `Reject`、`Skip` 或 `Emit`。
 - 容量上界必须覆盖所有可达瞬态。自有输出 adapter 可能分配内存；流式 API 使用
   调用方提供的缓冲区。
+- `ValueCodecDescriptor` 只擦除 value type 已在注册时固定的双向字符串 codec。
+  注册表按已校验的稳定 ID 查找；执行前会先核对类型擦除输入的实际类型。
 
 ## 延伸阅读
 

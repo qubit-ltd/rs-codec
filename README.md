@@ -113,6 +113,7 @@ mechanics shared while leaving domain rules in the format crate that owns them.
 | --- | --- |
 | Low-level value/unit contract | `Codec`, `DecodeFailure` |
 | Owned whole-value conversion | `ValueEncoder`, `ValueDecoder`, `CodecValueEncoder`, `CodecValueDecoder` |
+| Safely erased whole-value lookup | `ValueCodecDescriptor`, `ValueCodecRegistry`, `register_value_codec!` |
 | Strict caller-buffered conversion | `Transcoder`, `CodecTranscodeEncoder`, `CodecTranscodeDecoder`, `CodecTranscodeConverter` |
 | Policy-aware conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and hooks including `DecodeIncompleteAction` |
 | Progress and backpressure | `TranscodeProgress`, `TranscodeStatus` |
@@ -135,6 +136,9 @@ mechanics shared while leaving domain rules in the format crate that owns them.
   `Reject`, `Skip`, or `Emit` for an incomplete tail only after EOF is known.
 - Capacity bounds must cover every reachable transient state. Owned adapters
   may allocate; streaming APIs use caller-provided buffers.
+- `ValueCodecDescriptor` erases only a bidirectional string codec whose value
+  type is fixed at registration. Registry lookup is by validated stable ID;
+  execution checks the erased input type before invoking user code.
 
 ## Learn More
 
