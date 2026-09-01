@@ -2,7 +2,7 @@
 
 [English](user_guide.md) · [README](../README.zh_CN.md) · [API 文档](https://docs.rs/qubit-codec)
 
-本手册适用于 `qubit-codec 0.13 和 Rust 1.94 及以上版本，面向 codec 与 adapter
+本手册适用于 `qubit-codec` 0.13 和 Rust 1.94 及以上版本，面向 codec 与 adapter
 crate 作者，而不是寻找某种具体文件格式或字符集实现的应用开发者。
 
 ## 手册目标与读者
