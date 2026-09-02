@@ -34,9 +34,10 @@ all-features = true
 [features]
 default = []
 io = ["dep:qubit-io"]
+registry = ["dep:inventory"]
 
 [dependencies]
-inventory = "0.3"
+inventory = { version = "0.3", optional = true }
 thiserror = "2.0"
 qubit-utils = "0.3"
 

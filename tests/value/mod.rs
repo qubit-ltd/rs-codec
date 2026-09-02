@@ -11,6 +11,7 @@ mod codec_value_encoder_tests;
 mod codec_value_lifecycle_tests;
 mod decode_lifecycle_output_tests;
 mod decode_lifecycle_progress_tests;
+#[cfg(feature = "registry")]
 mod value_codec_registry_tests;
 mod value_decoder_tests;
 mod value_encoder_tests;

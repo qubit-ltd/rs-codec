@@ -159,19 +159,29 @@ pub use value::CodecValueDecoder;
 pub use value::CodecValueEncoder;
 pub use value::DecodeLifecycleOutput;
 pub use value::DecodeLifecycleProgress;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecDescriptor;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecExecutionError;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecId;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecIdError;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecRegistration;
+#[cfg(feature = "registry")]
 #[doc(hidden)]
 pub use value::ValueCodecRegistrationFactory;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecRegistrationSource;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecRegistry;
+#[cfg(feature = "registry")]
 pub use value::ValueCodecRegistryError;
 pub use value::ValueDecoder;
 pub use value::ValueEncoder;
 
+#[cfg(feature = "registry")]
 #[doc(hidden)]
 pub mod __private {
     pub use inventory;
