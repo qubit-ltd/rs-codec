@@ -21,11 +21,17 @@ qubit-codec = "0.13"
 ```
 
 The default feature set is empty. Enable `io` only for the `qubit-io` buffered
-bridges:
+bridges, and enable `registry` for global value codec registration and the
+`register_value_codec!` macro. The features are independent:
 
 ```toml
 [dependencies]
 qubit-codec = { version = "0.13", features = ["io"] }
+```
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.13", features = ["registry"] }
 ```
 
 The minimum supported Rust version is 1.94.
@@ -113,7 +119,7 @@ mechanics shared while leaving domain rules in the format crate that owns them.
 | --- | --- |
 | Low-level value/unit contract | `Codec`, `DecodeFailure` |
 | Owned whole-value conversion | `ValueEncoder`, `ValueDecoder`, `CodecValueEncoder`, `CodecValueDecoder` |
-| Safely erased whole-value lookup | `ValueCodecDescriptor`, `ValueCodecRegistry`, `register_value_codec!` |
+| Safely erased whole-value lookup with `registry` | `ValueCodecDescriptor`, `ValueCodecRegistry`, `register_value_codec!` |
 | Strict caller-buffered conversion | `Transcoder`, `CodecTranscodeEncoder`, `CodecTranscodeDecoder`, `CodecTranscodeConverter` |
 | Policy-aware conversion | `engine::TranscodeEncodeEngine`, `engine::TranscodeDecodeEngine`, `engine::TranscodeConvertEngine`, and hooks including `DecodeIncompleteAction` |
 | Progress and backpressure | `TranscodeProgress`, `TranscodeStatus` |
@@ -136,9 +142,10 @@ mechanics shared while leaving domain rules in the format crate that owns them.
   `Reject`, `Skip`, or `Emit` for an incomplete tail only after EOF is known.
 - Capacity bounds must cover every reachable transient state. Owned adapters
   may allocate; streaming APIs use caller-provided buffers.
-- `ValueCodecDescriptor` erases only a bidirectional string codec whose value
-  type is fixed at registration. Registry lookup is by validated stable ID;
-  execution checks the erased input type before invoking user code.
+- With `registry`, `ValueCodecDescriptor` erases only a bidirectional string
+  codec whose value type is fixed at registration. Registry lookup is by
+  validated stable ID; execution checks the erased input type before invoking
+  user code.
 
 ## Learn More
 
