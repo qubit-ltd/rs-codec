@@ -2,7 +2,7 @@
 
 [中文](user_guide.zh_CN.md) · [README](../README.md) · [API documentation](https://docs.rs/qubit-codec)
 
-This guide covers `qubit-codec` 0.13 and Rust 1.94 or later. It is written for
+This guide covers `qubit-codec` 0.14 and Rust 1.94 or later. It is written for
 authors of codec and adapter crates—not for application developers looking for
 a concrete file format or character set implementation.
 
@@ -121,7 +121,7 @@ not reimplement capacity or lifecycle code.
 
 ```toml
 [dependencies]
-qubit-codec = "0.13"
+qubit-codec = "0.14"
 ```
 
 The default feature set is empty. The scenario above needs no feature. Enable
@@ -129,7 +129,7 @@ The default feature set is empty. The scenario above needs no feature. Enable
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.13", features = ["io"] }
+qubit-codec = { version = "0.14", features = ["io"] }
 ```
 
 ## Core Workflow
