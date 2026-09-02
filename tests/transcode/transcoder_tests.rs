@@ -315,6 +315,39 @@ impl Transcoder for NeedInputEofTranscoder {
 }
 
 #[derive(Default)]
+struct OverreadingEofTranscoder;
+
+impl Transcoder for OverreadingEofTranscoder {
+    type Input = u8;
+    type Output = u8;
+    infallible_transcoder_error!();
+
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 2, 0))
+    }
+
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+}
+
+#[derive(Default)]
 struct UnderestimatingTranscoder;
 
 impl Transcoder for UnderestimatingTranscoder {
@@ -849,21 +882,40 @@ fn test_transcoder_transcode_complete_into_maps_runtime_need_output() {
 }
 
 #[test]
-#[should_panic(expected = "Transcoder::transcode returned invalid progress")]
 fn test_transcoder_transcode_complete_into_rejects_trailing_input_progress() {
     let mut transcoder = PartialCompleteTranscoder;
     let mut output = [0_u8; 2];
 
-    let _ = transcoder.transcode_complete_into(b"ab", &mut output);
+    let error = transcoder
+        .transcode_complete_into(b"ab", &mut output)
+        .expect_err("default EOF handling must reject invalid complete progress");
+
+    assert_eq!(
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_progress(
+            codec::TranscodeContractError::CompleteWithRemainingInput { read: 1, available: 2 },
+        )),
+        error,
+    );
 }
 
 #[test]
-#[should_panic(expected = "Transcoder::transcode returned invalid progress")]
 fn test_transcoder_transcode_complete_into_validates_progress() {
     let mut transcoder = OverreportingCompleteTranscoder;
     let mut output = [];
 
-    let _ = transcoder.transcode_complete_into(b"", &mut output);
+    let error = transcoder
+        .transcode_complete_into(b"", &mut output)
+        .expect_err("default EOF handling must reject invalid output progress");
+
+    assert_eq!(
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_progress(
+            codec::TranscodeContractError::OverWritten {
+                written: 1,
+                available: 0,
+            },
+        )),
+        error,
+    );
 }
 
 #[test]
@@ -941,6 +993,25 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
         .expect_err("EOF progress that remains incomplete must be rejected");
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(1, 2, 0)),
+        error,
+    );
+}
+
+#[test]
+fn test_transcode_eof_rejects_progress_that_reads_beyond_available_input() {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut transcoder = OverreadingEofTranscoder;
+        transcoder.transcode_eof(&[0], 0, &mut [], 0)
+    }));
+
+    assert!(result.is_ok(), "invalid EOF progress must not panic");
+    let error = result
+        .expect("invalid EOF progress must not panic")
+        .expect_err("invalid EOF progress must return a framework failure");
+    assert_eq!(
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_progress(
+            codec::TranscodeContractError::OverRead { read: 2, available: 1 },
+        )),
         error,
     );
 }

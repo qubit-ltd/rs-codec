@@ -464,7 +464,11 @@ pub trait Transcoder {
     /// can resolve a trailing prefix using EOF-aware format rules should
     /// override it. If the default still reports
     /// [`TranscodeStatus::NeedInput`], this method returns
-    /// [`TranscodeFailure::IncompleteInput`] instead.
+    /// [`TranscodeFailure::IncompleteInput`] instead. The default validates
+    /// its input and output indices before delegating, then validates returned
+    /// progress before calculating the incomplete-input context. A broken
+    /// implementation therefore returns [`TranscodeFailure::InvalidProgress`]
+    /// rather than causing arithmetic overflow or advancing invalid cursors.
     #[inline]
     fn transcode_eof(
         &mut self,
@@ -473,12 +477,18 @@ pub trait Transcoder {
         output: &mut [Self::Output],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
+        let available_input = input.len() - input_index;
+        let available_output = output.len() - output_index;
         let progress = self.transcode(input, input_index, output, output_index)?;
+        progress
+            .validate(input_index, available_input, output_index, available_output)
+            .map_err(TranscodeFailure::invalid_progress)?;
         match progress.status() {
             TranscodeStatus::NeedInput { required } => Err(TranscodeFailure::incomplete_input(
                 input_index + progress.read(),
                 required.get(),
-                input.len() - input_index - progress.read(),
+                available_input - progress.read(),
             )
             .into()),
             _ => Ok(progress),
@@ -642,9 +652,10 @@ pub trait Transcoder {
     /// # Panics
     ///
     /// Panics when `reset` or `finish` reports writing beyond its declared
-    /// bound or the available output, when `transcode` returns invalid
-    /// progress, or when a returned write count cannot be added to the output
-    /// cursor.
+    /// bound or the available output, when an overridden `transcode_eof`
+    /// returns invalid progress, or when a returned write count cannot be
+    /// added to the output cursor. The default `transcode_eof` converts
+    /// invalid `transcode` progress into [`TranscodeFailure::InvalidProgress`].
     fn transcode_complete_into(
         &mut self,
         input: &[Self::Input],

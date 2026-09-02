@@ -10,6 +10,7 @@
 use thiserror::Error;
 
 use super::capacity_error::CapacityError;
+use super::transcode_contract_error::TranscodeContractError;
 use crate::Codec;
 use crate::codec::assert_unit_bounds;
 
@@ -82,6 +83,14 @@ pub enum TranscodeFailure {
         required: usize,
         /// Input units available from `input_index`.
         available: usize,
+    },
+
+    /// A transcoder returned progress inconsistent with the supplied buffers.
+    #[error("invalid transcoder progress: {source}")]
+    InvalidProgress {
+        /// Contract error describing the invalid progress.
+        #[source]
+        source: TranscodeContractError,
     },
 
     /// The input contains exactly one decoded value plus trailing units.
@@ -187,6 +196,13 @@ impl TranscodeFailure {
             required,
             available,
         }
+    }
+
+    /// Creates an invalid-progress error.
+    #[inline(always)]
+    #[must_use]
+    pub const fn invalid_progress(source: TranscodeContractError) -> Self {
+        Self::InvalidProgress { source }
     }
 
     /// Creates a trailing-input error.
@@ -340,5 +356,13 @@ impl From<CapacityError> for TranscodeFailure {
         match error {
             CapacityError::OutputLengthOverflow => Self::OutputLengthOverflow,
         }
+    }
+}
+
+impl From<TranscodeContractError> for TranscodeFailure {
+    /// Converts a broken transcoder progress report into a framework failure.
+    #[inline(always)]
+    fn from(error: TranscodeContractError) -> Self {
+        Self::invalid_progress(error)
     }
 }
