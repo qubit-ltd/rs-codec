@@ -154,7 +154,7 @@ checked adapter 会在进入 `Codec::encode` 或 `Codec::decode` 前建立文档
   输入返回 `DecodeFailure::Invalid`；
 - 将 reset、main 和 finish 输出限制在声明的上界内。
 
-应像贯穿场景一样，在入口处用 `debug_assert!` 明确假定的范围。
+应像实战场景一样，在入口处用 `debug_assert!` 明确假定的范围。
 
 ### 3. 提供自有单值操作
 
@@ -302,7 +302,7 @@ crate 可以为两种情形应用同一个明确的 EOF 策略，而无需把开
 | 方向性 transcode error | encode、decode 或 conversion 失败。 | 保留方向；encode/conversion 错误可能携带不可编码 value。 |
 | `TranscodeContractError` | 自定义 transcoder 返回了不一致进度。 | 修复 transcoder 实现；这不是可恢复输入。 |
 
-在贯穿场景中，checked decoder 会在调用 unsafe `decode` 之前拒绝只有一个字节的完整
+在实战场景中，checked decoder 会在调用 unsafe `decode` 之前拒绝只有一个字节的完整
 输入：
 
 ```rust
