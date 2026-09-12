@@ -17,7 +17,7 @@ policy-ready conversion loops.
 
 ```toml
 [dependencies]
-qubit-codec = "0.14"
+qubit-codec = "0.15"
 ```
 
 The default feature set is empty. Enable `io` only for the `qubit-io` buffered
@@ -26,12 +26,12 @@ bridges, and enable `registry` for global value codec registration and the
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.14", features = ["io"] }
+qubit-codec = { version = "0.15", features = ["io"] }
 ```
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.14", features = ["registry"] }
+qubit-codec = { version = "0.15", features = ["registry"] }
 ```
 
 The minimum supported Rust version is 1.94.
