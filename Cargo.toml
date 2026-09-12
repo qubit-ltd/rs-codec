@@ -1,6 +1,6 @@
 [package]
 name = "qubit-codec"
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
 rust-version = "1.94"
 autotests = false
@@ -41,7 +41,7 @@ inventory = { version = "0.3", optional = true }
 thiserror = "2.0"
 qubit-utils = "0.3"
 
-qubit-io = { version = "0.16", optional = true }
+qubit-io = { version = "0.17", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
