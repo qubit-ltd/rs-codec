@@ -120,6 +120,7 @@ qubit-codec = "0.15"
 
 ```toml
 [dependencies]
+qubit-io = "0.17"
 qubit-codec = { version = "0.15", features = ["io"] }
 ```
 

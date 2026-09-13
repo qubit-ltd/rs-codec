@@ -26,6 +26,7 @@ bridges, and enable `registry` for global value codec registration and the
 
 ```toml
 [dependencies]
+qubit-io = "0.17"
 qubit-codec = { version = "0.15", features = ["io"] }
 ```
 
