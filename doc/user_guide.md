@@ -129,6 +129,7 @@ The default feature set is empty. The scenario above needs no feature. Enable
 
 ```toml
 [dependencies]
+qubit-io = "0.17"
 qubit-codec = { version = "0.15", features = ["io"] }
 ```
 
