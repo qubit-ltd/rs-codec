@@ -19,7 +19,12 @@ impl ValueCodecRegistrationSource {
     /// Creates a source location captured by a registration macro.
     #[doc(hidden)]
     #[must_use]
-    pub const fn new(crate_name: &'static str, module_path: &'static str, file: &'static str, line: u32) -> Self {
+    pub const fn new(
+        crate_name: &'static str,
+        module_path: &'static str,
+        file: &'static str,
+        line: u32,
+    ) -> Self {
         Self {
             crate_name,
             module_path,

@@ -140,7 +140,11 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Panics when `read` exceeds available input or `emitted` exceeds
     /// available output.
     #[inline(always)]
-    pub(in crate::transcode) fn accept_emitted(&mut self, read: NonZeroUsize, emitted: NonZeroUsize) {
+    pub(in crate::transcode) fn accept_emitted(
+        &mut self,
+        read: NonZeroUsize,
+        emitted: NonZeroUsize,
+    ) {
         let read = read.get();
         let emitted = emitted.get();
         assert!(
@@ -185,7 +189,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     ///
     /// Returns progress at the current decode cursor.
     #[inline(always)]
-    pub(in crate::transcode) fn need_input_progress_with(&self, required: NonZeroUsize) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_input_progress_with(
+        &self,
+        required: NonZeroUsize,
+    ) -> TranscodeProgress {
         self.state.need_input_progress(required)
     }
 
@@ -206,7 +213,10 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// units available at the current cursors.
     #[inline]
     #[must_use]
-    pub(in crate::transcode) fn apply_decode_outcome(&mut self, outcome: DecodeOutcome) -> Option<TranscodeProgress> {
+    pub(in crate::transcode) fn apply_decode_outcome(
+        &mut self,
+        outcome: DecodeOutcome,
+    ) -> Option<TranscodeProgress> {
         match outcome {
             DecodeOutcome::Emitted { read, emitted } => {
                 self.accept_emitted(read, emitted);

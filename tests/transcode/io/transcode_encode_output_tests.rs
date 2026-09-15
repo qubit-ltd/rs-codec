@@ -27,7 +27,8 @@ use qubit_io::Output;
 
 #[test]
 fn try_with_capacity_allocates_encode_buffer() {
-    let output = TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), 1).expect("encode buffer should allocate");
+    let output = TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), 1)
+        .expect("encode buffer should allocate");
 
     assert!(output.spare_capacity() >= 1);
     assert!(TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), usize::MAX).is_err());
@@ -72,7 +73,9 @@ enum PairEncodeError {
     BadOutputIndex,
     #[error("invalid output index {index} for output length {len}")]
     InvalidOutputIndex { index: usize, len: usize },
-    #[error("insufficient output at index {output_index}: required {required}, available {available}")]
+    #[error(
+        "insufficient output at index {output_index}: required {required}, available {available}"
+    )]
     InsufficientOutput {
         output_index: usize,
         required: usize,
@@ -104,7 +107,11 @@ impl Codec for CompleteEncodeLifecycleCodec {
     const MAX_ENCODE_RESET_UNITS: usize = 1;
     const MAX_ENCODE_FINISH_UNITS: usize = 1;
 
-    unsafe fn encode_reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         assert_eq!(0, self.state, "encode reset must start each lifecycle");
         output[output_index] = 0xaaaa;
         self.state = 1;
@@ -131,7 +138,11 @@ impl Codec for CompleteEncodeLifecycleCodec {
         Ok(1)
     }
 
-    unsafe fn encode_finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_finish(
+        &mut self,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         assert_eq!(2, self.state, "encode finish must run after encode");
         output[output_index] = 0xbbbb;
         self.state = 0;
@@ -185,12 +196,20 @@ impl Codec for ResetWidthCodec {
         Ok(2)
     }
 
-    unsafe fn encode_reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         self.reset = true;
         Ok(0)
     }
 
-    unsafe fn encode_finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         self.reset = false;
         Ok(0)
     }
@@ -231,7 +250,9 @@ impl Transcoder for PairEncoder {
     type Error = TranscodeEncodeError<PairEncodeError, u32>;
 
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        input_len.checked_mul(2).ok_or(CapacityError::OutputLengthOverflow)
+        input_len
+            .checked_mul(2)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     noop_reset!(u16);
@@ -256,7 +277,11 @@ impl Transcoder for PairEncoder {
                 return Err(domain(PairEncodeError::BadInputIndex));
             }
             if output_index + written + 2 > output.len() {
-                return Ok(TranscodeProgress::need_output(crate::nonzero(2), read, written));
+                return Ok(TranscodeProgress::need_output(
+                    crate::nonzero(2),
+                    read,
+                    written,
+                ));
             }
             let value = input[input_index + read];
             output[output_index + written] = (value >> 16) as u16;
@@ -517,7 +542,12 @@ struct UnitOutput {
 impl Output for UnitOutput {
     type Item = u16;
 
-    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[u16],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
         if self.fail_write {
             return Err(Error::new(ErrorKind::BrokenPipe, "output write failure"));
         }
@@ -613,7 +643,10 @@ impl Transcoder for FailingFinishEncoder {
         _output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
         match self.failure {
-            FinishFailure::InvalidIndex => Err(domain(PairEncodeError::InvalidOutputIndex { index: 4, len: 1 })),
+            FinishFailure::InvalidIndex => Err(domain(PairEncodeError::InvalidOutputIndex {
+                index: 4,
+                len: 1,
+            })),
             FinishFailure::InsufficientOutput => Err(domain(PairEncodeError::InsufficientOutput {
                 output_index: 0,
                 required: 2,
@@ -824,7 +857,9 @@ impl Transcoder for PrefixBeforeReadEncoder {
     type Error = TranscodeEncodeError<PairEncodeError, u32>;
 
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        input_len.checked_add(1).ok_or(CapacityError::OutputLengthOverflow)
+        input_len
+            .checked_add(1)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     noop_reset!(u16);
@@ -1005,9 +1040,17 @@ impl FixedCapacityOutput {
 impl Output for FixedCapacityOutput {
     type Item = u16;
 
-    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[u16],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
         if self.units.len() + count > self.capacity {
-            return Err(Error::new(ErrorKind::InvalidInput, "fixed output capacity exceeded"));
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "fixed output capacity exceeded",
+            ));
         }
         self.units.extend_from_slice(&input[index..index + count]);
         Ok(count)
@@ -1050,7 +1093,10 @@ where
     output.transcode(encoder, &mut mapper, input, input_index, count)
 }
 
-fn finish_with<E>(output: &mut TranscodeEncodeOutput<UnitOutput>, encoder: &mut E) -> std::io::Result<()>
+fn finish_with<E>(
+    output: &mut TranscodeEncodeOutput<UnitOutput>,
+    encoder: &mut E,
+) -> std::io::Result<()>
 where
     E: Transcoder<Input = u32, Output = u16, Error = TranscodeEncodeError<PairEncodeError, u32>>,
 {
@@ -1070,7 +1116,9 @@ fn test_buffered_encode_output_reset_buffers_prefix_without_flushing() {
 
     assert_eq!(1, encoder.reset_calls);
     assert!(output.inner().units.is_empty());
-    output.flush().expect("flush should deliver the reset prefix");
+    output
+        .flush()
+        .expect("flush should deliver the reset prefix");
     assert_eq!(&[0xaaaa], output.inner().units.as_slice());
 }
 
@@ -1099,13 +1147,15 @@ fn test_buffered_encode_output_exposes_raw_byte_write_and_seek_adapters() {
         1,
         Write::write(&mut output, &[5]).expect("std::io::Write should delegate to raw unit writes")
     );
-    Write::write_all(&mut output, &[6, 7]).expect("std::io::Write::write_all should delegate to raw units");
+    Write::write_all(&mut output, &[6, 7])
+        .expect("std::io::Write::write_all should delegate to raw units");
     Write::flush(&mut output).expect("std::io::Write::flush should drain");
     assert_eq!(&[1, 2, 3, 4, 5, 6, 7], output.inner().get_ref().as_slice(),);
 
     assert_eq!(
         1,
-        Seek::seek(&mut output, SeekFrom::Start(1)).expect("std::io::Seek should flush then delegate")
+        Seek::seek(&mut output, SeekFrom::Start(1))
+            .expect("std::io::Seek should flush then delegate")
     );
     Write::write_all(&mut output, &[8]).expect("write after seek should update the wrapped cursor");
     output.flush().expect("flush should drain after seek");
@@ -1130,8 +1180,8 @@ fn test_buffered_encode_output_returns_zero_for_zero_count() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-    let written =
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 0).expect("zero-count write should be a no-op");
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 0)
+        .expect("zero-count write should be a no-op");
 
     assert_eq!(0, written);
     assert!(output.inner().units.is_empty());
@@ -1166,7 +1216,10 @@ fn test_buffered_encode_output_transcode_rejects_invalid_input_range() {
         .expect_err("invalid input range should be rejected before encoding");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
-    assert_eq!("encode input range exceeds source buffer", error.to_string(),);
+    assert_eq!(
+        "encode input range exceeds source buffer",
+        error.to_string(),
+    );
 }
 
 #[test]
@@ -1189,8 +1242,8 @@ fn test_buffered_encode_output_flushes_full_buffer_before_next_write() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
-    let written =
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1).expect("first value should fill the unit buffer");
+    let written = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect("first value should fill the unit buffer");
     assert_eq!(1, written);
     assert!(output.inner().units.is_empty());
     let written = encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
@@ -1254,8 +1307,8 @@ fn test_buffered_encode_output_reports_transcoder_errors_as_io_errors() {
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
     let input = [u32::MAX];
-    let error =
-        encode_with(&mut output, &mut encoder, &input, 0, 1).expect_err("encoder error should be mapped to I/O error");
+    let error = encode_with(&mut output, &mut encoder, &input, 0, 1)
+        .expect_err("encoder error should be mapped to I/O error");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
@@ -1269,7 +1322,11 @@ fn test_buffered_encode_output_rejects_need_input_status() {
         .expect_err("encoder NeedInput status should be rejected");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert!(error.to_string().contains("violated the TranscodeEncoder contract"));
+    assert!(
+        error
+            .to_string()
+            .contains("violated the TranscodeEncoder contract")
+    );
 }
 
 #[test]
@@ -1316,10 +1373,13 @@ fn test_buffered_encode_output_flush_does_not_finish_encoder() {
     let output = UnitOutput::default();
     let mut encoder = FinishEncoder::default();
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1).expect("encoding should accept the value");
+    let written = encode_with(&mut output, &mut encoder, &[0x1234], 0, 1)
+        .expect("encoding should accept the value");
     assert_eq!(1, written);
 
-    output.flush().expect("flush should only drain buffered units");
+    output
+        .flush()
+        .expect("flush should only drain buffered units");
     assert_eq!(&[0x1234], output.inner().units.as_slice());
 
     finish_with(&mut output, &mut encoder).expect("finish should write encoder trailer");
@@ -1338,7 +1398,9 @@ fn test_buffered_encode_output_finish_writes_and_flushes() {
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
     assert!(output.inner().flushed);
     assert_eq!(Ok(1), encoder.max_finish_output_len());
-    output.flush().expect("explicit flush should be harmless after finish");
+    output
+        .flush()
+        .expect("explicit flush should be harmless after finish");
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
 }
 
@@ -1354,7 +1416,9 @@ fn test_buffered_encode_output_finish_to_buffer_defers_delivery() {
         .expect("finish should retain the encoder trailer");
 
     assert!(output.inner().units.is_empty());
-    output.flush().expect("flush should deliver the retained trailer");
+    output
+        .flush()
+        .expect("flush should deliver the retained trailer");
     assert_eq!(&[0xeeee], output.inner().units.as_slice());
 }
 
@@ -1375,8 +1439,8 @@ fn test_buffered_encode_output_maps_finish_capacity_bound_error() {
     let mut encoder = CapacityBoundEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
 
-    let error =
-        finish_with(&mut output, &mut encoder).expect_err("finish bound overflow should be mapped to I/O error");
+    let error = finish_with(&mut output, &mut encoder)
+        .expect_err("finish bound overflow should be mapped to I/O error");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("output length overflow"));
@@ -1390,15 +1454,20 @@ fn test_buffered_encode_output_maps_finish_failure_variants() {
         ..FinishEncoder::default()
     };
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
-    let error = finish_with(&mut output, &mut encoder).expect_err("finish capacity failure should be mapped to I/O");
+    let error = finish_with(&mut output, &mut encoder)
+        .expect_err("finish capacity failure should be mapped to I/O");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 
-    for failure in [FinishFailure::InvalidIndex, FinishFailure::InsufficientOutput] {
+    for failure in [
+        FinishFailure::InvalidIndex,
+        FinishFailure::InsufficientOutput,
+    ] {
         let output = UnitOutput::default();
         let mut encoder = FailingFinishEncoder { failure };
         let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
 
-        let error = finish_with(&mut output, &mut encoder).expect_err("finish failure should be mapped to I/O error");
+        let error = finish_with(&mut output, &mut encoder)
+            .expect_err("finish failure should be mapped to I/O error");
 
         assert_eq!(ErrorKind::InvalidData, error.kind());
     }
@@ -1410,7 +1479,8 @@ fn test_buffered_encode_output_finish_delegates_zero_width_finish() {
     let mut encoder = ZeroWidthFailingFinishEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 3);
 
-    let error = finish_with(&mut output, &mut encoder).expect_err("zero-width finish errors should not be skipped");
+    let error = finish_with(&mut output, &mut encoder)
+        .expect_err("zero-width finish errors should not be skipped");
     assert_eq!(ErrorKind::InvalidData, error.kind());
 }
 
@@ -1475,8 +1545,8 @@ fn test_buffered_encode_output_transcode_flushes_when_spare_is_empty() {
     let output = UnitOutput::default();
     let mut encoder = PairEncoder;
     let mut output = TranscodeEncodeOutput::with_capacity(output, 2);
-    let first =
-        encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1).expect("first value should fill the spare buffer");
+    let first = encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1)
+        .expect("first value should fill the spare buffer");
     assert_eq!(1, first);
     assert_eq!(0, output.spare_capacity());
     let second = encode_with(&mut output, &mut encoder, &[0x0003_0004], 0, 1)
@@ -1524,7 +1594,9 @@ fn test_buffered_encode_output_retries_after_need_output_without_reading() {
     assert_eq!(1, written);
     assert!(output.inner().units.is_empty());
 
-    output.flush().expect("flush should drain final buffered unit");
+    output
+        .flush()
+        .expect("flush should drain final buffered unit");
     assert_eq!(&[0xaaaa, 0x1234], output.inner().units.as_slice());
 }
 
@@ -1622,11 +1694,19 @@ impl Codec for ScriptedEncodeCodec {
         Ok(2)
     }
 
-    unsafe fn encode_reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         Ok(0)
     }
 
-    unsafe fn encode_finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_finish(
+        &mut self,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         if self.mode == ScriptedEncodeMode::FinishError {
             return Err(PairEncodeError::BadInputIndex);
         }
@@ -1640,7 +1720,12 @@ struct ZeroWriteOutput;
 impl Output for ZeroWriteOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        _input: &[u8],
+        _index: usize,
+        _count: usize,
+    ) -> std::io::Result<usize> {
         Ok(0)
     }
 
@@ -1767,7 +1852,8 @@ fn test_buffered_encode_output_write_encoded_reports_unencodable() {
 fn test_buffered_encode_output_write_all_reports_write_zero() {
     let mut output = TranscodeEncodeOutput::with_capacity(ZeroWriteOutput, 0);
 
-    let error = Write::write_all(&mut output, &[1, 2, 3]).expect_err("zero-length writes should surface WriteZero");
+    let error = Write::write_all(&mut output, &[1, 2, 3])
+        .expect_err("zero-length writes should surface WriteZero");
 
     assert_eq!(ErrorKind::WriteZero, error.kind());
 }
@@ -1812,12 +1898,20 @@ struct BrokenPipeByteOutput;
 impl Output for BrokenPipeByteOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        _input: &[u8],
+        _index: usize,
+        _count: usize,
+    ) -> std::io::Result<usize> {
         Err(Error::new(ErrorKind::BrokenPipe, "byte output failure"))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        Err(Error::new(ErrorKind::BrokenPipe, "byte output flush failure"))
+        Err(Error::new(
+            ErrorKind::BrokenPipe,
+            "byte output flush failure",
+        ))
     }
 }
 
@@ -1934,7 +2028,8 @@ fn test_buffered_encode_output_write_encoded_maps_finish_error_via_scratch() {
 fn test_buffered_encode_output_write_all_propagates_write_errors() {
     let mut output = TranscodeEncodeOutput::with_capacity(BrokenPipeByteOutput, 1);
 
-    let error = Write::write_all(&mut output, &[1, 2]).expect_err("write_all should propagate output write errors");
+    let error = Write::write_all(&mut output, &[1, 2])
+        .expect_err("write_all should propagate output write errors");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }

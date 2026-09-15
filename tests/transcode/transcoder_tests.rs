@@ -63,7 +63,11 @@ fn test_transcoder_default_method_returns_fixed_transcode_error() {
         .expect_err("overflow should be returned as transcode error");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0)),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(
+            0,
+            usize::MAX,
+            0
+        )),
         error
     );
 }
@@ -237,7 +241,8 @@ impl Transcoder for PairTranscoder {
         if !available.is_multiple_of(2) {
             let complete_len = available - 1;
             for i in 0..complete_len / 2 {
-                output[output_index + i] = input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
+                output[output_index + i] =
+                    input[input_index + i * 2] ^ input[input_index + i * 2 + 1];
             }
             return Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedInput {
@@ -404,7 +409,12 @@ impl Transcoder for PartialCompleteTranscoder {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        codec::TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
+        codec::TranscodeFailure::ensure_transcode_indices(
+            input.len(),
+            input_index,
+            output.len(),
+            output_index,
+        )?;
         output[output_index] = input[input_index];
         Ok(TranscodeProgress::complete(1, 1))
     }
@@ -674,7 +684,11 @@ fn test_transcoder_error_is_domain_error_type() {
 
 #[test]
 fn test_transcoder_error_associated_type_matches_framework_error() {
-    type ResetFn<T> = fn(&mut T, &mut [<T as Transcoder>::Output], usize) -> Result<usize, <T as Transcoder>::Error>;
+    type ResetFn<T> = fn(
+        &mut T,
+        &mut [<T as Transcoder>::Output],
+        usize,
+    ) -> Result<usize, <T as Transcoder>::Error>;
 
     let reset: ResetFn<CopyTranscoder> = <CopyTranscoder as Transcoder>::reset;
 
@@ -729,7 +743,12 @@ fn test_transcoder_capacity_bounds_are_global() {
     let mut output = [0_u8; 2];
 
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
-    assert_eq!(2, transcoder.finish(&mut output, 0).expect("finish should fit"));
+    assert_eq!(
+        2,
+        transcoder
+            .finish(&mut output, 0)
+            .expect("finish should fit")
+    );
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
     assert_eq!(Ok(5), transcoder.max_total_output_len(3));
 }
@@ -825,7 +844,10 @@ fn test_transcoder_transcode_complete_into_runs_reset_transcode_and_finish() {
 #[test]
 fn test_transcoder_transcode_complete_into_reports_stage_errors() {
     for (failure, expected) in [
-        (FailurePoint::Reset, TranscodeDecodeError::domain_reset("reset")),
+        (
+            FailurePoint::Reset,
+            TranscodeDecodeError::domain_reset("reset"),
+        ),
         (
             FailurePoint::TranscodeBound,
             codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
@@ -838,7 +860,10 @@ fn test_transcoder_transcode_complete_into_reports_stage_errors() {
             FailurePoint::Transcode,
             TranscodeDecodeError::domain_main("transcode", 0),
         ),
-        (FailurePoint::Finish, TranscodeDecodeError::domain_finish("finish")),
+        (
+            FailurePoint::Finish,
+            TranscodeDecodeError::domain_finish("finish"),
+        ),
     ] {
         let mut transcoder = FailingTranscoder { failure };
         let mut output = [0_u8; 1];
@@ -892,7 +917,10 @@ fn test_transcoder_transcode_complete_into_rejects_trailing_input_progress() {
 
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_progress(
-            codec::TranscodeContractError::CompleteWithRemainingInput { read: 1, available: 2 },
+            codec::TranscodeContractError::CompleteWithRemainingInput {
+                read: 1,
+                available: 2
+            },
         )),
         error,
     );
@@ -1010,7 +1038,10 @@ fn test_transcode_eof_rejects_progress_that_reads_beyond_available_input() {
         .expect_err("invalid EOF progress must return a framework failure");
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_progress(
-            codec::TranscodeContractError::OverRead { read: 2, available: 1 },
+            codec::TranscodeContractError::OverRead {
+                read: 2,
+                available: 1
+            },
         )),
         error,
     );

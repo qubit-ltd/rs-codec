@@ -55,7 +55,11 @@ impl Codec for ResetFailCodec {
         Ok(1)
     }
 
-    unsafe fn encode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         Err(ResetFailError)
     }
 }
@@ -137,7 +141,9 @@ impl Codec for OverreportingEncodeCodec {
 fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
     let mut encoder = CodecTranscodeEncoder::new(RejectOddCodec);
     let mut reset_output = [];
-    encoder.reset(&mut reset_output, 0).expect("initialize stream");
+    encoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -153,7 +159,9 @@ fn test_codec_transcode_encode_hooks_wraps_encode_errors() {
 fn test_codec_transcode_encode_hooks_panics_when_codec_reports_wrong_value_width() {
     let mut encoder = CodecTranscodeEncoder::new(OverreportingEncodeCodec);
     let mut reset_output = [];
-    encoder.reset(&mut reset_output, 0).expect("initialize stream");
+    encoder
+        .reset(&mut reset_output, 0)
+        .expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
