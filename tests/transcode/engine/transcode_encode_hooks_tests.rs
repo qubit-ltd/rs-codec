@@ -50,7 +50,11 @@ impl codec::Codec for UnitCodec {
         Ok(1)
     }
 
-    unsafe fn encode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::EncodeError> {
+    unsafe fn encode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
         Err(UnitEncodeError)
     }
 }
@@ -74,8 +78,9 @@ fn test_transcode_encode_hooks_default_finish_is_noop() {
     let mut codec = UnitCodec;
     let mut output = [0_u8; 1];
 
-    let written = TranscodeEncodeHooks::<UnitCodec>::finish_hooks(&mut hooks, &mut codec, &mut output, 0)
-        .expect("default finish should be a no-op");
+    let written =
+        TranscodeEncodeHooks::<UnitCodec>::finish_hooks(&mut hooks, &mut codec, &mut output, 0)
+            .expect("default finish should be a no-op");
 
     assert_eq!(0, written);
 }

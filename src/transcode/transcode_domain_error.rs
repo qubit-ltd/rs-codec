@@ -100,7 +100,11 @@ impl<E> TranscodeDomainError<E> {
     /// Returns a main-phase domain error with consumption context.
     #[inline(always)]
     #[must_use]
-    pub const fn main_with_consumed(source: E, input_index: usize, input_consumed: Option<NonZeroUsize>) -> Self {
+    pub const fn main_with_consumed(
+        source: E,
+        input_index: usize,
+        input_consumed: Option<NonZeroUsize>,
+    ) -> Self {
         Self::Main {
             source,
             input_index,

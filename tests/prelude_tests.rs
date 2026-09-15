@@ -113,7 +113,8 @@ impl TranscodeDecodeHooks<EchoCodec> for EchoDecodeHooks {
         error: &core::convert::Infallible,
         _consumed: Option<core::num::NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeError<core::convert::Infallible>> {
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeError<core::convert::Infallible>>
+    {
         match *error {}
     }
 }
@@ -125,7 +126,10 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
         &mut self,
         _codec: &mut EchoCodec,
         _context: &EncodeContext<'_, u8>,
-    ) -> Result<EncodeUnencodableAction<u8>, codec::TranscodeEncodeError<core::convert::Infallible, u8>> {
+    ) -> Result<
+        EncodeUnencodableAction<u8>,
+        codec::TranscodeEncodeError<core::convert::Infallible, u8>,
+    > {
         Ok(EncodeUnencodableAction::Reject)
     }
 }
@@ -154,12 +158,15 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     _accept_codec_transcode_converter::<CodecTranscodeConverter<EchoCodec, EchoCodec>>();
     _accept_transcode_decode_engine::<TranscodeDecodeEngine<EchoCodec, ()>>();
     _accept_transcode_encode_engine::<TranscodeEncodeEngine<EchoCodec, ()>>();
-    _accept_transcode_convert_engine::<TranscodeConvertEngine<EchoCodec, EchoCodec, EchoDecodeHooks, EchoEncodeHooks>>(
-    );
+    _accept_transcode_convert_engine::<
+        TranscodeConvertEngine<EchoCodec, EchoCodec, EchoDecodeHooks, EchoEncodeHooks>,
+    >();
     let mut codec = EchoCodec;
 
-    let encoded = ValueEncoder::<str>::encode(&mut codec, "abc").expect("echo encode should be infallible");
-    let decoded = ValueDecoder::<str>::decode(&mut codec, &encoded).expect("echo decode should be infallible");
+    let encoded =
+        ValueEncoder::<str>::encode(&mut codec, "abc").expect("echo encode should be infallible");
+    let decoded = ValueDecoder::<str>::decode(&mut codec, &encoded)
+        .expect("echo decode should be infallible");
     assert_eq!("abc", decoded);
 
     let progress = TranscodeProgress::complete(1, 2);
@@ -181,8 +188,9 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         TranscodeConvertError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
     );
 
-    let decode_error =
-        TranscodeDecodeError::<core::convert::Infallible>::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1));
+    let decode_error = TranscodeDecodeError::<core::convert::Infallible>::Failure(
+        codec::TranscodeFailure::incomplete_input(0, 2, 1),
+    );
     assert!(matches!(
         decode_error,
         TranscodeDecodeError::Failure(TranscodeFailure::IncompleteInput {
@@ -195,9 +203,13 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     type ConvertPreludeError = TranscodeConvertError<&'static str, &'static str, u8>;
 
     let convert_error = ConvertPreludeError::decode_domain_main("decode failed", 0);
-    assert!(matches!(convert_error, TranscodeConvertError::DecodeDomain(_)));
+    assert!(matches!(
+        convert_error,
+        TranscodeConvertError::DecodeDomain(_)
+    ));
 
-    let encode_error = TranscodeEncodeError::<core::convert::Infallible, u8>::unencodable_without_context(2);
+    let encode_error =
+        TranscodeEncodeError::<core::convert::Infallible, u8>::unencodable_without_context(2);
     assert_eq!(
         TranscodeEncodeError::Unencodable {
             input_index: 2,
@@ -206,12 +218,16 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
         encode_error,
     );
     let convert_error = ConvertPreludeError::encode_domain_main("encode failed", 0);
-    assert!(matches!(convert_error, TranscodeConvertError::EncodeDomain(_)));
+    assert!(matches!(
+        convert_error,
+        TranscodeConvertError::EncodeDomain(_)
+    ));
 
     let context = EncodeContext::new(&1_u8, 0, 0, 1);
     assert_eq!(0, context.input_index());
     assert_eq!(1, context.available_output());
 
-    let (decoded, consumed) = unsafe { Codec::decode(&mut codec, &[1], 0) }.expect("decode should be infallible");
+    let (decoded, consumed) =
+        unsafe { Codec::decode(&mut codec, &[1], 0) }.expect("decode should be infallible");
     assert_eq!((1, 1), (decoded, consumed.get()));
 }

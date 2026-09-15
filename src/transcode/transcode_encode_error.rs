@@ -15,7 +15,8 @@ use super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 
 /// Encode transcode error for a codec-backed encoder.
-pub type TranscodeEncodeErrorOf<C> = TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
+pub type TranscodeEncodeErrorOf<C> =
+    TranscodeEncodeError<<C as Codec>::EncodeError, <C as Codec>::Value>;
 
 /// Error reported by an encode-oriented transcode operation.
 #[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
@@ -131,7 +132,9 @@ impl<E, V> TranscodeEncodeError<E, V> {
     {
         match self {
             Self::Failure(failure) => TranscodeEncodeError::Failure(failure),
-            Self::Unencodable { input_index, value } => TranscodeEncodeError::Unencodable { input_index, value },
+            Self::Unencodable { input_index, value } => {
+                TranscodeEncodeError::Unencodable { input_index, value }
+            }
             Self::Domain(error) => TranscodeEncodeError::Domain(error.map_source(f)),
         }
     }

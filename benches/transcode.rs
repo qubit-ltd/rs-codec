@@ -110,7 +110,11 @@ impl Transcoder for CopyTranscoder {
         if count == input.len() {
             Ok(TranscodeProgress::complete(count, count))
         } else {
-            Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), count, count))
+            Ok(TranscodeProgress::need_output(
+                utils_crate::nonzero(1),
+                count,
+                count,
+            ))
         }
     }
 

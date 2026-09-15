@@ -340,7 +340,8 @@ impl TranscodeEncoder for LifecycleFailingEncoder {
 }
 
 #[test]
-fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending() -> io::Result<()> {
+fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending() -> io::Result<()>
+{
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
@@ -370,11 +371,15 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending() ->
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
-    let mut future = Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2));
+    let mut future =
+        Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2));
 
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(progress)) => {
-            assert_eq!(TranscodeProgress::need_output(utils_crate::nonzero(1), 1, 1), progress,);
+            assert_eq!(
+                TranscodeProgress::need_output(utils_crate::nonzero(1), 1, 1),
+                progress,
+            );
         }
         other => panic!("expected committed encode progress, got {other:?}"),
     }
@@ -391,7 +396,10 @@ fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<
     assert!(output.capacity() >= 3);
     assert_eq!(0, output.pending_len());
     assert!(format!("{output:?}").contains("AsyncTranscodeEncodeOutput"));
-    assert!(AsyncTranscodeEncodeOutput::try_with_capacity(ChunkedAsyncOutput::new(1), usize::MAX,).is_err());
+    assert!(
+        AsyncTranscodeEncodeOutput::try_with_capacity(ChunkedAsyncOutput::new(1), usize::MAX,)
+            .is_err()
+    );
 
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
@@ -462,8 +470,8 @@ fn test_async_transcode_encode_output_maps_lifecycle_errors() -> io::Result<()> 
         overflow_reset_bound: true,
         ..Default::default()
     };
-    let error =
-        complete(output.reset_async(&mut encoder, &mut map_error)).expect_err("reset capacity failure must be mapped");
+    let error = complete(output.reset_async(&mut encoder, &mut map_error))
+        .expect_err("reset capacity failure must be mapped");
     assert_eq!(io::ErrorKind::InvalidData, error.kind());
 
     let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
@@ -471,8 +479,8 @@ fn test_async_transcode_encode_output_maps_lifecycle_errors() -> io::Result<()> 
         fail_reset: true,
         ..Default::default()
     };
-    let error =
-        complete(output.reset_async(&mut encoder, &mut map_error)).expect_err("reset domain failure must be mapped");
+    let error = complete(output.reset_async(&mut encoder, &mut map_error))
+        .expect_err("reset domain failure must be mapped");
     assert_eq!(io::ErrorKind::Other, error.kind());
 
     let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));
@@ -489,8 +497,8 @@ fn test_async_transcode_encode_output_maps_lifecycle_errors() -> io::Result<()> 
         fail_finish: true,
         ..Default::default()
     };
-    let error =
-        complete(output.finish_async(&mut encoder, &mut map_error)).expect_err("finish domain failure must be mapped");
+    let error = complete(output.finish_async(&mut encoder, &mut map_error))
+        .expect_err("finish domain failure must be mapped");
     assert_eq!(io::ErrorKind::Other, error.kind());
 
     let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(1));

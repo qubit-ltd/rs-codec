@@ -104,7 +104,8 @@ fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let decoded = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
     assert_eq!(vec![0x41], decoded.0);
 
-    let written = unsafe { codec.encode(&vec![0x42], &mut output, 0) }.expect("plain codec encode is infallible");
+    let written = unsafe { codec.encode(&vec![0x42], &mut output, 0) }
+        .expect("plain codec encode is infallible");
     assert_eq!(1, written);
     assert_eq!([0x42], output);
 }

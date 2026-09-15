@@ -84,7 +84,10 @@ impl<Value> DecodeInvalidAction<Value> {
     #[inline(always)]
     #[must_use]
     pub(super) fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
-        assert!(available > 0, "DecodeInvalidAction cannot consume empty input",);
+        assert!(
+            available > 0,
+            "DecodeInvalidAction cannot consume empty input",
+        );
         assert!(
             consumed.get() <= available,
             "DecodeInvalidAction consumed units must not exceed available input",

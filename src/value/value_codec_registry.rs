@@ -58,7 +58,8 @@ impl ValueCodecRegistry {
     /// Returns the cached construction error when linked registrations
     /// conflict.
     pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
-        static REGISTRY: OnceLock<Result<ValueCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
+        static REGISTRY: OnceLock<Result<ValueCodecRegistry, ValueCodecRegistryError>> =
+            OnceLock::new();
         match REGISTRY.get_or_init(|| {
             let registrations = inventory::iter::<ValueCodecRegistrationFactory>
                 .into_iter()
@@ -78,7 +79,8 @@ impl ValueCodecRegistry {
     /// Panics when linked registrations conflict.
     #[must_use]
     pub fn global() -> &'static Self {
-        Self::try_global().unwrap_or_else(|error| panic!("invalid global value codec registry: {error}"))
+        Self::try_global()
+            .unwrap_or_else(|error| panic!("invalid global value codec registry: {error}"))
     }
 
     /// Finds a registration by stable ID.
@@ -97,11 +99,16 @@ impl ValueCodecRegistry {
     }
 
     /// Freezes registrations and rejects duplicate IDs.
-    fn build(mut registrations: Vec<ValueCodecRegistration>) -> Result<Self, ValueCodecRegistryError> {
+    fn build(
+        mut registrations: Vec<ValueCodecRegistration>,
+    ) -> Result<Self, ValueCodecRegistryError> {
         registrations.sort_by_key(ValueCodecRegistration::id);
         for pair in registrations.windows(2) {
             if pair[0].id() == pair[1].id() {
-                let mut sources = pair.iter().map(ValueCodecRegistration::source).collect::<Vec<_>>();
+                let mut sources = pair
+                    .iter()
+                    .map(ValueCodecRegistration::source)
+                    .collect::<Vec<_>>();
                 sources.sort_unstable();
                 return Err(ValueCodecRegistryError::DuplicateId {
                     id: pair[0].id().as_str(),

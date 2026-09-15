@@ -52,7 +52,8 @@ where
             .try_reserve_capacity(min_units_per_value)
             .map_err(allocation_error)?;
         loop {
-            let (available, end_of_input) = self.prepare_buffered_window(min_units_per_value, max_units_per_value)?;
+            let (available, end_of_input) =
+                self.prepare_buffered_window(min_units_per_value, max_units_per_value)?;
             let units = &self.input.unread()[..available];
             debug_assert!(units.len() >= min_units_per_value);
             let decode_result = unsafe {
@@ -69,7 +70,10 @@ where
                 Ok((value, consumed)) => {
                     return self.accept(value, consumed, available);
                 }
-                Err(DecodeFailure::Incomplete { source, required_total }) => {
+                Err(DecodeFailure::Incomplete {
+                    source,
+                    required_total,
+                }) => {
                     assert!(
                         required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                         "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
@@ -88,7 +92,10 @@ where
                         }
                         return match source {
                             Some(source) => Err(map_error(source)),
-                            None => Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value")),
+                            None => Err(Error::new(
+                                ErrorKind::UnexpectedEof,
+                                "failed to decode complete value",
+                            )),
                         };
                     }
                     if !self.refill_after_incomplete(required_total, available)? {
@@ -106,7 +113,10 @@ where
                             Err(DecodeFailure::Invalid { source, consumed }) => {
                                 return self.reject::<C, M>(source, consumed, available, map_error);
                             }
-                            Err(DecodeFailure::Incomplete { source, required_total }) => {
+                            Err(DecodeFailure::Incomplete {
+                                source,
+                                required_total,
+                            }) => {
                                 assert!(
                                     required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
                                     "Codec::decode_eof incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
@@ -122,9 +132,10 @@ where
                                 }
                                 return match source {
                                     Some(source) => Err(map_error(source)),
-                                    None => {
-                                        Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value"))
-                                    }
+                                    None => Err(Error::new(
+                                        ErrorKind::UnexpectedEof,
+                                        "failed to decode complete value",
+                                    )),
                                 };
                             }
                         }
@@ -154,7 +165,10 @@ where
             unsafe {
                 self.input.consume(available);
             }
-            return Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value"));
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "failed to decode complete value",
+            ));
         }
 
         if self.input.unread_len() < max_units_per_value
@@ -163,11 +177,19 @@ where
         {
             end_of_input = true;
         }
-        Ok((self.input.unread_len().min(max_units_per_value), end_of_input))
+        Ok((
+            self.input.unread_len().min(max_units_per_value),
+            end_of_input,
+        ))
     }
 
     /// Accepts a decoded value and consumes its source units.
-    fn accept<Value>(&mut self, value: Value, consumed: NonZeroUsize, available: usize) -> Result<Value> {
+    fn accept<Value>(
+        &mut self,
+        value: Value,
+        consumed: NonZeroUsize,
+        available: usize,
+    ) -> Result<Value> {
         if consumed.get() > available {
             return Err(Error::new(
                 ErrorKind::InvalidData,
@@ -183,7 +205,11 @@ where
     }
 
     /// Refills after the codec reports incomplete input.
-    fn refill_after_incomplete(&mut self, required_total: NonZeroUsize, available: usize) -> Result<bool> {
+    fn refill_after_incomplete(
+        &mut self,
+        required_total: NonZeroUsize,
+        available: usize,
+    ) -> Result<bool> {
         let required_total = required_total.get();
         if available >= required_total {
             return Err(Error::new(

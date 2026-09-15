@@ -181,9 +181,10 @@ impl Codec for FixedPairCodec {
     ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
-        Ok((input[input_index].wrapping_add(input[input_index + 1]), unsafe {
-            core::num::NonZeroUsize::new_unchecked(2)
-        }))
+        Ok((
+            input[input_index].wrapping_add(input[input_index + 1]),
+            unsafe { core::num::NonZeroUsize::new_unchecked(2) },
+        ))
     }
 
     unsafe fn encode(
@@ -253,7 +254,11 @@ impl Codec for OverreportingDecodeResetCodec {
 
     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
-    unsafe fn decode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         Ok(1)
     }
 
@@ -309,7 +314,11 @@ impl Codec for OverreportingDecodeFinishCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         Ok(1)
     }
 }
@@ -340,7 +349,11 @@ impl Codec for ResetFailDecodeCodec {
 
     const MAX_DECODE_RESET_VALUES: usize = 1;
 
-    unsafe fn decode_reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_reset(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         if self.fail_reset {
             Err(TestDecodeError::ResetFailed)
         } else {
@@ -473,7 +486,11 @@ impl Codec for FinishFailStatelessCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         if self.fail_finish {
             Err(TestDecodeError::FinishFailed)
         } else {
@@ -519,7 +536,11 @@ impl Codec for FinishFailStatefulCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(
+        &mut self,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         if self.fail_finish {
             Err(TestDecodeError::FinishFailed)
         } else {
@@ -567,7 +588,11 @@ impl Codec for StatefulLifecycleCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         output[output_index] = self.decode_state as u8;
         self.decode_state = 0;
         Ok(1)
@@ -595,7 +620,11 @@ impl Codec for ResetSensitiveLifecycleCodec {
 
     const MAX_DECODE_FINISH_VALUES: usize = 1;
 
-    unsafe fn decode_reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_reset(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         output[output_index] = 0xfe;
         self.decode_state = 1;
         Ok(1)
@@ -621,7 +650,11 @@ impl Codec for ResetSensitiveLifecycleCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(
+        &mut self,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::DecodeError> {
         output[output_index] = self.decode_state as u8;
         self.decode_state = 0;
         Ok(1)
@@ -661,8 +694,14 @@ impl Codec for CountingFinishCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(CountingFinishValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((CountingFinishValue(input[input_index]), core::num::NonZeroUsize::MIN))
+    ) -> Result<
+        (CountingFinishValue, core::num::NonZeroUsize),
+        codec::DecodeFailure<Self::DecodeError>,
+    > {
+        Ok((
+            CountingFinishValue(input[input_index]),
+            core::num::NonZeroUsize::MIN,
+        ))
     }
 
     unsafe fn encode(
@@ -687,10 +726,15 @@ impl Codec for CountingFinishCodec {
 
 #[test]
 fn test_codec_value_decoder_finishes_decode_state_after_success() {
-    let mut decoder = CodecValueDecoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
+    let mut decoder =
+        CodecValueDecoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
 
-    let first = decoder.decode_lifecycle(&[42]).expect("first decode should succeed");
-    let second = decoder.decode_lifecycle(&[42]).expect("second decode should succeed");
+    let first = decoder
+        .decode_lifecycle(&[42])
+        .expect("first decode should succeed");
+    let second = decoder
+        .decode_lifecycle(&[42])
+        .expect("second decode should succeed");
 
     assert_eq!(&42, first.value());
     assert_eq!(&[1], first.finish());
@@ -700,10 +744,16 @@ fn test_codec_value_decoder_finishes_decode_state_after_success() {
 
 #[test]
 fn test_codec_value_decoder_runs_complete_decode_lifecycle() {
-    let mut decoder = CodecValueDecoder::<ResetSensitiveLifecycleCodec>::new(ResetSensitiveLifecycleCodec::default());
+    let mut decoder = CodecValueDecoder::<ResetSensitiveLifecycleCodec>::new(
+        ResetSensitiveLifecycleCodec::default(),
+    );
 
-    let first = decoder.decode_lifecycle(&[43]).expect("first decode should succeed");
-    let second = decoder.decode_lifecycle(&[44]).expect("second decode should succeed");
+    let first = decoder
+        .decode_lifecycle(&[43])
+        .expect("first decode should succeed");
+    let second = decoder
+        .decode_lifecycle(&[44])
+        .expect("second decode should succeed");
 
     assert_eq!(&42, first.value());
     assert_eq!(&43, second.value());
@@ -711,7 +761,8 @@ fn test_codec_value_decoder_runs_complete_decode_lifecycle() {
 
 #[test]
 fn test_codec_value_decoder_rejects_short_reset_output_before_input_and_hooks() {
-    let mut decoder = CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
+    let mut decoder =
+        CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
 
     let error = decoder
         .decode_lifecycle_with_scratch(&[], &mut [], &mut [])
@@ -729,19 +780,25 @@ fn test_codec_value_decoder_rejects_short_reset_output_before_input_and_hooks() 
 
 #[test]
 fn test_codec_value_decoder_runs_reset_before_input_validation() {
-    let mut decoder = CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
+    let mut decoder =
+        CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
     let mut reset_output = [0_u8; 1];
 
     let error = decoder
         .decode_lifecycle_with_scratch(&[], &mut reset_output, &mut [])
         .expect_err("decode reset failure must precede incomplete input");
 
-    assert_eq!(TranscodeDecodeError::domain_reset(TestDecodeError::ResetFailed), error,);
+    assert_eq!(
+        TranscodeDecodeError::domain_reset(TestDecodeError::ResetFailed),
+        error,
+    );
 }
 
 #[test]
 fn test_codec_value_decoder_rejects_short_finish_output_before_decode() {
-    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec { fail_finish: true });
+    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec {
+        fail_finish: true,
+    });
 
     let error = decoder
         .decode_lifecycle_with_scratch(&[7], &mut [], &mut [])
@@ -759,7 +816,9 @@ fn test_codec_value_decoder_rejects_short_finish_output_before_decode() {
 
 #[test]
 fn test_codec_value_decoder_rejects_lifecycle_output_before_input_validation() {
-    let mut decoder = CodecValueDecoder::<ResetSensitiveLifecycleCodec>::new(ResetSensitiveLifecycleCodec::default());
+    let mut decoder = CodecValueDecoder::<ResetSensitiveLifecycleCodec>::new(
+        ResetSensitiveLifecycleCodec::default(),
+    );
 
     let error = decoder
         .decode(&[])
@@ -799,7 +858,8 @@ fn test_codec_value_decoder_reuses_caller_decode_lifecycle_scratch() {
 fn test_codec_value_decoder_decodes_exactly_one_value() {
     let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let output = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect("single byte should decode");
+    let output =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect("single byte should decode");
 
     assert_eq!(7, output);
 }
@@ -808,7 +868,8 @@ fn test_codec_value_decoder_decodes_exactly_one_value() {
 fn test_codec_value_decoder_default_and_debug_do_not_require_value_debug() {
     let mut decoder = CodecValueDecoder::<SingleByteCodec>::default();
 
-    let output = ValueDecoder::<[u8]>::decode(&mut decoder, &[9]).expect("default decoder should decode");
+    let output =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[9]).expect("default decoder should decode");
     let debug = format!("{decoder:?}");
 
     assert_eq!(9, output);
@@ -820,7 +881,8 @@ fn test_codec_value_decoder_default_and_debug_do_not_require_value_debug() {
 fn test_codec_value_decoder_reports_too_short_input_before_main_decode_call() {
     let mut decoder = CodecValueDecoder::<FixedPairCodec>::new(FixedPairCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("one byte is incomplete");
+    let error =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("one byte is incomplete");
 
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1)),
@@ -832,8 +894,8 @@ fn test_codec_value_decoder_reports_too_short_input_before_main_decode_call() {
 fn test_codec_value_decoder_wraps_codec_incomplete_failure() {
     let mut decoder = CodecValueDecoder::<IncompleteDecodeCodec>::new(IncompleteDecodeCodec);
 
-    let error =
-        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("codec-reported incomplete input should fail");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect_err("codec-reported incomplete input should fail");
 
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1)),
@@ -843,7 +905,8 @@ fn test_codec_value_decoder_wraps_codec_incomplete_failure() {
 
 #[test]
 fn test_codec_value_decoder_preserves_codec_incomplete_source() {
-    let mut decoder = CodecValueDecoder::<ContextualIncompleteDecodeCodec>::new(ContextualIncompleteDecodeCodec);
+    let mut decoder =
+        CodecValueDecoder::<ContextualIncompleteDecodeCodec>::new(ContextualIncompleteDecodeCodec);
     let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
         .expect_err("codec-reported incomplete source should be preserved");
 
@@ -857,7 +920,8 @@ fn test_codec_value_decoder_preserves_codec_incomplete_source() {
 fn test_codec_value_decoder_rejects_trailing_input() {
     let mut decoder = CodecValueDecoder::<SingleByteCodec>::new(SingleByteCodec);
 
-    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8]).expect_err("trailing input should fail");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7, 8])
+        .expect_err("trailing input should fail");
 
     assert_eq!(
         codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::trailing_input(1, 1)),
@@ -883,15 +947,20 @@ fn test_codec_value_decoder_wraps_codec_decode_error() {
 
 #[test]
 fn test_codec_value_decoder_wraps_decode_reset_error() {
-    let mut decoder = CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
+    let mut decoder =
+        CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: true });
 
     let error = decoder
         .decode_lifecycle(&[7])
         .expect_err("decode reset failure should be wrapped");
 
-    assert_eq!(TranscodeDecodeError::domain_reset(TestDecodeError::ResetFailed), error,);
+    assert_eq!(
+        TranscodeDecodeError::domain_reset(TestDecodeError::ResetFailed),
+        error,
+    );
 
-    let mut decoder = CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: false });
+    let mut decoder =
+        CodecValueDecoder::<ResetFailDecodeCodec>::new(ResetFailDecodeCodec { fail_reset: false });
     let value = decoder
         .decode_lifecycle(&[7])
         .expect("successful reset mode should decode");
@@ -917,7 +986,8 @@ fn test_codec_value_decoder_panics_when_codec_consumes_beyond_decode_maximum() {
 #[test]
 #[should_panic(expected = "Codec::decode_reset wrote beyond its reset bound")]
 fn test_codec_value_decoder_panics_when_decode_reset_overreports() {
-    let mut decoder = CodecValueDecoder::<OverreportingDecodeResetCodec>::new(OverreportingDecodeResetCodec);
+    let mut decoder =
+        CodecValueDecoder::<OverreportingDecodeResetCodec>::new(OverreportingDecodeResetCodec);
 
     let _ = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]);
 }
@@ -925,7 +995,8 @@ fn test_codec_value_decoder_panics_when_decode_reset_overreports() {
 #[test]
 #[should_panic(expected = "Codec::decode_finish wrote beyond its finish bound")]
 fn test_codec_value_decoder_panics_when_decode_finish_overreports() {
-    let mut decoder = CodecValueDecoder::<OverreportingDecodeFinishCodec>::new(OverreportingDecodeFinishCodec);
+    let mut decoder =
+        CodecValueDecoder::<OverreportingDecodeFinishCodec>::new(OverreportingDecodeFinishCodec);
 
     let _ = ValueDecoder::<[u8]>::decode(&mut decoder, &[7]);
 }
@@ -933,10 +1004,12 @@ fn test_codec_value_decoder_panics_when_decode_finish_overreports() {
 #[test]
 fn test_codec_value_decoder_wraps_stateless_decode_finish_error() {
     let mut decoder =
-        CodecValueDecoder::<FinishFailStatelessCodec>::new(FinishFailStatelessCodec { fail_finish: true });
+        CodecValueDecoder::<FinishFailStatelessCodec>::new(FinishFailStatelessCodec {
+            fail_finish: true,
+        });
 
-    let error =
-        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect_err("stateless finish failure should be wrapped");
+    let error = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect_err("stateless finish failure should be wrapped");
 
     assert_eq!(
         TranscodeDecodeError::domain_finish(TestDecodeError::FinishFailed),
@@ -944,15 +1017,19 @@ fn test_codec_value_decoder_wraps_stateless_decode_finish_error() {
     );
 
     let mut decoder =
-        CodecValueDecoder::<FinishFailStatelessCodec>::new(FinishFailStatelessCodec { fail_finish: false });
-    let value =
-        ValueDecoder::<[u8]>::decode(&mut decoder, &[7]).expect("successful stateless finish mode should decode");
+        CodecValueDecoder::<FinishFailStatelessCodec>::new(FinishFailStatelessCodec {
+            fail_finish: false,
+        });
+    let value = ValueDecoder::<[u8]>::decode(&mut decoder, &[7])
+        .expect("successful stateless finish mode should decode");
     assert_eq!(7, value);
 }
 
 #[test]
 fn test_codec_value_decoder_wraps_stateful_decode_finish_error() {
-    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec { fail_finish: true });
+    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec {
+        fail_finish: true,
+    });
 
     let error = decoder
         .decode_lifecycle(&[7])
@@ -963,7 +1040,9 @@ fn test_codec_value_decoder_wraps_stateful_decode_finish_error() {
         error,
     );
 
-    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec { fail_finish: false });
+    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec {
+        fail_finish: false,
+    });
     let value = decoder
         .decode_lifecycle(&[7])
         .expect("successful stateful finish mode should decode");

@@ -53,7 +53,9 @@ pub enum TranscodeContractError {
     },
 
     /// A `Complete` status left visible input unconsumed.
-    #[error("transcoder reported Complete after consuming {read} of {available} available input units")]
+    #[error(
+        "transcoder reported Complete after consuming {read} of {available} available input units"
+    )]
     CompleteWithRemainingInput {
         /// Input units reported as consumed.
         read: usize,

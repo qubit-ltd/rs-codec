@@ -109,12 +109,13 @@ where
     <C as ValueDecoder<str>>::Error: std::error::Error + 'static,
     V: 'static,
 {
-    let value = value
-        .downcast_ref::<V>()
-        .ok_or_else(|| ValueCodecExecutionError::TypeMismatch {
-            expected_type: core::any::type_name::<V>(),
-            actual_type: value.type_id(),
-        })?;
+    let value =
+        value
+            .downcast_ref::<V>()
+            .ok_or_else(|| ValueCodecExecutionError::TypeMismatch {
+                expected_type: core::any::type_name::<V>(),
+                actual_type: value.type_id(),
+            })?;
     C::default()
         .encode(value)
         .map_err(|source| ValueCodecExecutionError::EncodeFailed {
