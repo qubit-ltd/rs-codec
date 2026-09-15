@@ -80,3 +80,9 @@ external/
 *.tar.gz
 *.rar
 *.7z
+
+# Locally installed pinned rs-infra tools
+.infra/tools/bin/
+
+# Locally generated GitHub Pages site
+/public/
