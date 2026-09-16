@@ -167,12 +167,10 @@ where
         C::Value: Default,
     {
         let mut reset = Vec::new();
-        try_reserve_vec(&mut reset, C::MAX_DECODE_RESET_VALUES)
-            .map_err(|_| TranscodeFailure::allocation_failed())?;
+        try_reserve_vec(&mut reset, C::MAX_DECODE_RESET_VALUES).map_err(|_| TranscodeFailure::allocation_failed())?;
         reset.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish = Vec::new();
-        try_reserve_vec(&mut finish, C::MAX_DECODE_FINISH_VALUES)
-            .map_err(|_| TranscodeFailure::allocation_failed())?;
+        try_reserve_vec(&mut finish, C::MAX_DECODE_FINISH_VALUES).map_err(|_| TranscodeFailure::allocation_failed())?;
         finish.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let (value, reset_written, finish_written) = self
             .decode_lifecycle_with_scratch(input, &mut reset, &mut finish)?
@@ -213,11 +211,7 @@ where
     ) -> Result<DecodeLifecycleProgress<C::Value>, TranscodeDecodeErrorOf<C>> {
         let (value, reset_written, finish_written) =
             decode_exact_complete_value(&mut self.codec, input, reset_output, finish_output)?;
-        Ok(DecodeLifecycleProgress::new(
-            value,
-            reset_written,
-            finish_written,
-        ))
+        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
     }
 }
 

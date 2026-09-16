@@ -126,10 +126,7 @@ impl<E> DecodeFailure<E> {
     #[inline(always)]
     #[must_use]
     pub const fn invalid_unknown(source: E) -> Self {
-        Self::Invalid {
-            source,
-            consumed: None,
-        }
+        Self::Invalid { source, consumed: None }
     }
 
     /// Returns the current minimum input length required before retrying an

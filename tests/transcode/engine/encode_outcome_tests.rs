@@ -17,9 +17,7 @@ use crate::common::IdentityCodec;
 fn test_encode_outcome_reports_output_pressure_through_progress() {
     let mut encoder = CodecTranscodeEncoder::new(IdentityCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [];
 

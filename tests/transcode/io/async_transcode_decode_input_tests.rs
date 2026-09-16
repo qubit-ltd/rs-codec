@@ -67,8 +67,7 @@ impl AsyncInput for ChunkedAsyncInput {
         self.pending = true;
         let available = self.bytes.len().saturating_sub(self.position);
         let read = available.min(count).min(self.max_chunk);
-        output[index..index + read]
-            .copy_from_slice(&self.bytes[self.position..self.position + read]);
+        output[index..index + read].copy_from_slice(&self.bytes[self.position..self.position + read]);
         self.position += read;
         Poll::Ready(Ok(read))
     }
@@ -149,11 +148,7 @@ impl Transcoder for PairDecoder {
             return Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0));
         }
         if available_output == 0 {
-            return Ok(TranscodeProgress::need_output(
-                utils_crate::nonzero(1),
-                0,
-                0,
-            ));
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
         }
         output[output_index] = u16::from_be_bytes([input[input_index], input[input_index + 1]]);
         Ok(TranscodeProgress::complete(2, 1))
@@ -328,8 +323,7 @@ impl Transcoder for NoProgressDecoder {
 /// Verifies refilling across pending chunk boundaries before decoding.
 #[test]
 fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
-    let mut input =
-        AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12, 0x34], 1), 2);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12, 0x34], 1), 2);
     let mut decoder = PairDecoder;
     let mut output = [0_u16; 1];
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -355,8 +349,7 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
 /// Verifies EOF preserves an incomplete suffix for caller-defined policy.
 #[test]
 fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Result<()> {
-    let mut input =
-        AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 2);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 2);
     let mut decoder = PairDecoder;
     let mut output = [0_u16; 1];
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -364,11 +357,7 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Re
     let step = complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 1))?;
 
     assert_eq!(
-        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(
-            utils_crate::nonzero(2),
-            0,
-            0,
-        )),
+        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0,)),
         step
     );
     assert_eq!([0x12], input.unread());
@@ -385,8 +374,7 @@ fn test_async_transcode_decode_input_commits_progress_before_later_pending() -> 
     let mut output = [0_u16; 2];
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
 
-    let mut future =
-        Box::pin(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 2));
+    let mut future = Box::pin(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 2));
     match poll_once(future.as_mut()) {
         Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(progress))) => {
             assert_eq!(TranscodeProgress::complete(2, 1), progress);
@@ -403,8 +391,7 @@ fn test_async_transcode_decode_input_commits_progress_before_later_pending() -> 
 /// Verifies invalid transcoder progress becomes an invalid-data I/O error.
 #[test]
 fn test_async_transcode_decode_input_rejects_invalid_progress() -> io::Result<()> {
-    let mut input =
-        AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 1);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 1);
     let mut decoder = NoProgressDecoder;
     let mut output = [0_u16; 1];
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -446,21 +433,13 @@ fn test_async_transcode_decode_input_exposes_buffer_operations() -> io::Result<(
 /// Verifies constructor capacity requests and EOF refill behavior.
 #[test]
 fn test_async_transcode_decode_input_capacity_and_eof() -> io::Result<()> {
-    let input =
-        AsyncTranscodeDecodeInput::try_with_capacity(ChunkedAsyncInput::new(Vec::new(), 1), 3)?;
+    let input = AsyncTranscodeDecodeInput::try_with_capacity(ChunkedAsyncInput::new(Vec::new(), 1), 3)?;
     assert!(input.capacity() >= 3);
     assert!(format!("{input:?}").contains("AsyncTranscodeDecodeInput"));
 
-    assert!(
-        AsyncTranscodeDecodeInput::try_with_capacity(
-            ChunkedAsyncInput::new(Vec::new(), 1),
-            usize::MAX,
-        )
-        .is_err()
-    );
+    assert!(AsyncTranscodeDecodeInput::try_with_capacity(ChunkedAsyncInput::new(Vec::new(), 1), usize::MAX,).is_err());
 
-    let mut input =
-        AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 1);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 1);
     assert!(!complete(input.fill_until_async(2))?);
     assert_eq!([0x12], input.unread());
     assert!(!complete(input.fill_more_async())?);
@@ -493,14 +472,8 @@ fn test_async_transcode_decode_input_runs_decoder_lifecycle() -> io::Result<()> 
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
     let mut output = [0_u16; 3];
 
-    assert_eq!(
-        1,
-        input.reset(&mut decoder, &mut map_error, &mut output, 1, 1)?
-    );
-    assert_eq!(
-        1,
-        input.finish(&mut decoder, &mut map_error, &mut output, 2, 1)?
-    );
+    assert_eq!(1, input.reset(&mut decoder, &mut map_error, &mut output, 1, 1)?);
+    assert_eq!(1, input.finish(&mut decoder, &mut map_error, &mut output, 2, 1)?);
     assert_eq!([0, 0xaaaa, 0xbbbb], output);
     let error = input
         .reset(&mut decoder, &mut map_error, &mut output, 0, 0)
@@ -541,8 +514,7 @@ fn test_async_transcode_decode_input_reads_and_reports_eof() -> io::Result<()> {
 
 #[test]
 fn test_async_transcode_decode_input_transcode_eof_step_consumes_buffered_tail() -> io::Result<()> {
-    let mut input =
-        AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x5a], 1), 1);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x5a], 1), 1);
     assert!(complete(input.fill_more_async())?);
     let mut decoder = EofTailDecoder;
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -609,8 +581,7 @@ fn test_async_transcode_decode_input_maps_refill_errors() -> io::Result<()> {
     assert_eq!(io::ErrorKind::Other, error.kind());
 
     let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
-    let error =
-        complete(input.fill_until_async(usize::MAX)).expect_err("impossible capacity must fail");
+    let error = complete(input.fill_until_async(usize::MAX)).expect_err("impossible capacity must fail");
     assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
     Ok(())
 }

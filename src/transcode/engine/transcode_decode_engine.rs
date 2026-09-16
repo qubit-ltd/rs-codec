@@ -176,17 +176,11 @@ pub struct TranscodeDecodeEngine<C, H> {
 
 /// Adds two independent decoded-value capacity bounds.
 fn add_decode_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
-    first
-        .checked_add(second)
-        .ok_or(CapacityError::OutputLengthOverflow)
+    first.checked_add(second).ok_or(CapacityError::OutputLengthOverflow)
 }
 
 /// Adds reset, transcode, and finish decoded-value capacity bounds.
-fn sum_decode_output_bounds(
-    reset: usize,
-    transcode: usize,
-    finish: usize,
-) -> Result<usize, CapacityError> {
+fn sum_decode_output_bounds(reset: usize, transcode: usize, finish: usize) -> Result<usize, CapacityError> {
     let before_finish = add_decode_output_bounds(reset, transcode)?;
     add_decode_output_bounds(before_finish, finish)
 }
@@ -381,11 +375,7 @@ where
     /// or hook reset handling fails. Capacity and index failures occur before
     /// any reset state is changed. Once reset execution starts, an error
     /// poisons the engine until a later reset succeeds.
-    pub fn reset(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    pub fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         let required = C::MAX_DECODE_RESET_VALUES;
         TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         self.lifecycle.on_reset_start();
@@ -396,10 +386,7 @@ where
             self.codec.decode_reset(output, output_index)
         }
         .map_err(TranscodeDecodeError::domain_reset)?;
-        assert!(
-            written <= required,
-            "Codec::decode_reset wrote beyond its reset bound",
-        );
+        assert!(written <= required, "Codec::decode_reset wrote beyond its reset bound",);
         self.lifecycle.on_reset_success();
         Ok(written)
     }
@@ -468,15 +455,9 @@ where
         end_of_input: bool,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_transcode()?;
-        TranscodeFailure::ensure_transcode_indices(
-            input.len(),
-            input_index,
-            output.len(),
-            output_index,
-        )?;
+        TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
 
-        let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE)
-            .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+        let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE).expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
         let min_units_len = min_units.get();
         let mut state = DecodeState::new(input, input_index, output, output_index);
         while state.has_input() {
@@ -486,12 +467,10 @@ where
                 if !end_of_input {
                     return Ok(state.need_input_progress_with(min_units));
                 }
-                match self.hooks.handle_incomplete_decode(
-                    &mut self.codec,
-                    None,
-                    min_units,
-                    context,
-                )? {
+                match self
+                    .hooks
+                    .handle_incomplete_decode(&mut self.codec, None, min_units, context)?
+                {
                     DecodeIncompleteAction::Reject => {
                         return Err(TranscodeFailure::incomplete_input(
                             context.input_index(),
@@ -501,11 +480,9 @@ where
                         .into());
                     }
                     DecodeIncompleteAction::Skip => {
-                        let read = NonZeroUsize::new(available)
-                            .expect("incomplete decode tail must contain source units");
-                        if let Some(progress) =
-                            state.apply_decode_outcome(DecodeOutcome::skipped(read))
-                        {
+                        let read =
+                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
+                        if let Some(progress) = state.apply_decode_outcome(DecodeOutcome::skipped(read)) {
                             return Ok(progress);
                         }
                         continue;
@@ -520,10 +497,10 @@ where
                         unsafe {
                             *state.output_mut().get_unchecked_mut(output_index) = value;
                         }
-                        let read = NonZeroUsize::new(available)
-                            .expect("incomplete decode tail must contain source units");
-                        if let Some(progress) = state
-                            .apply_decode_outcome(DecodeOutcome::emitted(read, NonZeroUsize::MIN))
+                        let read =
+                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
+                        if let Some(progress) =
+                            state.apply_decode_outcome(DecodeOutcome::emitted(read, NonZeroUsize::MIN))
                         {
                             return Ok(progress);
                         }
@@ -536,14 +513,13 @@ where
             }
             let output_index = state.output_cursor();
             let output = state.output_mut();
-            let (outcome, _) =
-                self.decode_one(input, context, end_of_input, |value, _input_index| {
-                    // SAFETY: `needs_output()` returned false, so the output
-                    // cursor points at a writable initialized slot.
-                    unsafe {
-                        *output.get_unchecked_mut(output_index) = value;
-                    }
-                })?;
+            let (outcome, _) = self.decode_one(input, context, end_of_input, |value, _input_index| {
+                // SAFETY: `needs_output()` returned false, so the output
+                // cursor points at a writable initialized slot.
+                unsafe {
+                    *output.get_unchecked_mut(output_index) = value;
+                }
+            })?;
             if let Some(progress) = state.apply_decode_outcome(outcome) {
                 return Ok(progress);
             }
@@ -589,17 +565,13 @@ where
     /// [`Codec::MAX_DECODE_FINISH_VALUES`] or when the combined codec and hook
     /// finalization writes beyond
     /// [`TranscodeDecodeEngine::max_finish_output_len`].
-    pub fn finish(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    pub fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.lifecycle.on_finish_attempt()?;
         let required = self.max_finish_output_len()?;
         TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         self.lifecycle.on_finish_start();
-        let finished = unsafe { self.codec.decode_finish(output, output_index) }
-            .map_err(TranscodeDecodeError::domain_finish)?;
+        let finished =
+            unsafe { self.codec.decode_finish(output, output_index) }.map_err(TranscodeDecodeError::domain_finish)?;
         assert!(
             finished <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
@@ -692,17 +664,15 @@ where
         );
 
         if context.available() < C::MIN_UNITS_PER_VALUE {
-            let required_total = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE)
-                .expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+            let required_total =
+                NonZeroUsize::new(C::MIN_UNITS_PER_VALUE).expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
             if !end_of_input {
                 return Ok((DecodeOutcome::need_input(required_total), None));
             }
-            return match self.hooks.handle_incomplete_decode(
-                &mut self.codec,
-                None,
-                required_total,
-                context,
-            )? {
+            return match self
+                .hooks
+                .handle_incomplete_decode(&mut self.codec, None, required_total, context)?
+            {
                 DecodeIncompleteAction::Reject => Err(TranscodeFailure::incomplete_input(
                     context.input_index(),
                     required_total.get(),
@@ -718,10 +688,7 @@ where
                     let read = NonZeroUsize::new(context.available())
                         .expect("incomplete decode tail must contain source units");
                     let consumed_value = consume(value, context.input_index());
-                    Ok((
-                        DecodeOutcome::emitted(read, NonZeroUsize::MIN),
-                        Some(consumed_value),
-                    ))
+                    Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value)))
                 }
             };
         }
@@ -751,10 +718,7 @@ where
                     Some(consumed_value),
                 ))
             }
-            Err(DecodeFailure::Incomplete {
-                source,
-                required_total,
-            }) => {
+            Err(DecodeFailure::Incomplete { source, required_total }) => {
                 assert!(
                     required_total.get() > context.available(),
                     "Codec::decode incomplete required_total must exceed available input",
@@ -766,17 +730,12 @@ where
                 if !end_of_input {
                     return Ok((DecodeOutcome::need_input(required_total), None));
                 }
-                match self.hooks.handle_incomplete_decode(
-                    &mut self.codec,
-                    source.as_ref(),
-                    required_total,
-                    context,
-                )? {
+                match self
+                    .hooks
+                    .handle_incomplete_decode(&mut self.codec, source.as_ref(), required_total, context)?
+                {
                     DecodeIncompleteAction::Reject => match source {
-                        Some(source) => Err(TranscodeDecodeError::domain_main(
-                            source,
-                            context.input_index(),
-                        )),
+                        Some(source) => Err(TranscodeDecodeError::domain_main(source, context.input_index())),
                         None => Err(TranscodeFailure::incomplete_input(
                             context.input_index(),
                             required_total.get(),
@@ -793,20 +752,15 @@ where
                         let read = NonZeroUsize::new(context.available())
                             .expect("incomplete decode tail must contain source units");
                         let consumed_value = consume(value, context.input_index());
-                        Ok((
-                            DecodeOutcome::emitted(read, NonZeroUsize::MIN),
-                            Some(consumed_value),
-                        ))
+                        Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value)))
                     }
                 }
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {
-                let action = match self.hooks.handle_invalid_decode(
-                    &mut self.codec,
-                    &source,
-                    consumed,
-                    context,
-                )? {
+                let action = match self
+                    .hooks
+                    .handle_invalid_decode(&mut self.codec, &source, consumed, context)?
+                {
                     DecodeInvalidAction::Reject => {
                         return Err(TranscodeDecodeError::domain_main_with_consumed(
                             source,
@@ -814,9 +768,7 @@ where
                             consumed,
                         ));
                     }
-                    DecodeInvalidAction::Skip { consumed } => {
-                        AppliedDecodeInvalidAction::Skip { consumed }
-                    }
+                    DecodeInvalidAction::Skip { consumed } => AppliedDecodeInvalidAction::Skip { consumed },
                     DecodeInvalidAction::Emit { value, consumed } => {
                         AppliedDecodeInvalidAction::Emit { value, consumed }
                     }
@@ -837,18 +789,13 @@ where
     {
         match action {
             AppliedDecodeInvalidAction::Skip { consumed } => {
-                let read =
-                    DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
                 (DecodeOutcome::skipped(read), None)
             }
             AppliedDecodeInvalidAction::Emit { value, consumed } => {
-                let read =
-                    DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
+                let read = DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
                 let consumed_value = consume(value, context.input_index());
-                (
-                    DecodeOutcome::emitted(read, NonZeroUsize::MIN),
-                    Some(consumed_value),
-                )
+                (DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value))
             }
         }
     }
@@ -885,11 +832,7 @@ where
 
     /// Runs hook-owned cleanup before a logical decoder reset.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
@@ -919,11 +862,7 @@ where
 
     /// Finishes internally retained output after EOF.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
 }

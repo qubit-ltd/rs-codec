@@ -15,9 +15,7 @@ use crate::common::IdentityCodec;
 fn test_encode_attempt_is_exercised_by_encoder() {
     let mut encoder = CodecTranscodeEncoder::new(IdentityCodec);
     let mut reset_output = [];
-    encoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
     let progress = encoder

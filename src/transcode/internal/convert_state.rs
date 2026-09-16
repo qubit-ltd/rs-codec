@@ -41,12 +41,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// positions.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn new(
-        input: &'a [Input],
-        input_index: usize,
-        output: &'a mut [Output],
-        output_index: usize,
-    ) -> Self {
+    pub(crate) fn new(input: &'a [Input], input_index: usize, output: &'a mut [Output], output_index: usize) -> Self {
         Self {
             state: TranscodeState::new(input, input_index, output, output_index),
         }
@@ -146,10 +141,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// - `read`: Number of input units consumed by the conversion step.
     #[inline(always)]
     pub(crate) fn advance_input(&mut self, read: usize) {
-        assert!(
-            read <= self.available_input(),
-            "conversion step read beyond input"
-        );
+        assert!(read <= self.available_input(), "conversion step read beyond input");
         self.state.advance_input(read);
     }
 
@@ -244,10 +236,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Returns stop progress for missing input, otherwise `None`.
     #[inline]
     #[must_use]
-    pub(crate) fn apply_decode_outcome(
-        &mut self,
-        outcome: DecodeOutcome,
-    ) -> Option<TranscodeProgress> {
+    pub(crate) fn apply_decode_outcome(&mut self, outcome: DecodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             DecodeOutcome::Emitted { read, emitted } => {
                 assert_eq!(
@@ -279,10 +268,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// output cursor.
     #[inline]
     #[must_use]
-    pub(crate) fn apply_encode_outcome(
-        &mut self,
-        outcome: EncodeOutcome,
-    ) -> Option<TranscodeProgress> {
+    pub(crate) fn apply_encode_outcome(&mut self, outcome: EncodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             EncodeOutcome::Consumed { written } => {
                 self.advance_output(written);

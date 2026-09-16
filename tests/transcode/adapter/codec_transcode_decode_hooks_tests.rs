@@ -51,11 +51,7 @@ impl Codec for FlushFailCodec {
         Ok(1)
     }
 
-    unsafe fn decode_finish(
-        &mut self,
-        _output: &mut [u8],
-        _output_index: usize,
-    ) -> Result<usize, Self::DecodeError> {
+    unsafe fn decode_finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::DecodeError> {
         Err(FlushFailError)
     }
 }
@@ -109,9 +105,7 @@ impl Codec for InvalidByteCodec {
 fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
     let mut decoder = CodecTranscodeDecoder::new(InvalidByteCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
@@ -120,11 +114,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(
-            InvalidByteError,
-            0,
-            Some(crate::nonzero(1)),
-        ),
+        TranscodeDecodeError::domain_main_with_consumed(InvalidByteError, 0, Some(crate::nonzero(1)),),
         error,
     );
 }
@@ -133,9 +123,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
 fn test_codec_transcode_decode_hooks_wraps_decode_finish_errors() {
     let mut decoder = CodecTranscodeDecoder::new(FlushFailCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 
