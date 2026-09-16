@@ -135,11 +135,7 @@ where
 
     /// Runs before-reset cleanup for decoder state.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
 
@@ -168,8 +164,7 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        self.engine
-            .transcode(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Transcodes an input segment while marking it as the end of the stream.
@@ -184,8 +179,7 @@ where
         output: &mut [C::Value],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        self.engine
-            .transcode_eof(input, input_index, output, output_index)
+        self.engine.transcode_eof(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -203,11 +197,7 @@ where
     ///
     /// Returns a finish error if finalization cannot complete.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [C::Value],
-        output_index: usize,
-    ) -> Result<usize, TranscodeDecodeErrorOf<C>> {
+    fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }
 }

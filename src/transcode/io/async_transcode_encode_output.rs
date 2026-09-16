@@ -108,10 +108,7 @@ where
     ///
     /// Returns an allocation error when the internal unit buffer cannot be
     /// allocated.
-    pub fn try_with_capacity(
-        inner: O,
-        capacity: usize,
-    ) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: O, capacity: usize) -> std::result::Result<Self, TryReserveError> {
         Ok(Self {
             output: AsyncBufferedOutput::try_with_capacity(inner, capacity)?,
             required_spare: 1,
@@ -212,24 +209,16 @@ where
     /// # Panics
     ///
     /// Panics when `encoder` writes more units than its declared reset bound.
-    pub async fn reset_async<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
+    pub async fn reset_async<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
     {
-        let required = encoder
-            .max_reset_output_len()
-            .map_err(capacity_error_to_invalid_data)?;
+        let required = encoder.max_reset_output_len().map_err(capacity_error_to_invalid_data)?;
         self.ensure_spare_capacity_async(required).await?;
         let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
-        let written = encoder
-            .reset(units, output_index)
-            .map_err(&mut *map_error)?;
+        let written = encoder.reset(units, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "reset wrote beyond its bound");
         // SAFETY: `written` is bounded by the reserved spare range above.
         unsafe {
@@ -308,13 +297,7 @@ where
             .transcode(input, input_index, units, output_index)
             .map_err(&mut *map_error)
             .and_then(|progress| {
-                validate_encode_progress(
-                    progress,
-                    input_index,
-                    count,
-                    output_index,
-                    available_output,
-                )
+                validate_encode_progress(progress, input_index, count, output_index, available_output)
             });
         let progress = match progress {
             Ok(progress) => progress,
@@ -325,15 +308,14 @@ where
         unsafe {
             this.output.advance(progress.written());
         }
-        this.required_spare =
-            if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
-                required.get()
-            } else {
-                // `validate_encode_progress` rejects `NeedInput` before this
-                // point.
-                debug_assert!(progress.is_complete());
-                1
-            };
+        this.required_spare = if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+            required.get()
+        } else {
+            // `validate_encode_progress` rejects `NeedInput` before this
+            // point.
+            debug_assert!(progress.is_complete());
+            1
+        };
         Poll::Ready(Ok(progress))
     }
 
@@ -355,10 +337,7 @@ where
         E: TranscodeEncoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
     {
-        poll_fn(|cx| {
-            Pin::new(&mut *self).poll_transcode(cx, encoder, map_error, input, input_index, count)
-        })
-        .await
+        poll_fn(|cx| Pin::new(&mut *self).poll_transcode(cx, encoder, map_error, input, input_index, count)).await
     }
 
     /// Finishes the encoder and retains its final output for delivery.
@@ -378,11 +357,7 @@ where
     /// # Panics
     ///
     /// Panics when `encoder` writes more units than its declared finish bound.
-    pub async fn finish_async<E, M, Value>(
-        &mut self,
-        encoder: &mut E,
-        map_error: &mut M,
-    ) -> Result<()>
+    pub async fn finish_async<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
         M: FnMut(E::Error) -> Error,
@@ -393,9 +368,7 @@ where
         self.ensure_spare_capacity_async(required).await?;
         let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(available >= required);
-        let written = encoder
-            .finish(units, output_index)
-            .map_err(&mut *map_error)?;
+        let written = encoder.finish(units, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         // SAFETY: `written` is bounded by the reserved spare range above.
         unsafe {

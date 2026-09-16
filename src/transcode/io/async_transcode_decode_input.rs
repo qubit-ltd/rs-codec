@@ -101,10 +101,7 @@ where
     ///
     /// Returns the allocation error when the internal buffer cannot be
     /// allocated.
-    pub fn try_with_capacity(
-        inner: I,
-        capacity: usize,
-    ) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: I, capacity: usize) -> std::result::Result<Self, TryReserveError> {
         Ok(Self {
             input: AsyncBufferedInput::try_with_capacity(inner, capacity)?,
         })
@@ -152,10 +149,7 @@ where
     ///
     /// Panics when count exceeds the unread unit count.
     pub fn consume(&mut self, count: usize) {
-        assert!(
-            count <= self.unread_len(),
-            "cannot consume beyond buffered input",
-        );
+        assert!(count <= self.unread_len(), "cannot consume beyond buffered input",);
         // SAFETY: The asserted bound proves count fits the unread window.
         unsafe {
             self.input.consume(count);
@@ -203,9 +197,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_reset_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_reset_output_len().map_err(capacity_to_io_error)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -219,9 +211,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .reset(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.reset(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "reset wrote beyond its bound");
         Ok(written)
     }
@@ -248,9 +238,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_finish_output_len().map_err(capacity_to_io_error)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -264,9 +252,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .finish(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.finish(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }
@@ -302,9 +288,7 @@ where
     /// Returns allocation, input, or buffer-management errors while refilling.
     pub async fn fill_until_async(&mut self, count: usize) -> Result<bool> {
         if count > self.input.capacity() {
-            self.input
-                .try_reserve_capacity(count)
-                .map_err(allocation_error)?;
+            self.input.try_reserve_capacity(count).map_err(allocation_error)?;
         }
         self.input.fill_until_async(count).await
     }
@@ -342,9 +326,9 @@ where
             "decoded output range exceeds destination buffer",
         )?;
         if count == 0 {
-            return Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(
-                TranscodeProgress::complete(0, 0),
-            )));
+            return Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(TranscodeProgress::complete(
+                0, 0,
+            ))));
         }
         let output = &mut output[..output_end];
         if self.as_ref().get_ref().unread_len() == 0 {
@@ -363,9 +347,7 @@ where
         let progress = decoder
             .transcode(this.unread(), 0, output, output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
-            });
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count));
         let progress = match progress {
             Ok(progress) => progress,
             Err(error) => return Poll::Ready(Err(error)),
@@ -412,9 +394,7 @@ where
         let progress = decoder
             .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
-            })?;
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(progress)
     }
@@ -437,10 +417,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        poll_fn(|cx| {
-            Pin::new(&mut *self).poll_transcode(cx, decoder, map_error, output, output_index, count)
-        })
-        .await
+        poll_fn(|cx| Pin::new(&mut *self).poll_transcode(cx, decoder, map_error, output, output_index, count)).await
     }
 }
 

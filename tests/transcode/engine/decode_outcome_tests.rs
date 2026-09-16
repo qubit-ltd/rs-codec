@@ -17,9 +17,7 @@ use crate::common::IdentityCodec;
 fn test_decode_outcome_emits_through_transcode_progress() {
     let mut decoder = CodecTranscodeDecoder::new(IdentityCodec);
     let mut reset_output = [];
-    decoder
-        .reset(&mut reset_output, 0)
-        .expect("initialize stream");
+    decoder.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
 

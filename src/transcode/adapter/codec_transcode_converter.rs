@@ -67,12 +67,7 @@ where
     #[must_use]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
-            engine: TranscodeConvertEngine::new(
-                decoder,
-                encoder,
-                CodecTranscodeDecodeHooks,
-                CodecTranscodeEncodeHooks,
-            ),
+            engine: TranscodeConvertEngine::new(decoder, encoder, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks),
         }
     }
 
@@ -197,11 +192,7 @@ where
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
-    pub fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>>
+    pub fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
     {
@@ -237,8 +228,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        self.engine
-            .transcode(input, input_index, output, output_index)
+        self.engine.transcode(input, input_index, output, output_index)
     }
 
     /// Converts source units after the caller has established end of input.
@@ -250,8 +240,7 @@ where
         output: &mut [E::Unit],
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeConvertErrorOf<D, E>> {
-        self.engine
-            .transcode_eof(input, input_index, output, output_index)
+        self.engine.transcode_eof(input, input_index, output, output_index)
     }
 
     /// Finishes internally retained output after EOF.
@@ -354,11 +343,7 @@ where
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
     #[inline(always)]
-    fn reset(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
+    fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
 
@@ -421,11 +406,7 @@ where
     ///
     /// Returns a finish error for pending output that cannot be finalized.
     #[inline(always)]
-    fn finish(
-        &mut self,
-        output: &mut [E::Unit],
-        output_index: usize,
-    ) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
+    fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
 }

@@ -49,11 +49,7 @@ impl TranscodeProgress {
     #[inline(always)]
     #[must_use]
     pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
-        Self {
-            status,
-            read,
-            written,
-        }
+        Self { status, read, written }
     }
 
     /// Creates a completed progress value.
@@ -235,18 +231,18 @@ impl TranscodeProgress {
             });
         }
 
-        input_index.checked_add(self.read).ok_or(
-            TranscodeContractError::ProgressIndexOverflow {
+        input_index
+            .checked_add(self.read)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
                 index: input_index,
                 advanced: self.read,
-            },
-        )?;
-        output_index.checked_add(self.written).ok_or(
-            TranscodeContractError::ProgressIndexOverflow {
+            })?;
+        output_index
+            .checked_add(self.written)
+            .ok_or(TranscodeContractError::ProgressIndexOverflow {
                 index: output_index,
                 advanced: self.written,
-            },
-        )?;
+            })?;
         match self.status {
             TranscodeStatus::Complete => {
                 if self.read != available_input {

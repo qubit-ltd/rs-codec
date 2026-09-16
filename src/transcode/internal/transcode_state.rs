@@ -53,10 +53,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
         output: &'a mut [Output],
         output_index: usize,
     ) -> Self {
-        debug_assert!(
-            input_index <= input.len(),
-            "input index must be within the input slice",
-        );
+        debug_assert!(input_index <= input.len(), "input index must be within the input slice",);
 
         Self {
             input,
@@ -266,10 +263,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with need-input status.
     #[inline(always)]
     #[must_use]
-    pub(in crate::transcode) fn need_input_progress(
-        &self,
-        required: NonZeroUsize,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_input_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_input(required, self.read(), self.written())
     }
 
@@ -284,10 +278,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns [`TranscodeProgress`] with need-output status.
     #[inline(always)]
     #[must_use]
-    pub(in crate::transcode) fn need_output_progress(
-        &self,
-        required: NonZeroUsize,
-    ) -> TranscodeProgress {
+    pub(in crate::transcode) fn need_output_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_output(required, self.read(), self.written())
     }
 }

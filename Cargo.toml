@@ -37,14 +37,14 @@ io = ["dep:qubit-io"]
 registry = ["dep:inventory"]
 
 [dependencies]
-inventory = { version = "0.3", optional = true }
-thiserror = "2.0"
+inventory = { version = "^0.3", optional = true }
+thiserror = "^2.0"
 qubit-utils = "0.3"
 
 qubit-io = { version = "0.17", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.8", default-features = false }
+criterion = { version = "^0.8", default-features = false }
 
 [[bench]]
 name = "transcode"

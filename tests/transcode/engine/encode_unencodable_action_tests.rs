@@ -10,10 +10,7 @@ use qubit_codec::engine::EncodeUnencodableAction;
 
 #[test]
 fn test_encode_unencodable_action_constructors() {
-    assert_eq!(
-        EncodeUnencodableAction::<u8>::reject(),
-        EncodeUnencodableAction::Reject,
-    );
+    assert_eq!(EncodeUnencodableAction::<u8>::reject(), EncodeUnencodableAction::Reject,);
     assert_eq!(
         EncodeUnencodableAction::replace(7_u8),
         EncodeUnencodableAction::Replace { value: 7 },

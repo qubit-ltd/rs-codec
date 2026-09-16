@@ -137,11 +137,7 @@ where
     /// be represented as `usize`.
     #[inline(always)]
     #[must_use = "capacity planning can fail on overflow"]
-    fn max_transcode_output_len(
-        &self,
-        _codec: &C,
-        input_len: usize,
-    ) -> Result<usize, CapacityError> {
+    fn max_transcode_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(C::MAX_ENCODE_UNITS_PER_VALUE)
             .ok_or(CapacityError::OutputLengthOverflow)

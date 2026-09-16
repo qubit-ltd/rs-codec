@@ -113,10 +113,7 @@ where
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
     #[inline]
-    pub fn try_with_capacity(
-        inner: I,
-        capacity: usize,
-    ) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: I, capacity: usize) -> std::result::Result<Self, TryReserveError> {
         Ok(Self {
             input: BufferedInput::try_with_capacity(inner, capacity)?,
         })
@@ -179,9 +176,7 @@ where
     /// errors from the wrapped input while refilling.
     pub fn fill_until(&mut self, count: usize) -> std::io::Result<bool> {
         if count > self.input.capacity() {
-            self.input
-                .try_reserve_capacity(count)
-                .map_err(allocation_error)?;
+            self.input.try_reserve_capacity(count).map_err(allocation_error)?;
         }
         self.input.fill_until(count)
     }
@@ -220,9 +215,7 @@ where
         let progress = decoder
             .transcode(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
-            })?;
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(Some(progress))
     }
@@ -265,9 +258,7 @@ where
         let progress = decoder
             .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| {
-                validate_decode_progress(progress, 0, available_input, output_index, count)
-            })?;
+            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(progress)
     }
@@ -282,10 +273,7 @@ where
     ///
     /// Panics when `count` exceeds [`Self::unread_len`].
     pub fn consume(&mut self, count: usize) {
-        assert!(
-            count <= self.unread_len(),
-            "cannot consume beyond buffered input",
-        );
+        assert!(count <= self.unread_len(), "cannot consume beyond buffered input",);
         // SAFETY: The caller-provided count is within the unread window.
         unsafe {
             self.input.consume(count);
@@ -398,8 +386,7 @@ where
     {
         TranscodeFailure::ensure_no_decode_lifecycle_output::<C>()
             .map_err(|error| Error::new(ErrorKind::Unsupported, error))?;
-        let progress =
-            self.read_decoded_lifecycle_with_scratch_impl(codec, &mut [], &mut [], map_error)?;
+        let progress = self.read_decoded_lifecycle_with_scratch_impl(codec, &mut [], &mut [], map_error)?;
         let (value, reset_written, finish_written) = progress.into_parts();
         debug_assert_eq!(0, reset_written);
         debug_assert_eq!(0, finish_written);
@@ -447,20 +434,12 @@ where
         reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish_output = Vec::new();
         finish_output.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
-        let progress = self.read_decoded_lifecycle_with_scratch_impl(
-            codec,
-            &mut reset_output,
-            &mut finish_output,
-            map_error,
-        )?;
+        let progress =
+            self.read_decoded_lifecycle_with_scratch_impl(codec, &mut reset_output, &mut finish_output, map_error)?;
         let (value, reset_written, finish_written) = progress.into_parts();
         reset_output.truncate(reset_written);
         finish_output.truncate(finish_written);
-        Ok(DecodeLifecycleOutput::new(
-            reset_output,
-            value,
-            finish_output,
-        ))
+        Ok(DecodeLifecycleOutput::new(reset_output, value, finish_output))
     }
 
     /// Decodes one complete codec lifecycle into separate caller storage.
@@ -558,11 +537,7 @@ where
             finish_written <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",
         );
-        Ok(DecodeLifecycleProgress::new(
-            value,
-            reset_written,
-            finish_written,
-        ))
+        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
     }
 
     /// Runs decoder reset into an indexed output range.
@@ -590,9 +565,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_reset_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_reset_output_len().map_err(capacity_to_io_error)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -606,9 +579,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .reset(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.reset(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "reset wrote beyond its bound");
         Ok(written)
     }
@@ -741,9 +712,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder
-            .max_finish_output_len()
-            .map_err(capacity_to_io_error)?;
+        let required = decoder.max_finish_output_len().map_err(capacity_to_io_error)?;
         // Validate the caller-supplied count range first (InvalidInput).
         let output_end = SliceRange::checked_range_end(
             output.len(),
@@ -761,9 +730,7 @@ where
             ));
         }
         let output = &mut output[..output_end];
-        let written = decoder
-            .finish(output, output_index)
-            .map_err(&mut *map_error)?;
+        let written = decoder.finish(output, output_index).map_err(&mut *map_error)?;
         assert!(written <= required, "finish wrote beyond its bound");
         Ok(written)
     }

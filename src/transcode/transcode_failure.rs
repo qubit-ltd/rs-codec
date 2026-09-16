@@ -42,9 +42,7 @@ pub enum TranscodeFailure {
     },
 
     /// The caller supplied an output range extending beyond the output slice.
-    #[error(
-        "invalid output range at index {output_index} with length {range_len} for output length {output_len}"
-    )]
+    #[error("invalid output range at index {output_index} with length {range_len} for output length {output_len}")]
     InvalidOutputRange {
         /// Absolute output index where the range starts.
         output_index: usize,
@@ -55,9 +53,7 @@ pub enum TranscodeFailure {
     },
 
     /// The output slice cannot hold all required output.
-    #[error(
-        "insufficient output at index {output_index}: required {required} units, available {available}"
-    )]
+    #[error("insufficient output at index {output_index}: required {required} units, available {available}")]
     InsufficientOutput {
         /// Absolute output index where writing would start.
         output_index: usize,
@@ -145,30 +141,20 @@ impl TranscodeFailure {
     #[inline(always)]
     #[must_use]
     pub const fn invalid_input_index(index: usize, len: usize) -> Self {
-        Self::InvalidInputIndex {
-            index,
-            input_len: len,
-        }
+        Self::InvalidInputIndex { index, input_len: len }
     }
 
     /// Creates an invalid-output-index error.
     #[inline(always)]
     #[must_use]
     pub const fn invalid_output_index(index: usize, len: usize) -> Self {
-        Self::InvalidOutputIndex {
-            index,
-            output_len: len,
-        }
+        Self::InvalidOutputIndex { index, output_len: len }
     }
 
     /// Creates an invalid-output-range error.
     #[inline(always)]
     #[must_use]
-    pub const fn invalid_output_range(
-        output_index: usize,
-        range_len: usize,
-        output_len: usize,
-    ) -> Self {
+    pub const fn invalid_output_range(output_index: usize, range_len: usize, output_len: usize) -> Self {
         Self::InvalidOutputRange {
             output_index,
             range_len,
@@ -179,11 +165,7 @@ impl TranscodeFailure {
     /// Creates an insufficient-output error.
     #[inline(always)]
     #[must_use]
-    pub const fn insufficient_output(
-        output_index: usize,
-        required: usize,
-        available: usize,
-    ) -> Self {
+    pub const fn insufficient_output(output_index: usize, required: usize, available: usize) -> Self {
         Self::InsufficientOutput {
             output_index,
             required,
@@ -227,19 +209,13 @@ impl TranscodeFailure {
     #[inline(always)]
     #[must_use]
     pub const fn trailing_input(consumed: usize, remaining: usize) -> Self {
-        Self::TrailingInput {
-            consumed,
-            remaining,
-        }
+        Self::TrailingInput { consumed, remaining }
     }
 
     /// Creates an unsupported decode-lifecycle-output error.
     #[inline(always)]
     #[must_use]
-    pub const fn unsupported_decode_lifecycle_output(
-        reset_bound: usize,
-        finish_bound: usize,
-    ) -> Self {
+    pub const fn unsupported_decode_lifecycle_output(reset_bound: usize, finish_bound: usize) -> Self {
         Self::UnsupportedDecodeLifecycleOutput {
             reset_bound,
             finish_bound,
@@ -286,11 +262,7 @@ impl TranscodeFailure {
 
     /// Validates that enough input units are available from `input_index`.
     #[inline]
-    pub fn ensure_min_input(
-        input_len: usize,
-        input_index: usize,
-        min_required: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_min_input(input_len: usize, input_index: usize, min_required: usize) -> Result<(), Self> {
         Self::ensure_input_index(input_len, input_index)?;
         let available = input_len - input_index;
         if available < min_required {
@@ -348,11 +320,7 @@ impl TranscodeFailure {
 
     /// Validates that an output slice can hold one-shot finalization output.
     #[inline]
-    pub fn ensure_output_capacity(
-        output_len: usize,
-        output_index: usize,
-        required: usize,
-    ) -> Result<(), Self> {
+    pub fn ensure_output_capacity(output_len: usize, output_index: usize, required: usize) -> Result<(), Self> {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if available < required {
@@ -372,11 +340,7 @@ impl TranscodeFailure {
         Self::ensure_output_index(output_len, output_index)?;
         let available = output_len - output_index;
         if range_len > available {
-            return Err(Self::invalid_output_range(
-                output_index,
-                range_len,
-                output_len,
-            ));
+            return Err(Self::invalid_output_range(output_index, range_len, output_len));
         }
         if range_len < required {
             return Err(Self::insufficient_output(output_index, required, range_len));

@@ -144,13 +144,7 @@ where
         try_reserve_vec(output, units).map_err(|_| TranscodeFailure::allocation_failed())?;
         output.resize_with(target_len, C::Unit::default);
 
-        match encode_complete_value_into_reserved(
-            &mut self.codec,
-            input,
-            output,
-            original_len,
-            units,
-        ) {
+        match encode_complete_value_into_reserved(&mut self.codec, input, output, original_len, units) {
             Ok(written) => {
                 output.truncate(original_len + written);
                 Ok(written)

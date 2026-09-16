@@ -23,8 +23,7 @@ impl ValueEncoder<str> for StringEncoder {
 
 #[test]
 fn test_encoder_trait_dispatches_to_implementor() {
-    let encoded = ValueEncoder::<str>::encode(&mut StringEncoder, "text")
-        .expect("encoding should be infallible");
+    let encoded = ValueEncoder::<str>::encode(&mut StringEncoder, "text").expect("encoding should be infallible");
 
     assert_eq!("text", encoded);
 }
@@ -43,8 +42,8 @@ impl ValueEncoder<str> for UppercaseCodec {
 
 #[test]
 fn test_codec_types_can_be_used_through_encoder_trait() {
-    let encoded = ValueEncoder::<str>::encode(&mut UppercaseCodec, "abc")
-        .expect("uppercase encoding should be infallible");
+    let encoded =
+        ValueEncoder::<str>::encode(&mut UppercaseCodec, "abc").expect("uppercase encoding should be infallible");
 
     assert_eq!("ABC", encoded);
 }

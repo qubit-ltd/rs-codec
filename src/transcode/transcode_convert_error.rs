@@ -17,11 +17,8 @@ use super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 
 /// Convert transcode error for a codec-backed converter.
-pub type TranscodeConvertErrorOf<D, E> = TranscodeConvertError<
-    <D as Codec>::DecodeError,
-    <E as Codec>::EncodeError,
-    <D as Codec>::Value,
->;
+pub type TranscodeConvertErrorOf<D, E> =
+    TranscodeConvertError<<D as Codec>::DecodeError, <E as Codec>::EncodeError, <D as Codec>::Value>;
 
 /// Error reported by a unit-to-unit transcode conversion.
 #[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
@@ -151,9 +148,7 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
             Self::Failure(failure) => TranscodeConvertError::Failure(failure),
             Self::DecodeDomain(error) => TranscodeConvertError::DecodeDomain(error.map_source(f)),
             Self::EncodeDomain(error) => TranscodeConvertError::EncodeDomain(error),
-            Self::Unencodable { input_index, value } => {
-                TranscodeConvertError::Unencodable { input_index, value }
-            }
+            Self::Unencodable { input_index, value } => TranscodeConvertError::Unencodable { input_index, value },
         }
     }
 
@@ -167,9 +162,7 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
             Self::Failure(failure) => TranscodeConvertError::Failure(failure),
             Self::DecodeDomain(error) => TranscodeConvertError::DecodeDomain(error),
             Self::EncodeDomain(error) => TranscodeConvertError::EncodeDomain(error.map_source(f)),
-            Self::Unencodable { input_index, value } => {
-                TranscodeConvertError::Unencodable { input_index, value }
-            }
+            Self::Unencodable { input_index, value } => TranscodeConvertError::Unencodable { input_index, value },
         }
     }
 
@@ -193,10 +186,7 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// Converts an encode error into a converter error while adding fallback
     /// value context to unencodable errors that lack it.
     #[inline]
-    pub fn from_encode_error_with_value(
-        error: TranscodeEncodeError<EE, V>,
-        fallback_value: V,
-    ) -> Self {
+    pub fn from_encode_error_with_value(error: TranscodeEncodeError<EE, V>, fallback_value: V) -> Self {
         match error {
             TranscodeEncodeError::Unencodable {
                 input_index,
@@ -227,9 +217,7 @@ impl<DE, EE, V> From<TranscodeEncodeError<EE, V>> for TranscodeConvertError<DE, 
     fn from(error: TranscodeEncodeError<EE, V>) -> Self {
         match error {
             TranscodeEncodeError::Failure(failure) => Self::Failure(failure),
-            TranscodeEncodeError::Unencodable { input_index, value } => {
-                Self::Unencodable { input_index, value }
-            }
+            TranscodeEncodeError::Unencodable { input_index, value } => Self::Unencodable { input_index, value },
             TranscodeEncodeError::Domain(error) => Self::EncodeDomain(error),
         }
     }
