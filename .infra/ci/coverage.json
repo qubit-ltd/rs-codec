@@ -3,7 +3,7 @@
     "qubit-codec": [
       "src/transcode/engine/transcode_decode_engine.rs",
       "src/transcode/io/async_transcode_encode_output.rs",
-      "src/transcode/io/codec_decode_driver.rs",
+      "src/transcode/io/internal/codec_decode_driver.rs",
       "src/transcode/io/transcode_encode_output.rs",
       "src/transcode/transcode_convert_error.rs",
       "src/transcode/transcode_encode_error.rs",
