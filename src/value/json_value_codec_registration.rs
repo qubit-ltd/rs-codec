@@ -7,6 +7,8 @@
 // =============================================================================
 //! Built-in registry entries for Serde JSON value codecs.
 
+use serde_json::Value;
+
 use crate::JsonBytesValueCodec;
 use crate::JsonStringValueCodec;
 use crate::register_value_bytes_codec;
@@ -20,12 +22,12 @@ pub const JSON_BYTES_VALUE_CODEC_ID: &str = "qubit.codec.json.bytes";
 
 register_value_string_codec!(
     id = JSON_STRING_VALUE_CODEC_ID,
-    codec = JsonStringValueCodec<serde_json::Value>,
-    value = serde_json::Value,
+    codec = JsonStringValueCodec<Value>,
+    value = Value,
 );
 
 register_value_bytes_codec!(
     id = JSON_BYTES_VALUE_CODEC_ID,
-    codec = JsonBytesValueCodec<serde_json::Value>,
-    value = serde_json::Value,
+    codec = JsonBytesValueCodec<Value>,
+    value = Value,
 );

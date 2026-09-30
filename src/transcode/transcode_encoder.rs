@@ -30,11 +30,46 @@ use super::Transcoder;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::TranscodeEncoder;
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
 ///
-/// fn accepts_encoder<E: TranscodeEncoder>(encoder: &E) {
-///     let _ = encoder;
+/// use qubit_codec::Codec;
+/// use qubit_codec::CodecTranscodeEncoder;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeEncoder;
+/// use qubit_codec::Transcoder;
+///
+/// struct ByteCodec;
+/// impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>>
+///     {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible>
+///     {
+///         output[index] = *value;
+///         Ok(1)
+///     }
 /// }
+///
+/// fn accepts_encoder<E: TranscodeEncoder>(_: &E) {}
+/// let mut encoder = CodecTranscodeEncoder::new(ByteCodec);
+/// accepts_encoder(&encoder);
+/// let mut output = [0; 2];
+/// let written = encoder.transcode_complete_into(&[1, 2], &mut output).unwrap();
+/// assert_eq!(written, 2);
+/// assert_eq!(output, [1, 2]);
 /// ```
 pub trait TranscodeEncoder:
     Transcoder<Error = TranscodeEncodeError<Self::EncodeError, <Self as Transcoder>::Input>>

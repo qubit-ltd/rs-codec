@@ -10,6 +10,8 @@
 use core::marker::PhantomData;
 
 use serde::de::DeserializeOwned;
+use serde_json::Error as JsonError;
+use serde_json::from_str;
 
 use super::ValueDecoder;
 
@@ -22,7 +24,8 @@ use super::ValueDecoder;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_codec::{JsonStringValueDecoder, ValueDecoder};
+/// use qubit_codec::JsonStringValueDecoder;
+/// use qubit_codec::ValueDecoder;
 /// use serde::Deserialize;
 ///
 /// #[derive(Debug, Deserialize, PartialEq)]
@@ -38,11 +41,16 @@ use super::ValueDecoder;
 #[must_use]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JsonStringValueDecoder<T> {
+    /// Tracks the owned output type without storing a value between calls.
     _marker: PhantomData<T>,
 }
 
 impl<T> JsonStringValueDecoder<T> {
     /// Creates a JSON string decoder for values of type `T`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a stateless decoder without allocating or constructing a `T`.
     #[inline]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }
@@ -53,12 +61,28 @@ impl<T> ValueDecoder<str> for JsonStringValueDecoder<T>
 where
     T: DeserializeOwned,
 {
-    type Error = serde_json::Error;
+    /// JSON syntax or target-value deserialization failure.
+    type Error = JsonError;
+    /// Owned value deserialized independently of the input string lifetime.
     type Output = T;
 
     /// Deserializes `input` from a JSON string.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: One complete JSON value, optionally surrounded by whitespace.
+    ///
+    /// # Returns
+    ///
+    /// Returns an owned `T`; decoding may allocate according to the target
+    /// type.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JSON error for malformed or incomplete input, trailing
+    /// non-whitespace data, or a value incompatible with `T`.
     #[inline]
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
-        serde_json::from_str(input)
+        from_str(input)
     }
 }

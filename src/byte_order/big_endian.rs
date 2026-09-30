@@ -14,7 +14,9 @@ use super::ByteOrderSpec;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec};
+/// use qubit_codec::BigEndian;
+/// use qubit_codec::ByteOrder;
+/// use qubit_codec::ByteOrderSpec;
 ///
 /// let _: BigEndian = Default::default();
 /// assert_eq!(BigEndian::ORDER, ByteOrder::BigEndian);

@@ -10,6 +10,8 @@
 use core::marker::PhantomData;
 
 use serde::de::DeserializeOwned;
+use serde_json::Error as JsonError;
+use serde_json::from_slice;
 
 use super::ValueDecoder;
 
@@ -38,11 +40,16 @@ use super::ValueDecoder;
 #[must_use]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JsonBytesValueDecoder<T> {
+    /// Associates the decoder with `T` without retaining a value.
     _marker: PhantomData<T>,
 }
 
 impl<T> JsonBytesValueDecoder<T> {
     /// Creates a JSON bytes decoder for values of type `T`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a stateless decoder without allocating or constructing a `T`.
     #[inline]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }
@@ -53,12 +60,29 @@ impl<T> ValueDecoder<[u8]> for JsonBytesValueDecoder<T>
 where
     T: DeserializeOwned,
 {
-    type Error = serde_json::Error;
+    /// JSON syntax, UTF-8, or target-value deserialization failure.
+    type Error = JsonError;
+    /// Owned value deserialized independently of the input byte slice.
     type Output = T;
 
     /// Deserializes `input` from UTF-8 JSON bytes.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: One complete UTF-8 JSON value, optionally surrounded by
+    ///   whitespace.
+    ///
+    /// # Returns
+    ///
+    /// Returns an owned `T`; decoding may allocate according to the target
+    /// type.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JSON error for invalid UTF-8, malformed or incomplete input,
+    /// trailing non-whitespace data, or a value incompatible with `T`.
     #[inline]
     fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
-        serde_json::from_slice(input)
+        from_slice(input)
     }
 }

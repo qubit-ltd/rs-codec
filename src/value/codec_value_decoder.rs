@@ -35,11 +35,34 @@ use crate::value::codec_value_lifecycle::decode_exact_complete_value;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::{Codec, CodecValueDecoder};
+/// use std::convert::Infallible;
+/// use std::num::NonZeroUsize;
 ///
-/// fn make_decoder<C: Codec>(codec: C) -> CodecValueDecoder<C> {
-///     CodecValueDecoder::new(codec)
+/// use qubit_codec::Codec;
+/// use qubit_codec::CodecValueDecoder;
+/// use qubit_codec::DecodeFailure;
+///
+/// struct Identity;
+/// impl Codec for Identity {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+///         Ok((input[index], NonZeroUsize::new(1).unwrap()))
+///     }
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
 /// }
+/// let mut decoder = CodecValueDecoder::new(Identity);
+/// assert_eq!(decoder.decode(&[7]).unwrap(), 7);
 /// ```
 pub struct CodecValueDecoder<C>
 where
@@ -65,8 +88,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the supplied codec declares invalid unit bounds or an
-    /// invalid decode unit bounds.
+    /// Fails at compile time if codec decode bounds are zero or the minimum
+    /// exceeds the maximum.
     #[inline]
     #[must_use]
     pub fn new(codec: C) -> Self {
@@ -75,7 +98,11 @@ where
     }
 
     /// Returns a shared reference to the wrapped codec.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The codec borrowed for as long as the adapter is borrowed.
+    #[inline]
     #[must_use]
     pub const fn codec(&self) -> &C {
         &self.codec
@@ -85,14 +112,22 @@ where
     ///
     /// The next value operation starts a fresh codec lifecycle, so mutations
     /// are applied to the following operation.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// An exclusive borrow of the codec without allocating.
+    #[inline]
     #[must_use]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
     }
 
     /// Consumes the adapter and returns its wrapped codec.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The owned codec, preserving its most recent lifecycle state.
+    #[inline]
     #[must_use]
     pub fn into_codec(self) -> C {
         self.codec
@@ -153,7 +188,8 @@ where
     ///
     /// Returns a framework error when input is incomplete or has trailing
     /// units. Returns a phase-aware domain error when reset, decode, or finish
-    /// fails.
+    /// fails. Returns an allocation failure when either lifecycle buffer cannot
+    /// reserve its declared capacity.
     ///
     /// # Panics
     ///
@@ -219,11 +255,29 @@ impl<C> ValueDecoder<[C::Unit]> for CodecValueDecoder<C>
 where
     C: Codec,
 {
+    /// Owned value returned after the complete decode lifecycle.
     type Output = C::Value;
+    /// Framework or phase-aware codec failure from one-value decoding.
     type Error = TranscodeDecodeErrorOf<C>;
 
     /// Decodes one value through the owned-value adapter.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete encoded representation of exactly one value.
+    ///
+    /// # Returns
+    ///
+    /// The owned decoded value after finishing the codec lifecycle.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same unsupported-lifecycle, incomplete-input,
+    /// trailing-input, and codec errors as [`Self::decode`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec reports consumption beyond its bounds or the input.
     fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         self.decode(input)
     }
@@ -234,6 +288,18 @@ where
     C: Codec + fmt::Debug,
 {
     /// Formats the decoder without requiring finished values to be printable.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Destination and formatting options.
+    ///
+    /// # Returns
+    ///
+    /// Unit on successful formatting.
+    ///
+    /// # Errors
+    ///
+    /// Returns the formatter error if writing the codec representation fails.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("CodecValueDecoder")
@@ -247,7 +313,15 @@ where
     C: Codec + Default,
 {
     /// Creates a decoder from the default codec.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// An adapter owning `C::default()`.
+    ///
+    /// # Panics
+    ///
+    /// Fails at compile time for invalid codec decode bounds, as [`Self::new`].
+    /// May panic if the codec's own default constructor panics.
     fn default() -> Self {
         Self::new(C::default())
     }

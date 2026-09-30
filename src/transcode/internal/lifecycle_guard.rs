@@ -43,7 +43,7 @@ impl LifecycleGuard {
     /// # Returns
     ///
     /// Returns a guard ready to observe the first lifecycle event.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn new() -> Self {
         Self {
@@ -55,18 +55,22 @@ impl LifecycleGuard {
     ///
     /// Reset is legal from every phase. The guard remains poisoned unless the
     /// caller later invokes [`Self::on_reset_success`].
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_reset_start(&mut self) {
         self.phase = LifecyclePhase::Poisoned;
     }
 
     /// Commits the [`LifecyclePhase::Fresh`] phase after reset succeeds.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_reset_success(&mut self) {
         self.phase = LifecyclePhase::Fresh;
     }
 
     /// Records a `transcode` entry.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after accepting the entry and entering streaming state.
     ///
     /// # Errors
     ///
@@ -76,7 +80,7 @@ impl LifecycleGuard {
     /// successful reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
     /// failure.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_transcode(&mut self) -> Result<(), TranscodeFailure> {
         match self.phase {
             LifecyclePhase::Uninitialized => {
@@ -101,6 +105,10 @@ impl LifecycleGuard {
     /// capacity checks rejecting the supplied output) can retry without
     /// being marked closed.
     ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when finish may begin; the phase remains unchanged.
+    ///
     /// # Errors
     ///
     /// Returns [`TranscodeFailure::FinishAfterFinish`] when `finish` is called
@@ -109,7 +117,7 @@ impl LifecycleGuard {
     /// successful reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] after partial reset or finish
     /// failure.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_finish_attempt(&self) -> Result<(), TranscodeFailure> {
         match self.phase {
             LifecyclePhase::Uninitialized => {
@@ -130,14 +138,14 @@ impl LifecycleGuard {
     ///
     /// The guard remains poisoned unless the caller later invokes
     /// [`Self::on_finish_success`].
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_finish_start(&mut self) {
         self.phase = LifecyclePhase::Poisoned;
     }
 
     /// Commits the `Finished` state after `finish` actually completed. Call
     /// only on the success path.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn on_finish_success(&mut self) {
         self.phase = LifecyclePhase::Finished;
     }

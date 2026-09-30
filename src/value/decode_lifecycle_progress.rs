@@ -16,11 +16,45 @@
 /// # Examples
 ///
 /// ```
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+///
+/// use qubit_codec::Codec;
+/// use qubit_codec::CodecValueDecoder;
+/// use qubit_codec::DecodeFailure;
 /// use qubit_codec::DecodeLifecycleProgress;
 ///
-/// fn inspect<V>(progress: &DecodeLifecycleProgress<V>) -> usize {
-///     progress.reset_written() + progress.finish_written()
+/// struct ByteCodec;
+/// impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>>
+///     {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible>
+///     {
+///         output[index] = *value;
+///         Ok(1)
+///     }
 /// }
+///
+/// let mut decoder = CodecValueDecoder::new(ByteCodec);
+/// let progress: DecodeLifecycleProgress<u8> = decoder
+///     .decode_lifecycle_with_scratch(&[42], &mut [], &mut [])
+///     .unwrap();
+/// assert_eq!(*progress.value(), 42);
+/// assert_eq!(progress.reset_written(), 0);
+/// assert_eq!(progress.finish_written(), 0);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[must_use]
@@ -45,7 +79,7 @@ impl<V> DecodeLifecycleProgress<V> {
     /// # Returns
     ///
     /// Returns completed lifecycle progress.
-    #[inline(always)]
+    #[inline]
     pub(crate) const fn new(value: V, reset_written: usize, finish_written: usize) -> Self {
         Self {
             value,
@@ -59,7 +93,7 @@ impl<V> DecodeLifecycleProgress<V> {
     /// # Returns
     ///
     /// Returns a shared reference to the main decoded value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn value(&self) -> &V {
         &self.value
@@ -70,7 +104,7 @@ impl<V> DecodeLifecycleProgress<V> {
     /// # Returns
     ///
     /// Returns the initialized reset output length.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn reset_written(&self) -> usize {
         self.reset_written
@@ -81,7 +115,7 @@ impl<V> DecodeLifecycleProgress<V> {
     /// # Returns
     ///
     /// Returns the initialized finish output length.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn finish_written(&self) -> usize {
         self.finish_written
@@ -92,7 +126,7 @@ impl<V> DecodeLifecycleProgress<V> {
     /// # Returns
     ///
     /// Returns the main value, reset output length, and finish output length.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (V, usize, usize) {
         (self.value, self.reset_written, self.finish_written)

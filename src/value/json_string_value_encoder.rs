@@ -38,6 +38,7 @@ use super::ValueEncoder;
 #[must_use]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JsonStringValueEncoder<T> {
+    /// Associates the encoder with `T` without retaining a source value.
     _marker: PhantomData<T>,
 }
 

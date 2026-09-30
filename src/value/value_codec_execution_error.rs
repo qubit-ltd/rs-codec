@@ -13,7 +13,28 @@ use std::any::TypeId;
 use thiserror::Error;
 
 /// Failure produced by a type-erased value-codec invocation.
+///
+/// Registry lookups erase the concrete encoder and decoder types, so the
+/// mismatch and failure they report are carried here as diagnostics instead of
+/// a generic type parameter.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueCodecExecutionError;
+/// use std::any::TypeId;
+///
+/// let error = ValueCodecExecutionError::TypeMismatch {
+///     expected_type: "u32",
+///     actual_type: TypeId::of::<String>(),
+/// };
+/// assert_eq!(
+///     error.to_string(),
+///     format!("value codec for u32 received incompatible type {:?}", TypeId::of::<String>())
+/// );
+/// ```
 #[derive(Debug, Error)]
+#[must_use]
 pub enum ValueCodecExecutionError {
     /// The supplied value has the wrong Rust type.
     #[error("value codec for {expected_type} received incompatible type {actual_type:?}")]

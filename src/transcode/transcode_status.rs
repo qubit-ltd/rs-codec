@@ -68,7 +68,7 @@ impl TranscodeStatus {
     /// # Returns
     ///
     /// Returns a [`TranscodeStatus::NeedInput`] value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn need_input(required: NonZeroUsize) -> Self {
         Self::NeedInput { required }
@@ -84,7 +84,7 @@ impl TranscodeStatus {
     /// # Returns
     ///
     /// Returns a [`TranscodeStatus::NeedOutput`] value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn need_output(required: NonZeroUsize) -> Self {
         Self::NeedOutput { required }

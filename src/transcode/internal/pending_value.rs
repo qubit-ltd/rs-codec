@@ -8,6 +8,10 @@
 //! Pending decoded value retained by buffered converters.
 
 /// Decoded value retained after source input has been consumed.
+///
+/// # Type Parameters
+///
+/// - `Value`: Owned decoded value retained until downstream encoding succeeds.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::transcode) struct PendingValue<Value> {
     /// Decoded logical value.
@@ -27,7 +31,8 @@ impl<Value> PendingValue<Value> {
     /// # Returns
     ///
     /// Returns pending-value state owned by the converter engine.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) const fn new(value: Value, input_index: usize) -> Self {
         Self { value, input_index }
     }
@@ -38,7 +43,7 @@ impl<Value> PendingValue<Value> {
     ///
     /// Returns the absolute source input index used for downstream encode
     /// errors.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn input_index(&self) -> usize {
         self.input_index
@@ -49,7 +54,7 @@ impl<Value> PendingValue<Value> {
     /// # Returns
     ///
     /// Returns the retained decoded value by shared reference.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn value(&self) -> &Value {
         &self.value
@@ -60,7 +65,8 @@ impl<Value> PendingValue<Value> {
     /// # Returns
     ///
     /// Returns the owned decoded value.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) fn into_value(self) -> Value {
         self.value
     }
