@@ -11,6 +11,18 @@
       "defaultFeatures": false,
       "features": ["io"],
       "commands": ["test", "doc", "clippy"]
+    },
+    {
+      "name": "json",
+      "defaultFeatures": false,
+      "features": ["json"],
+      "commands": ["test", "doc", "clippy"]
+    },
+    {
+      "name": "json-registry",
+      "defaultFeatures": false,
+      "features": ["json", "registry"],
+      "commands": ["test", "doc", "clippy"]
     }
   ]
 }
