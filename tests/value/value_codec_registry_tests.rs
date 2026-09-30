@@ -7,6 +7,10 @@
 // =============================================================================
 
 use std::any::TypeId;
+use std::any::type_name;
+use std::io::Error;
+use std::ptr;
+use std::thread;
 
 use qubit_codec::ValueBytesCodecDescriptor;
 use qubit_codec::ValueBytesCodecRegistry;
@@ -28,11 +32,11 @@ struct U32StringCodec;
 
 impl ValueEncoder<u32> for U32StringCodec {
     type Output = String;
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn encode(&mut self, input: &u32) -> Result<Self::Output, Self::Error> {
         if *input == u32::MAX {
-            Err(std::io::Error::other("encode fixture failure"))
+            Err(Error::other("encode fixture failure"))
         } else {
             Ok(input.to_string())
         }
@@ -41,10 +45,10 @@ impl ValueEncoder<u32> for U32StringCodec {
 
 impl ValueDecoder<str> for U32StringCodec {
     type Output = u32;
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
-        input.parse().map_err(std::io::Error::other)
+        input.parse().map_err(Error::other)
     }
 }
 
@@ -53,7 +57,7 @@ struct U32BeBytesCodec;
 
 impl ValueEncoder<u32> for U32BeBytesCodec {
     type Output = Vec<u8>;
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn encode(&mut self, input: &u32) -> Result<Self::Output, Self::Error> {
         Ok(input.to_be_bytes().to_vec())
@@ -62,12 +66,10 @@ impl ValueEncoder<u32> for U32BeBytesCodec {
 
 impl ValueDecoder<[u8]> for U32BeBytesCodec {
     type Output = u32;
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
-        let bytes: [u8; 4] = input
-            .try_into()
-            .map_err(|_| std::io::Error::other("expected four bytes"))?;
+        let bytes: [u8; 4] = input.try_into().map_err(|_| Error::other("expected four bytes"))?;
         Ok(u32::from_be_bytes(bytes))
     }
 }
@@ -91,10 +93,7 @@ static SECOND: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
 #[test]
 fn test_value_string_codec_descriptor_executes_both_directions() {
     assert_eq!(STRING_DESCRIPTOR.codec_type_id(), TypeId::of::<U32StringCodec>());
-    assert_eq!(
-        STRING_DESCRIPTOR.codec_type_name(),
-        std::any::type_name::<U32StringCodec>()
-    );
+    assert_eq!(STRING_DESCRIPTOR.codec_type_name(), type_name::<U32StringCodec>());
     assert_eq!(STRING_DESCRIPTOR.value_type_id(), TypeId::of::<u32>());
     assert_eq!(STRING_DESCRIPTOR.value_type_name(), "u32");
     assert!(format!("{STRING_DESCRIPTOR:?}").contains("U32StringCodec"));
@@ -165,14 +164,29 @@ fn test_local_value_string_codec_registry_owns_and_queries_entries() {
 #[test]
 fn test_value_string_codec_registry_rejects_duplicate_ids() {
     let error = ValueStringCodecRegistry::from_registrations([&FIRST, &SECOND]).expect_err("duplicate ID");
-    assert!(matches!(error, ValueCodecRegistryError::DuplicateId { .. }));
-    assert!(error.to_string().contains("example.local"));
+
+    let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
+
+    assert_eq!(*id, "example.local", "the error reports the conflicting stable ID");
+    assert_eq!(
+        sources.as_slice(),
+        &[FIRST.source(), SECOND.source()],
+        "the error reports every declaration site that claimed the ID, in sorted order"
+    );
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "duplicate value codec ID example.local from {:?}",
+            [FIRST.source(), SECOND.source()]
+        ),
+        "the Display message carries the conflicting ID and both sources"
+    );
 }
 
 #[test]
 fn test_global_value_string_codec_registry_collects_macro_registration() {
     let registry = ValueStringCodecRegistry::try_global().expect("valid global registry");
-    assert!(std::ptr::eq(registry, ValueStringCodecRegistry::global()));
+    assert!(ptr::eq(registry, ValueStringCodecRegistry::global()));
     let registration = registry.get("example.u32").expect("linked registration");
     assert_eq!(
         registration.descriptor().codec_type_id(),
@@ -184,7 +198,7 @@ fn test_global_value_string_codec_registry_collects_macro_registration() {
 #[test]
 fn test_global_value_bytes_codec_registry_collects_macro_registration() {
     let registry = ValueBytesCodecRegistry::try_global().expect("valid global registry");
-    assert!(std::ptr::eq(registry, ValueBytesCodecRegistry::global()));
+    assert!(ptr::eq(registry, ValueBytesCodecRegistry::global()));
     let registration = registry.get("example.u32").expect("linked registration");
     assert_eq!(
         registration.descriptor().codec_type_id(),
@@ -210,7 +224,7 @@ fn test_same_id_may_exist_in_string_and_bytes_registries() {
 fn test_global_value_string_codec_registry_initialization_is_unique_across_threads() {
     let addresses = (0..8)
         .map(|_| {
-            std::thread::spawn(|| {
+            thread::spawn(|| {
                 ValueStringCodecRegistry::try_global().expect("valid global registry")
                     as *const ValueStringCodecRegistry as usize
             })

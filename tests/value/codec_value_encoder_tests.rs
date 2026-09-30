@@ -7,10 +7,15 @@
 // =============================================================================
 //! Tests for the codec-backed value encoder adapter.
 
-use qubit_codec as codec;
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec::Codec;
 use qubit_codec::CodecValueEncoder;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDomainError;
 use qubit_codec::TranscodeEncodeError;
+use qubit_codec::TranscodeFailure;
 use qubit_codec::ValueEncoder;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -19,8 +24,8 @@ struct PairByteCodec;
 impl Codec for PairByteCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -32,12 +37,12 @@ impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -73,7 +78,7 @@ struct RejectOddCodec;
 impl Codec for RejectOddCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = &'static str;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -90,12 +95,12 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -121,8 +126,8 @@ struct OverreportingEncodeCodec;
 impl Codec for OverreportingEncodeCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -134,10 +139,10 @@ impl Codec for OverreportingEncodeCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -159,7 +164,7 @@ struct FailingEncodeCodec;
 impl Codec for FailingEncodeCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = &'static str;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -172,8 +177,8 @@ impl Codec for FailingEncodeCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -197,8 +202,8 @@ struct AppendOverflowCodec;
 impl Codec for AppendOverflowCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -212,8 +217,8 @@ impl Codec for AppendOverflowCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -238,8 +243,8 @@ struct NonCloneValueCodec;
 impl Codec for NonCloneValueCodec {
     type Value = NonCloneValue;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -251,12 +256,12 @@ impl Codec for NonCloneValueCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonCloneValue, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((NonCloneValue { value }, core::num::NonZeroUsize::MIN))
+        Ok((NonCloneValue { value }, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -296,7 +301,7 @@ struct FinishFailError;
 impl Codec for ResetFailLifecycleCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = ResetFailError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -311,8 +316,8 @@ impl Codec for ResetFailLifecycleCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -338,7 +343,7 @@ impl Codec for ResetFailLifecycleCodec {
 impl Codec for FinishFailLifecycleCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = FinishFailError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -353,8 +358,8 @@ impl Codec for FinishFailLifecycleCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -383,8 +388,8 @@ struct OverflowEncodeBoundCodec;
 impl Codec for OverflowEncodeBoundCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -398,8 +403,8 @@ impl Codec for OverflowEncodeBoundCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -421,8 +426,8 @@ struct ResetWidthCodec {
 impl Codec for ResetWidthCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -438,8 +443,8 @@ impl Codec for ResetWidthCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -471,8 +476,8 @@ struct OversizedResetWidthCodec;
 impl Codec for OversizedResetWidthCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -490,8 +495,8 @@ impl Codec for OversizedResetWidthCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -514,8 +519,8 @@ struct ResetDomainCodec {
 impl Codec for ResetDomainCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -531,8 +536,8 @@ impl Codec for ResetDomainCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -565,8 +570,8 @@ struct StatefulLifecycleCodec {
 impl Codec for StatefulLifecycleCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -582,8 +587,8 @@ impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -723,7 +728,7 @@ fn test_codec_value_encoder_truncates_output_after_encode_error() {
 
     assert!(matches!(
         error,
-        TranscodeEncodeError::Domain(codec::TranscodeDomainError::Main {
+        TranscodeEncodeError::Domain(TranscodeDomainError::Main {
             source: "encode failed",
             input_index: 0,
             input_consumed: None
@@ -745,7 +750,7 @@ fn test_codec_value_encoder_rejects_output_length_overflow() {
     let error = ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("reset plus value bound should overflow");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
+        TranscodeEncodeError::Failure(TranscodeFailure::output_length_overflow()),
         error
     );
 }
@@ -760,7 +765,7 @@ fn test_codec_value_encoder_encode_into_rejects_bound_overflow() {
         .expect_err("reset plus value bound should overflow");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
+        TranscodeEncodeError::Failure(TranscodeFailure::output_length_overflow()),
         error
     );
     assert_eq!(vec![0xaa], output);
@@ -774,7 +779,7 @@ fn test_codec_value_encoder_reports_allocation_failure() {
         ValueEncoder::<u8>::encode(&mut encoder, &7).expect_err("unrepresentable allocation should be reported");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::allocation_failed()),
+        TranscodeEncodeError::Failure(TranscodeFailure::allocation_failed()),
         error
     );
 }
@@ -789,7 +794,7 @@ fn test_codec_value_encoder_encode_into_rejects_target_len_overflow() {
         .expect_err("appending encoded units should report length overflow");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::output_length_overflow()),
+        TranscodeEncodeError::Failure(TranscodeFailure::output_length_overflow()),
         error
     );
     assert_eq!(vec![0xaa], output);
