@@ -44,9 +44,22 @@ use crate::Transcoder;
 /// use qubit_codec::AsyncTranscodeDecodeInput;
 /// use qubit_io::AsyncInput;
 ///
-/// fn make_input<I: AsyncInput<Item = u8>>(inner: I) -> AsyncTranscodeDecodeInput<I> {
-///     AsyncTranscodeDecodeInput::new(inner)
-/// }
+/// # use std::io::Result;
+/// # use std::pin::Pin;
+/// # use std::task::Context;
+/// # use std::task::Poll;
+/// # struct EmptyInput;
+/// # impl AsyncInput for EmptyInput {
+/// #     type Item = u8;
+/// #     unsafe fn poll_read_unchecked(self: Pin<&mut Self>, _cx: &mut Context<'_>, _output: &mut [u8], _index: usize, _count: usize) -> Poll<Result<usize>> {
+/// #         Poll::Ready(Ok(0))
+/// #     }
+/// # }
+/// let mut input = AsyncTranscodeDecodeInput::with_capacity(EmptyInput, 8);
+/// assert!(input.capacity() >= 8);
+/// assert_eq!(input.unread_len(), 0);
+/// input.consume(0);
+/// assert!(input.unread().is_empty());
 /// ```
 #[must_use]
 pub struct AsyncTranscodeDecodeInput<I>
@@ -97,6 +110,15 @@ where
     /// Tries to create an adapter with an internal unit buffer of at least
     /// capacity.
     ///
+    /// # Parameters
+    ///
+    /// - `inner`: Asynchronous unit source owned by the adapter.
+    /// - `capacity`: Minimum requested unit-buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// The adapter with an empty unread window on successful allocation.
+    ///
     /// # Errors
     ///
     /// Returns the allocation error when the internal buffer cannot be
@@ -111,7 +133,12 @@ where
     ///
     /// The input can be physically positioned after units retained in this
     /// adapter's unread buffer.
+    ///
+    /// # Returns
+    ///
+    /// A shared borrow of the underlying source, excluding buffered units.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &I {
         self.input.inner()
     }
@@ -120,34 +147,59 @@ where
     ///
     /// Direct reads can invalidate the logical stream position represented by
     /// unread buffered units.
+    ///
+    /// # Returns
+    ///
+    /// An exclusive borrow of the source; direct reads bypass buffered units.
     #[must_use]
+    #[inline]
     pub fn inner_mut(&mut self) -> &mut I {
         self.input.inner_mut()
     }
 
     /// Returns the number of unread units currently buffered.
+    ///
+    /// # Returns
+    ///
+    /// The number of buffered units not yet consumed.
     #[must_use]
+    #[inline]
     pub const fn unread_len(&self) -> usize {
         self.input.unread_len()
     }
 
     /// Returns the unread buffered unit window.
+    ///
+    /// # Returns
+    ///
+    /// The currently retained units borrowed without allocation.
     #[must_use]
+    #[inline]
     pub fn unread(&self) -> &[I::Item] {
         self.input.unread()
     }
 
     /// Returns the total internal unit-buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// The total number of units the internal buffer can hold.
     #[must_use]
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.input.capacity()
     }
 
     /// Consumes unread units from the current buffer window.
     ///
+    /// # Parameters
+    ///
+    /// - `count`: Number of retained units to discard from the unread prefix.
+    ///
     /// # Panics
     ///
     /// Panics when count exceeds the unread unit count.
+    #[inline]
     pub fn consume(&mut self, count: usize) {
         assert!(count <= self.unread_len(), "cannot consume beyond buffered input",);
         // SAFETY: The asserted bound proves count fits the unread window.
@@ -157,6 +209,12 @@ where
     }
 
     /// Copies unread units into an indexed output range without consuming them.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination slice receiving copies of retained units.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of unread units to copy without consuming them.
     ///
     /// # Safety
     ///
@@ -171,12 +229,35 @@ where
     }
 
     /// Consumes this adapter and returns the input plus its unread buffer.
+    ///
+    /// # Returns
+    ///
+    /// The owned source and buffer, preserving all unread units.
     #[must_use = "the returned input and unread buffer must be handled"]
+    #[inline]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
     }
 
     /// Runs decoder reset into an indexed output range without I/O.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Stateful decoder from source units into values.
+    /// - `M`: Callback mapping decoder errors to I/O errors.
+    /// - `Value`: Destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder whose state may change during this operation.
+    /// - `map_error`: Callback invoked for decoder errors.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of writable destination positions.
+    ///
+    /// # Returns
+    ///
+    /// Number of values emitted during decoder reset.
     ///
     /// # Errors
     ///
@@ -217,6 +298,24 @@ where
     }
 
     /// Finishes a decoder into an indexed output range without I/O.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Stateful decoder from source units into values.
+    /// - `M`: Callback mapping decoder errors to I/O errors.
+    /// - `Value`: Destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder whose state may change during this operation.
+    /// - `map_error`: Callback invoked for decoder errors.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of writable destination positions.
+    ///
+    /// # Returns
+    ///
+    /// Number of values emitted while finishing the decoder.
     ///
     /// # Errors
     ///
@@ -278,6 +377,11 @@ where
 
     /// Refills until at least count unread units are available.
     ///
+    /// # Parameters
+    ///
+    /// - `count`: Minimum desired unread unit count; grows the buffer if
+    ///   needed.
+    ///
     /// # Returns
     ///
     /// Returns true when count units are available, or false when EOF occurs
@@ -301,6 +405,27 @@ where
     /// polls the input again. This makes the returned progress the commit
     /// boundary for cancellation: resume with the adapter's current state,
     /// rather than replaying the previous source range.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Stateful decoder from source units into values.
+    /// - `M`: Callback mapping decoder errors to I/O errors.
+    /// - `Value`: Destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `cx`: Task context used when polling the source.
+    /// - `decoder`: Decoder whose state may change during this operation.
+    /// - `map_error`: Callback invoked for decoder errors.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of writable destination positions.
+    ///
+    /// # Returns
+    ///
+    /// `Pending` only while awaiting source input before decoding; otherwise
+    /// ready progress or end-of-input. Successful progress has already
+    /// consumed source units.
     ///
     /// # Errors
     ///
@@ -362,10 +487,29 @@ where
     /// [`Transcoder::transcode_eof`], validates progress, and commits consumed
     /// source units before returning.
     ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Stateful decoder from source units into values.
+    /// - `M`: Callback mapping decoder errors to I/O errors.
+    /// - `Value`: Destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder whose state may change during this operation.
+    /// - `map_error`: Callback invoked for decoder errors.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of writable destination positions.
+    ///
+    /// # Returns
+    ///
+    /// Validated progress with source consumption committed; zero progress when
+    /// the output range or unread input is empty.
+    ///
     /// # Errors
     ///
     /// Returns invalid output-range errors, or decoder errors mapped by
-    /// `map_error`.
+    /// `map_error`, and invalid-progress errors from contract validation.
     pub fn transcode_eof_step<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -405,6 +549,30 @@ where
     /// This is the async wrapper for [`Self::poll_transcode`]. It returns after
     /// one decoder invocation; callers that require a complete destination
     /// range must drive successive steps and retain each returned progress.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Stateful decoder from source units into values.
+    /// - `M`: Callback mapping decoder errors to I/O errors.
+    /// - `Value`: Destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder whose state may change during this operation.
+    /// - `map_error`: Callback invoked for decoder errors.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    /// - `count`: Number of writable destination positions.
+    ///
+    /// # Returns
+    ///
+    /// One committed progress step, or end-of-input when the source is
+    /// exhausted.
+    ///
+    /// # Errors
+    ///
+    /// Returns input, allocation, output-range, invalid-progress, or mapped
+    /// decoder errors from `poll_transcode`.
     pub async fn transcode_async<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -430,11 +598,32 @@ where
     type Item = I::Item;
 
     /// Reports that this input retains unread units.
+    ///
+    /// # Returns
+    ///
+    /// Always `true`, because this adapter retains unread units.
+    #[inline]
     fn is_buffered(&self) -> bool {
         true
     }
 
     /// Polls one read through the retained unit buffer.
+    ///
+    /// # Parameters
+    ///
+    /// - `cx`: Task context used to poll the buffered source.
+    /// - `output`: Destination unit slice.
+    /// - `index`: First destination index.
+    /// - `count`: Maximum number of units to read.
+    ///
+    /// # Returns
+    ///
+    /// `Pending` while awaiting source data, or a ready read count; zero
+    /// indicates EOF.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors from the buffered source or its buffer management.
     ///
     /// # Safety
     ///
@@ -460,6 +649,18 @@ where
     AsyncBufferedInput<I>: fmt::Debug,
 {
     /// Formats this asynchronous decoder input for debugging.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Debug output destination.
+    ///
+    /// # Returns
+    ///
+    /// The result of formatting the buffered input.
+    ///
+    /// # Errors
+    ///
+    /// Returns a formatting error if the destination rejects output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("AsyncTranscodeDecodeInput")
@@ -469,6 +670,14 @@ where
 }
 
 /// Converts decoder capacity failures into invalid stream data.
+///
+/// # Parameters
+///
+/// - `error`: Capacity failure retained as the I/O error payload.
+///
+/// # Returns
+///
+/// An invalid-data error owning the original capacity failure.
 fn capacity_to_io_error(error: CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

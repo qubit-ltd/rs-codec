@@ -7,7 +7,9 @@
 // =============================================================================
 //! Buffered input driver that decodes units into values.
 
-use core::fmt;
+use core::fmt::Debug;
+use core::fmt::Formatter;
+use core::fmt::Result as FormatResult;
 use std::collections::TryReserveError;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -15,6 +17,7 @@ use std::io::Read;
 use std::io::Result;
 use std::io::Seek;
 use std::io::SeekFrom;
+use std::result::Result as StdResult;
 
 use qubit_io::Buffer;
 use qubit_io::BufferedInput;
@@ -24,8 +27,9 @@ use qubit_utils::SliceRange;
 use qubit_utils::UncheckedSlice;
 use qubit_utils::allocation_error;
 
-use super::codec_decode_driver::CodecDecodeDriver;
+use super::internal::CodecDecodeDriver;
 use super::transcode_progress_validation::validate_decode_progress;
+use crate::CapacityError;
 use crate::Codec;
 use crate::DecodeLifecycleOutput;
 use crate::DecodeLifecycleProgress;
@@ -60,6 +64,7 @@ where
     I: Input,
     I::Item: Copy + Default,
 {
+    /// Owns the unit source and retains unread units across decode operations.
     input: BufferedInput<I>,
 }
 
@@ -108,12 +113,16 @@ where
     /// * `inner` - Unit input read by this adapter.
     /// * `capacity` - Requested internal unit buffer capacity.
     ///
+    /// # Returns
+    ///
+    /// Returns a buffered adapter owning `inner` with at least the requested
+    /// capacity.
+    ///
     /// # Errors
     ///
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
-    #[inline]
-    pub fn try_with_capacity(inner: I, capacity: usize) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {
             input: BufferedInput::try_with_capacity(inner, capacity)?,
         })
@@ -128,6 +137,7 @@ where
     ///
     /// A shared reference to the wrapped unit input.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &I {
         self.input.inner()
     }
@@ -138,6 +148,7 @@ where
     ///
     /// The number of unread units in the internal buffer.
     #[must_use]
+    #[inline]
     pub fn unread_len(&self) -> usize {
         self.input.unread_len()
     }
@@ -149,6 +160,7 @@ where
     /// Returns a shared slice over the unread portion of the internal unit
     /// buffer. The slice is valid until this adapter is mutated.
     #[must_use]
+    #[inline]
     pub fn unread(&self) -> &[I::Item] {
         self.input.unread()
     }
@@ -159,6 +171,7 @@ where
     ///
     /// The maximum number of units retained in the internal buffer.
     #[must_use]
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.input.capacity()
     }
@@ -170,11 +183,17 @@ where
     ///
     /// * `count` - Minimum number of unread units required.
     ///
+    /// # Returns
+    ///
+    /// Returns `true` when at least `count` units are buffered; `false` if EOF
+    /// prevents reaching that count. Buffered units remain available in either
+    /// case.
+    ///
     /// # Errors
     ///
     /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
     /// errors from the wrapped input while refilling.
-    pub fn fill_until(&mut self, count: usize) -> std::io::Result<bool> {
+    pub fn fill_until(&mut self, count: usize) -> Result<bool> {
         if count > self.input.capacity() {
             self.input.try_reserve_capacity(count).map_err(allocation_error)?;
         }
@@ -187,6 +206,30 @@ where
     /// Consumed input is committed before this method returns. Callers can use
     /// the returned [`TranscodeProgress`] to distinguish `NeedOutput` from an
     /// incomplete input tail without guessing from the unread buffer alone.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Streaming decoder accepting the source unit type.
+    /// - `M`: Mapper from decoder errors to I/O errors.
+    /// - `Value`: Decoded destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder for the current logical stream.
+    /// - `map_error`: Mapper invoked for decoder errors.
+    /// - `output`: Destination value storage.
+    /// - `output_index`: Start of the writable range.
+    /// - `count`: Maximum number of destination values available.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some` validated progress after a decode step, or `None` at EOF
+    /// with no buffered units. A zero count returns `Some` zero progress.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid output-range or progress errors, input/refill errors,
+    /// or decoder errors translated by `map_error`.
     pub fn transcode_step<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -225,6 +268,25 @@ where
     /// This method does not read from the wrapped input. It passes the current
     /// unread buffer to [`Transcoder::transcode_eof`], validates the returned
     /// progress, and commits consumed source units before returning.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Streaming decoder accepting the source unit type.
+    /// - `M`: Mapper from decoder errors to I/O errors.
+    /// - `Value`: Decoded destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder for the current logical stream.
+    /// - `map_error`: Mapper invoked for decoder errors.
+    /// - `output`: Destination value storage.
+    /// - `output_index`: Start of the writable range.
+    /// - `count`: Maximum number of destination values available.
+    ///
+    /// # Returns
+    ///
+    /// Returns validated EOF progress; an empty input or zero count returns
+    /// zero progress.
     ///
     /// # Errors
     ///
@@ -272,6 +334,7 @@ where
     /// # Panics
     ///
     /// Panics when `count` exceeds [`Self::unread_len`].
+    #[inline]
     pub fn consume(&mut self, count: usize) {
         assert!(count <= self.unread_len(), "cannot consume beyond buffered input",);
         // SAFETY: The caller-provided count is within the unread window.
@@ -309,6 +372,7 @@ where
     ///
     /// The wrapped input and the buffer holding unread units.
     #[must_use = "the returned input and unread buffer must be handled"]
+    #[inline]
     pub fn into_parts(self) -> (I, Buffer<I::Item>) {
         self.input.into_parts()
     }
@@ -329,6 +393,11 @@ where
     ///
     /// Returns input or buffer validation errors from the wrapped
     /// [`qubit_io::BufferedInput`].
+    ///
+    /// # Panics
+    ///
+    /// Debug builds panic if the destination range violates the safety
+    /// contract.
     ///
     /// # Safety
     ///
@@ -356,6 +425,11 @@ where
     /// This strict convenience method supports codecs whose decode reset and
     /// finish phases do not emit values. Use
     /// [`Self::read_decoded_lifecycle_with`] when those phases have output.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec accepting the wrapped input's unit type.
+    /// - `M`: Mapper from codec decode errors to I/O errors.
     ///
     /// # Parameters
     ///
@@ -398,6 +472,11 @@ where
     /// The method allocates independent storage for values emitted by
     /// `decode_reset` and `decode_finish`, so neither phase can overwrite the
     /// other.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec accepting the wrapped input's unit type.
+    /// - `M`: Mapper from codec decode errors to I/O errors.
     ///
     /// # Parameters
     ///
@@ -444,6 +523,11 @@ where
 
     /// Decodes one complete codec lifecycle into separate caller storage.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec accepting the wrapped input's unit type.
+    /// - `M`: Mapper from codec decode errors to I/O errors.
+    ///
     /// # Parameters
     ///
     /// - `codec`: Codec used to decode one complete lifecycle.
@@ -485,64 +569,27 @@ where
         self.read_decoded_lifecycle_with_scratch_impl(codec, reset_output, finish_output, map_error)
     }
 
-    /// Reads and decodes reset, body, and finish output using caller scratch
-    /// buffers.
-    ///
-    /// This internal path keeps lifecycle allocation and error mapping in one
-    /// place for the public convenience methods.
-    fn read_decoded_lifecycle_with_scratch_impl<C, M>(
-        &mut self,
-        codec: &mut C,
-        reset_output: &mut [C::Value],
-        finish_output: &mut [C::Value],
-        mut map_error: M,
-    ) -> Result<DecodeLifecycleProgress<C::Value>>
-    where
-        C: Codec<Unit = I::Item>,
-        M: FnMut(C::DecodeError) -> Error,
-    {
-        assert_unit_bounds::<C>();
-        if reset_output.len() < C::MAX_DECODE_RESET_VALUES {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "decode reset output is shorter than the codec reset bound",
-            ));
-        }
-        if finish_output.len() < C::MAX_DECODE_FINISH_VALUES {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                "decode finish output is shorter than the codec finish bound",
-            ));
-        }
-        let reset_written = unsafe {
-            // SAFETY: The reset output length check above reserves the codec's
-            // declared decode-reset output bound.
-            codec.decode_reset(reset_output, 0)
-        }
-        .map_err(&mut map_error)?;
-        assert!(
-            reset_written <= C::MAX_DECODE_RESET_VALUES,
-            "Codec::decode_reset wrote beyond its reset bound",
-        );
-
-        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
-
-        let finish_written = unsafe {
-            // SAFETY: The finish output length check above reserves the
-            // codec's declared decode-finish output bound.
-            codec.decode_finish(finish_output, 0)
-        }
-        .map_err(&mut map_error)?;
-        assert!(
-            finish_written <= C::MAX_DECODE_FINISH_VALUES,
-            "Codec::decode_finish wrote beyond its finish bound",
-        );
-        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
-    }
-
     /// Runs decoder reset into an indexed output range.
     ///
     /// This method does not read or consume buffered input units.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Streaming decoder accepting the source unit type.
+    /// - `M`: Mapper from decoder errors to I/O errors.
+    /// - `Value`: Decoded destination value type.
+    ///
+    /// # Parameters
+    ///
+    /// - `decoder`: Decoder for the current logical stream.
+    /// - `map_error`: Mapper invoked for decoder errors.
+    /// - `output`: Destination value storage.
+    /// - `output_index`: Start of the writable range.
+    /// - `count`: Maximum number of destination values available.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset values initialized in the requested range.
     ///
     /// # Errors
     ///
@@ -586,6 +633,12 @@ where
 
     /// Decodes values into an indexed output range using a streaming
     /// [`Transcoder`].
+    ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Streaming decoder accepting the source unit type.
+    /// - `M`: Mapper from decoder errors to I/O errors.
+    /// - `Value`: Decoded destination value type.
     ///
     /// # Parameters
     ///
@@ -679,6 +732,12 @@ where
 
     /// Finishes a streaming decoder into an indexed output range.
     ///
+    /// # Type Parameters
+    ///
+    /// - `D`: Streaming decoder accepting the source unit type.
+    /// - `M`: Mapper from decoder errors to I/O errors.
+    /// - `Value`: Decoded destination value type.
+    ///
     /// # Parameters
     ///
     /// * `decoder` - Streaming decoder whose final output is being collected.
@@ -763,7 +822,98 @@ where
     I: Input,
     I::Item: Copy + Default,
 {
+    /// Reads and decodes reset, body, and finish output using caller scratch
+    /// buffers.
+    ///
+    /// This internal path keeps lifecycle allocation and error mapping in one
+    /// place for the public convenience methods.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec accepting the wrapped input's unit type.
+    /// - `M`: Mapper from codec decode errors to I/O errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec whose reset, decode, and finish phases are executed.
+    /// - `reset_output`: Separate storage for reset values.
+    /// - `finish_output`: Separate storage for finish values.
+    /// - `map_error`: Mapper for codec decode errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded value and initialized lengths of both output
+    /// buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns InvalidInput for insufficient scratch capacity, input I/O
+    /// errors, UnexpectedEof for a truncated value, InvalidData for invalid
+    /// codec progress, or mapped codec reset, decode, and finish errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if reset or finish reports output beyond its declared bound.
+    fn read_decoded_lifecycle_with_scratch_impl<C, M>(
+        &mut self,
+        codec: &mut C,
+        reset_output: &mut [C::Value],
+        finish_output: &mut [C::Value],
+        mut map_error: M,
+    ) -> Result<DecodeLifecycleProgress<C::Value>>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        assert_unit_bounds::<C>();
+        if reset_output.len() < C::MAX_DECODE_RESET_VALUES {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "decode reset output is shorter than the codec reset bound",
+            ));
+        }
+        if finish_output.len() < C::MAX_DECODE_FINISH_VALUES {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "decode finish output is shorter than the codec finish bound",
+            ));
+        }
+        let reset_written = unsafe {
+            // SAFETY: The reset output length check above reserves the codec's
+            // declared decode-reset output bound.
+            codec.decode_reset(reset_output, 0)
+        }
+        .map_err(&mut map_error)?;
+        assert!(
+            reset_written <= C::MAX_DECODE_RESET_VALUES,
+            "Codec::decode_reset wrote beyond its reset bound",
+        );
+
+        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
+
+        let finish_written = unsafe {
+            // SAFETY: The finish output length check above reserves the
+            // codec's declared decode-finish output bound.
+            codec.decode_finish(finish_output, 0)
+        }
+        .map_err(&mut map_error)?;
+        assert!(
+            finish_written <= C::MAX_DECODE_FINISH_VALUES,
+            "Codec::decode_finish wrote beyond its finish bound",
+        );
+        Ok(DecodeLifecycleProgress::new(value, reset_written, finish_written))
+    }
+
     /// Refills the underlying buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if unread input is available after refill, or `false` at
+    /// EOF.
+    ///
+    /// # Errors
+    ///
+    /// Propagates errors from the wrapped input while refilling.
     fn fill_more(&mut self) -> Result<bool> {
         self.input.fill_more()
     }
@@ -774,6 +924,19 @@ where
     I: Input<Item = u8>,
 {
     /// Reads raw bytes through the internal buffer.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination for raw buffered bytes.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of bytes read; zero indicates EOF or an empty
+    /// destination.
+    ///
+    /// # Errors
+    ///
+    /// Propagates wrapped input or buffer errors.
     fn read(&mut self, output: &mut [u8]) -> Result<usize> {
         // SAFETY: The full output slice is a valid destination range.
         unsafe { self.read_unchecked(output, 0, output.len()) }
@@ -785,19 +948,44 @@ where
     I: Input<Item = u8> + Seekable<Unit = u8>,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
+    ///
+    /// # Parameters
+    ///
+    /// - `position`: Target byte-stream position.
+    ///
+    /// # Returns
+    ///
+    /// Returns the new byte offset after clearing buffered data.
+    ///
+    /// # Errors
+    ///
+    /// Propagates wrapped seek errors, preserving the buffer when seeking
+    /// fails.
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }
 }
 
-impl<I> fmt::Debug for TranscodeDecodeInput<I>
+impl<I> Debug for TranscodeDecodeInput<I>
 where
     I: Input,
     I::Item: Copy + Default,
-    BufferedInput<I>: fmt::Debug,
+    BufferedInput<I>: Debug,
 {
     /// Formats this buffered decode input for debugging.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatting sink receiving the struct and owned input.
+    ///
+    /// # Returns
+    ///
+    /// Returns success after writing the debug representation.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a formatting error from the sink or wrapped input.
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
         formatter
             .debug_struct("TranscodeDecodeInput")
             .field("input", &self.input)
@@ -806,6 +994,14 @@ where
 }
 
 /// Converts a capacity planning failure into an I/O error.
-fn capacity_to_io_error(error: crate::CapacityError) -> Error {
+///
+/// # Parameters
+///
+/// - `error`: Capacity failure preserved as the I/O error source.
+///
+/// # Returns
+///
+/// Returns an `InvalidData` I/O error owning the capacity failure.
+fn capacity_to_io_error(error: CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }

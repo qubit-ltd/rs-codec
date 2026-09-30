@@ -9,6 +9,7 @@
 
 use core::fmt;
 use core::num::NonZeroUsize;
+use core::result::Result as CoreResult;
 use std::collections::TryReserveError;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -53,8 +54,9 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::TranscodeEncodeOutput;
 /// use std::io::Cursor;
+///
+/// use qubit_codec::TranscodeEncodeOutput;
 ///
 /// let output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 8);
 /// assert!(output.spare_capacity() >= 8);
@@ -64,6 +66,7 @@ where
     O: Output,
     O::Item: Copy + Default,
 {
+    /// Owns the wrapped unit sink and pending encoded units awaiting delivery.
     output: BufferedOutput<O>,
 }
 
@@ -116,8 +119,11 @@ where
     ///
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
-    #[inline]
-    pub fn try_with_capacity(inner: O, capacity: usize) -> std::result::Result<Self, TryReserveError> {
+    ///
+    /// # Returns
+    ///
+    /// A buffered adapter owning `inner` on success.
+    pub fn try_with_capacity(inner: O, capacity: usize) -> CoreResult<Self, TryReserveError> {
         Ok(Self {
             output: BufferedOutput::try_with_capacity(inner, capacity)?,
         })
@@ -132,6 +138,7 @@ where
     ///
     /// A shared reference to the wrapped unit output.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &O {
         self.output.inner()
     }
@@ -142,6 +149,7 @@ where
     ///
     /// The number of output units that can still be appended without flushing.
     #[must_use]
+    #[inline]
     pub fn spare_capacity(&self) -> usize {
         self.output.spare_capacity()
     }
@@ -153,17 +161,23 @@ where
     /// The full backing storage, the spare start index, and the spare unit
     /// count.
     #[must_use]
+    #[inline]
     pub fn spare_raw_parts_mut(&mut self) -> (&mut [O::Item], usize, usize) {
         self.output.spare_raw_parts_mut()
     }
 
     /// Marks `count` units from [`Self::spare_raw_parts_mut`] as written.
     ///
+    /// # Parameters
+    ///
+    /// * `count` - Initialized units to commit from the spare window.
+    ///
     /// # Safety
     ///
     /// The caller must guarantee that `count <= Self::spare_capacity()` and
     /// that the corresponding units in the returned spare slice have been
     /// initialized.
+    #[inline]
     pub unsafe fn advance(&mut self, count: usize) {
         // SAFETY: The caller guarantees `count` and initialization invariants.
         unsafe { self.output.advance(count) }
@@ -188,14 +202,6 @@ where
         self.output.ensure_spare_capacity(count)
     }
 
-    /// Ensures enough output capacity for one non-zero required unit count.
-    ///
-    /// The non-zero wrapper preserves the engine's progress contract while
-    /// this adapter performs any necessary allocation.
-    fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
-        self.ensure_spare_capacity(required.get())
-    }
-
     /// Consumes this adapter without flushing the wrapped output.
     ///
     /// This method does not call [`Self::flush`] and performs no I/O. Pending
@@ -206,6 +212,7 @@ where
     ///
     /// The wrapped output and the buffer holding pending units.
     #[must_use = "the returned output and pending buffer must be handled"]
+    #[inline]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }
@@ -223,6 +230,11 @@ where
     ///
     /// The method grows the persistent internal buffer when necessary, then
     /// writes the complete encoded value into its spare window.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `C` - Codec producing the wrapped output unit type.
+    /// * `M` - Mapper from codec errors into I/O errors.
     ///
     /// # Parameters
     ///
@@ -275,6 +287,17 @@ where
     /// This method reserves enough persistent buffer capacity for all reset
     /// output before calling `encoder`. It does not flush pending units.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Transcoder producing the wrapped output unit type.
+    /// * `M` - Mapper from transcoder errors into I/O errors.
+    /// * `Value` - Source value type accepted by the transcoder.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Transcoder whose stream prefix is being collected.
+    /// * `map_error` - Mapper for reset failures.
+    ///
     /// # Errors
     ///
     /// Returns capacity errors, allocation errors, or reset errors mapped by
@@ -312,6 +335,12 @@ where
     /// grows it for any larger `NeedOutput.required` value reported by
     /// `encoder`.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output unit type.
+    /// * `M` - Mapper from encoder errors into I/O errors.
+    /// * `Value` - Source value type accepted by the encoder.
+    ///
     /// # Parameters
     ///
     /// * `encoder` - Streaming encoder used for this operation.
@@ -334,10 +363,14 @@ where
     /// be passed to this method.
     ///
     /// ```compile_fail
-    /// use qubit_codec::{
-    ///     CapacityError, TranscodeEncodeError, TranscodeEncodeOutput,
-    ///     TranscodeProgress, Transcoder,
-    /// };
+    /// use std::io::Error;
+    /// use std::io::sink;
+    ///
+    /// use qubit_codec::CapacityError;
+    /// use qubit_codec::TranscodeEncodeError;
+    /// use qubit_codec::TranscodeEncodeOutput;
+    /// use qubit_codec::TranscodeProgress;
+    /// use qubit_codec::Transcoder;
     ///
     /// struct GenericTranscoder;
     ///
@@ -380,9 +413,9 @@ where
     ///     }
     /// }
     ///
-    /// let mut output = TranscodeEncodeOutput::with_capacity(std::io::sink(), 1);
+    /// let mut output = TranscodeEncodeOutput::with_capacity(sink(), 1);
     /// let mut transcoder = GenericTranscoder;
-    /// let mut map_error = |_| std::io::Error::other("transcode error");
+    /// let mut map_error = |_| Error::other("transcode error");
     /// let _ = output.transcode(
     ///     &mut transcoder,
     ///     &mut map_error,
@@ -460,6 +493,12 @@ where
     /// growing it when [`Transcoder::max_finish_output_len`] exceeds the
     /// current capacity.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Transcoder producing the wrapped output unit type.
+    /// * `M` - Mapper from transcoder errors into I/O errors.
+    /// * `Value` - Source value type accepted by the transcoder.
+    ///
     /// # Parameters
     ///
     /// * `encoder` - Encoder whose final units are being collected.
@@ -469,6 +508,10 @@ where
     ///
     /// Returns capacity, transcode finalization, or wrapped output flush
     /// errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the encoder exceeds its declared finish-output bound.
     pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
@@ -483,6 +526,12 @@ where
     /// This method separates encoder finalization from output delivery. It is
     /// useful when a caller must record successful finalization before a later
     /// flush can fail. Call [`Self::flush`] to deliver the retained units.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Transcoder producing the wrapped output unit type.
+    /// * `M` - Mapper from transcoder errors into I/O errors.
+    /// * `Value` - Source value type accepted by the transcoder.
     ///
     /// # Parameters
     ///
@@ -521,6 +570,22 @@ where
         }
         Ok(())
     }
+
+    /// Ensures enough output capacity for one non-zero required unit count.
+    ///
+    /// The non-zero wrapper preserves the engine's progress contract while
+    /// this adapter performs any necessary allocation.
+    ///
+    /// # Parameters
+    ///
+    /// * `required` - Minimum writable unit count requested by the engine.
+    ///
+    /// # Errors
+    ///
+    /// Propagates buffer allocation or wrapped-output flush errors.
+    fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
+        self.ensure_spare_capacity(required.get())
+    }
 }
 
 impl<O> TranscodeEncodeOutput<O>
@@ -549,12 +614,37 @@ impl<O> Write for TranscodeEncodeOutput<O>
 where
     O: Output<Item = u8>,
 {
-    /// Writes raw bytes through the internal buffer.
+    /// Writes raw bytes through the internal buffer without encoding them.
+    ///
+    /// # Parameters
+    ///
+    /// * `input` - Bytes to append to the buffered unit output.
+    ///
+    /// # Returns
+    ///
+    /// The number of bytes accepted, which may be shorter than `input`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates wrapped-output errors when buffer delivery is needed.
     fn write(&mut self, input: &[u8]) -> Result<usize> {
         Output::write(&mut self.output, input)
     }
 
-    /// Writes all raw bytes through the internal buffer.
+    /// Writes all raw bytes through the internal buffer without encoding them.
+    ///
+    /// # Parameters
+    ///
+    /// * `input` - Bytes that must all be accepted before success.
+    ///
+    /// # Errors
+    ///
+    /// Propagates output errors and returns `WriteZero` if output stops
+    /// progressing.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the wrapped output reports more bytes than supplied.
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
         let mut written = 0;
         while written < input.len() {
@@ -571,7 +661,12 @@ where
         Ok(())
     }
 
-    /// Flushes buffered bytes to the wrapped output.
+    /// Flushes buffered bytes to the wrapped output without finishing an
+    /// encoder.
+    ///
+    /// # Errors
+    ///
+    /// Propagates wrapped-output flush errors.
     fn flush(&mut self) -> Result<()> {
         TranscodeEncodeOutput::flush(self)
     }
@@ -582,6 +677,18 @@ where
     O: Output<Item = u8> + Seekable<Unit = u8>,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
+    ///
+    /// # Parameters
+    ///
+    /// * `position` - Target position relative to the selected seek origin.
+    ///
+    /// # Returns
+    ///
+    /// The new absolute byte position.
+    ///
+    /// # Errors
+    ///
+    /// Propagates flush or seek errors from the wrapped output.
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }
@@ -593,7 +700,15 @@ where
     O::Item: Copy + Default,
     BufferedOutput<O>: fmt::Debug,
 {
-    /// Formats this buffered encode output for debugging.
+    /// Formats the owned buffer and underlying output for diagnostics.
+    ///
+    /// # Parameters
+    ///
+    /// * `formatter` - Destination and formatting options.
+    ///
+    /// # Errors
+    ///
+    /// Returns a formatting error if the destination rejects output.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TranscodeEncodeOutput")
@@ -602,14 +717,42 @@ where
     }
 }
 
-/// Maps a streaming capacity error into an I/O error.
+/// Wraps a streaming capacity failure as `InvalidData`, retaining its source.
+///
+/// # Parameters
+///
+/// * `error` - Capacity planning failure from a streaming transcoder.
+///
+/// # Returns
+///
+/// An owned I/O error carrying the original capacity error.
 fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
-/// Maps a one-value codec result into the I/O surface used by this adapter.
+/// Preserves successful values and maps one-value failures into I/O errors.
+///
+/// # Type Parameters
+///
+/// * `T` - Successful result value.
+/// * `E` - Codec-domain error passed to the mapper.
+/// * `Value` - Source value type carried by an unencodable error.
+///
+/// # Parameters
+///
+/// * `result` - Codec lifecycle result to translate.
+/// * `map_error` - Called only for a codec-domain failure.
+///
+/// # Returns
+///
+/// The original successful value without transformation.
+///
+/// # Errors
+///
+/// Returns mapped domain errors or `InvalidInput` for bounds and domain
+/// rejection.
 fn map_encode_value_result<T, E, Value>(
-    result: core::result::Result<T, TranscodeEncodeError<E, Value>>,
+    result: CoreResult<T, TranscodeEncodeError<E, Value>>,
     map_error: &mut dyn FnMut(E) -> Error,
 ) -> Result<T> {
     match result {
@@ -618,8 +761,22 @@ fn map_encode_value_result<T, E, Value>(
     }
 }
 
-/// Maps one-value codec encode errors into the I/O surface used by this
-/// adapter.
+/// Maps domain failures through the caller and other failures to
+/// `InvalidInput`.
+///
+/// # Type Parameters
+///
+/// * `E` - Codec-domain error passed to the mapper.
+/// * `Value` - Rejected source value type, discarded during I/O translation.
+///
+/// # Parameters
+///
+/// * `error` - Encoding failure consumed by this translation.
+/// * `map_error` - Invoked only for the `Domain` variant.
+///
+/// # Returns
+///
+/// An I/O error retaining mapped domain detail or a bound/rejection message.
 #[inline(never)]
 fn map_encode_value_error<E, Value>(
     error: TranscodeEncodeError<E, Value>,

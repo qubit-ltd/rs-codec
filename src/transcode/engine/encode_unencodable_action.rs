@@ -10,6 +10,10 @@
 use crate::Codec;
 
 /// Unencodable-value action for a codec-backed encode hook.
+///
+/// # Type Parameters
+///
+/// - `C`: Codec whose associated `Value` is carried by replacement actions.
 pub type EncodeUnencodableActionOf<C> = EncodeUnencodableAction<<C as Codec>::Value>;
 
 /// Action selected after a codec reports an unencodable input value.
@@ -59,7 +63,7 @@ impl<Value> EncodeUnencodableAction<Value> {
     /// # Returns
     ///
     /// Returns [`Self::Reject`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn reject() -> Self {
         Self::Reject
@@ -74,7 +78,7 @@ impl<Value> EncodeUnencodableAction<Value> {
     /// # Returns
     ///
     /// Returns [`Self::Replace`] carrying `value`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn replace(value: Value) -> Self {
         Self::Replace { value }

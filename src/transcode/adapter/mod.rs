@@ -7,13 +7,12 @@
 // =============================================================================
 
 mod codec_transcode_converter;
-mod codec_transcode_decode_hooks;
 mod codec_transcode_decoder;
-mod codec_transcode_encode_hooks;
 mod codec_transcode_encoder;
+mod internal;
 
 pub use codec_transcode_converter::CodecTranscodeConverter;
-pub(in crate::transcode) use codec_transcode_decode_hooks::CodecTranscodeDecodeHooks;
 pub use codec_transcode_decoder::CodecTranscodeDecoder;
-pub(in crate::transcode) use codec_transcode_encode_hooks::CodecTranscodeEncodeHooks;
 pub use codec_transcode_encoder::CodecTranscodeEncoder;
+pub(in crate::transcode) use internal::CodecTranscodeDecodeHooks;
+pub(in crate::transcode) use internal::CodecTranscodeEncodeHooks;

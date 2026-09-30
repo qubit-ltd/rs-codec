@@ -20,7 +20,7 @@ use crate::Codec;
 use crate::DecodeFailure;
 
 /// Drives one codec decode operation against persistent buffered input.
-pub(super) struct CodecDecodeDriver<'a, I>
+pub(in crate::transcode::io) struct CodecDecodeDriver<'a, I>
 where
     I: Input,
     I::Item: Copy + Default,
@@ -35,13 +35,53 @@ where
     I::Item: Copy + Default,
 {
     /// Creates a one-value decode driver over `input`.
-    #[inline(always)]
-    pub(super) const fn new(input: &'a mut BufferedInput<I>) -> Self {
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Buffered unit input shared with the public adapter. The
+    ///   borrow keeps every unit this driver consumes inside that buffer.
+    ///
+    /// # Returns
+    ///
+    /// Returns a driver that decodes exactly one value per `read_one` call.
+    #[inline]
+    #[must_use]
+    pub(in crate::transcode::io) const fn new(input: &'a mut BufferedInput<I>) -> Self {
         Self { input }
     }
 
     /// Reads one decoded value after codec lifecycle reset completed.
-    pub(super) fn read_one<C, M>(&mut self, codec: &mut C, map_error: &mut M) -> Result<C::Value>
+    ///
+    /// The driver fills the shared buffer until the codec minimum is
+    /// available, retries after an incomplete report, and switches to
+    /// `Codec::decode_eof` once the underlying input is exhausted.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec whose decode entry points read the prepared window.
+    /// - `map_error`: Converts a codec decode error into the reported I/O
+    ///   error; it is called at most once per call.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded value after consuming exactly the units the codec
+    /// reported as read.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::UnexpectedEof` when the input ends before one
+    /// complete value is available, `ErrorKind::InvalidData` when the codec
+    /// reports consumption beyond the unread window or reports incomplete
+    /// input inside a window that is already large enough, the allocation
+    /// error when the buffer cannot grow, and the mapped codec error when the
+    /// codec rejects the input.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a codec reports `DecodeFailure::Incomplete` with a
+    /// `required_total` above `Codec::MAX_DECODE_UNITS_PER_VALUE`, which
+    /// violates the codec contract.
+    pub(in crate::transcode::io) fn read_one<C, M>(&mut self, codec: &mut C, map_error: &mut M) -> Result<C::Value>
     where
         C: Codec<Unit = I::Item>,
         M: FnMut(C::DecodeError) -> Error,
@@ -138,6 +178,29 @@ where
     }
 
     /// Prepares the buffered window for one codec decode attempt.
+    ///
+    /// The buffer is filled up to the codec minimum first, then
+    /// opportunistically up to the codec maximum without exceeding the
+    /// existing buffer capacity. All unread units are consumed before
+    /// reporting the unexpected end of input, so the caller never observes
+    /// a partially drained window.
+    ///
+    /// # Parameters
+    ///
+    /// - `min_units_per_value`: Smallest unit count one codec attempt may read.
+    /// - `max_units_per_value`: Largest unit count one codec attempt may read.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of leading unread units the codec may read together
+    /// with whether the underlying input is exhausted, which selects
+    /// `Codec::decode` or `Codec::decode_eof`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::UnexpectedEof` when fewer than `min_units_per_value`
+    /// units remain after refilling, and propagates buffer fill or allocation
+    /// failures from the underlying input.
     fn prepare_buffered_window(
         &mut self,
         min_units_per_value: usize,
@@ -167,6 +230,21 @@ where
     }
 
     /// Accepts a decoded value and consumes its source units.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Value produced by the codec for the prepared window.
+    /// - `consumed`: Non-zero unit count the codec reported as read.
+    /// - `available`: Unit count the codec was allowed to read.
+    ///
+    /// # Returns
+    ///
+    /// Returns `value` after the consumed units are removed from the buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::InvalidData` when `consumed` exceeds `available`,
+    /// because that consumption would move the window past its own bounds.
     fn accept<Value>(&mut self, value: Value, consumed: NonZeroUsize, available: usize) -> Result<Value> {
         if consumed.get() > available {
             return Err(Error::new(
@@ -183,6 +261,24 @@ where
     }
 
     /// Refills after the codec reports incomplete input.
+    ///
+    /// # Parameters
+    ///
+    /// - `required_total`: Total unit count the codec needs to make progress.
+    /// - `available`: Unit count already readable before this refill.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` when the buffer now holds `required_total` units and the
+    /// decode attempt should be retried, and `false` when the input is
+    /// exhausted first.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::InvalidData` when the codec already had
+    /// `required_total` units readable, which contradicts an incomplete report,
+    /// and propagates buffer growth and fill failures from the underlying
+    /// input.
     fn refill_after_incomplete(&mut self, required_total: NonZeroUsize, available: usize) -> Result<bool> {
         let required_total = required_total.get();
         if available >= required_total {
@@ -198,6 +294,23 @@ where
     }
 
     /// Rejects invalid codec input and applies its consumption hint.
+    ///
+    /// The optional consumption hint is honored first so the mapped error
+    /// describes a window that already advanced past the rejected units.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Codec decode error reported for the prepared window.
+    /// - `consumed`: Optional unit count the codec reported as read before
+    ///   failing.
+    /// - `available`: Unit count the codec was allowed to read.
+    /// - `map_error`: Converts `source` into the reported I/O error.
+    ///
+    /// # Errors
+    ///
+    /// Always returns an error. Returns `ErrorKind::InvalidData` when the
+    /// consumption hint exceeds `available` without calling `map_error`,
+    /// otherwise the error produced by `map_error`.
     fn reject<C, M>(
         &mut self,
         source: C::DecodeError,

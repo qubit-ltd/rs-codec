@@ -12,6 +12,10 @@ use core::num::NonZeroUsize;
 use crate::Codec;
 
 /// Invalid-decode action for a codec-backed decode hook.
+///
+/// # Type Parameters
+///
+/// - `C`: Codec whose decoded value is carried by replacement actions.
 pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
 
 /// Action selected after a codec reports invalid encoded input.
@@ -28,6 +32,7 @@ pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
 ///
 /// ```
 /// use core::num::NonZeroUsize;
+///
 /// use qubit_codec::engine::DecodeInvalidAction;
 ///
 /// let action = DecodeInvalidAction::<u8>::Skip {
@@ -37,6 +42,7 @@ pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum DecodeInvalidAction<Value> {
     /// Reject the current invalid input.
     ///
@@ -81,7 +87,7 @@ impl<Value> DecodeInvalidAction<Value> {
     /// # Panics
     ///
     /// Panics when `available == 0` or when `consumed > available`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(super) fn bound_consumed(consumed: NonZeroUsize, available: usize) -> NonZeroUsize {
         assert!(available > 0, "DecodeInvalidAction cannot consume empty input",);

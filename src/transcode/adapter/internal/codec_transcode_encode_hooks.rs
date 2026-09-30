@@ -7,9 +7,9 @@
 // =============================================================================
 //! Policy hooks used by the default codec-backed buffered encoder.
 
-use super::super::engine::EncodeContext;
-use super::super::engine::EncodeUnencodableAction;
-use super::super::engine::TranscodeEncodeHooks;
+use super::super::super::engine::EncodeContext;
+use super::super::super::engine::EncodeUnencodableAction;
+use super::super::super::engine::TranscodeEncodeHooks;
 use crate::Codec;
 use crate::TranscodeEncodeErrorOf;
 
@@ -22,7 +22,24 @@ where
     C: Codec,
 {
     /// Rejects values outside the wrapped codec's encodable domain.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// * `_codec` - The codec reporting the value; it is not inspected or
+    ///   mutated.
+    /// * `_context` - The rejected value and progress, unused by this fixed
+    ///   policy.
+    ///
+    /// # Returns
+    ///
+    /// Always returns `Ok(EncodeUnencodableAction::Reject)` without side
+    /// effects.
+    ///
+    /// # Errors
+    ///
+    /// This policy never returns an error directly; the engine applies
+    /// rejection.
+    #[inline]
     fn handle_unencodable_encode(
         &mut self,
         _codec: &mut C,

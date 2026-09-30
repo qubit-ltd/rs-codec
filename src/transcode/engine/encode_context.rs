@@ -29,9 +29,13 @@
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct EncodeContext<'a, Value> {
+    /// Value borrowed for the lifetime of this policy context.
     input_value: &'a Value,
+    /// Absolute input position of the borrowed value.
     input_index: usize,
+    /// Absolute output cursor at the start of the encode attempt.
     output_index: usize,
+    /// Number of writable output units remaining at the cursor.
     available_output: usize,
 }
 
@@ -48,7 +52,7 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// Returns a read-only encode context.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn new(input_value: &'a Value, input_index: usize, output_index: usize, available_output: usize) -> Self {
         Self {
@@ -60,28 +64,44 @@ impl<'a, Value> EncodeContext<'a, Value> {
     }
 
     /// Returns the input value being encoded.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The input value borrowed through this context without allocation.
+    #[inline]
     #[must_use]
     pub const fn input_value(&self) -> &Value {
         self.input_value
     }
 
     /// Returns the absolute input index of the current value.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The absolute position of the value in the input sequence.
+    #[inline]
     #[must_use]
     pub const fn input_index(&self) -> usize {
         self.input_index
     }
 
     /// Returns the absolute output index where writing begins.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The starting output cursor for this encode attempt.
+    #[inline]
     #[must_use]
     pub const fn output_index(&self) -> usize {
         self.output_index
     }
 
     /// Returns output capacity visible to this encode attempt.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// The number of output units available from the starting cursor.
+    #[inline]
     #[must_use]
     pub const fn available_output(&self) -> usize {
         self.available_output

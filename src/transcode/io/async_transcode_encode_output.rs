@@ -46,19 +46,40 @@ use crate::Transcoder;
 /// # Examples
 ///
 /// ```
+/// use std::io::Result;
+/// use std::pin::Pin;
+/// use std::task::Context;
+/// use std::task::Poll;
+///
 /// use qubit_codec::AsyncTranscodeEncodeOutput;
 /// use qubit_io::AsyncOutput;
 ///
-/// fn make_output<O: AsyncOutput<Item = u8>>(inner: O) -> AsyncTranscodeEncodeOutput<O> {
-///     AsyncTranscodeEncodeOutput::new(inner)
+/// struct Sink;
+/// impl AsyncOutput for Sink {
+///     type Item = u8;
+///     unsafe fn poll_write_unchecked(
+///         self: Pin<&mut Self>, _: &mut Context<'_>, _: &[u8], _: usize, count: usize,
+///     ) -> Poll<Result<usize>> {
+///         Poll::Ready(Ok(count))
+///     }
+///     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+///         Poll::Ready(Ok(()))
+///     }
 /// }
+/// let output = AsyncTranscodeEncodeOutput::with_capacity(Sink, 8);
+/// assert!(output.capacity() >= 8);
+/// assert_eq!(output.pending_len(), 0);
+/// let (_sink, pending) = output.into_parts();
+/// assert!(pending.is_empty());
 /// ```
 pub struct AsyncTranscodeEncodeOutput<O>
 where
     O: AsyncOutput,
     O::Item: Clone + Default,
 {
+    /// Owned output buffer retaining units until the wrapped sink accepts them.
     output: AsyncBufferedOutput<O>,
+    /// Minimum spare units requested by the previous encoder progress report.
     required_spare: usize,
 }
 
@@ -104,6 +125,16 @@ where
 
     /// Tries to create an adapter with at least `capacity` buffered units.
     ///
+    /// # Parameters
+    ///
+    /// * `inner` - Output moved into the adapter, including on allocation
+    ///   failure.
+    /// * `capacity` - Minimum number of units to reserve.
+    ///
+    /// # Returns
+    ///
+    /// Returns an empty buffered adapter on successful allocation.
+    ///
     /// # Errors
     ///
     /// Returns an allocation error when the internal unit buffer cannot be
@@ -116,7 +147,12 @@ where
     }
 
     /// Returns the total internal unit-buffer capacity.
+    ///
+    /// # Returns
+    ///
+    /// The allocated unit capacity, including occupied and spare slots.
     #[must_use]
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.output.capacity()
     }
@@ -127,6 +163,7 @@ where
     ///
     /// Returns the wrapped output. Units can still be pending in this adapter.
     #[must_use]
+    #[inline]
     pub const fn inner(&self) -> &O {
         self.output.inner()
     }
@@ -140,6 +177,8 @@ where
     /// # Returns
     ///
     /// Returns the wrapped output.
+    #[must_use]
+    #[inline]
     pub fn inner_mut(&mut self) -> &mut O {
         self.output.inner_mut()
     }
@@ -150,6 +189,7 @@ where
     ///
     /// Returns the length of the pending unit window.
     #[must_use]
+    #[inline]
     pub const fn pending_len(&self) -> usize {
         self.output.pending_len()
     }
@@ -163,6 +203,7 @@ where
     ///
     /// Returns the wrapped output and its pending unit buffer.
     #[must_use = "the returned output and pending buffer must be handled"]
+    #[inline]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {
         self.output.into_parts()
     }
@@ -175,6 +216,11 @@ where
 {
     /// Flushes pending transcoded units and the wrapped asynchronous output.
     ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after pending units are delivered and the sink is
+    /// flushed.
+    ///
     /// # Errors
     ///
     /// Returns output-delivery or flush errors from the wrapped output. A
@@ -184,6 +230,10 @@ where
     }
 
     /// Delivers pending transcoded units without flushing the wrapped output.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` when the pending buffer is empty.
     ///
     /// # Errors
     ///
@@ -196,10 +246,20 @@ where
 
     /// Runs encoder reset and buffers its stream-prefix units.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output item type.
+    /// * `M` - Error mapper invoked for encoder failures.
+    /// * `Value` - Logical input value type accepted by the encoder.
+    ///
     /// # Parameters
     ///
     /// * `encoder` - Streaming encoder whose lifecycle is being started.
     /// * `map_error` - Maps transcoder errors into I/O errors.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` with the reset prefix retained in the buffer.
     ///
     /// # Errors
     ///
@@ -235,8 +295,15 @@ where
     /// poll. The returned [`TranscodeProgress`] is therefore the exact source
     /// range committed by this call.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output item type.
+    /// * `M` - Error mapper invoked for encoder failures.
+    /// * `Value` - Logical input value type accepted by the encoder.
+    ///
     /// # Parameters
     ///
+    /// * `cx` - Task context used by the sink to register readiness.
     /// * `encoder` - Streaming encoder used for the conversion.
     /// * `map_error` - Maps transcoder errors into I/O errors.
     /// * `input` - Source values.
@@ -245,7 +312,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns one validated encoder progress report.
+    /// Returns `Pending` while making output space, without consuming input,
+    /// or `Ready` with one validated encoder progress report or an error.
     ///
     /// # Errors
     ///
@@ -325,6 +393,30 @@ where
     /// one encoder invocation; callers that need to consume a whole source
     /// range must advance the source index by [`TranscodeProgress::read`] and
     /// call it again.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output item type.
+    /// * `M` - Error mapper invoked for encoder failures.
+    /// * `Value` - Logical input value type accepted by the encoder.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder invoked once after output space is available.
+    /// * `map_error` - Maps encoder errors to I/O errors.
+    /// * `input` - Source values borrowed for this operation.
+    /// * `input_index` - Starting source offset.
+    /// * `count` - Number of source values available at that offset.
+    ///
+    /// # Returns
+    ///
+    /// One validated progress report describing committed source consumption.
+    ///
+    /// # Errors
+    ///
+    /// Returns range, capacity, allocation, delivery, contract or mapped
+    /// encoder errors, with pending units retained as described by
+    /// `poll_transcode`.
     pub async fn transcode_async<E, M, Value>(
         &mut self,
         encoder: &mut E,
@@ -342,17 +434,28 @@ where
 
     /// Finishes the encoder and retains its final output for delivery.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output item type.
+    /// * `M` - Error mapper invoked for encoder failures.
+    /// * `Value` - Logical input value type accepted by the encoder.
+    ///
     /// # Parameters
     ///
     /// * `encoder` - Streaming encoder whose lifecycle is being finished.
     /// * `map_error` - Maps transcoder errors into I/O errors.
     ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` after final units are committed to the buffer.
+    ///
     /// # Errors
     ///
-    /// Returns capacity planning, allocation, or mapped finish errors. Call
-    /// [`Self::flush_async`] after this method to deliver final units. Keeping
-    /// finalization separate from delivery lets a caller record the completed
-    /// lifecycle before any later suspension point.
+    /// Returns capacity planning, output delivery, allocation, or mapped finish
+    /// errors. Call [`Self::flush_async`] after this method to deliver
+    /// final units. Keeping finalization separate from delivery lets a
+    /// caller record the completed lifecycle before any later suspension
+    /// point.
     ///
     /// # Panics
     ///
@@ -379,6 +482,19 @@ where
 
     /// Reserves enough total buffer capacity and makes `count` spare slots
     /// available for one transcoder operation.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` - Minimum spare units needed after any pending delivery.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the requested spare capacity is available.
+    ///
+    /// # Errors
+    ///
+    /// Returns allocation or wrapped output errors; undelivered units remain
+    /// buffered.
     async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
         let required_capacity = self.output.pending_len().saturating_add(count);
         self.output
@@ -389,6 +505,15 @@ where
 }
 
 /// Converts capacity planning failures into invalid asynchronous stream data.
+///
+/// # Parameters
+///
+/// * `error` - Capacity failure retained as the source of the I/O error.
+///
+/// # Returns
+///
+/// An `InvalidData` error owning the capacity failure.
+#[must_use]
 fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
@@ -400,6 +525,19 @@ where
     AsyncBufferedOutput<O>: fmt::Debug,
 {
     /// Formats this asynchronous output adapter for debugging.
+    ///
+    /// # Parameters
+    ///
+    /// * `formatter` - Destination for the adapter and wrapped buffer
+    ///   description.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after the description is written.
+    ///
+    /// # Errors
+    ///
+    /// Propagates errors reported by the formatter.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("AsyncTranscodeEncodeOutput")

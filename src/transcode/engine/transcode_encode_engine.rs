@@ -50,22 +50,17 @@ use crate::codec::assert_unit_bounds;
 /// # Examples
 ///
 /// ```rust
-/// use core::{
-///     convert::Infallible,
-///     num::NonZeroUsize,
-/// };
-/// use qubit_codec::{
-///     Codec,
-///     TranscodeEncodeErrorOf,
-///     DecodeFailure,
-///     TranscodeStatus,
-/// };
-/// use qubit_codec::engine::{
-///     EncodeContext,
-///     EncodeUnencodableAction,
-///     TranscodeEncodeEngine,
-///     TranscodeEncodeHooks,
-/// };
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+///
+/// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeEncodeErrorOf;
+/// use qubit_codec::TranscodeStatus;
+/// use qubit_codec::engine::EncodeContext;
+/// use qubit_codec::engine::EncodeUnencodableAction;
+/// use qubit_codec::engine::TranscodeEncodeEngine;
+/// use qubit_codec::engine::TranscodeEncodeHooks;
 ///
 /// #[derive(Clone, Copy)]
 /// struct ByteCodec;
@@ -137,7 +132,9 @@ use crate::codec::assert_unit_bounds;
 /// - `H`: Policy hook object used by the engine.
 #[derive(Debug)]
 pub struct TranscodeEncodeEngine<C, H> {
+    /// Owned codec carrying the encode-side stream state.
     codec: C,
+    /// Owned policy hooks for unsupported values and lifecycle output.
     hooks: H,
     /// Guard for the `reset → transcode* → finish` lifecycle in every build
     /// profile.
@@ -182,7 +179,7 @@ where
     /// # Returns
     ///
     /// Returns a shared reference to the codec owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn codec(&self) -> &C {
         &self.codec
@@ -193,7 +190,7 @@ where
     /// # Returns
     ///
     /// Returns a mutable reference to the codec owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
@@ -204,7 +201,7 @@ where
     /// # Returns
     ///
     /// Returns a shared reference to the hook object owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn hooks(&self) -> &H {
         &self.hooks
@@ -215,7 +212,7 @@ where
     /// # Returns
     ///
     /// Returns a mutable reference to the hook object owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn hooks_mut(&mut self) -> &mut H {
         &mut self.hooks
@@ -250,9 +247,12 @@ where
     ///
     /// # Returns
     ///
-    /// a conservative upper bound for output units, or a capacity error on
-    /// arithmetic overflow.
-    #[inline(always)]
+    /// Returns a conservative upper bound for output units.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when hook planning overflows.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
@@ -262,8 +262,8 @@ where
     ///
     /// # Returns
     ///
-    /// the codec's reset-output upper bound.
-    #[inline(always)]
+    /// Returns the codec's reset-output upper bound. This query never fails.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(C::MAX_ENCODE_RESET_UNITS)
@@ -281,8 +281,12 @@ where
     ///
     /// # Returns
     ///
-    /// the combined codec-finish and hook-finish output bound.
-    #[inline(always)]
+    /// Returns the combined codec-finish and hook-finish output bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         C::MAX_ENCODE_FINISH_UNITS
@@ -305,9 +309,12 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the complete-stream output bound, or a capacity error on
-    /// arithmetic overflow.
-    #[inline(never)]
+    /// Returns the complete-stream output bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error if a component query or their sum overflows.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
@@ -337,6 +344,10 @@ where
     /// hook reset handling fails. Capacity and index failures occur before any
     /// reset state is changed. Once reset execution starts, an error poisons
     /// the engine until a later reset succeeds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec reports reset output beyond its declared bound.
     pub fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         let required = self.max_reset_output_len()?;
         TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
@@ -372,15 +383,20 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when `input_index` is outside `input`, when
-    /// `output_index` is outside `output`, or when hook planning or writing
-    /// rejects a value. Returns
+    /// Returns framework errors when `input_index` is outside `input` or
+    /// `output_index` is outside `output`, and domain errors when codec or
+    /// hook processing fails or rejects a value. Returns
     /// [`TranscodeFailure::TranscodeBeforeReset`] when the engine has not
     /// completed its first reset. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
     /// failed after execution started.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec violates its declared encode length or hooks
+    /// return an unencodable replacement.
     pub fn transcode(
         &mut self,
         input: &[C::Value],
@@ -489,6 +505,12 @@ where
     ///
     /// Returns framework errors for insufficient output or capacity overflow,
     /// and domain errors from reset, encode, or finish.
+    ///
+    /// # Panics
+    ///
+    /// Panics if codec or hook implementations violate the output or
+    /// replacement contracts of [`Self::reset`], [`Self::transcode`], or
+    /// [`Self::finish`].
     #[inline]
     pub fn transcode_complete_into(
         &mut self,
@@ -505,7 +527,8 @@ where
     ///
     /// # Parameters
     ///
-    /// - `context`: Encode context for the current value.
+    /// - `attempt`: Current value, absolute indices, and writable output
+    ///   buffer.
     ///
     /// # Returns
     ///
@@ -515,6 +538,11 @@ where
     ///
     /// Returns an engine-domain error when the codec fails or when the hook
     /// rejects an unencodable value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec violates its encode length contract or hooks
+    /// supply an unencodable replacement.
     pub(in crate::transcode) fn encode_one(
         &mut self,
         attempt: EncodeAttempt<'_, C::Value, C::Unit>,
@@ -537,7 +565,8 @@ where
     ///
     /// # Parameters
     ///
-    /// - `context`: Encode context for the current value.
+    /// - `attempt`: Current value, absolute indices, and writable output
+    ///   buffer.
     ///
     /// # Returns
     ///
@@ -584,7 +613,8 @@ where
     /// # Parameters
     ///
     /// - `action`: Policy action selected by the encode hooks.
-    /// - `context`: Encode context for the rejected input value.
+    /// - `attempt`: Rejected value, absolute indices, and writable output
+    ///   buffer.
     ///
     /// # Returns
     ///
@@ -592,8 +622,14 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a codec error when replacement encoding fails.
-    #[inline(always)]
+    /// Returns an unencodable-value error for rejection, or a codec-domain
+    /// error when replacement encoding fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if replacement encoding violates the codec length contract or
+    /// the replacement cannot be encoded.
+    #[inline]
     fn apply_unencodable_action(
         &mut self,
         action: EncodeUnencodableAction<C::Value>,
@@ -616,7 +652,8 @@ where
     /// # Parameters
     ///
     /// - `value`: Replacement value selected by hooks.
-    /// - `context`: Encode context for the original unencodable input value.
+    /// - `attempt`: Original value, absolute indices, and writable output
+    ///   buffer.
     ///
     /// # Returns
     ///
@@ -676,7 +713,7 @@ where
     /// # Returns
     ///
     /// Returns an engine with default codec and hooks.
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self::new(C::default(), H::default())
     }
@@ -687,36 +724,131 @@ where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
 {
+    /// Logical values borrowed from the caller during encoding.
     type Input = C::Value;
+    /// Encoded storage units written into caller-owned buffers.
     type Output = C::Unit;
+    /// Framework failures or codec-domain errors from encoding.
     type Error = TranscodeEncodeErrorOf<C>;
 
-    /// Returns an upper bound for units produced from `input_len` values.
-    #[inline(always)]
+    /// Gets a conservative upper bound for output units needed for
+    /// `input_len` values.
+    ///
+    /// This bound covers only the streaming encode phase. It is delegated to
+    /// [`TranscodeEncodeHooks::max_transcode_output_len`], so it includes hook
+    /// policy and is valid for every reachable transient codec and hook state.
+    /// Downstream encoders must use this engine-level API for capacity planning
+    /// instead of recomputing the bound from [`Codec`] constants.
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of input values the caller plans to encode.
+    ///
+    /// # Returns
+    ///
+    /// Returns a conservative upper bound for output units.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when hook planning overflows.
+    #[inline]
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeEncodeEngine::max_transcode_output_len(self, input_len)
     }
 
-    /// Returns the maximum units emitted when resetting stream state.
-    #[inline(always)]
+    /// Gets the global maximum output units emitted by stream reset.
+    ///
+    /// # Returns
+    ///
+    /// Returns the codec's reset-output upper bound. This query never fails.
+    #[inline]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeEncodeEngine::max_reset_output_len(self)
     }
 
-    /// Returns the maximum units emitted by finishing internal state.
-    #[inline(always)]
+    /// Gets the global maximum output units emitted by finishing codec and hook
+    /// state.
+    ///
+    /// Returns the sum of [`Codec::MAX_ENCODE_FINISH_UNITS`] and the
+    /// hook-provided final-output bound. The codec finish portion covers units
+    /// written by [`Codec::encode_finish`]; hook implementations must not
+    /// include that portion in
+    /// [`TranscodeEncodeHooks::max_finish_output_len`]. Both component bounds
+    /// cover every reachable transient state.
+    ///
+    /// # Returns
+    ///
+    /// Returns the combined codec-finish and hook-finish output bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
+    #[inline]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeEncodeEngine::max_finish_output_len(self)
     }
 
     /// Resets codec encode state, hook-owned state, and stream-start output.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Complete output unit slice visible to the encoder.
+    /// - `output_index`: Absolute output unit index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of reset units written.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors when the caller provides invalid or
+    /// insufficient output capacity. Returns domain errors when codec reset or
+    /// hook reset handling fails. Capacity and index failures occur before any
+    /// reset state is changed. Once reset execution starts, an error poisons
+    /// the engine until a later reset succeeds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec reports reset output beyond its declared bound.
+    #[inline]
     fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         TranscodeEncodeEngine::reset(self, output, output_index)
     }
 
-    /// Encodes input values into caller-provided output units.
-    #[inline(always)]
+    /// Encodes values into a caller-provided output buffer.
+    ///
+    /// The engine stops before consuming the next input value when the current
+    /// output buffer does not satisfy that value's planned capacity bound.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete input value slice visible to the encoder.
+    /// - `input_index`: Absolute input value index where encoding starts.
+    /// - `output`: Complete output unit slice visible to the encoder.
+    /// - `output_index`: Absolute output unit index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress describing input values consumed, output units written,
+    /// and why encoding stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors when `input_index` is outside `input` or
+    /// `output_index` is outside `output`, and domain errors when codec or
+    /// hook processing fails or rejects a value. Returns
+    /// [`TranscodeFailure::TranscodeBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
+    /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec violates its declared encode length or hooks
+    /// return an unencodable replacement.
+    #[inline]
     fn transcode(
         &mut self,
         input: &[C::Value],
@@ -727,8 +859,44 @@ where
         TranscodeEncodeEngine::transcode(self, input, input_index, output, output_index)
     }
 
-    /// Finishes hook-owned encoder state.
-    #[inline(always)]
+    /// Finishes codec and hook-owned output after EOF.
+    ///
+    /// Finalization first finishes encode-side codec state through
+    /// [`Codec::encode_finish`], then lets hook implementations finish their
+    /// own retained state. The caller must provide enough output capacity for
+    /// [`TranscodeEncodeEngine::max_finish_output_len`], which includes both
+    /// the codec finish bound and the hook-owned finish bound.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Complete output unit slice visible to the encoder.
+    /// - `output_index`: Absolute output unit index where writing starts.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of units written by finalization.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors when the caller provides invalid or
+    /// insufficient output capacity. Returns domain errors when codec finish or
+    /// hook finalization fails. Returns
+    /// [`TranscodeFailure::FinishBeforeReset`] when the engine has not
+    /// completed its first reset. Returns
+    /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
+    /// already finished and has not been reset, or
+    /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
+    /// failed after execution started. Capacity and index failures occur before
+    /// finish execution and remain retryable; later failures poison the engine
+    /// until reset succeeds.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the codec finish writes beyond
+    /// [`Codec::MAX_ENCODE_FINISH_UNITS`] or when the combined codec and hook
+    /// finalization writes beyond
+    /// [`TranscodeEncodeEngine::max_finish_output_len`].
+    #[inline]
     fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         TranscodeEncodeEngine::finish(self, output, output_index)
     }
@@ -739,5 +907,6 @@ where
     C: Codec,
     H: TranscodeEncodeHooks<C>,
 {
+    /// Codec-specific source error retained by domain failures.
     type EncodeError = C::EncodeError;
 }

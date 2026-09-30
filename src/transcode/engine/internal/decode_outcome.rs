@@ -41,21 +41,47 @@ pub(crate) enum DecodeOutcome {
 
 impl DecodeOutcome {
     /// Creates an emitted-value outcome.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `read`: Nonzero source units consumed.
+    /// - `emitted`: Nonzero logical values delivered to the consumer.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Emitted` with both counters preserved.
+    #[inline]
     #[must_use]
     pub(crate) const fn emitted(read: NonZeroUsize, emitted: NonZeroUsize) -> Self {
         Self::Emitted { read, emitted }
     }
 
     /// Creates a skipped-input outcome.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `read`: Nonzero source units discarded without emitting values.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Skipped` with the consumed-unit count.
+    #[inline]
     #[must_use]
     pub(crate) const fn skipped(read: NonZeroUsize) -> Self {
         Self::Skipped { read }
     }
 
     /// Creates a missing-input outcome.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `required`: Total source units needed at the current input position.
+    ///
+    /// # Returns
+    ///
+    /// Returns `NeedInput` with the required total, not an additional-unit
+    /// count.
+    #[inline]
     #[must_use]
     pub(crate) const fn need_input(required: NonZeroUsize) -> Self {
         Self::NeedInput { required }

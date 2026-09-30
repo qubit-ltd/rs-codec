@@ -9,7 +9,7 @@
 mod async_transcode_decode_input;
 mod async_transcode_decode_step;
 mod async_transcode_encode_output;
-mod codec_decode_driver;
+mod internal;
 mod transcode_decode_input;
 mod transcode_encode_output;
 mod transcode_progress_validation;
