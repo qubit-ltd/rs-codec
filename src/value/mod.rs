@@ -12,6 +12,20 @@ mod codec_value_encoder;
 pub(crate) mod codec_value_lifecycle;
 mod decode_lifecycle_output;
 mod decode_lifecycle_progress;
+#[cfg(feature = "json")]
+mod json_bytes_value_codec;
+#[cfg(feature = "json")]
+mod json_bytes_value_decoder;
+#[cfg(feature = "json")]
+mod json_bytes_value_encoder;
+#[cfg(feature = "json")]
+mod json_string_value_codec;
+#[cfg(feature = "json")]
+mod json_string_value_decoder;
+#[cfg(feature = "json")]
+mod json_string_value_encoder;
+#[cfg(all(feature = "json", feature = "registry"))]
+mod json_value_codec_registration;
 #[cfg(feature = "registry")]
 mod value_bytes_codec_descriptor;
 #[cfg(feature = "registry")]
@@ -41,6 +55,22 @@ pub use codec_value_decoder::CodecValueDecoder;
 pub use codec_value_encoder::CodecValueEncoder;
 pub use decode_lifecycle_output::DecodeLifecycleOutput;
 pub use decode_lifecycle_progress::DecodeLifecycleProgress;
+#[cfg(feature = "json")]
+pub use json_bytes_value_codec::JsonBytesValueCodec;
+#[cfg(feature = "json")]
+pub use json_bytes_value_decoder::JsonBytesValueDecoder;
+#[cfg(feature = "json")]
+pub use json_bytes_value_encoder::JsonBytesValueEncoder;
+#[cfg(feature = "json")]
+pub use json_string_value_codec::JsonStringValueCodec;
+#[cfg(feature = "json")]
+pub use json_string_value_decoder::JsonStringValueDecoder;
+#[cfg(feature = "json")]
+pub use json_string_value_encoder::JsonStringValueEncoder;
+#[cfg(all(feature = "json", feature = "registry"))]
+pub use json_value_codec_registration::JSON_BYTES_VALUE_CODEC_ID;
+#[cfg(all(feature = "json", feature = "registry"))]
+pub use json_value_codec_registration::JSON_STRING_VALUE_CODEC_ID;
 #[cfg(feature = "registry")]
 pub use value_bytes_codec_descriptor::ValueBytesCodecDescriptor;
 #[cfg(feature = "registry")]

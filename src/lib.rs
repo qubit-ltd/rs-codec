@@ -159,6 +159,22 @@ pub use value::CodecValueDecoder;
 pub use value::CodecValueEncoder;
 pub use value::DecodeLifecycleOutput;
 pub use value::DecodeLifecycleProgress;
+#[cfg(all(feature = "json", feature = "registry"))]
+pub use value::JSON_BYTES_VALUE_CODEC_ID;
+#[cfg(all(feature = "json", feature = "registry"))]
+pub use value::JSON_STRING_VALUE_CODEC_ID;
+#[cfg(feature = "json")]
+pub use value::JsonBytesValueCodec;
+#[cfg(feature = "json")]
+pub use value::JsonBytesValueDecoder;
+#[cfg(feature = "json")]
+pub use value::JsonBytesValueEncoder;
+#[cfg(feature = "json")]
+pub use value::JsonStringValueCodec;
+#[cfg(feature = "json")]
+pub use value::JsonStringValueDecoder;
+#[cfg(feature = "json")]
+pub use value::JsonStringValueEncoder;
 #[cfg(feature = "registry")]
 pub use value::ValueBytesCodecDescriptor;
 #[cfg(feature = "registry")]

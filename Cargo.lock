@@ -252,6 +252,8 @@ dependencies = [
  "inventory",
  "qubit-io",
  "qubit-utils",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

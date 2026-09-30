@@ -57,7 +57,7 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// Registers a default-constructible bidirectional string codec.
 #[macro_export]
 macro_rules! register_value_string_codec {
-    (id = $id:literal, codec = $codec:ty, value = $value:ty $(,)?) => {
+    (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
             static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
                 $crate::ValueStringCodecDescriptor::of::<$codec, $value>();
@@ -80,7 +80,7 @@ macro_rules! register_value_string_codec {
 /// Registers a default-constructible bidirectional bytes codec.
 #[macro_export]
 macro_rules! register_value_bytes_codec {
-    (id = $id:literal, codec = $codec:ty, value = $value:ty $(,)?) => {
+    (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
             static DESCRIPTOR: $crate::ValueBytesCodecDescriptor =
                 $crate::ValueBytesCodecDescriptor::of::<$codec, $value>();
