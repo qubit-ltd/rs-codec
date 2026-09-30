@@ -60,6 +60,8 @@ fuzz_target!(|data: &[u8]| {
     }
 });
 
+/// Models a byte codec whose trailing `0xfe` requests one more input unit.
+/// This exercises engine buffering without duplicating a production parser.
 #[derive(Default)]
 struct PrefixCodec;
 
@@ -97,6 +99,7 @@ impl Codec for PrefixCodec {
     }
 }
 
+/// Makes invalid-input handling unreachable for the infallible fixture codec.
 struct RejectingHooks;
 
 impl TranscodeDecodeHooks<PrefixCodec> for RejectingHooks {
