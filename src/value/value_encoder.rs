@@ -32,9 +32,18 @@
 /// assert_eq!(encoder.encode("hello").unwrap(), b"hello");
 /// ```
 pub trait ValueEncoder<Input: ?Sized> {
-    /// Encoded output type.
+    /// Owned representation produced from one input value.
+    ///
+    /// Implementations must return a value that owns its data: `Output` may not
+    /// borrow from `Input` or from `self`, so the result outlives the borrow
+    /// passed to [`Self::encode`]. The representation is free — for example
+    /// `String` or `Vec<u8>` — and its size is the encoding's cost.
     type Output;
-    /// Encoding error type.
+    /// Failure reported when one input value cannot be represented.
+    ///
+    /// Implementations choose the error type; anything convertible into it from
+    /// a codec or allocation failure is accepted. Callers observe it only as
+    /// the `Err` of [`Self::encode`].
     type Error;
 
     /// Encodes `input`.

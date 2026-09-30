@@ -11,7 +11,19 @@
 use thiserror::Error;
 
 /// A stable value-codec ID protocol violation.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueCodecId;
+/// use qubit_codec::ValueCodecIdError;
+///
+/// let error = ValueCodecId::try_new("").unwrap_err();
+/// assert_eq!(error, ValueCodecIdError::Empty);
+/// assert_eq!(error.to_string(), "value codec ID cannot be empty");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[must_use]
 pub enum ValueCodecIdError {
     /// The complete ID is empty.
     #[error("value codec ID cannot be empty")]

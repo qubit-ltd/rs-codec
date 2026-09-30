@@ -23,10 +23,22 @@ use crate::ValueCodecIdError;
 /// assert_eq!(id.as_str(), "example.u16");
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ValueCodecId(&'static str);
+pub struct ValueCodecId(
+    /// Validated static identifier, borrowed without allocation.
+    &'static str,
+);
 
 impl ValueCodecId {
     /// Creates an ID from a static string.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Non-empty dot-separated ASCII segments; each starts with a
+    ///   letter and continues with letters, digits, or underscores.
+    ///
+    /// # Returns
+    ///
+    /// An ID borrowing the validated static string without allocation.
     ///
     /// # Panics
     ///
@@ -41,9 +53,19 @@ impl ValueCodecId {
 
     /// Validates and creates an ID.
     ///
+    /// # Parameters
+    ///
+    /// - `value`: Non-empty dot-separated ASCII segments; each starts with a
+    ///   letter and continues with letters, digits, or underscores.
+    ///
+    /// # Returns
+    ///
+    /// An ID borrowing the validated static string without allocation.
+    ///
     /// # Errors
     ///
-    /// Returns the exact stable-ID protocol violation.
+    /// Returns Empty for an empty ID, EmptySegment for leading/trailing or
+    /// consecutive dots, or InvalidSegment for an invalid ASCII segment.
     pub const fn try_new(value: &'static str) -> Result<Self, ValueCodecIdError> {
         match validate(value) {
             Ok(()) => Ok(Self(value)),
@@ -52,6 +74,12 @@ impl ValueCodecId {
     }
 
     /// Returns the complete stable ID.
+    ///
+    /// # Returns
+    ///
+    /// The original static string; consuming this Copy ID does not invalidate
+    /// it.
+    #[inline]
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         self.0
@@ -60,12 +88,30 @@ impl ValueCodecId {
 
 impl Borrow<str> for ValueCodecId {
     /// Borrows the stable identifier for lookup without allocating.
+    ///
+    /// # Returns
+    ///
+    /// The complete ID string borrowed through this lookup key.
+    #[inline]
     fn borrow(&self) -> &str {
         self.0
     }
 }
 
-/// Validates one point-separated ASCII identifier.
+/// Validates one point-separated ASCII identifier in linear time.
+///
+/// # Parameters
+///
+/// - `value`: Candidate identifier, borrowed without allocating.
+///
+/// # Returns
+///
+/// Unit when every segment follows the ASCII protocol.
+///
+/// # Errors
+///
+/// Returns Empty for no bytes, EmptySegment for a dot-delimited empty part,
+/// or InvalidSegment for a non-letter start or unsupported continuation.
 const fn validate(value: &str) -> Result<(), ValueCodecIdError> {
     let bytes = value.as_bytes();
     if bytes.is_empty() {
@@ -88,7 +134,25 @@ const fn validate(value: &str) -> Result<(), ValueCodecIdError> {
     validate_segment(bytes, start, bytes.len())
 }
 
-/// Validates one non-empty ID segment.
+/// Validates one non-empty ID segment in linear time.
+///
+/// # Parameters
+///
+/// - `bytes`: Complete identifier storage.
+/// - `start`: Inclusive segment boundary, no greater than `end`.
+/// - `end`: Exclusive boundary, no greater than `bytes.len()`.
+///
+/// # Returns
+///
+/// Unit for an ASCII letter followed by ASCII letters, digits, or underscores.
+///
+/// # Errors
+///
+/// Returns InvalidSegment for an empty segment or a disallowed byte.
+///
+/// # Panics
+///
+/// May panic if the caller violates the documented index bounds.
 const fn validate_segment(bytes: &[u8], start: usize, end: usize) -> Result<(), ValueCodecIdError> {
     if start == end || !bytes[start].is_ascii_alphabetic() {
         return Err(ValueCodecIdError::InvalidSegment);

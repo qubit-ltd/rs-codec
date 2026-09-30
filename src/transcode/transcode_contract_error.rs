@@ -13,8 +13,18 @@ use thiserror::Error;
 /// than malformed input data. Buffered drivers call
 /// [`crate::TranscodeProgress::validate`] before trusting progress counters for
 /// unchecked buffer cursor movement.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeContractError;
+///
+/// let error = TranscodeContractError::OverRead { read: 2, available: 1 };
+/// assert_eq!(error.to_string(), "transcoder consumed 2 units but only 1 were available");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum TranscodeContractError {
     /// The transcoder consumed more input units than the caller supplied.
     #[error("transcoder consumed {read} units but only {available} were available")]

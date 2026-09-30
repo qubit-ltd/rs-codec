@@ -14,7 +14,9 @@ use super::ByteOrderSpec;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::{ByteOrder, ByteOrderSpec, NativeEndian};
+/// use qubit_codec::ByteOrder;
+/// use qubit_codec::ByteOrderSpec;
+/// use qubit_codec::NativeEndian;
 ///
 /// let _: NativeEndian = Default::default();
 /// assert_eq!(NativeEndian::ORDER, ByteOrder::NativeEndian);

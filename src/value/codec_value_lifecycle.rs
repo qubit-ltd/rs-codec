@@ -30,7 +30,7 @@ use crate::codec::assert_unit_bounds;
 ///
 /// Returns [`CapacityError::OutputLengthOverflow`] when the sum cannot be
 /// represented as `usize`.
-#[inline(always)]
+#[inline]
 pub(crate) fn max_complete_encode_units<C>() -> Result<usize, CapacityError>
 where
     C: Codec,

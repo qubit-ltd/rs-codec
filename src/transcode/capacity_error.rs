@@ -12,8 +12,18 @@ use thiserror::Error;
 /// Capacity planning is separate from actual transcoding. This error means the
 /// requested upper bound cannot be represented as a `usize`; callers should
 /// reject the one-shot allocation request or switch to chunked streaming.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::CapacityError;
+///
+/// let error = CapacityError::OutputLengthOverflow;
+/// assert_eq!(error.to_string(), "output length overflow");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum CapacityError {
     /// The computed output length overflowed `usize`.
     #[error("output length overflow")]

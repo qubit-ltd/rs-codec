@@ -14,6 +14,10 @@ use crate::CapacityError;
 use crate::Codec;
 
 /// Slot that owns the converter's retained decoded value.
+///
+/// # Type Parameters
+///
+/// - `Value`: Decoded value retained until the target encoder has capacity.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::transcode) struct PendingValueSlot<Value> {
     /// Retained decoded value waiting for output capacity.
@@ -22,7 +26,11 @@ pub(in crate::transcode) struct PendingValueSlot<Value> {
 
 impl<Value> PendingValueSlot<Value> {
     /// Creates an empty pending-value slot.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Returns a slot with no retained value.
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn empty() -> Self {
         Self { value: None }
@@ -45,8 +53,11 @@ impl<Value> PendingValueSlot<Value> {
     ///
     /// # Returns
     ///
-    /// Returns the current pending-value output bound, or a capacity error
-    /// when encoder planning overflows.
+    /// Returns zero for an empty slot, or the encoder bound for one value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when encoder planning overflows.
     #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     pub(in crate::transcode) fn current_output_len<E, H>(
@@ -64,14 +75,14 @@ impl<Value> PendingValueSlot<Value> {
         }
     }
 
-    /// Removes any retained decoded value.
+    /// Stores a decoded value that could not be encoded yet.
     ///
-    /// # Returns
+    /// # Parameters
     ///
-    /// Returns unit `()`.
-    #[inline(always)]
-    pub(in crate::transcode) fn clear(&mut self) {
-        self.value = None;
+    /// - `pending`: Decoded value and its source input position.
+    #[inline]
+    pub(in crate::transcode) fn put(&mut self, pending: PendingValue<Value>) {
+        self.value = Some(pending);
     }
 
     /// Takes the retained decoded value, if any.
@@ -79,18 +90,18 @@ impl<Value> PendingValueSlot<Value> {
     /// # Returns
     ///
     /// Returns the retained value when present, otherwise `None`.
-    #[inline(always)]
+    #[inline]
     pub(in crate::transcode) fn take(&mut self) -> Option<PendingValue<Value>> {
         self.value.take()
     }
 
-    /// Stores a decoded value that could not be encoded yet.
+    /// Removes any retained decoded value.
     ///
-    /// # Parameters
+    /// # Returns
     ///
-    /// - `pending`: Decoded value and its source input position.
-    #[inline(always)]
-    pub(in crate::transcode) fn put(&mut self, pending: PendingValue<Value>) {
-        self.value = Some(pending);
+    /// Returns unit `()`.
+    #[inline]
+    pub(in crate::transcode) fn clear(&mut self) {
+        self.value = None;
     }
 }

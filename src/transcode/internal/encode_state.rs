@@ -14,7 +14,13 @@ use super::super::transcode_progress::TranscodeProgress;
 use super::encode_attempt::EncodeAttempt;
 use super::transcode_state::TranscodeState;
 
-/// Mutable state for one buffered encode call.
+/// Tracks borrowed input and output cursors for one buffered encode call.
+///
+/// # Type Parameters
+///
+/// - `'a`: Lifetime of the input and exclusively borrowed output buffers.
+/// - `Value`: Logical values read from input.
+/// - `Unit`: Representation units written to output.
 pub(in crate::transcode) struct EncodeState<'a, Value, Unit> {
     /// Shared input/output state for this encode call.
     state: TranscodeState<'a, Value, Unit>,
@@ -34,7 +40,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns initialized encode state with cursors at the requested start
     /// positions.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) fn new(
         input: &'a [Value],
         input_index: usize,
@@ -51,17 +58,24 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns `true` when more input values remain.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) fn has_input(&self) -> bool {
         self.state.has_input()
     }
 
-    /// Returns an encode context at the current cursors.
+    /// Returns an encode context borrowing the current value and output.
+    ///
+    /// # Returns
+    ///
+    /// An attempt borrowing the current value and the output buffer until the
+    /// mutable borrow of this state ends. The cursors are not advanced.
     ///
     /// # Safety
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) unsafe fn context_unchecked(&mut self) -> EncodeAttempt<'_, Value, Unit> {
         let input_index = self.state.input_cursor();
         let output_index = self.state.output_cursor();
@@ -71,41 +85,13 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
         EncodeAttempt::new(value, input_index, output, output_index)
     }
 
-    /// Returns the number of writable output units from the current cursor.
-    ///
-    /// # Returns
-    ///
-    /// Returns writable output capacity from the current output cursor.
-    #[inline(always)]
-    fn available_output(&self) -> usize {
-        self.state.available_output()
-    }
-
-    /// Accepts a completed one-value write and advances both cursors.
-    ///
-    /// # Parameters
-    ///
-    /// - `written`: Output units written by the last encode call.
-    ///
-    /// # Returns
-    ///
-    /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
-    #[inline(always)]
-    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
-        assert!(
-            written <= self.available_output(),
-            "EncodeOutcome::Consumed wrote beyond available output",
-        );
-        self.state.advance(1, written);
-    }
-
     /// Returns completed progress for the current cursors.
     ///
     /// # Returns
     ///
     /// Returns a completed [`TranscodeProgress`] with consumed input and output
     /// counters.
-    #[inline(always)]
+    #[inline]
     pub(in crate::transcode) fn complete_progress(&self) -> TranscodeProgress {
         self.state.complete_progress()
     }
@@ -120,9 +106,31 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity
     /// counters.
-    #[inline(always)]
+    #[inline]
     pub(in crate::transcode) fn need_output_progress_with(&self, required: NonZeroUsize) -> TranscodeProgress {
         self.state.need_output_progress(required)
+    }
+
+    /// Accepts a completed one-value write and advances both cursors.
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Output units written by the last encode call.
+    ///
+    /// # Returns
+    ///
+    /// Returns unit `()`, while advancing `input_cursor` and `output_cursor`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `written` exceeds the remaining output capacity.
+    #[inline]
+    pub(in crate::transcode) fn accept_written_value(&mut self, written: usize) {
+        assert!(
+            written <= self.available_output(),
+            "EncodeOutcome::Consumed wrote beyond available output",
+        );
+        self.state.advance(1, written);
     }
 
     /// Applies one encode outcome to this encode state.
@@ -134,6 +142,11 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns stop progress when output is insufficient, otherwise `None`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a consumed outcome writes beyond remaining capacity, or a
+    /// need-output outcome does not request more than the available capacity.
     #[inline]
     pub(in crate::transcode) fn apply_encode_outcome(&mut self, outcome: EncodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
@@ -150,5 +163,16 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
                 Some(self.need_output_progress_with(required))
             }
         }
+    }
+
+    /// Returns the number of writable output units from the current cursor.
+    ///
+    /// # Returns
+    ///
+    /// Returns writable output capacity from the current output cursor.
+    #[inline]
+    #[must_use]
+    fn available_output(&self) -> usize {
+        self.state.available_output()
     }
 }

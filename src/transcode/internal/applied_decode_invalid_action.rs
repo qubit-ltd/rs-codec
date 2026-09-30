@@ -10,6 +10,11 @@
 use core::num::NonZeroUsize;
 
 /// Decode-policy action ready to be applied to buffered state.
+///
+/// # Type Parameters
+///
+/// - `Value`: Owned replacement value transferred to the decode consumer when
+///   the policy emits a value instead of skipping invalid source units.
 pub(in crate::transcode) enum AppliedDecodeInvalidAction<Value> {
     /// Skips invalid source units without emitting a value.
     Skip {

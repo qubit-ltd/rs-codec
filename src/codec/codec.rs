@@ -96,15 +96,45 @@ use super::decode_failure::DecodeFailure;
 ///
 /// # Examples
 ///
-/// A caller can inspect a codec's declared unit bounds before allocating a
-/// buffer:
+/// A minimal identity codec exposes its bounds and decodes one byte:
 ///
 /// ```
-/// use qubit_codec::Codec;
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
 ///
-/// fn decode_capacity<C: Codec>() -> usize {
-///     C::MAX_DECODE_UNITS_PER_VALUE
+/// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
+///
+/// struct Identity;
+/// impl Identity {
+///     fn new() -> Self { Self }
 /// }
+/// impl Codec for Identity {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
+///
+/// let mut codec = Identity::new();
+/// assert_eq!(codec.encode_len(&42), 1);
+/// // SAFETY: the input contains the one readable unit required by Identity.
+/// let (value, consumed) = unsafe { codec.decode(&[42], 0) }.unwrap();
+/// assert_eq!((value, consumed.get()), (42, 1));
 /// ```
 pub trait Codec {
     /// The type of logical values decoded from or encoded into the buffer.
@@ -214,7 +244,7 @@ pub trait Codec {
     ///
     /// Returns `true` when `value` may be passed to
     /// [`encode_len`](Self::encode_len) and [`encode`](Self::encode).
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn can_encode_value(&self, _value: &Self::Value) -> bool {
         true
@@ -259,7 +289,7 @@ pub trait Codec {
     /// encodings, or framing layers that defer output until enough values have
     /// been seen or EOF is finalized. Stateless and directly value-to-unit
     /// codecs should continue returning a positive length.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn encode_len(&self, _value: &Self::Value) -> usize {
         Self::MAX_ENCODE_UNITS_PER_VALUE
@@ -287,7 +317,7 @@ pub trait Codec {
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_ENCODE_RESET_UNITS`](Self::MAX_ENCODE_RESET_UNITS) units starting
     /// at `output_index`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "reset output and reset errors must be handled"]
     unsafe fn encode_reset(
         &mut self,
@@ -377,7 +407,7 @@ pub trait Codec {
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_ENCODE_FINISH_UNITS`](Self::MAX_ENCODE_FINISH_UNITS) units
     /// starting at `output_index`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "finish output and finish errors must be handled"]
     unsafe fn encode_finish(
         &mut self,
@@ -414,7 +444,7 @@ pub trait Codec {
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) values
     /// starting at `output_index`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "reset output and reset errors must be handled"]
     unsafe fn decode_reset(
         &mut self,
@@ -481,12 +511,27 @@ pub trait Codec {
     /// trailing prefix using EOF-aware format rules. The default preserves the
     /// open-stream behavior by delegating to [`decode`](Self::decode).
     ///
+    /// # Parameters
+    ///
+    /// - `input`: Final source unit buffer; no more units will arrive.
+    /// - `input_index`: Start index of the value in `input`.
+    ///
+    /// # Returns
+    ///
+    /// Returns the decoded value and the non-zero number of consumed units.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecodeFailure::Incomplete`] for an unresolved final prefix,
+    /// or [`DecodeFailure::Invalid`] for malformed input, as in
+    /// [`decode`](Self::decode). An override may resolve a prefix at EOF.
+    ///
     /// # Safety
     ///
     /// The caller must satisfy the same input-index and minimum-readable-unit
     /// preconditions as [`decode`](Self::decode). Implementations must not
     /// read beyond the currently available units.
-    #[inline(always)]
+    #[inline]
     #[must_use = "decoded value, consumed length, and decode errors must be handled"]
     unsafe fn decode_eof(
         &mut self,
@@ -525,7 +570,7 @@ pub trait Codec {
     /// The caller must guarantee that the implementation can write up to
     /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES) values
     /// starting at `output_index`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "finish output length and finish errors must be handled"]
     unsafe fn decode_finish(
         &mut self,
@@ -553,7 +598,7 @@ pub trait Codec {
 /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], because these invariants must hold
 /// for any well-formed [`Codec`] implementation and violating them is always a
 /// bug.
-#[inline(always)]
+#[inline]
 pub(crate) fn assert_unit_bounds<C>()
 where
     C: Codec,
