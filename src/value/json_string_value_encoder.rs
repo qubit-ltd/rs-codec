@@ -44,7 +44,6 @@ pub struct JsonStringValueEncoder<T> {
 impl<T> JsonStringValueEncoder<T> {
     /// Creates a JSON string encoder for values of type `T`.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }
     }
