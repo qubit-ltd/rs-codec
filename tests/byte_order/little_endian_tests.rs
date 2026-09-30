@@ -10,7 +10,9 @@ use qubit_codec::LittleEndian;
 
 #[test]
 fn test_little_endian_is_copyable_default_marker() {
-    let marker = LittleEndian;
+    let marker: LittleEndian = Default::default();
+    let copied = marker;
 
-    assert_eq!(marker, LittleEndian);
+    assert_eq!(marker, copied, "copying preserves the little-endian marker");
+    assert_eq!(marker, LittleEndian, "the default is the little-endian marker");
 }

@@ -6,6 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec as codec;
 use qubit_codec::BigEndian;
 use qubit_codec::ByteOrder;
@@ -48,7 +51,7 @@ struct EchoCodec;
 
 impl ValueEncoder<str> for EchoCodec {
     type Output = String;
-    type Error = core::convert::Infallible;
+    type Error = Infallible;
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -57,7 +60,7 @@ impl ValueEncoder<str> for EchoCodec {
 
 impl ValueDecoder<str> for EchoCodec {
     type Output = String;
-    type Error = core::convert::Infallible;
+    type Error = Infallible;
 
     fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -67,8 +70,8 @@ impl ValueDecoder<str> for EchoCodec {
 impl Codec for EchoCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -80,12 +83,12 @@ impl Codec for EchoCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -110,10 +113,10 @@ impl TranscodeDecodeHooks<EchoCodec> for EchoDecodeHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut EchoCodec,
-        error: &core::convert::Infallible,
-        _consumed: Option<core::num::NonZeroUsize>,
+        error: &Infallible,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
-    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeError<core::convert::Infallible>> {
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeError<Infallible>> {
         match *error {}
     }
 }
@@ -125,7 +128,7 @@ impl TranscodeEncodeHooks<EchoCodec> for EchoEncodeHooks {
         &mut self,
         _codec: &mut EchoCodec,
         _context: &EncodeContext<'_, u8>,
-    ) -> Result<EncodeUnencodableAction<u8>, codec::TranscodeEncodeError<core::convert::Infallible, u8>> {
+    ) -> Result<EncodeUnencodableAction<u8>, codec::TranscodeEncodeError<Infallible, u8>> {
         Ok(EncodeUnencodableAction::Reject)
     }
 }
@@ -175,14 +178,13 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let _: TranscodeConvertErrorOf<EchoCodec, EchoCodec> =
         TranscodeConvertError::Failure(codec::TranscodeFailure::invalid_input_index(1, 0));
     assert_eq!(
-        TranscodeConvertError::<core::convert::Infallible, core::convert::Infallible, u8>::Failure(
-            codec::TranscodeFailure::invalid_output_index(1, 0)
-        ),
+        TranscodeConvertError::<Infallible, Infallible, u8>::Failure(codec::TranscodeFailure::invalid_output_index(
+            1, 0
+        )),
         TranscodeConvertError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
     );
 
-    let decode_error =
-        TranscodeDecodeError::<core::convert::Infallible>::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1));
+    let decode_error = TranscodeDecodeError::<Infallible>::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1));
     assert!(matches!(
         decode_error,
         TranscodeDecodeError::Failure(TranscodeFailure::IncompleteInput {
@@ -197,7 +199,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     let convert_error = ConvertPreludeError::decode_domain_main("decode failed", 0);
     assert!(matches!(convert_error, TranscodeConvertError::DecodeDomain(_)));
 
-    let encode_error = TranscodeEncodeError::<core::convert::Infallible, u8>::unencodable_without_context(2);
+    let encode_error = TranscodeEncodeError::<Infallible, u8>::unencodable_without_context(2);
     assert_eq!(
         TranscodeEncodeError::Unencodable {
             input_index: 2,
