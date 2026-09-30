@@ -21,3 +21,15 @@ fn test_decode_context_reports_relative_progress() {
     assert_eq!(5, context.input_used());
     assert_eq!(2, context.output_written());
 }
+
+#[test]
+#[should_panic(expected = "decode context input index must not precede input start")]
+fn test_decode_context_panics_when_input_index_precedes_input_start() {
+    let _ = DecodeContext::new(7, 2, 3, 5, 4);
+}
+
+#[test]
+#[should_panic(expected = "decode context output index must not precede output start")]
+fn test_decode_context_panics_when_output_index_precedes_output_start() {
+    let _ = DecodeContext::new(2, 7, 5, 3, 4);
+}

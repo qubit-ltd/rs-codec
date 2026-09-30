@@ -7,6 +7,8 @@
 // =============================================================================
 //! Tests for the semantic transcode encoder marker trait.
 
+use core::convert::Infallible;
+
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeEncodeError;
@@ -20,7 +22,7 @@ struct CharToByte;
 impl Transcoder for CharToByte {
     type Input = char;
     type Output = u8;
-    type Error = TranscodeEncodeError<core::convert::Infallible, char>;
+    type Error = TranscodeEncodeError<Infallible, char>;
 
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -30,7 +32,7 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<usize, TranscodeEncodeError<Infallible, char>> {
         codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
@@ -41,7 +43,7 @@ impl Transcoder for CharToByte {
         input_index: usize,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<TranscodeProgress, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<TranscodeProgress, TranscodeEncodeError<Infallible, char>> {
         let readable = input.len().saturating_sub(input_index);
         let writable = output.len().saturating_sub(output_index);
         let count = readable.min(writable);
@@ -55,14 +57,14 @@ impl Transcoder for CharToByte {
         &mut self,
         output: &mut [u8],
         output_index: usize,
-    ) -> Result<usize, TranscodeEncodeError<core::convert::Infallible, char>> {
+    ) -> Result<usize, TranscodeEncodeError<Infallible, char>> {
         codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
         Ok(0)
     }
 }
 
 impl TranscodeEncoder for CharToByte {
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 }
 
 #[test]

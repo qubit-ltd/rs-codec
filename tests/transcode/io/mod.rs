@@ -12,4 +12,3 @@ mod async_transcode_encode_output_tests;
 mod codec_decode_driver_tests;
 mod transcode_decode_input_tests;
 mod transcode_encode_output_tests;
-mod transcode_progress_validation_tests;

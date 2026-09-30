@@ -396,7 +396,7 @@ fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
-    complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
+    let _ = complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
     assert_eq!(1, output.pending_len());
     complete(output.drain_async())?;
     assert_eq!(0, output.pending_len());
@@ -520,7 +520,7 @@ fn test_async_transcode_encode_output_propagates_delivery_errors() -> io::Result
     let mut encoder = CopyEncoder;
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
 
-    complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
+    let _ = complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?;
     output.inner_mut().failed = true;
 
     let error = complete(output.drain_async()).expect_err("delivery error must be preserved");

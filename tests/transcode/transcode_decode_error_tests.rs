@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec as codec;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeDomainError;
@@ -36,7 +35,7 @@ fn test_decode_error_wraps_framework_and_domain_errors() {
 fn test_decode_error_maps_decode_failure() {
     let incomplete = DecodeFailure::<DomainError>::incomplete(crate::nonzero(4));
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(2, 4, 1)),
+        TranscodeDecodeError::Failure(TranscodeFailure::incomplete_input(2, 4, 1)),
         TranscodeDecodeError::from_decode_failure(incomplete, 2, 1),
     );
 

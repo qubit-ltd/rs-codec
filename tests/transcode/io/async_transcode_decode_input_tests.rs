@@ -9,15 +9,17 @@
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::pin::pin;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
-use qubit_codec as codec;
 use qubit_codec::AsyncTranscodeDecodeInput;
 use qubit_codec::AsyncTranscodeDecodeStep;
+use qubit_codec::CapacityError;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeProgress;
+use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 use qubit_io::AsyncInput;
 use qubit_utils as utils_crate;
@@ -97,7 +99,7 @@ where
     F: Future,
 {
     let mut context = Context::from_waker(Waker::noop());
-    let mut future = std::pin::pin!(future);
+    let mut future = pin!(future);
     for _ in 0..128 {
         if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
             return output;
@@ -125,7 +127,7 @@ impl Transcoder for PairDecoder {
     type Error = TranscodeDecodeError<TestDecodeError>;
 
     /// Reports the maximum output length for a supplied byte input.
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, codec::CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len / 2)
     }
 
@@ -168,7 +170,7 @@ impl Transcoder for EofTailDecoder {
     type Output = u16;
     type Error = TranscodeDecodeError<TestDecodeError>;
 
-    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, codec::CapacityError> {
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
@@ -211,11 +213,11 @@ impl Transcoder for LifecycleDecoder {
     type Output = u16;
     type Error = TranscodeDecodeError<TestDecodeError>;
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, codec::CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn max_reset_output_len(&self) -> Result<usize, codec::CapacityError> {
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(1)
     }
 
@@ -234,7 +236,7 @@ impl Transcoder for LifecycleDecoder {
         Ok(TranscodeProgress::complete(input_index, output_index))
     }
 
-    fn max_finish_output_len(&self) -> Result<usize, codec::CapacityError> {
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(1)
     }
 
@@ -253,12 +255,12 @@ impl Transcoder for CapacityFailingDecoder {
     type Output = u16;
     type Error = TranscodeDecodeError<TestDecodeError>;
 
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, codec::CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
-    fn max_reset_output_len(&self) -> Result<usize, codec::CapacityError> {
-        Err(codec::CapacityError::OutputLengthOverflow)
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
     }
 
     fn reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
@@ -275,8 +277,8 @@ impl Transcoder for CapacityFailingDecoder {
         Ok(TranscodeProgress::complete(0, 0))
     }
 
-    fn max_finish_output_len(&self) -> Result<usize, codec::CapacityError> {
-        Err(codec::CapacityError::OutputLengthOverflow)
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Err(CapacityError::OutputLengthOverflow)
     }
 
     fn finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
@@ -294,7 +296,7 @@ impl Transcoder for NoProgressDecoder {
     type Error = TranscodeDecodeError<TestDecodeError>;
 
     /// Reports no output requirement.
-    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, codec::CapacityError> {
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
         Ok(0)
     }
 
@@ -320,6 +322,89 @@ impl Transcoder for NoProgressDecoder {
     }
 }
 
+/// Decoder that reports zero lifecycle capacity but still writes one value.
+#[derive(Debug, Default)]
+struct OverreportingLifecycleDecoder;
+
+impl Transcoder for OverreportingLifecycleDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    /// Reports no output requirement.
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    /// Under-reports the reset bound so the engine sees an over-report.
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    /// Resets while writing one value past the reported bound of zero.
+    fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xcccc;
+        Ok(1)
+    }
+
+    /// Decodes nothing.
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::complete(0, 0))
+    }
+
+    /// Under-reports the finish bound so the engine sees an over-report.
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(0)
+    }
+
+    /// Finishes while writing one value past the reported bound of zero.
+    fn finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xdddd;
+        Ok(1)
+    }
+}
+
+/// Verifies reset over-reporting violates the reserved reset bound.
+#[test]
+#[should_panic(expected = "reset wrote beyond its bound")]
+fn test_async_transcode_decode_input_panics_when_reset_overreports_bound() {
+    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut decoder = OverreportingLifecycleDecoder;
+    let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    let _ = input.reset(&mut decoder, &mut map_error, &mut output, 0, 1);
+}
+
+/// Verifies finish over-reporting violates the reserved finish bound.
+#[test]
+#[should_panic(expected = "finish wrote beyond its bound")]
+fn test_async_transcode_decode_input_panics_when_finish_overreports_bound() {
+    let input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut decoder = OverreportingLifecycleDecoder;
+    let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    let _ = input.finish(&mut decoder, &mut map_error, &mut output, 0, 1);
+}
+
+/// Verifies consuming past the unread window violates the documented bound.
+#[test]
+#[should_panic(expected = "cannot consume beyond buffered input")]
+fn test_async_transcode_decode_input_consume_panics_beyond_unread_window() {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(vec![0x12], 1));
+    complete(input.fill_more_async()).expect("initial fill should succeed");
+    assert_eq!(1, input.unread_len());
+
+    input.consume(2);
+}
+
 /// Verifies refilling across pending chunk boundaries before decoding.
 #[test]
 fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
@@ -332,7 +417,7 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
     assert!(matches!(
         first,
         AsyncTranscodeDecodeStep::Progress(progress)
-            if matches!(progress.status(), codec::TranscodeStatus::NeedInput { .. })
+            if matches!(progress.status(), TranscodeStatus::NeedInput { .. })
     ));
     assert!(complete(input.fill_until_async(2))?);
     let step = complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 1))?;
@@ -584,4 +669,45 @@ fn test_async_transcode_decode_input_maps_refill_errors() -> io::Result<()> {
     let error = complete(input.fill_until_async(usize::MAX)).expect_err("impossible capacity must fail");
     assert_eq!(io::ErrorKind::OutOfMemory, error.kind());
     Ok(())
+}
+
+/// Verifies the poll-based entry point surfaces pending and then commits
+/// progress.
+#[test]
+fn test_async_transcode_decode_input_poll_transcode_commits_progress_after_pending() {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12, 0x34], 1), 2);
+    let mut context = Context::from_waker(Waker::noop());
+    let mut decoder = PairDecoder;
+    let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 1];
+
+    let pending = AsyncTranscodeDecodeInput::<ChunkedAsyncInput>::poll_transcode(
+        Pin::new(&mut input),
+        &mut context,
+        &mut decoder,
+        &mut map_error,
+        &mut output,
+        0,
+        1,
+    );
+
+    assert!(
+        matches!(pending, Poll::Pending),
+        "the poll-based entry point must surface the source pending state, got {pending:?}"
+    );
+
+    let ready = AsyncTranscodeDecodeInput::<ChunkedAsyncInput>::poll_transcode(
+        Pin::new(&mut input),
+        &mut context,
+        &mut decoder,
+        &mut map_error,
+        &mut output,
+        0,
+        1,
+    );
+
+    assert!(
+        matches!(ready, Poll::Ready(Ok(AsyncTranscodeDecodeStep::Progress(_)))),
+        "polling again after the source unblocks must commit one progress step, got {ready:?}"
+    );
 }

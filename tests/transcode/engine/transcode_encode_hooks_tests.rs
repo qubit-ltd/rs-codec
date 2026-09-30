@@ -6,7 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_codec as codec;
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
+use qubit_codec::Codec;
+use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeEncodeErrorOf;
 use qubit_codec::engine::EncodeContext;
 use qubit_codec::engine::EncodeUnencodableAction;
 use qubit_codec::engine::TranscodeEncodeHooks;
@@ -18,10 +23,10 @@ struct UnitCodec;
 #[error("encode failed")]
 struct UnitEncodeError;
 
-impl codec::Codec for UnitCodec {
+impl Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = UnitEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -36,8 +41,8 @@ impl codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -63,7 +68,7 @@ impl TranscodeEncodeHooks<UnitCodec> for DefaultOnlyHooks {
         &mut self,
         _codec: &mut UnitCodec,
         _context: &EncodeContext<'_, u8>,
-    ) -> Result<EncodeUnencodableAction<u8>, codec::TranscodeEncodeErrorOf<UnitCodec>> {
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<UnitCodec>> {
         Ok(EncodeUnencodableAction::Reject)
     }
 }
@@ -86,4 +91,25 @@ fn test_transcode_encode_hooks_default_before_reset_is_noop() {
     let mut codec = UnitCodec;
 
     TranscodeEncodeHooks::<UnitCodec>::reset_hooks(&mut hooks, &mut codec);
+}
+
+#[test]
+fn test_transcode_encode_hooks_default_transcode_output_len_scales_with_codec_width() {
+    let hooks = DefaultOnlyHooks;
+    let codec = UnitCodec;
+
+    let bound = TranscodeEncodeHooks::<UnitCodec>::max_transcode_output_len(&hooks, &codec, 5)
+        .expect("default bound should fit the requested input length");
+
+    assert_eq!(5, bound);
+}
+
+#[test]
+fn test_transcode_encode_hooks_default_finish_output_len_is_zero() {
+    let hooks = DefaultOnlyHooks;
+    let codec = UnitCodec;
+
+    let bound = TranscodeEncodeHooks::<UnitCodec>::max_finish_output_len(&hooks, &codec);
+
+    assert_eq!(0, bound);
 }

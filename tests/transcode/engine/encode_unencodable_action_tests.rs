@@ -16,3 +16,8 @@ fn test_encode_unencodable_action_constructors() {
         EncodeUnencodableAction::Replace { value: 7 },
     );
 }
+
+#[test]
+fn test_encode_unencodable_action_skip_variant_is_public() {
+    assert_eq!(EncodeUnencodableAction::<u8>::Skip, EncodeUnencodableAction::Skip,);
+}

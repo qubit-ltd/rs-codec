@@ -775,7 +775,7 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
 
     let mut output = [0_u8; 4];
 
-    converter
+    let _ = converter
         .transcode(&[3, 5, 7], 0, &mut output, 0)
         .expect("conversion should fill output");
 

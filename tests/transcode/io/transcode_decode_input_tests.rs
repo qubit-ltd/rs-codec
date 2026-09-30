@@ -6,11 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::num::NonZeroUsize;
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Read;
+use std::io::Result as IoResult;
 use std::io::Seek;
 use std::io::SeekFrom;
 
@@ -26,7 +28,7 @@ use qubit_io as io_crate;
 use qubit_io::Input;
 
 #[test]
-fn try_with_capacity_allocates_decode_buffer() {
+fn test_try_with_capacity_allocates_decode_buffer() {
     let input =
         TranscodeDecodeInput::try_with_capacity(Cursor::new(vec![1_u8]), 1).expect("decode buffer should allocate");
 
@@ -73,7 +75,7 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         if available < 2 {
             return Err(DecodeFailure::incomplete(crate::nonzero(2)));
@@ -154,7 +156,7 @@ impl Codec for ContextualIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete_with_source(
             PairDecodeError::BadInputIndex,
             crate::nonzero(2),
@@ -217,7 +219,7 @@ impl Codec for DecodeLifecycleCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         assert_eq!(1, self.state, "decode must run after reset");
         self.state = 2;
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
@@ -268,7 +270,7 @@ impl Codec for NonDefaultValueCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(Self::Value, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(Self::Value, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((NonDefaultValue(input[input_index]), crate::nonzero(1)))
     }
 
@@ -634,7 +636,7 @@ impl ChunkedInput {
 impl Input for ChunkedInput {
     type Item = u16;
 
-    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, count: usize) -> IoResult<usize> {
         if self.fail_after_reads == Some(self.reads) {
             return Err(Error::new(ErrorKind::BrokenPipe, "input failure"));
         }
@@ -907,7 +909,7 @@ struct FailingInput;
 impl Input for FailingInput {
     type Item = u16;
 
-    unsafe fn read_unchecked(&mut self, _output: &mut [u16], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, _output: &mut [u16], _index: usize, _count: usize) -> IoResult<usize> {
         Err(Error::new(ErrorKind::BrokenPipe, "input failure"))
     }
 }
@@ -918,7 +920,7 @@ struct FailingSeekInput;
 impl Input for FailingSeekInput {
     type Item = u8;
 
-    unsafe fn read_unchecked(&mut self, _output: &mut [u8], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, _output: &mut [u8], _index: usize, _count: usize) -> IoResult<usize> {
         Ok(0)
     }
 }
@@ -926,7 +928,7 @@ impl Input for FailingSeekInput {
 impl io_crate::Seekable for FailingSeekInput {
     type Unit = u8;
 
-    fn seek_to(&mut self, _position: SeekFrom) -> std::io::Result<u64> {
+    fn seek_to(&mut self, _position: SeekFrom) -> IoResult<u64> {
         Err(Error::new(ErrorKind::BrokenPipe, "seek failure"))
     }
 }
@@ -945,7 +947,7 @@ impl Default for ErrorAfterFirstReadInput {
 impl Input for ErrorAfterFirstReadInput {
     type Item = u16;
 
-    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, _count: usize) -> IoResult<usize> {
         if self.first_read {
             self.first_read = false;
             output[index] = 0x0001;
@@ -985,7 +987,7 @@ impl Codec for HugeMinimumCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         unreachable!("the minimum-width reserve must fail first");
     }
 
@@ -1016,9 +1018,9 @@ impl Codec for HugeIncompleteCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(
-            core::num::NonZeroUsize::new(usize::MAX).expect("usize::MAX is non-zero"),
+            NonZeroUsize::new(usize::MAX).expect("usize::MAX is non-zero"),
         ))
     }
 
@@ -1038,7 +1040,7 @@ fn decode_with<I, D>(
     output: &mut [u32],
     output_index: usize,
     count: usize,
-) -> std::io::Result<usize>
+) -> IoResult<usize>
 where
     I: Input<Item = u16>,
     D: Transcoder<Input = u16, Output = u32, Error = TranscodeDecodeError<PairDecodeError>>,
@@ -1053,7 +1055,7 @@ fn finish_with<I, D>(
     output: &mut [u32],
     output_index: usize,
     count: usize,
-) -> std::io::Result<usize>
+) -> IoResult<usize>
 where
     I: Input<Item = u16>,
     D: Transcoder<Input = u16, Output = u32, Error = TranscodeDecodeError<PairDecodeError>>,
@@ -1882,7 +1884,7 @@ impl Codec for InvalidPairReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let _ = input[input_index];
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
@@ -1920,7 +1922,7 @@ impl Codec for GrowingPairReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         if !self.pass && available < 4 {
             return Err(DecodeFailure::incomplete(crate::nonzero(4)));
@@ -1959,8 +1961,8 @@ impl Codec for OverconsumeReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Ok((0, core::num::NonZeroUsize::new(3).expect("three units")))
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((0, NonZeroUsize::new(3).expect("three units")))
     }
 
     unsafe fn encode(
@@ -2074,7 +2076,7 @@ impl Codec for PartialWindowIncompleteCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         if available < 4 {
             return Err(DecodeFailure::incomplete(crate::nonzero(4)));
@@ -2112,7 +2114,7 @@ impl Codec for OverlongIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(crate::nonzero(3)))
     }
 
@@ -2144,10 +2146,10 @@ impl Codec for OverconsumeInvalidReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
-            core::num::NonZeroUsize::new(3).expect("three units"),
+            NonZeroUsize::new(3).expect("three units"),
         ))
     }
 
@@ -2200,7 +2202,7 @@ impl Codec for ScratchGrowingReadCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         match self.mode {
             ScratchReadMode::GrowThenSucceed if available < 3 => {
@@ -2252,7 +2254,7 @@ fn read_with_scratch_mode(
     input: ChunkedInput,
     capacity: usize,
     mode: ScratchReadMode,
-) -> (std::io::Result<u32>, TranscodeDecodeInput<ChunkedInput>) {
+) -> (IoResult<u32>, TranscodeDecodeInput<ChunkedInput>) {
     let mut input = TranscodeDecodeInput::with_capacity(input, capacity);
     let mut codec = ScratchGrowingReadCodec::with_mode(mode);
     let result = input.read_decoded_with(&mut codec, map_codec_error);
@@ -2277,7 +2279,7 @@ impl Codec for ScratchByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         if available < 3 {
             return Err(DecodeFailure::incomplete(crate::nonzero(3)));
@@ -2730,7 +2732,7 @@ impl Codec for AlwaysIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(crate::nonzero(4)))
     }
 
@@ -2762,7 +2764,7 @@ impl Codec for StuckIncompleteReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
@@ -2893,7 +2895,7 @@ impl Codec for ImpossibleIncompleteMainLoopCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(crate::nonzero(2)))
     }
 
@@ -2925,10 +2927,10 @@ impl Codec for InvalidWithConsumedReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::invalid(
             PairDecodeError::BadInputIndex,
-            core::num::NonZeroUsize::MIN,
+            NonZeroUsize::MIN,
         ))
     }
 
@@ -2948,7 +2950,7 @@ struct FailingReadInput;
 impl Input for FailingReadInput {
     type Item = u16;
 
-    unsafe fn read_unchecked(&mut self, _output: &mut [u16], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, _output: &mut [u16], _index: usize, _count: usize) -> IoResult<usize> {
         Err(Error::new(ErrorKind::BrokenPipe, "input read failure"))
     }
 }
@@ -2967,7 +2969,7 @@ impl Default for ErrorAfterTwoUnitInput {
 impl Input for ErrorAfterTwoUnitInput {
     type Item = u16;
 
-    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u16], index: usize, count: usize) -> IoResult<usize> {
         if self.first_read {
             self.first_read = false;
             let read = count.min(2);
@@ -2997,7 +2999,7 @@ impl Codec for IncompleteBeyondBufferReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::incomplete(crate::nonzero(4)))
     }
 
@@ -3029,7 +3031,7 @@ impl Codec for InvalidWithoutConsumedReadCodec {
         &mut self,
         _input: &[u16],
         _input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Err(DecodeFailure::invalid_unknown(PairDecodeError::BadInputIndex))
     }
 

@@ -8,7 +8,9 @@
 //! Tests for the reusable buffered converter engine.
 
 use core::cell::Cell;
+use core::convert::Infallible;
 use core::num::NonZeroUsize;
+use std::hint::black_box;
 use std::rc::Rc;
 
 use qubit_codec as codec;
@@ -58,8 +60,8 @@ enum EngineError {
     Encode,
 }
 
-impl From<core::convert::Infallible> for EngineError {
-    fn from(error: core::convert::Infallible) -> Self {
+impl From<Infallible> for EngineError {
+    fn from(error: Infallible) -> Self {
         match error {}
     }
 }
@@ -68,7 +70,7 @@ impl Codec for SourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -104,7 +106,7 @@ impl Codec for ShortSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -135,7 +137,7 @@ impl Codec for ShortSourceCodec {
 impl Codec for TargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = EngineError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -186,8 +188,8 @@ struct ResetDependentTargetCodec {
 impl Codec for ResetEmittingTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -224,7 +226,7 @@ impl Codec for ResetEmittingTargetCodec {
 impl Codec for ResetDependentTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = EngineError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -285,7 +287,7 @@ struct TargetResetFailError;
 impl Codec for ResetFailTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = TargetResetFailError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -322,8 +324,8 @@ impl Codec for ResetFailTargetCodec {
 impl Codec for FinishOverflowTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -353,7 +355,7 @@ impl Codec for FinishOverflowTargetCodec {
 impl Codec for MismatchCapacityTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = EngineError;
 
     const MIN_UNITS_PER_VALUE: usize = 3;
@@ -432,7 +434,7 @@ impl Codec for ErrorSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -465,8 +467,8 @@ impl Codec for ErrorSourceCodec {
 impl<const FINISH_BOUND: usize> Codec for FinishValueSourceCodec<FINISH_BOUND> {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -688,7 +690,7 @@ impl<const FINISH_BOUND: usize> TranscodeDecodeHooks<FinishValueSourceCodec<FINI
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut FinishValueSourceCodec<FINISH_BOUND>,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<FinishValueSourceCodec<FINISH_BOUND>>> {
@@ -713,7 +715,7 @@ impl<const FINISH_BOUND: usize> TranscodeDecodeHooks<FinishValueSourceCodec<FINI
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut FinishValueSourceCodec<FINISH_BOUND>,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<FinishValueSourceCodec<FINISH_BOUND>>> {
@@ -1276,14 +1278,14 @@ fn test_buffered_convert_engine_implements_transcoder() {
     let mut engine = new_copy_engine();
     let mut output = [0_u8; 2];
     let max_transcode_output_len: fn(&CopyConvertEngine, usize) -> Result<usize, CapacityError> =
-        std::hint::black_box(<CopyConvertEngine as Transcoder>::max_transcode_output_len);
+        black_box(<CopyConvertEngine as Transcoder>::max_transcode_output_len);
     let max_finish_output_len: fn(&CopyConvertEngine) -> Result<usize, CapacityError> =
-        std::hint::black_box(<CopyConvertEngine as Transcoder>::max_finish_output_len);
+        black_box(<CopyConvertEngine as Transcoder>::max_finish_output_len);
     let max_reset_output_len: fn(&CopyConvertEngine) -> Result<usize, CapacityError> =
-        std::hint::black_box(<CopyConvertEngine as Transcoder>::max_reset_output_len);
-    let transcode: TranscodeFn = std::hint::black_box(<CopyConvertEngine as Transcoder>::transcode);
-    let reset: OutputFn = std::hint::black_box(<CopyConvertEngine as Transcoder>::reset);
-    let finish: OutputFn = std::hint::black_box(<CopyConvertEngine as Transcoder>::finish);
+        black_box(<CopyConvertEngine as Transcoder>::max_reset_output_len);
+    let transcode: TranscodeFn = black_box(<CopyConvertEngine as Transcoder>::transcode);
+    let reset: OutputFn = black_box(<CopyConvertEngine as Transcoder>::reset);
+    let finish: OutputFn = black_box(<CopyConvertEngine as Transcoder>::finish);
 
     assert_eq!(Ok(3), max_transcode_output_len(&engine, 2));
     assert_eq!(Ok(1), max_finish_output_len(&engine));
@@ -1995,7 +1997,7 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResetObservingDecodeHooks {
-    called: std::rc::Rc<Cell<bool>>,
+    called: Rc<Cell<bool>>,
 }
 
 impl TranscodeDecodeHooks<SourceCodec> for ResetObservingDecodeHooks {
@@ -2027,8 +2029,8 @@ struct StatelessResetFailingSourceCodec;
 impl Codec for StatelessResetSourceCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2066,7 +2068,7 @@ impl Codec for StatelessResetFailingSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2109,7 +2111,7 @@ impl TranscodeDecodeHooks<StatelessResetSourceCodec> for StatelessResetSourceDec
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut StatelessResetSourceCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<StatelessResetSourceCodec>> {
@@ -2146,8 +2148,8 @@ struct OverflowResetSourceCodec;
 impl Codec for OverflowResetSourceCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2187,8 +2189,8 @@ struct OverflowResetTargetCodec;
 impl Codec for OverflowResetTargetCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2229,7 +2231,7 @@ impl TranscodeDecodeHooks<OverflowResetSourceCodec> for OverflowResetSourceDecod
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverflowResetSourceCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<OverflowResetSourceCodec>> {
@@ -2257,7 +2259,7 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec> for MismatchCapacityResetEmi
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut ResetEmittingSourceCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<ResetEmittingSourceCodec>> {
@@ -2286,7 +2288,7 @@ fn test_buffered_convert_engine_reset_emits_target_reset_output() {
 
 #[test]
 fn test_buffered_convert_engine_reset_calls_decode_reset_hooks() {
-    let called = std::rc::Rc::new(Cell::new(false));
+    let called = Rc::new(Cell::new(false));
     let mut engine = TranscodeConvertEngine::new(
         SourceCodec,
         TargetCodec,
@@ -2521,8 +2523,8 @@ struct ResetEncodingFailSourceCodec;
 impl Codec for ResetEmittingSourceCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2566,8 +2568,8 @@ impl Codec for ResetEmittingSourceCodec {
 impl Codec for ResetEncodingFailSourceCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2615,7 +2617,7 @@ impl TranscodeDecodeHooks<ResetEmittingSourceCodec> for ResetSourceDecodeHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut ResetEmittingSourceCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<ResetEmittingSourceCodec>> {
@@ -2630,7 +2632,7 @@ impl TranscodeDecodeHooks<ResetEncodingFailSourceCodec> for ResetEncodingFailSou
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut ResetEncodingFailSourceCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<ResetEncodingFailSourceCodec>> {
@@ -2645,7 +2647,7 @@ impl Codec for ResetFailingSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2706,7 +2708,7 @@ impl Codec for FinishFailingSourceCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = EngineError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -2972,7 +2974,7 @@ fn test_buffered_convert_engine_partial_reset_failure_poisoned() {
         ResetTargetHooks,
     );
     let mut output = [0_u8; 2];
-    engine
+    let _ = engine
         .reset(&mut output, 0)
         .expect_err("source reset should fail after target reset succeeds");
     assert_eq!(0xaa, output[0]);
@@ -2994,7 +2996,7 @@ fn test_buffered_convert_engine_failed_finish_poisoned_until_reset() {
     engine.reset(&mut reset_output, 0).expect("initialize stream");
 
     let mut output = [0_u8; 1];
-    engine.finish(&mut output, 0).expect_err("source finish should fail");
+    let _ = engine.finish(&mut output, 0).expect_err("source finish should fail");
     assert_eq!(
         Err(TranscodeConvertError::Failure(TranscodeFailure::LifecyclePoisoned,)),
         engine.finish(&mut output, 0),
