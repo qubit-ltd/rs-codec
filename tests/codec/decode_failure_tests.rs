@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
 use core::num::NonZeroUsize;
 
 use qubit_codec::Codec;
@@ -21,7 +22,7 @@ impl Codec for PlainCodec {
     type Value = Vec<u8>;
     type Unit = u8;
     type DecodeError = DomainDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 

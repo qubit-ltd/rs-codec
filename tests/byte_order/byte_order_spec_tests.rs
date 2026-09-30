@@ -14,7 +14,19 @@ use qubit_codec::NativeEndian;
 
 #[test]
 fn test_byte_order_spec_exposes_runtime_order() {
-    assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
-    assert_eq!(ByteOrder::LittleEndian, LittleEndian::ORDER);
-    assert_eq!(ByteOrder::NativeEndian, NativeEndian::ORDER);
+    assert_eq!(
+        ByteOrder::BigEndian,
+        BigEndian::ORDER,
+        "BigEndian::ORDER reports the big-endian runtime selector"
+    );
+    assert_eq!(
+        ByteOrder::LittleEndian,
+        LittleEndian::ORDER,
+        "LittleEndian::ORDER reports the little-endian runtime selector"
+    );
+    assert_eq!(
+        ByteOrder::NativeEndian,
+        NativeEndian::ORDER,
+        "NativeEndian::ORDER reports the native-endian runtime selector"
+    );
 }

@@ -10,7 +10,9 @@ use qubit_codec::NativeEndian;
 
 #[test]
 fn test_native_endian_is_copyable_default_marker() {
-    let marker = NativeEndian;
+    let marker: NativeEndian = Default::default();
+    let copied = marker;
 
-    assert_eq!(marker, NativeEndian);
+    assert_eq!(marker, copied, "copying preserves the native-endian marker");
+    assert_eq!(marker, NativeEndian, "the default is the native-endian marker");
 }
