@@ -20,9 +20,13 @@ use crate::TranscodeProgress;
 /// assert!(matches!(step, AsyncTranscodeDecodeStep::EndOfInput));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
 pub enum AsyncTranscodeDecodeStep {
     /// The wrapped input reached EOF with no unread units.
     EndOfInput,
     /// The decoder consumed input or initialized output without another await.
-    Progress(TranscodeProgress),
+    Progress(
+        /// Consumed and written counts and the decoder stop status.
+        TranscodeProgress,
+    ),
 }

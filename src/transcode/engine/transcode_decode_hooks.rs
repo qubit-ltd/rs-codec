@@ -42,17 +42,15 @@ use crate::TranscodeDecodeErrorOf;
 /// value.
 ///
 /// ```rust
+/// use core::convert::Infallible;
 /// use core::num::NonZeroUsize;
-/// use qubit_codec::{
-///     Codec,
-///     DecodeFailure,
-///     TranscodeDecodeError,
-/// };
-/// use qubit_codec::engine::{
-///     DecodeContext,
-///     DecodeInvalidAction,
-///     TranscodeDecodeHooks,
-/// };
+///
+/// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeDecodeError;
+/// use qubit_codec::engine::DecodeContext;
+/// use qubit_codec::engine::DecodeInvalidAction;
+/// use qubit_codec::engine::TranscodeDecodeHooks;
 ///
 /// #[derive(Clone, Copy)]
 /// struct MyCodec;
@@ -66,7 +64,7 @@ use crate::TranscodeDecodeErrorOf;
 ///     type Value = u8;
 ///     type Unit = u8;
 ///     type DecodeError = MyDecodeError;
-///     type EncodeError = core::convert::Infallible;
+///     type EncodeError = Infallible;
 ///
 ///     const MIN_UNITS_PER_VALUE: usize = 1;
 ///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -99,6 +97,7 @@ use crate::TranscodeDecodeErrorOf;
 ///     }
 /// }
 ///
+/// #[derive(Default)]
 /// struct ReplacementHooks;
 ///
 /// impl TranscodeDecodeHooks<MyCodec> for ReplacementHooks {
@@ -119,6 +118,16 @@ use crate::TranscodeDecodeErrorOf;
 ///         }
 ///     }
 /// }
+///
+/// let mut hooks = ReplacementHooks::default();
+/// let mut codec = MyCodec;
+/// let context = DecodeContext::new(0, 0, 0, 0, 1);
+/// let error = MyDecodeError::Malformed { consumed: NonZeroUsize::MIN };
+/// let action = hooks.handle_invalid_decode(
+///     &mut codec, &error, Some(NonZeroUsize::MIN), context,
+/// ).expect("replacement policy accepts malformed input");
+/// assert!(matches!(action, DecodeInvalidAction::Emit { value: b'?', consumed }
+///     if consumed == NonZeroUsize::MIN));
 /// ```
 ///
 /// # Type Parameters
@@ -156,7 +165,7 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
     /// be represented as `usize`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -183,7 +192,7 @@ where
     ///
     /// Returns the finite, transient-state-independent final-output upper
     /// bound.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
         0
@@ -244,7 +253,7 @@ where
     /// # Errors
     ///
     /// Returns [`crate::TranscodeDecodeError`] when policy evaluation fails.
-    #[inline(always)]
+    #[inline]
     fn handle_incomplete_decode(
         &mut self,
         _codec: &mut C,
@@ -263,7 +272,7 @@ where
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    #[inline(always)]
+    #[inline]
     fn reset_hooks(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output.

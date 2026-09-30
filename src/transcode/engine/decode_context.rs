@@ -53,7 +53,7 @@ impl DecodeContext {
     ///
     /// Panics when `input_index < input_start` or
     /// `output_index < output_start`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn new(
         input_start: usize,
@@ -84,7 +84,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns the input start index.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn input_start(self) -> usize {
         self.input_start
@@ -95,7 +95,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns the current input index.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn input_index(self) -> usize {
         self.input_index
@@ -106,7 +106,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns the output start index.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn output_start(self) -> usize {
         self.output_start
@@ -118,7 +118,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns the current output index.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn output_index(self) -> usize {
         self.output_index
@@ -129,7 +129,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns the available input-unit count.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn available(self) -> usize {
         self.available
@@ -140,7 +140,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns `input_index - input_start`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn input_used(self) -> usize {
         self.input_index - self.input_start
@@ -151,7 +151,7 @@ impl DecodeContext {
     /// # Returns
     ///
     /// Returns `output_index - output_start`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn output_written(self) -> usize {
         self.output_index - self.output_start

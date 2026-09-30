@@ -9,9 +9,9 @@
 
 use core::num::NonZeroUsize;
 
-use super::super::engine::DecodeContext;
-use super::super::engine::DecodeInvalidAction;
-use super::super::engine::TranscodeDecodeHooks;
+use super::super::super::engine::DecodeContext;
+use super::super::super::engine::DecodeInvalidAction;
+use super::super::super::engine::TranscodeDecodeHooks;
 use crate::Codec;
 use crate::TranscodeDecodeErrorOf;
 
@@ -28,14 +28,19 @@ where
     /// # Parameters
     ///
     /// - `_codec`: Low-level codec instance.
-    /// - `error`: Invalid domain error produced by the low-level codec.
+    /// - `_error`: Invalid domain error produced by the low-level codec.
     /// - `_consumed`: Invalid units that a non-strict policy may consume.
-    /// - `context`: Decoding context carrying input position.
+    /// - `_context`: Decoding context carrying input position.
     ///
     /// # Returns
     ///
     /// Returns the strict invalid-decode policy action.
-    #[inline(always)]
+    ///
+    /// # Errors
+    ///
+    /// This strict hook never returns an error; it always rejects invalid
+    /// input.
+    #[inline]
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut C,

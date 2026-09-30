@@ -39,6 +39,44 @@ use crate::Transcoder;
 ///
 /// - `D`: Low-level codec used to decode source units.
 /// - `E`: Low-level codec used to encode target units.
+///
+/// # Examples
+///
+/// A byte-preserving codec can be adapted to the buffered streaming interface.
+///
+/// ```
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+///
+/// use qubit_codec::Codec;
+/// use qubit_codec::CodecTranscodeConverter;
+/// use qubit_codec::DecodeFailure;
+///
+/// # struct ByteCodec;
+/// # impl Codec for ByteCodec {
+/// #     type Value = u8;
+/// #     type Unit = u8;
+/// #     type DecodeError = Infallible;
+/// #     type EncodeError = Infallible;
+/// #     const MIN_UNITS_PER_VALUE: usize = 1;
+/// #     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+/// #     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+/// #     unsafe fn decode(&mut self, input: &[u8], index: usize)
+/// #         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+/// #         Ok((input[index], NonZeroUsize::MIN))
+/// #     }
+/// #     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+/// #         -> Result<usize, Infallible> {
+/// #         output[index] = *value;
+/// #         Ok(1)
+/// #     }
+/// # }
+/// let mut converter = CodecTranscodeConverter::new(ByteCodec, ByteCodec);
+/// let mut output = [0_u8; 2];
+/// converter.reset(&mut output, 0).unwrap();
+/// converter.transcode(&[7, 9], 0, &mut output, 0).unwrap();
+/// assert_eq!(output, [7, 9]);
+/// ```
 pub struct CodecTranscodeConverter<D, E>
 where
     D: Codec,
@@ -63,7 +101,7 @@ where
     /// # Returns
     ///
     /// Returns a buffered converter adapter for the supplied codecs.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
@@ -72,7 +110,11 @@ where
     }
 
     /// Returns a shared reference to the source codec.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Borrows the source codec without allocating or changing stream state.
+    #[inline]
     #[must_use]
     pub fn source_codec(&self) -> &D {
         self.engine.source_codec()
@@ -83,14 +125,22 @@ where
     /// Mutating a codec during an active stream can invalidate that stream's
     /// assumptions; reset the adapter before continuing with the new codec
     /// configuration.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Exclusively borrows the codec while the adapter remains borrowed.
+    #[inline]
     #[must_use]
     pub fn source_codec_mut(&mut self) -> &mut D {
         self.engine.source_codec_mut()
     }
 
     /// Returns a shared reference to the target codec.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Borrows the target codec without allocating or changing stream state.
+    #[inline]
     #[must_use]
     pub fn target_codec(&self) -> &E {
         self.engine.target_codec()
@@ -101,7 +151,11 @@ where
     /// Mutating a codec during an active stream can invalidate that stream's
     /// assumptions; reset the adapter before continuing with the new codec
     /// configuration.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Exclusively borrows the codec while the adapter remains borrowed.
+    #[inline]
     #[must_use]
     pub fn target_codec_mut(&mut self) -> &mut E {
         self.engine.target_codec_mut()
@@ -111,7 +165,11 @@ where
     ///
     /// Any buffered lifecycle state, pending value, and internal hooks are
     /// discarded.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Returns the owned source codec followed by the owned target codec.
+    #[inline]
     #[must_use]
     pub fn into_codecs(self) -> (D, E) {
         let (source, target, _, _) = self.engine.into_parts();
@@ -130,8 +188,13 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for produced target units.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
     }
@@ -143,8 +206,13 @@ where
     ///
     /// Returns a conservative upper bound valid for every reachable converter
     /// state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_finish_output_len()
     }
@@ -161,7 +229,7 @@ where
     /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
     /// arithmetic overflows.
     #[must_use = "capacity planning can fail on overflow"]
-    #[inline(always)]
+    #[inline]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_reset_output_len()
     }
@@ -191,7 +259,6 @@ where
     ///
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
-    #[inline(always)]
     pub fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>>
     where
         D::Value: Default,
@@ -220,7 +287,6 @@ where
     ///
     /// Returns converter error when source or target indices are invalid, or
     /// when decoding/encoding fails under current policy.
-    #[inline(always)]
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -232,7 +298,24 @@ where
     }
 
     /// Converts source units after the caller has established end of input.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Final source unit slice; the caller must not supply more
+    ///   input later.
+    /// - `input_index`: Absolute index at which unread source units begin.
+    /// - `output`: Target unit slice receiving converted values.
+    /// - `output_index`: Absolute index at which target output begins.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed and produced counts with the conversion stop reason.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error for invalid indices, invalid or incomplete
+    /// final source input, or a decoder/encoder failure under the current
+    /// policy.
     pub fn transcode_eof(
         &mut self,
         input: &[D::Unit],
@@ -260,8 +343,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a finish error for pending output that cannot be finalized.
-    #[inline(always)]
+    /// Returns a converter error for invalid output indices, insufficient
+    /// output capacity, or failures while draining pending values or
+    /// finishing either codec.
     pub fn finish(
         &mut self,
         output: &mut [E::Unit],
@@ -280,8 +364,12 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Default,
 {
+    /// Source units accepted by the decoder codec.
     type Input = D::Unit;
+    /// Target units produced by the encoder codec.
     type Output = E::Unit;
+    /// Conversion failures retaining decoder, encoder, and pending-value
+    /// context.
     type Error = TranscodeConvertErrorOf<D, E>;
 
     /// Returns an upper bound for target units produced from `input_len` units.
@@ -293,7 +381,12 @@ where
     /// # Returns
     ///
     /// Returns a conservative upper bound for produced target units.
-    #[inline(always)]
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
+    #[inline]
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_transcode_output_len(self, input_len)
     }
@@ -304,7 +397,12 @@ where
     ///
     /// Returns a conservative upper bound valid for every reachable converter
     /// state.
-    #[inline(always)]
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
+    /// arithmetic overflows.
+    #[inline]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_finish_output_len(self)
     }
@@ -320,7 +418,7 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
     /// arithmetic overflows.
-    #[inline(always)]
+    #[inline]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         CodecTranscodeConverter::max_reset_output_len(self)
     }
@@ -342,7 +440,6 @@ where
     ///
     /// Returns a converter error when the output range is invalid or too
     /// small, or when decoder or encoder reset processing fails.
-    #[inline(always)]
     fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::reset(self, output, output_index)
     }
@@ -365,7 +462,6 @@ where
     ///
     /// Returns converter error when source or target indices are invalid, or
     /// when decoding/encoding fails under current policy.
-    #[inline(always)]
     fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -380,7 +476,24 @@ where
     ///
     /// This forwarding implementation delegates to the converter's EOF-aware
     /// operation so buffered decoder state can be finalized before encoding.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Final source unit slice; the caller must not supply more
+    ///   input later.
+    /// - `input_index`: Absolute index at which unread source units begin.
+    /// - `output`: Target unit slice receiving converted values.
+    /// - `output_index`: Absolute index at which target output begins.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed and produced counts with the conversion stop reason.
+    ///
+    /// # Errors
+    ///
+    /// Returns a converter error for invalid indices, invalid or incomplete
+    /// final source input, or a decoder/encoder failure under the current
+    /// policy.
     fn transcode_eof(
         &mut self,
         input: &[D::Unit],
@@ -404,8 +517,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a finish error for pending output that cannot be finalized.
-    #[inline(always)]
+    /// Returns a converter error for invalid output indices, insufficient
+    /// output capacity, or failures while draining pending values or
+    /// finishing either codec.
     fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         CodecTranscodeConverter::finish(self, output, output_index)
     }
@@ -417,8 +531,11 @@ where
     E: Codec<Value = D::Value>,
     D::Value: Default,
 {
+    /// Domain error reported by the source codec.
     type DecodeError = D::DecodeError;
+    /// Domain error reported by the target codec.
     type EncodeError = E::EncodeError;
+    /// Decoded value transferred from source codec to target codec.
     type Value = D::Value;
 }
 
@@ -433,7 +550,7 @@ where
     /// # Returns
     ///
     /// Returns a converter with default codecs and hooks.
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self {
             engine: TranscodeConvertEngine::default(),
@@ -456,6 +573,10 @@ where
     /// # Returns
     ///
     /// Returns `fmt::Result` from the formatter.
+    ///
+    /// # Errors
+    ///
+    /// Returns the formatter error if writing the debug representation fails.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CodecTranscodeConverter")
             .field("engine", &self.engine)

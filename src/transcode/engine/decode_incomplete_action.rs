@@ -10,6 +10,10 @@
 use crate::Codec;
 
 /// Incomplete-decode action for a codec-backed decode hook.
+///
+/// # Type Parameters
+///
+/// - `C`: Codec whose logical value type is emitted by the decode hook.
 pub type DecodeIncompleteActionOf<C> = DecodeIncompleteAction<<C as Codec>::Value>;
 
 /// Action selected after end-of-input leaves a codec value incomplete.

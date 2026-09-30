@@ -175,11 +175,42 @@ pub struct TranscodeDecodeEngine<C, H> {
 }
 
 /// Adds two independent decoded-value capacity bounds.
+///
+/// # Parameters
+///
+/// - `first`: First decoded-value bound.
+/// - `second`: Independent decoded-value bound to add.
+///
+/// # Returns
+///
+/// Returns the combined decoded-value bound.
+///
+/// # Errors
+///
+/// Returns `CapacityError::OutputLengthOverflow` if the sum exceeds
+/// `usize::MAX`.
+#[inline]
 fn add_decode_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
     first.checked_add(second).ok_or(CapacityError::OutputLengthOverflow)
 }
 
 /// Adds reset, transcode, and finish decoded-value capacity bounds.
+///
+/// # Parameters
+///
+/// - `reset`: Maximum reset output.
+/// - `transcode`: Maximum streaming output.
+/// - `finish`: Maximum finalization output.
+///
+/// # Returns
+///
+/// Returns the complete-stream decoded-value bound.
+///
+/// # Errors
+///
+/// Returns `CapacityError::OutputLengthOverflow` if the sum exceeds
+/// `usize::MAX`.
+#[inline]
 fn sum_decode_output_bounds(reset: usize, transcode: usize, finish: usize) -> Result<usize, CapacityError> {
     let before_finish = add_decode_output_bounds(reset, transcode)?;
     add_decode_output_bounds(before_finish, finish)
@@ -222,7 +253,7 @@ where
     /// # Returns
     ///
     /// Returns a shared reference to the codec owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn codec(&self) -> &C {
         &self.codec
@@ -233,7 +264,7 @@ where
     /// # Returns
     ///
     /// Returns a mutable reference to the codec owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
@@ -244,7 +275,7 @@ where
     /// # Returns
     ///
     /// Returns a shared reference to the hook object owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn hooks(&self) -> &H {
         &self.hooks
@@ -255,7 +286,7 @@ where
     /// # Returns
     ///
     /// Returns a mutable reference to the hook object owned by this engine.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn hooks_mut(&mut self) -> &mut H {
         &mut self.hooks
@@ -268,7 +299,7 @@ where
     /// # Returns
     ///
     /// Returns the wrapped codec followed by the decode hooks.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (C, H) {
         let Self { codec, hooks, .. } = self;
@@ -292,7 +323,11 @@ where
     ///
     /// Returns a conservative upper bound, or a capacity error on arithmetic
     /// overflow.
-    #[inline(always)]
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when hook capacity arithmetic overflows.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
@@ -309,7 +344,12 @@ where
     /// include that portion in
     /// [`TranscodeDecodeHooks::max_finish_output_len`]. Both component bounds
     /// cover every reachable transient state.
-    #[inline(always)]
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when the combined finish bound exceeds
+    /// `usize::MAX`.
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         add_decode_output_bounds(
@@ -320,9 +360,12 @@ where
 
     /// Returns the global maximum values emitted when resetting stream state.
     ///
-    /// Returns [`Codec::MAX_DECODE_RESET_VALUES`] for the wrapped codec.
+    /// # Returns
+    ///
+    /// Returns `Ok(Codec::MAX_DECODE_RESET_VALUES)` for the wrapped codec.
+    /// This query cannot fail.
     /// Stateless decoders always return `0`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(C::MAX_DECODE_RESET_VALUES)
@@ -344,6 +387,10 @@ where
     ///
     /// Returns the complete-stream output bound, or a capacity error on
     /// arithmetic overflow.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error when a component or their sum overflows.
     #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
@@ -375,6 +422,10 @@ where
     /// or hook reset handling fails. Capacity and index failures occur before
     /// any reset state is changed. Once reset execution starts, an error
     /// poisons the engine until a later reset succeeds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the codec reports more than `MAX_DECODE_RESET_VALUES` written.
     pub fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         let required = C::MAX_DECODE_RESET_VALUES;
         TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
@@ -407,15 +458,18 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when `input_index` is outside `input`, when
-    /// `output_index` is outside `output`, or when a concrete policy hook
-    /// rejects a value. Returns
+    /// Returns framework errors when either index is outside its slice, and
+    /// domain errors when a concrete policy hook rejects a value. Returns
     /// [`TranscodeFailure::TranscodeBeforeReset`] when the engine has not
     /// completed its first reset. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
     /// failed after execution started.
+    ///
+    /// # Panics
+    ///
+    /// Panics when codec or hook progress violates declared decode bounds.
     pub fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -431,7 +485,27 @@ where
     /// This follows the normal streaming contract, except that codec attempts
     /// use [`Codec::decode_eof`]. A codec may therefore resolve a trailing
     /// prefix that would remain incomplete in an open stream.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete source-unit slice.
+    /// - `input_index`: Absolute index of the next source unit.
+    /// - `output`: Destination for decoded values.
+    /// - `output_index`: Absolute index of the next destination slot.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed/written counts and the reason decoding stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors for invalid lifecycle state or slice indices,
+    /// and policy/domain errors for rejected input, including incomplete EOF
+    /// tails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when codec or hook progress violates declared decode bounds.
     pub fn transcode_eof(
         &mut self,
         input: &[C::Unit],
@@ -440,92 +514,6 @@ where
         output_index: usize,
     ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
         self.transcode_with_eof(input, input_index, output, output_index, true)
-    }
-
-    /// Runs one decode step with an explicit end-of-input flag.
-    ///
-    /// The helper centralizes lifecycle validation and shared cursor handling
-    /// for the streaming and EOF-aware entry points.
-    fn transcode_with_eof(
-        &mut self,
-        input: &[C::Unit],
-        input_index: usize,
-        output: &mut [C::Value],
-        output_index: usize,
-        end_of_input: bool,
-    ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
-        self.lifecycle.on_transcode()?;
-        TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
-
-        let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE).expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
-        let min_units_len = min_units.get();
-        let mut state = DecodeState::new(input, input_index, output, output_index);
-        while state.has_input() {
-            let context = state.context();
-            let available = context.available();
-            if available < min_units_len {
-                if !end_of_input {
-                    return Ok(state.need_input_progress_with(min_units));
-                }
-                match self
-                    .hooks
-                    .handle_incomplete_decode(&mut self.codec, None, min_units, context)?
-                {
-                    DecodeIncompleteAction::Reject => {
-                        return Err(TranscodeFailure::incomplete_input(
-                            context.input_index(),
-                            min_units.get(),
-                            available,
-                        )
-                        .into());
-                    }
-                    DecodeIncompleteAction::Skip => {
-                        let read =
-                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
-                        if let Some(progress) = state.apply_decode_outcome(DecodeOutcome::skipped(read)) {
-                            return Ok(progress);
-                        }
-                        continue;
-                    }
-                    DecodeIncompleteAction::Emit { value } => {
-                        if state.needs_output() {
-                            return Ok(state.need_output_progress());
-                        }
-                        let output_index = state.output_cursor();
-                        // SAFETY: `needs_output()` returned false, so the
-                        // output cursor points at a writable initialized slot.
-                        unsafe {
-                            *state.output_mut().get_unchecked_mut(output_index) = value;
-                        }
-                        let read =
-                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
-                        if let Some(progress) =
-                            state.apply_decode_outcome(DecodeOutcome::emitted(read, NonZeroUsize::MIN))
-                        {
-                            return Ok(progress);
-                        }
-                        continue;
-                    }
-                }
-            }
-            if state.needs_output() {
-                return Ok(state.need_output_progress());
-            }
-            let output_index = state.output_cursor();
-            let output = state.output_mut();
-            let (outcome, _) = self.decode_one(input, context, end_of_input, |value, _input_index| {
-                // SAFETY: `needs_output()` returned false, so the output
-                // cursor points at a writable initialized slot.
-                unsafe {
-                    *output.get_unchecked_mut(output_index) = value;
-                }
-            })?;
-            if let Some(progress) = state.apply_decode_outcome(outcome) {
-                return Ok(progress);
-            }
-        }
-
-        Ok(state.complete_progress())
     }
 
     /// Finishes codec and hook-owned output after EOF.
@@ -609,7 +597,11 @@ where
     /// Returns framework errors for insufficient output, capacity overflow, or
     /// an incomplete EOF tail, and domain errors from reset, decode, or
     /// finish.
-    #[inline(always)]
+    ///
+    /// # Panics
+    ///
+    /// Panics when codec or hook output violates reset, decode, or finish
+    /// bounds.
     pub fn transcode_complete_into(
         &mut self,
         input: &[C::Unit],
@@ -625,6 +617,7 @@ where
     /// - `input`: Complete input unit slice visible to the caller.
     /// - `context`: Decode context describing the current source and output
     ///   cursors.
+    /// - `end_of_input`: Whether the source is final and EOF policy applies.
     /// - `consume`: Callback invoked exactly once when this attempt emits a
     ///   logical value.
     ///
@@ -635,8 +628,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the decode outcome and the consumer result when a value was
-    /// emitted.
+    /// Returns the decode outcome and `Some` consumer result when a value was
+    /// emitted; returns `None` when input was skipped or more input is needed.
     ///
     /// # Errors
     ///
@@ -647,7 +640,9 @@ where
     /// Panics when the codec reports consumption beyond the available input,
     /// an incomplete-input requirement beyond
     /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], or hooks return an action that
-    /// consumes beyond the available input.
+    /// consumes beyond the available input. Also panics when reported consumed
+    /// width exceeds the codec maximum or an incomplete requirement does not
+    /// exceed available input. Debug builds reject an empty context.
     pub(crate) fn decode_one<R, F>(
         &mut self,
         input: &[C::Unit],
@@ -778,7 +773,137 @@ where
         }
     }
 
+    /// Runs one decode step with an explicit end-of-input flag.
+    ///
+    /// The helper centralizes lifecycle validation and shared cursor handling
+    /// for the streaming and EOF-aware entry points.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete source-unit slice.
+    /// - `input_index`: Absolute index of the next source unit.
+    /// - `output`: Destination for decoded values.
+    /// - `output_index`: Absolute index of the next destination slot.
+    /// - `end_of_input`: Whether to resolve incomplete tails through EOF
+    ///   policy.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed/written counts and the reason decoding stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns framework errors for invalid lifecycle state or slice indices,
+    /// and policy/domain errors for rejected input, including incomplete EOF
+    /// tails.
+    ///
+    /// # Panics
+    ///
+    /// Panics when codec or hook progress violates declared decode bounds.
+    fn transcode_with_eof(
+        &mut self,
+        input: &[C::Unit],
+        input_index: usize,
+        output: &mut [C::Value],
+        output_index: usize,
+        end_of_input: bool,
+    ) -> Result<TranscodeProgress, TranscodeDecodeErrorOf<C>> {
+        self.lifecycle.on_transcode()?;
+        TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
+
+        let min_units = NonZeroUsize::new(C::MIN_UNITS_PER_VALUE).expect("Codec::MIN_UNITS_PER_VALUE is non-zero");
+        let min_units_len = min_units.get();
+        let mut state = DecodeState::new(input, input_index, output, output_index);
+        while state.has_input() {
+            let context = state.context();
+            let available = context.available();
+            if available < min_units_len {
+                if !end_of_input {
+                    return Ok(state.need_input_progress_with(min_units));
+                }
+                match self
+                    .hooks
+                    .handle_incomplete_decode(&mut self.codec, None, min_units, context)?
+                {
+                    DecodeIncompleteAction::Reject => {
+                        return Err(TranscodeFailure::incomplete_input(
+                            context.input_index(),
+                            min_units.get(),
+                            available,
+                        )
+                        .into());
+                    }
+                    DecodeIncompleteAction::Skip => {
+                        let read =
+                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
+                        if let Some(progress) = state.apply_decode_outcome(DecodeOutcome::skipped(read)) {
+                            return Ok(progress);
+                        }
+                        continue;
+                    }
+                    DecodeIncompleteAction::Emit { value } => {
+                        if state.needs_output() {
+                            return Ok(state.need_output_progress());
+                        }
+                        let output_index = state.output_cursor();
+                        // SAFETY: `needs_output()` returned false, so the
+                        // output cursor points at a writable initialized slot.
+                        unsafe {
+                            *state.output_mut().get_unchecked_mut(output_index) = value;
+                        }
+                        let read =
+                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
+                        if let Some(progress) =
+                            state.apply_decode_outcome(DecodeOutcome::emitted(read, NonZeroUsize::MIN))
+                        {
+                            return Ok(progress);
+                        }
+                        continue;
+                    }
+                }
+            }
+            if state.needs_output() {
+                return Ok(state.need_output_progress());
+            }
+            let output_index = state.output_cursor();
+            let output = state.output_mut();
+            let (outcome, _) = self.decode_one(input, context, end_of_input, |value, _input_index| {
+                // SAFETY: `needs_output()` returned false, so the output
+                // cursor points at a writable initialized slot.
+                unsafe {
+                    *output.get_unchecked_mut(output_index) = value;
+                }
+            })?;
+            if let Some(progress) = state.apply_decode_outcome(outcome) {
+                return Ok(progress);
+            }
+        }
+
+        Ok(state.complete_progress())
+    }
+
     /// Applies a hook-selected invalid-decode action after reject handling.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `R`: Consumer result for an emitted value.
+    /// - `F`: Callback consuming an emitted value and its source index.
+    ///
+    /// # Parameters
+    ///
+    /// - `action`: Validated policy action to skip or emit.
+    /// - `context`: Source cursor and available input.
+    /// - `consume`: Callback invoked only for an emitted value.
+    ///
+    /// # Returns
+    ///
+    /// Returns progress with `Some` callback result for Emit, or `None` for
+    /// Skip.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the action consumes more units than the context makes
+    /// available.
     fn apply_invalid_decode_action<R, F>(
         action: AppliedDecodeInvalidAction<C::Value>,
         context: DecodeContext,
@@ -806,38 +931,99 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
+    /// Source units accepted by the wrapped codec.
     type Input = C::Unit;
+    /// Logical values decoded by the wrapped codec.
     type Output = C::Value;
+    /// Framework failures and the wrapped codec's decode errors.
     type Error = TranscodeDecodeErrorOf<C>;
 
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input_len`: Number of source units to decode.
+    ///
+    /// # Returns
+    ///
+    /// Returns the conservative streaming output bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error on hook arithmetic overflow.
+    #[inline]
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_transcode_output_len(self, input_len)
     }
 
     /// Returns an upper bound for values produced by finishing codec and hook
     /// state.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Returns the combined codec and hook finish bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error if that sum overflows.
+    #[inline]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_finish_output_len(self)
     }
 
     /// Returns an upper bound for values emitted when resetting stream state.
-    #[inline(always)]
+    ///
+    /// # Returns
+    ///
+    /// Returns the codec reset bound as `Ok`; this query cannot fail.
+    #[inline]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         TranscodeDecodeEngine::max_reset_output_len(self)
     }
 
-    /// Runs hook-owned cleanup before a logical decoder reset.
-    #[inline(always)]
+    /// Resets hooks and codec state, emitting any stream-start values.
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First writable value index.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of stream-start values written.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid-capacity/index errors or codec reset domain errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if codec reset output exceeds its declared bound.
     fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::reset(self, output, output_index)
     }
 
     /// Decodes source units into logical values.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Source unit slice.
+    /// - `input_index`: First source index.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed/written counts and the stop status.
+    ///
+    /// # Errors
+    ///
+    /// Returns lifecycle/index errors or rejected-input domain errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if codec or hook progress violates decode bounds.
     fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -849,7 +1035,26 @@ where
     }
 
     /// Decodes source units after end of input is known.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Final source unit slice.
+    /// - `input_index`: First source index.
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First destination index.
+    ///
+    /// # Returns
+    ///
+    /// Returns consumed/written counts and the stop status.
+    ///
+    /// # Errors
+    ///
+    /// Returns lifecycle/index errors or rejected input and incomplete-tail
+    /// errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if codec or hook progress violates decode bounds.
     fn transcode_eof(
         &mut self,
         input: &[C::Unit],
@@ -861,7 +1066,23 @@ where
     }
 
     /// Finishes internally retained output after EOF.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `output`: Destination value slice.
+    /// - `output_index`: First writable value index.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of final values written.
+    ///
+    /// # Errors
+    ///
+    /// Returns lifecycle/capacity/index errors or codec/hook finish errors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if finalization output exceeds its declared bounds.
     fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         TranscodeDecodeEngine::finish(self, output, output_index)
     }
@@ -872,5 +1093,6 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
+    /// Domain error reported by the wrapped codec while decoding.
     type DecodeError = C::DecodeError;
 }

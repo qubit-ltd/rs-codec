@@ -31,14 +31,31 @@ pub(crate) enum EncodeOutcome {
 
 impl EncodeOutcome {
     /// Creates an outcome for a consumed input value.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Number of output units emitted; zero is valid for
+    ///   buffering.
+    ///
+    /// # Returns
+    ///
+    /// A consumed outcome retaining the emitted unit count.
+    #[inline]
     #[must_use]
     pub(crate) const fn consumed(written: usize) -> Self {
         Self::Consumed { written }
     }
 
     /// Creates an outcome for insufficient output capacity.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    ///
+    /// - `required`: Total capacity needed from the current output cursor.
+    ///
+    /// # Returns
+    ///
+    /// A retryable outcome that leaves the current input value unconsumed.
+    #[inline]
     #[must_use]
     pub(crate) const fn need_output(required: NonZeroUsize) -> Self {
         Self::NeedOutput { required }

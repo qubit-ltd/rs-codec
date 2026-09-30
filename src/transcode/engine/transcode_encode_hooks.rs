@@ -37,20 +37,16 @@ use crate::TranscodeEncodeErrorOf;
 /// This hook reports unsupported values as adapter-level errors.
 ///
 /// ```rust
-/// use core::{
-///     convert::Infallible,
-///     num::NonZeroUsize,
-/// };
-/// use qubit_codec::{
-///     Codec,
-///     TranscodeEncodeErrorOf,
-///     DecodeFailure,
-/// };
-/// use qubit_codec::engine::{
-///     EncodeContext,
-///     EncodeUnencodableAction,
-///     TranscodeEncodeHooks,
-/// };
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+///
+/// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeEncodeErrorOf;
+/// use qubit_codec::engine::EncodeContext;
+/// use qubit_codec::engine::EncodeUnencodableAction;
+/// use qubit_codec::engine::TranscodeEncodeEngine;
+/// use qubit_codec::engine::TranscodeEncodeHooks;
 ///
 /// #[derive(Clone, Copy)]
 /// struct ByteCodec;
@@ -98,6 +94,14 @@ use crate::TranscodeEncodeErrorOf;
 ///         Ok(EncodeUnencodableAction::Reject)
 ///     }
 /// }
+///
+/// let mut engine = TranscodeEncodeEngine::new(ByteCodec, StrictHooks);
+/// engine.reset(&mut [], 0).unwrap();
+/// let mut output = [0_u8; 1];
+/// let progress = engine.transcode(&[42], 0, &mut output, 0).unwrap();
+/// assert_eq!(progress.read(), 1);
+/// assert_eq!(progress.written(), 1);
+/// assert_eq!(output, [42]);
 /// ```
 ///
 /// # Type Parameters
@@ -135,7 +139,7 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
     /// be represented as `usize`.
-    #[inline(always)]
+    #[inline]
     #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         input_len
@@ -164,7 +168,7 @@ where
     ///
     /// Returns the finite, transient-state-independent final-output upper
     /// bound.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
         0
@@ -204,7 +208,7 @@ where
     /// # Parameters
     ///
     /// - `codec`: Low-level codec owned by the engine.
-    #[inline(always)]
+    #[inline]
     fn reset_hooks(&mut self, _codec: &mut C) {}
 
     /// Finishes hook-owned state and writes any retained output units.
@@ -234,7 +238,7 @@ where
     ///
     /// Returns a transcode encode error when hook-owned state cannot be
     /// finalized.
-    #[inline(always)]
+    #[inline]
     fn finish_hooks(
         &mut self,
         _codec: &mut C,
