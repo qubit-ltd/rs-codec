@@ -13,10 +13,20 @@ use super::super::transcode_progress::TranscodeProgress;
 
 /// Shared input/output state for one transcode call.
 ///
-/// `TranscodeState` owns the input/output slices visible to a single buffered
-/// transcode call and tracks absolute input/output cursors. Concrete
+/// `TranscodeState` borrows the input/output slices visible to a single
+/// buffered transcode call and tracks absolute input/output cursors. Concrete
 /// encode/decode/convert states wrap it and keep domain-specific operations in
 /// their own types.
+///
+/// Callers must keep input cursors within the input slice and prevent cursor
+/// arithmetic from overflowing. An output cursor beyond the slice is tolerated
+/// by capacity queries, which report zero remaining capacity.
+///
+/// # Type Parameters
+///
+/// - `'a`: Lifetime of the shared input and exclusive output borrows.
+/// - `Input`: Source unit type read by the current transcode call.
+/// - `Output`: Target unit type written by the current transcode call.
 pub(in crate::transcode) struct TranscodeState<'a, Input, Output> {
     /// Complete input slice visible to the current call.
     input: &'a [Input],
@@ -45,7 +55,12 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns initialized state with both cursors at their call starts.
-    #[inline(always)]
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `input_index` exceeds `input.len()`. Callers
+    /// must uphold this input bound in all builds.
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn new(
         input: &'a [Input],
@@ -70,7 +85,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the full input slice visible to this call.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn input(&self) -> &[Input] {
         self.input
@@ -81,7 +96,8 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the full mutable output slice visible to this call.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) fn output_mut(&mut self) -> &mut [Output] {
         self.output
     }
@@ -92,7 +108,8 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     ///
     /// Returns the immutable input slice and mutable output slice. This helper
     /// lets callers borrow the two disjoint fields at the same time.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub(in crate::transcode) fn input_output_mut(&mut self) -> (&[Input], &mut [Output]) {
         (self.input, self.output)
     }
@@ -102,7 +119,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the input index recorded when this call began.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn input_start(&self) -> usize {
         self.input_start
@@ -113,7 +130,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the output index recorded when this call began.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn output_start(&self) -> usize {
         self.output_start
@@ -124,7 +141,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the absolute input index for the next read or consume operation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn input_cursor(&self) -> usize {
         self.input_cursor
@@ -135,7 +152,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns the absolute output index for the next write operation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn output_cursor(&self) -> usize {
         self.output_cursor
@@ -146,7 +163,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns `true` when the input cursor has not reached the input end.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn has_input(&self) -> bool {
         self.input_cursor < self.input.len()
@@ -157,7 +174,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns `true` when the output cursor is at the output end.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn needs_output(&self) -> bool {
         self.output_cursor == self.output.len()
@@ -168,7 +185,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns remaining input units visible from `input_cursor`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn available_input(&self) -> usize {
         self.input.len() - self.input_cursor
@@ -179,7 +196,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns remaining output capacity from `output_cursor`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) fn available_output(&self) -> usize {
         self.output.len().saturating_sub(self.output_cursor)
@@ -190,7 +207,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns consumed input units relative to `input_start`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn read(&self) -> usize {
         self.input_cursor - self.input_start
@@ -201,42 +218,10 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// # Returns
     ///
     /// Returns written output units relative to `output_start`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(in crate::transcode) const fn written(&self) -> usize {
         self.output_cursor - self.output_start
-    }
-
-    /// Advances the input cursor.
-    ///
-    /// # Parameters
-    ///
-    /// - `read`: Number of input units consumed by the last operation.
-    #[inline(always)]
-    pub(in crate::transcode) fn advance_input(&mut self, read: usize) {
-        self.input_cursor += read;
-    }
-
-    /// Advances the output cursor.
-    ///
-    /// # Parameters
-    ///
-    /// - `written`: Number of output units written by the last operation.
-    #[inline(always)]
-    pub(in crate::transcode) fn advance_output(&mut self, written: usize) {
-        self.output_cursor += written;
-    }
-
-    /// Advances both cursors.
-    ///
-    /// # Parameters
-    ///
-    /// - `read`: Number of input units consumed by the last operation.
-    /// - `written`: Number of output units written by the last operation.
-    #[inline(always)]
-    pub(in crate::transcode) fn advance(&mut self, read: usize, written: usize) {
-        self.advance_input(read);
-        self.advance_output(written);
     }
 
     /// Returns completed progress for the current cursors.
@@ -245,8 +230,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     ///
     /// Returns completed progress with consumed input and written output
     /// counters.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub(in crate::transcode) fn complete_progress(&self) -> TranscodeProgress {
         TranscodeProgress::complete(self.read(), self.written())
     }
@@ -258,11 +242,11 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower
     ///   bound.
+    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with need-input status.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub(in crate::transcode) fn need_input_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_input(required, self.read(), self.written())
     }
@@ -273,12 +257,62 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     ///
     /// - `required`: Total output units required from the current output
     ///   position.
+    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress`] with need-output status.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub(in crate::transcode) fn need_output_progress(&self, required: NonZeroUsize) -> TranscodeProgress {
         TranscodeProgress::need_output(required, self.read(), self.written())
+    }
+
+    /// Advances the input cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `read`: Number of input units consumed by the last operation; must not
+    ///   exceed the available input.
+    ///
+    /// # Panics
+    ///
+    /// Panics when overflow checks are enabled if cursor addition overflows.
+    #[inline]
+    pub(in crate::transcode) fn advance_input(&mut self, read: usize) {
+        self.input_cursor += read;
+    }
+
+    /// Advances the output cursor.
+    ///
+    /// # Parameters
+    ///
+    /// - `written`: Number of output units written by the last operation.
+    ///   Callers must ensure cursor addition does not overflow.
+    ///
+    /// # Panics
+    ///
+    /// Panics when overflow checks are enabled if cursor addition overflows.
+    #[inline]
+    pub(in crate::transcode) fn advance_output(&mut self, written: usize) {
+        self.output_cursor += written;
+    }
+
+    /// Advances both cursors.
+    ///
+    /// `read` must not exceed the available input. Neither cursor addition may
+    /// overflow; this method delegates to the individual cursor operations.
+    ///
+    /// # Parameters
+    ///
+    /// - `read`: Number of input units consumed by the last operation.
+    /// - `written`: Number of output units written by the last operation.
+    ///   Callers must ensure cursor addition does not overflow.
+    ///
+    /// # Panics
+    ///
+    /// Panics when overflow checks are enabled if cursor addition overflows.
+    #[inline]
+    pub(in crate::transcode) fn advance(&mut self, read: usize, written: usize) {
+        self.advance_input(read);
+        self.advance_output(written);
     }
 }

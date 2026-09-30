@@ -20,7 +20,18 @@ use thiserror::Error;
 /// # Type Parameters
 ///
 /// - `E`: Domain error reported by the concrete codec, hook, or facade.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::TranscodeDomainError;
+///
+/// let error = TranscodeDomainError::main("invalid byte", 4);
+/// assert_eq!(error.input_index(), Some(4));
+/// assert_eq!(error.to_string(), "codec main error at input index 4: invalid byte");
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Error, Hash, PartialEq)]
+#[must_use]
 pub enum TranscodeDomainError<E> {
     /// Domain error reported while resetting codec or hook state.
     #[error("codec reset error: {source}")]
@@ -61,8 +72,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns a reset-phase domain error.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn reset(source: E) -> Self {
         Self::Reset { source }
     }
@@ -77,8 +87,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns a main-phase domain error.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn main(source: E, input_index: usize) -> Self {
         Self::Main {
             source,
@@ -98,8 +107,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns a main-phase domain error with consumption context.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn main_with_consumed(source: E, input_index: usize, input_consumed: Option<NonZeroUsize>) -> Self {
         Self::Main {
             source,
@@ -117,8 +125,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns a finish-phase domain error.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn finish(source: E) -> Self {
         Self::Finish { source }
     }
@@ -128,7 +135,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns a shared reference to the domain error.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn source(&self) -> &E {
         match self {
@@ -141,7 +148,7 @@ impl<E> TranscodeDomainError<E> {
     /// # Returns
     ///
     /// Returns the domain error.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_source(self) -> E {
         match self {
@@ -155,7 +162,7 @@ impl<E> TranscodeDomainError<E> {
     ///
     /// Returns `Some(index)` for main-phase errors and `None` for reset or
     /// finish errors.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn input_index(&self) -> Option<usize> {
         match self {
@@ -170,7 +177,7 @@ impl<E> TranscodeDomainError<E> {
     ///
     /// Returns `Some(consumed)` when a main-phase decode error reports the
     /// invalid input width. Returns `None` otherwise.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn input_consumed(&self) -> Option<NonZeroUsize> {
         match self {

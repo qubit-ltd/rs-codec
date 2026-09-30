@@ -11,6 +11,8 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use inventory::iter;
+
 use crate::ValueBytesCodecDescriptor;
 use crate::ValueBytesCodecRegistrationFactory;
 use crate::ValueCodecId;
@@ -27,6 +29,10 @@ pub type ValueBytesCodecRegistry = ValueCodecRegistry<ValueBytesCodecDescriptor>
 
 /// An immutable value-codec registry sorted by stable ID.
 ///
+/// # Type Parameters
+///
+/// - `D`: Copyable, static descriptor identifying one wire representation.
+///
 /// # Examples
 ///
 /// ```
@@ -37,12 +43,23 @@ pub type ValueBytesCodecRegistry = ValueCodecRegistry<ValueBytesCodecDescriptor>
 /// ```
 #[derive(Debug)]
 pub struct ValueCodecRegistry<D: 'static> {
+    /// Owned registrations sorted once by stable ID during construction.
     registrations: Box<[ValueCodecRegistration<D>]>,
+    /// Stable ID to position mapping into the immutable registration slice.
     indices: BTreeMap<ValueCodecId, usize>,
 }
 
 impl<D: Copy + 'static> ValueCodecRegistry<D> {
     /// Builds a local registry from static registrations.
+    ///
+    /// # Parameters
+    ///
+    /// - `registrations`: Static entries copied into this registry; input order
+    ///   is ignored.
+    ///
+    /// # Returns
+    ///
+    /// An owned, immutable registry sorted by ID, independent of the iterator.
     ///
     /// # Errors
     ///
@@ -54,7 +71,12 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     }
 
     /// Returns an empty local registry.
+    ///
+    /// # Returns
+    ///
+    /// A local registry with no registrations or indexed IDs.
     #[must_use]
+    #[inline]
     pub fn empty() -> Self {
         Self {
             registrations: Box::new([]),
@@ -62,22 +84,20 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
         }
     }
 
-    /// Finds a registration by stable ID.
-    ///
-    /// Returns `None` when `id` is absent.
-    #[must_use]
-    pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration<D>> {
-        let index = *self.indices.get(id)?;
-        self.registrations.get(index)
-    }
-
-    /// Returns registrations in deterministic ID order.
-    #[must_use]
-    pub fn registrations(&self) -> &[ValueCodecRegistration<D>] {
-        &self.registrations
-    }
-
     /// Freezes registrations and rejects duplicate IDs.
+    ///
+    /// # Parameters
+    ///
+    /// - `registrations`: Owned entries sorted in place before indexing.
+    ///
+    /// # Returns
+    ///
+    /// An immutable registry owning the sorted entries and their lookup index.
+    ///
+    /// # Errors
+    ///
+    /// Returns `DuplicateId` with the first conflicting ID and its two sorted
+    /// sources.
     fn build(mut registrations: Vec<ValueCodecRegistration<D>>) -> Result<Self, ValueCodecRegistryError> {
         registrations.sort_by_key(ValueCodecRegistration::id);
         for pair in registrations.windows(2) {
@@ -100,19 +120,56 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
             indices,
         })
     }
+
+    /// Finds a registration by stable ID.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: Exact stable ID to look up, without normalization.
+    ///
+    /// # Returns
+    ///
+    /// `Some` borrows the matching registration from this registry; `None`
+    /// means the ID is absent. Lookup uses a logarithmic tree search.
+    #[must_use]
+    #[inline]
+    pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration<D>> {
+        let index = *self.indices.get(id)?;
+        self.registrations.get(index)
+    }
+
+    /// Returns registrations in deterministic ID order.
+    ///
+    /// # Returns
+    ///
+    /// The immutable registration slice borrowed from this registry without
+    /// allocation.
+    #[must_use]
+    #[inline]
+    pub fn registrations(&self) -> &[ValueCodecRegistration<D>] {
+        &self.registrations
+    }
 }
 
 impl ValueStringCodecRegistry {
     /// Initializes and returns the process-wide linked string registry.
+    ///
+    /// Initialization is synchronized and cached, including construction
+    /// failures.
+    ///
+    /// # Returns
+    ///
+    /// A shared static registry containing all linked string registrations.
     ///
     /// # Errors
     ///
     /// Returns the cached construction error when linked registrations
     /// conflict.
     pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
+        // Caches both successful construction and duplicate-ID failures.
         static REGISTRY: OnceLock<Result<ValueStringCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
         match REGISTRY.get_or_init(|| {
-            let registrations = inventory::iter::<ValueStringCodecRegistrationFactory>
+            let registrations = iter::<ValueStringCodecRegistrationFactory>
                 .into_iter()
                 .map(|factory| (factory.0)())
                 .collect();
@@ -126,6 +183,10 @@ impl ValueStringCodecRegistry {
     /// Returns the process-wide string registry or panics with a stable
     /// diagnostic.
     ///
+    /// # Returns
+    ///
+    /// A shared static registry, initialized at most once by `try_global`.
+    ///
     /// # Panics
     ///
     /// Panics when linked registrations conflict.
@@ -138,14 +199,22 @@ impl ValueStringCodecRegistry {
 impl ValueBytesCodecRegistry {
     /// Initializes and returns the process-wide linked bytes registry.
     ///
+    /// Initialization is synchronized and cached, including construction
+    /// failures.
+    ///
+    /// # Returns
+    ///
+    /// A shared static registry containing all linked bytes registrations.
+    ///
     /// # Errors
     ///
     /// Returns the cached construction error when linked registrations
     /// conflict.
     pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
+        // Caches both successful construction and duplicate-ID failures.
         static REGISTRY: OnceLock<Result<ValueBytesCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
         match REGISTRY.get_or_init(|| {
-            let registrations = inventory::iter::<ValueBytesCodecRegistrationFactory>
+            let registrations = iter::<ValueBytesCodecRegistrationFactory>
                 .into_iter()
                 .map(|factory| (factory.0)())
                 .collect();
@@ -158,6 +227,10 @@ impl ValueBytesCodecRegistry {
 
     /// Returns the process-wide bytes registry or panics with a stable
     /// diagnostic.
+    ///
+    /// # Returns
+    ///
+    /// A shared static registry, initialized at most once by `try_global`.
     ///
     /// # Panics
     ///
