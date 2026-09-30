@@ -44,7 +44,6 @@ pub struct JsonBytesValueDecoder<T> {
 impl<T> JsonBytesValueDecoder<T> {
     /// Creates a JSON bytes decoder for values of type `T`.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }
     }

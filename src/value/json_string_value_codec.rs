@@ -30,7 +30,6 @@ pub struct JsonStringValueCodec<T> {
 impl<T> JsonStringValueCodec<T> {
     /// Creates a bidirectional JSON string codec for values of type `T`.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }
     }
