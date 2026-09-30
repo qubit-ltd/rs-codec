@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::cell::Cell;
 use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -24,6 +25,7 @@ use qubit_codec::TranscodeEncoder;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
 use qubit_io::Output;
+use thiserror::Error as ThisError;
 
 #[test]
 fn try_with_capacity_allocates_encode_buffer() {
@@ -50,7 +52,7 @@ impl Codec for HugeEncodeBoundCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((input[input_index], crate::nonzero(1)))
     }
 
@@ -64,7 +66,7 @@ impl Codec for HugeEncodeBoundCodec {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, ThisError)]
 enum PairEncodeError {
     #[error("bad input index")]
     BadInputIndex,
@@ -115,7 +117,7 @@ impl Codec for CompleteEncodeLifecycleCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
@@ -141,7 +143,7 @@ impl Codec for CompleteEncodeLifecycleCodec {
 
 #[derive(Debug, Default)]
 struct ResetWidthCodec {
-    pre_reset_queries: core::cell::Cell<usize>,
+    pre_reset_queries: Cell<usize>,
     reset: bool,
 }
 
@@ -169,7 +171,7 @@ impl Codec for ResetWidthCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
@@ -1604,7 +1606,7 @@ impl Codec for ScriptedEncodeCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
@@ -1792,7 +1794,7 @@ impl Codec for OverflowEncodeBoundCodec {
         &mut self,
         input: &[u16],
         input_index: usize,
-    ) -> Result<(u32, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 

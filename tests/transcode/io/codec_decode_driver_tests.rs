@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
 use core::num::NonZeroUsize;
 use std::io::Cursor;
 use std::io::Error;
@@ -39,8 +40,8 @@ struct EofAwareShortCodec;
 impl Codec for EofAwareShortCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = std::convert::Infallible;
-    type EncodeError = std::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -93,8 +94,8 @@ struct InvalidEofIncompleteHintCodec;
 impl Codec for InvalidEofIncompleteHintCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = std::convert::Infallible;
-    type EncodeError = std::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -137,5 +138,146 @@ fn test_codec_decode_driver_rejects_satisfied_eof_incomplete_hint() {
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
     assert!(error.to_string().contains("available window"));
+    assert_eq!(&[0xa5], input.unread());
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct AlwaysIncompleteCodec;
+
+impl Codec for AlwaysIncompleteCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 4;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Err(DecodeFailure::incomplete(utils_crate::nonzero(4)))
+    }
+
+    unsafe fn decode_eof(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Err(DecodeFailure::incomplete(utils_crate::nonzero(4)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_codec_decode_driver_reports_truncated_input_as_unexpected_eof() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(vec![0xa5]));
+
+    let error = input
+        .read_decoded_with(&mut AlwaysIncompleteCodec, Error::other)
+        .expect_err("a truncated value must not decode");
+
+    assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert!(input.unread().is_empty());
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct RejectingCodec;
+
+impl Codec for RejectingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Error;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Err(DecodeFailure::invalid(
+            Error::other("rejected input"),
+            NonZeroUsize::MIN,
+        ))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_codec_decode_driver_maps_codec_rejection_to_io_error() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(vec![0xa5]));
+
+    let error = input
+        .read_decoded_with(&mut RejectingCodec, Error::other)
+        .expect_err("a rejected value must fail");
+
+    assert!(error.to_string().contains("rejected input"));
+    assert!(input.unread().is_empty());
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct OverConsumingCodec;
+
+impl Codec for OverConsumingCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], utils_crate::nonzero(2)))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        _value: &u8,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_codec_decode_driver_rejects_consumption_beyond_window() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(vec![0xa5]));
+
+    let error = input
+        .read_decoded_with(&mut OverConsumingCodec, Error::other)
+        .expect_err("consuming beyond the window must be rejected");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("exceed unread window"));
     assert_eq!(&[0xa5], input.unread());
 }

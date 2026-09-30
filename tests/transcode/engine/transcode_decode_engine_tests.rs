@@ -53,7 +53,7 @@ impl Codec for PrefixCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
@@ -70,9 +70,9 @@ impl Codec for PrefixCodec {
             }
             0xff => Err(codec::DecodeFailure::invalid(
                 PrefixDecodeError::Invalid { consumed: 1 },
-                core::num::NonZeroUsize::MIN,
+                NonZeroUsize::MIN,
             )),
-            value => Ok((value, core::num::NonZeroUsize::MIN)),
+            value => Ok((value, NonZeroUsize::MIN)),
         }
     }
 
@@ -258,10 +258,10 @@ impl Codec for OverconsumingCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((input[input_index], unsafe { core::num::NonZeroUsize::new_unchecked(2) }))
+        Ok((input[input_index], unsafe { NonZeroUsize::new_unchecked(2) }))
     }
 
     unsafe fn encode(
@@ -350,10 +350,10 @@ impl Codec for DropTrackedCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(DropTrackedValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(DropTrackedValue, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         Ok((
             DropTrackedValue::new(input[input_index], self.drops.clone()),
-            core::num::NonZeroUsize::MIN,
+            NonZeroUsize::MIN,
         ))
     }
 
@@ -666,11 +666,11 @@ impl Codec for MinTwoCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((input[input_index].wrapping_add(input[input_index + 1]), unsafe {
-            core::num::NonZeroUsize::new_unchecked(2)
+            NonZeroUsize::new_unchecked(2)
         }))
     }
 
@@ -708,8 +708,8 @@ impl Codec for OverflowFlushCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -1410,8 +1410,8 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -1446,7 +1446,7 @@ impl TranscodeDecodeHooks<FlushFailCodec> for FlushMappingHooks {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResetObservingHooks {
-    called: std::rc::Rc<Cell<bool>>,
+    called: Rc<Cell<bool>>,
 }
 
 impl TranscodeDecodeHooks<PrefixCodec> for ResetObservingHooks {
@@ -1494,8 +1494,8 @@ impl Codec for ResetFailCodec {
         &mut self,
         _input: &[u8],
         _input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((0u8, core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((0u8, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -1561,7 +1561,7 @@ fn test_transcode_decode_engine_reset_rejects_invalid_output_index() {
 
 #[test]
 fn test_transcode_decode_engine_reset_calls_hook_before_reset() {
-    let called = std::rc::Rc::new(Cell::new(false));
+    let called = Rc::new(Cell::new(false));
     let hooks = ResetObservingHooks { called: called.clone() };
     let mut decoder = TranscodeDecodeEngine::<_, _>::new(PrefixCodec, hooks);
 
@@ -1782,7 +1782,7 @@ fn test_transcode_decode_engine_failed_finish_poisoned_until_reset() {
 fn test_transcode_decode_engine_failed_reset_poisoned_until_successful_reset() {
     let mut engine = TranscodeDecodeEngine::<_, _>::new(ResetFailCodec::default(), ResetErrorMappingHooks);
     let mut output = [0_u8; 1];
-    engine
+    let _ = engine
         .reset(&mut output, 0)
         .expect_err("codec reset should fail after reset execution starts");
     assert_eq!(
@@ -1966,8 +1966,8 @@ impl Codec for ResetEmittingDecodeCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(

@@ -7,15 +7,19 @@
 // =============================================================================
 //! Tests for the codec-backed buffered decoder adapter.
 
-use qubit_codec as codec;
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec::Codec;
 use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeDecoder;
+use qubit_codec::TranscodeFailure;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
+/// Decodes 0x80 plus one byte as a pair, rejects 0xff, and copies other bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableByteCodec;
 
@@ -23,7 +27,7 @@ impl Codec for VariableByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -35,7 +39,7 @@ impl Codec for VariableByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -45,16 +49,11 @@ impl Codec for VariableByteCodec {
                 if available < 2 {
                     Err(DecodeFailure::incomplete(crate::nonzero(2)))
                 } else {
-                    Ok((input[input_index + 1], unsafe {
-                        core::num::NonZeroUsize::new_unchecked(2)
-                    }))
+                    Ok((input[input_index + 1], unsafe { NonZeroUsize::new_unchecked(2) }))
                 }
             }
-            0xff => Err(DecodeFailure::invalid(
-                TestDecodeError::Invalid,
-                core::num::NonZeroUsize::MIN,
-            )),
-            value => Ok((value, core::num::NonZeroUsize::MIN)),
+            0xff => Err(DecodeFailure::invalid(TestDecodeError::Invalid, NonZeroUsize::MIN)),
+            value => Ok((value, NonZeroUsize::MIN)),
         }
     }
 
@@ -85,14 +84,15 @@ enum TestDecodeError {
     Invalid,
 }
 
+/// Requires two input bytes and decodes their wrapping sum to test short tails.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FixedPairCodec;
 
 impl Codec for FixedPairCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
 
@@ -104,7 +104,7 @@ impl Codec for FixedPairCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((
@@ -126,6 +126,8 @@ impl Codec for FixedPairCodec {
     }
 }
 
+/// Copies single bytes but fails decode finish to test phase-aware error
+/// mapping.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
 
@@ -133,7 +135,7 @@ impl Codec for FlushFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = &'static str;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -145,8 +147,8 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -164,6 +166,7 @@ impl Codec for FlushFailCodec {
     }
 }
 
+/// Copies single bytes but fails decode reset before normal decoding can start.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct ResetFailCodec;
 
@@ -171,7 +174,7 @@ impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = &'static str;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -183,8 +186,8 @@ impl Codec for ResetFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -310,7 +313,7 @@ fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
         .expect_err("an incomplete EOF value should be rejected");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::incomplete_input(0, 2, 1)),
+        TranscodeDecodeError::Failure(TranscodeFailure::incomplete_input(0, 2, 1)),
         error,
     );
 }
@@ -328,7 +331,7 @@ fn test_codec_transcode_decoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
+        TranscodeDecodeError::Failure(TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -346,7 +349,7 @@ fn test_codec_transcode_decoder_reports_input_index_beyond_buffer() {
         .expect_err("out-of-range input index should fail");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
+        TranscodeDecodeError::Failure(TranscodeFailure::invalid_input_index(2, 1)),
         error
     );
 }
@@ -364,7 +367,7 @@ fn test_codec_transcode_decoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
+        TranscodeDecodeError::Failure(TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
