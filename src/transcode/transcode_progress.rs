@@ -16,7 +16,8 @@ use super::TranscodeStatus;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::{TranscodeProgress, TranscodeStatus};
+/// use qubit_codec::TranscodeProgress;
+/// use qubit_codec::TranscodeStatus;
 ///
 /// let progress = TranscodeProgress::complete(3, 6);
 /// assert_eq!(progress.read(), 3);
@@ -24,6 +25,7 @@ use super::TranscodeStatus;
 /// assert!(matches!(progress.status(), TranscodeStatus::Complete));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
 pub struct TranscodeProgress {
     /// Stop reason reported by the transcoder.
     status: TranscodeStatus,
@@ -46,8 +48,7 @@ impl TranscodeProgress {
     /// # Returns
     ///
     /// Returns a progress value carrying the supplied counters.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn new(status: TranscodeStatus, read: usize, written: usize) -> Self {
         Self { status, read, written }
     }
@@ -62,8 +63,7 @@ impl TranscodeProgress {
     /// # Returns
     ///
     /// Returns a progress value whose status is [`TranscodeStatus::Complete`].
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn complete(read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::Complete, read, written)
     }
@@ -81,8 +81,7 @@ impl TranscodeProgress {
     /// # Returns
     ///
     /// Returns a progress value with [`TranscodeStatus::NeedInput`].
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn need_input(required: NonZeroUsize, read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::need_input(required), read, written)
     }
@@ -99,8 +98,7 @@ impl TranscodeProgress {
     /// # Returns
     ///
     /// Returns a progress value with [`TranscodeStatus::NeedOutput`].
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn need_output(required: NonZeroUsize, read: usize, written: usize) -> Self {
         Self::new(TranscodeStatus::need_output(required), read, written)
     }
@@ -110,7 +108,7 @@ impl TranscodeProgress {
     /// # Returns
     ///
     /// Returns the stored [`TranscodeStatus`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn status(self) -> TranscodeStatus {
         self.status
@@ -122,7 +120,7 @@ impl TranscodeProgress {
     ///
     /// Returns `true` when the stored status is
     /// [`TranscodeStatus::Complete`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_complete(self) -> bool {
         matches!(self.status, TranscodeStatus::Complete)
@@ -134,7 +132,7 @@ impl TranscodeProgress {
     ///
     /// Returns `true` when the stored status is
     /// [`TranscodeStatus::NeedInput`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_need_input(self) -> bool {
         matches!(self.status, TranscodeStatus::NeedInput { .. })
@@ -147,7 +145,7 @@ impl TranscodeProgress {
     ///
     /// Returns `true` when the stored status is
     /// [`TranscodeStatus::NeedOutput`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_need_output(self) -> bool {
         matches!(self.status, TranscodeStatus::NeedOutput { .. })
@@ -159,7 +157,7 @@ impl TranscodeProgress {
     ///
     /// Returns a count relative to the input index passed to the conversion
     /// call.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn read(self) -> usize {
         self.read
@@ -171,7 +169,7 @@ impl TranscodeProgress {
     ///
     /// Returns a count relative to the output index passed to the conversion
     /// call.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn written(self) -> usize {
         self.written

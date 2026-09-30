@@ -21,7 +21,20 @@ use core::num::NonZeroUsize;
 /// # Type Parameters
 ///
 /// - `E`: Codec-specific invalid-input error type.
+///
+/// # Examples
+///
+/// ```
+/// use core::num::NonZeroUsize;
+///
+/// use qubit_codec::DecodeFailure;
+///
+/// let failure = DecodeFailure::<()>::incomplete(NonZeroUsize::MIN);
+/// assert_eq!(failure.required_total(), Some(NonZeroUsize::MIN));
+/// assert_eq!(failure.invalid_source(), None);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[must_use]
 pub enum DecodeFailure<E> {
     /// The visible input is a valid prefix but not enough to decode a value.
     #[non_exhaustive]
@@ -64,8 +77,7 @@ impl<E> DecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an incomplete decode failure.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn incomplete(required_total: NonZeroUsize) -> Self {
         Self::Incomplete {
             source: None,
@@ -86,8 +98,7 @@ impl<E> DecodeFailure<E> {
     ///
     /// Returns an incomplete decode failure retaining `source` for adapters
     /// that need detailed EOF diagnostics.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn incomplete_with_source(source: E, required_total: NonZeroUsize) -> Self {
         Self::Incomplete {
             source: Some(source),
@@ -105,8 +116,7 @@ impl<E> DecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an invalid decode failure.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn invalid(source: E, consumed: NonZeroUsize) -> Self {
         Self::Invalid {
             source,
@@ -123,8 +133,7 @@ impl<E> DecodeFailure<E> {
     /// # Returns
     ///
     /// Returns an invalid decode failure.
-    #[inline(always)]
-    #[must_use]
+    #[inline]
     pub const fn invalid_unknown(source: E) -> Self {
         Self::Invalid { source, consumed: None }
     }
@@ -137,7 +146,7 @@ impl<E> DecodeFailure<E> {
     /// Returns `Some(required_total)` for incomplete failures, where the value
     /// is a lower bound that a later retry may raise, or `None` for
     /// invalid-input failures.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn required_total(&self) -> Option<NonZeroUsize> {
         match self {
@@ -151,8 +160,8 @@ impl<E> DecodeFailure<E> {
     /// # Returns
     ///
     /// Returns `Some(source)` when the codec supplied incomplete-input context,
-    /// or `None` when the failure only carries the retry bound.
-    #[inline(always)]
+    /// or `None` when the failure only carries the retry bound or is invalid.
+    #[inline]
     #[must_use]
     pub const fn incomplete_source(&self) -> Option<&E> {
         match self {
@@ -167,7 +176,7 @@ impl<E> DecodeFailure<E> {
     ///
     /// Returns `Some(source)` for invalid-input failures, or `None` for
     /// incomplete failures.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn invalid_source(&self) -> Option<&E> {
         match self {
@@ -182,7 +191,7 @@ impl<E> DecodeFailure<E> {
     ///
     /// Returns `Some(consumed)` for [`Invalid`](Self::Invalid), or `None` when
     /// the failure is incomplete or invalid with unknown consumption.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn consumed_units(&self) -> Option<NonZeroUsize> {
         match self {
