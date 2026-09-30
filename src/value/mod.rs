@@ -13,7 +13,7 @@ pub(crate) mod codec_value_lifecycle;
 mod decode_lifecycle_output;
 mod decode_lifecycle_progress;
 #[cfg(feature = "registry")]
-mod value_codec_descriptor;
+mod value_bytes_codec_descriptor;
 #[cfg(feature = "registry")]
 mod value_codec_execution_error;
 #[cfg(feature = "registry")]
@@ -32,13 +32,15 @@ mod value_codec_registry;
 mod value_codec_registry_error;
 mod value_decoder;
 mod value_encoder;
+#[cfg(feature = "registry")]
+mod value_string_codec_descriptor;
 
 pub use codec_value_decoder::CodecValueDecoder;
 pub use codec_value_encoder::CodecValueEncoder;
 pub use decode_lifecycle_output::DecodeLifecycleOutput;
 pub use decode_lifecycle_progress::DecodeLifecycleProgress;
 #[cfg(feature = "registry")]
-pub use value_codec_descriptor::ValueCodecDescriptor;
+pub use value_bytes_codec_descriptor::ValueBytesCodecDescriptor;
 #[cfg(feature = "registry")]
 pub use value_codec_execution_error::ValueCodecExecutionError;
 #[cfg(feature = "registry")]
@@ -46,15 +48,28 @@ pub use value_codec_id::ValueCodecId;
 #[cfg(feature = "registry")]
 pub use value_codec_id_error::ValueCodecIdError;
 #[cfg(feature = "registry")]
+pub use value_codec_registration::ValueBytesCodecRegistration;
+#[cfg(feature = "registry")]
 pub use value_codec_registration::ValueCodecRegistration;
 #[cfg(feature = "registry")]
+pub use value_codec_registration::ValueStringCodecRegistration;
+#[cfg(feature = "registry")]
 #[doc(hidden)]
-pub use value_codec_registration_factory::ValueCodecRegistrationFactory;
+pub use value_codec_registration_factory::ValueBytesCodecRegistrationFactory;
+#[cfg(feature = "registry")]
+#[doc(hidden)]
+pub use value_codec_registration_factory::ValueStringCodecRegistrationFactory;
 #[cfg(feature = "registry")]
 pub use value_codec_registration_source::ValueCodecRegistrationSource;
 #[cfg(feature = "registry")]
+pub use value_codec_registry::ValueBytesCodecRegistry;
+#[cfg(feature = "registry")]
 pub use value_codec_registry::ValueCodecRegistry;
+#[cfg(feature = "registry")]
+pub use value_codec_registry::ValueStringCodecRegistry;
 #[cfg(feature = "registry")]
 pub use value_codec_registry_error::ValueCodecRegistryError;
 pub use value_decoder::ValueDecoder;
 pub use value_encoder::ValueEncoder;
+#[cfg(feature = "registry")]
+pub use value_string_codec_descriptor::ValueStringCodecDescriptor;

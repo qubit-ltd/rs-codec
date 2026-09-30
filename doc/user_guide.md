@@ -1,74 +1,56 @@
-# Qubit Codec User Guide
+# Qubit Codec user guide
 
-[中文](user_guide.zh_CN.md) · [README](../README.md) · [API documentation](https://docs.rs/qubit-codec)
+[Chinese user guide](user_guide.zh_CN.md) · [README](../README.md) · [API reference](https://docs.rs/qubit-codec)
 
-This guide covers `qubit-codec` 0.15 and Rust 1.94 or later. It is written for
-authors of codec and adapter crates—not for application developers looking for
-a concrete file format or character set implementation.
+This guide covers `qubit-codec` 0.16.0 on Rust 1.94 or later. It is for authors of codec and adapter crates who need shared capacity, lifecycle, and streaming mechanics while keeping format rules local. Application developers looking for a ready-made hex, Base64, or character-set implementation should use a domain crate instead. Reading through [Verify conversion results](#verify-conversion-results) is enough to ship a fixed-width `Codec` with owned and caller-buffered adapters. Later sections cover incremental streams, lifecycle decode, policy hooks, optional I/O bridges, and the `registry` feature.
 
-## Purpose and Audience
+## Contents
 
-Use `qubit-codec` when a format crate needs one or more of these reusable
-boundaries:
+- [The problem it solves](#the-problem-it-solves)
+- [Where to start](#where-to-start)
+- [Publish a fixed-width codec](#publish-a-fixed-width-codec)
+  - [Implement the representation once](#implement-the-representation-once)
+  - [Declare the Codec bounds](#declare-the-codec-bounds)
+  - [Expose owned one-value operations](#expose-owned-one-value-operations)
+  - [Encode many values into a caller-owned buffer](#encode-many-values-into-a-caller-owned-buffer)
+  - [Types used on this path](#types-used-on-this-path)
+- [Verify conversion results](#verify-conversion-results)
+  - [What success looks like](#what-success-looks-like)
+  - [Incomplete input versus invalid input](#incomplete-input-versus-invalid-input)
+- [Drive an incremental stream](#drive-an-incremental-stream)
+- [Handle lifecycle decode output](#handle-lifecycle-decode-output)
+- [Apply policy for malformed input or EOF](#apply-policy-for-malformed-input-or-eof)
+- [Choose byte-order helpers](#choose-byte-order-helpers)
+- [Connect buffered I/O](#connect-buffered-io)
+- [Register codecs for runtime lookup](#register-codecs-for-runtime-lookup)
+- [Errors, diagnostics, and troubleshooting](#errors-diagnostics-and-troubleshooting)
+- [Boundaries and a practice checklist](#boundaries-and-a-practice-checklist)
+- [Further reading](#further-reading)
 
-- a low-level contract for one logical value or codec quantum;
-- an owned-output facade over that contract;
-- a caller-buffered streaming adapter with explicit progress;
-- policy hooks for invalid or unencodable input;
-- buffered `qubit-io` integration.
+## The problem it solves
 
-The format crate continues to own representation rules and domain errors.
-`qubit-codec` owns the shared mechanics: indices, capacity planning, progress,
-reset/finish lifecycle, and the separation between incomplete and invalid
-input.
+Take a binary protocol crate. It must map a `u16` field to two big-endian bytes for on-the-wire messages, expose a simple `encode(&u16) -> Vec<u8>` for tests and one-shot callers, and later accept byte chunks from a socket without treating a one-byte prefix as corrupt data. If each layer reimplements index arithmetic, capacity planning, reset/finish lifecycle, and the distinction between “need more bytes” and “bytes are wrong,” the same format accumulates incompatible contracts.
 
-## Conceptual Model
+With `qubit-codec`, the format crate implements the representation rule once on `Codec`. Checked adapters supply owned output (`CodecValueEncoder` / `CodecValueDecoder`), strict caller-buffered conversion (`CodecTranscode*`), and optional policy engines with hooks. The crate does **not** ship concrete formats such as hex, percent encoding, or UTF-8 handling; those stay in domain crates. It also does **not** decide EOF for you: an incomplete prefix is reported as incomplete until the caller confirms end-of-input or applies a documented EOF policy.
 
-```text
-format-owned rules
-      |
-    Codec --------------> CodecValueEncoder / CodecValueDecoder
-      |                              owned output
-      |
-      +-----------------> CodecTranscodeEncoder / Decoder / Converter
-      |                              strict buffered conversion
-      |
-      +-----------------> Transcode*Engine + hooks
-                                     policy-aware conversion
+## Where to start
 
-ValueEncoder / ValueDecoder          whole-value formats without a useful
-                                     single-value codec quantum
+1. [Publish a fixed-width codec](#publish-a-fixed-width-codec) walks through `U16BeCodec`, owned encode/decode, and batch encoding into a caller buffer.
+2. [Verify conversion results](#verify-conversion-results) shows what success looks like and how incomplete input differs from invalid input. The basic integration path ends there.
+3. Read on as needed: [Drive an incremental stream](#drive-an-incremental-stream), [Handle lifecycle decode output](#handle-lifecycle-decode-output), [Apply policy for malformed input or EOF](#apply-policy-for-malformed-input-or-eof), [Connect buffered I/O](#connect-buffered-io), or [Register codecs for runtime lookup](#register-codecs-for-runtime-lookup).
 
-Transcoder                           custom streaming or EOF/framing behavior
-```
+Optional features `io` and `registry` are independent; enable only what the crate uses.
 
-Choose the smallest layer that preserves the format's real boundary:
+## Publish a fixed-width codec
 
-| Requirement | Recommended API |
-| --- | --- |
-| One logical value maps to encoded units | Implement `Codec` |
-| Only complete input has useful meaning | Implement `ValueEncoder` / `ValueDecoder` directly |
-| Existing `Codec`, owned result | `CodecValueEncoder` / `CodecValueDecoder` |
-| Existing `Codec`, strict stream | A `CodecTranscode*` adapter |
-| Invalid or unencodable input needs replacement, skipping, or reporting | A transcode engine plus hooks |
-| Streaming rules require custom EOF or framing decisions | Implement `Transcoder` |
-
-A fixed-width integer or character usually has a useful `Codec` value
-boundary. A formatted hex string, percent-encoded string, or C string literal
-usually does not; a value-level implementation is clearer for those formats.
-
-## Scenario: Publish One Fixed-Width Codec at Two Levels
-
-Suppose a binary-format crate must encode a `u16` as two big-endian bytes. Its
-success criteria are concrete:
+The success criteria for this scenario are concrete:
 
 1. `0x1234` encodes to `[0x12, 0x34]`.
 2. `[0x12, 0x34]` decodes to `0x1234`.
-3. One input byte is reported as incomplete rather than passed to the unsafe
-   codec entry point.
-4. The same codec can encode many values into a caller-owned buffer.
+3. A one-byte input is rejected as incomplete before the unsafe `Codec::decode` entry runs.
+4. The same codec encodes many values into one caller-owned buffer without reimplementing capacity math.
 
-The crate implements the representation rule once:
+### Implement the representation once
 
 ```rust
 use core::{convert::Infallible, num::NonZeroUsize};
@@ -114,66 +96,25 @@ impl Codec for U16BeCodec {
 }
 ```
 
-The checked adapters now supply both publishing levels; the format crate does
-not reimplement capacity or lifecycle code.
+Fixed-width integers and code units usually have a useful single-value `Codec` boundary. Formatted hex strings, percent-encoded text, or C string literals often do not; for those, implement `ValueEncoder` / `ValueDecoder` directly instead of forcing a `Codec` quantum.
 
-## Installation and Minimal Configuration
+### Declare the Codec bounds
 
-```toml
-[dependencies]
-qubit-codec = "0.15"
-```
-
-The default feature set is empty. The scenario above needs no feature. Enable
-`io` only when using the `qubit-io` bridges:
-
-```toml
-[dependencies]
-qubit-io = "0.17"
-qubit-codec = { version = "0.15", features = ["io"] }
-```
-
-## Core Workflow
-
-### 1. Declare exact `Codec` bounds
-
-The three required constants are public safety and capacity contracts, not
-performance hints:
+The three required constants are public safety and capacity contracts, not performance hints:
 
 | Contract | Meaning |
 | --- | --- |
-| `MIN_UNITS_PER_VALUE` | Smallest readable input that could hold one decoded value; it must be non-zero. |
-| `MAX_DECODE_UNITS_PER_VALUE` | Largest successful decode consumption or incomplete retry requirement; it must be non-zero and at least the minimum. |
+| `MIN_UNITS_PER_VALUE` | Smallest readable input that could hold one decoded value; must be non-zero. |
+| `MAX_DECODE_UNITS_PER_VALUE` | Largest successful decode consumption or incomplete retry requirement; must be non-zero and at least the minimum. |
 | `MAX_ENCODE_UNITS_PER_VALUE` | Value-independent upper bound for main-phase encode output; zero is allowed only for deliberate buffering. |
 
-The default `encode_len` returns `MAX_ENCODE_UNITS_PER_VALUE`, which is exact
-for the fixed-width scenario. A variable-width or stateful codec must override
-it. For the same value and codec state, a successful `encode` must write
-exactly the reported length.
+Default `encode_len` returns `MAX_ENCODE_UNITS_PER_VALUE`, which is exact for this scenario. Variable-width or stateful codecs must override it. For the same value and codec state, a successful `encode` must write exactly the length reported by `encode_len`. Override `can_encode_value` when `Value` includes values outside the encoded domain; checked encoders call it before `encode_len` and the unsafe `encode`.
 
-Override `can_encode_value` when `Value` includes values outside the encoded
-domain. Checked encoders call it before `encode_len` and the unsafe `encode`.
+Checked adapters establish index and capacity preconditions before calling unsafe `Codec` methods. Implementations must read and write only within those ranges, return a non-zero decode count no larger than the decode bound, keep state consistent on errors, and use `DecodeFailure::Incomplete` versus `DecodeFailure::Invalid` consistently. Use `debug_assert!` at the entry point to document the assumed ranges, as above.
 
-### 2. Keep unsafe entry points narrow
+### Expose owned one-value operations
 
-Checked adapters establish the documented index and capacity preconditions
-before entering `Codec::encode` or `Codec::decode`. The implementation must
-still:
-
-- read and write only within those preconditions;
-- return a non-zero successful decode count no larger than the decode bound;
-- leave state consistent on errors;
-- return `DecodeFailure::Incomplete` for a valid open-stream prefix that needs
-  more units, and `DecodeFailure::Invalid` for malformed domain input;
-- keep reset, main, and finish output within their declared bounds.
-
-Use `debug_assert!` at the entry point to make the assumed ranges visible, as
-the scenario does.
-
-### 3. Expose owned one-value operations
-
-`CodecValueEncoder` and `CodecValueDecoder` run a complete codec lifecycle and
-return owned output:
+`CodecValueEncoder` and `CodecValueDecoder` run a full codec lifecycle and return owned output:
 
 ```rust
 use qubit_codec::{CodecValueDecoder, CodecValueEncoder, ValueEncoder};
@@ -187,18 +128,11 @@ let decoded = decoder.decode(&encoded).expect("input contains one u16");
 assert_eq!(0x1234, decoded);
 ```
 
-Strict one-value decode requires exactly one main value. Extra units produce
-`TranscodeFailure::TrailingInput`. A codec that declares values from
-`decode_reset` or `decode_finish` must instead use `decode_lifecycle` or
-`decode_lifecycle_with_scratch`; the runnable
-[lifecycle example](../examples/decode_lifecycle.rs) preserves reset, main, and
-finish output separately.
+Strict one-value decode requires exactly one main value. Extra units after that value produce `TranscodeFailure::TrailingInput`.
 
-### 4. Expose caller-buffered conversion
+### Encode many values into a caller-owned buffer
 
-A `CodecTranscodeEncoder` applies the same codec to a sequence of values. The
-one-shot helper sizes and executes the full lifecycle while the caller owns the
-buffer:
+`CodecTranscodeEncoder` applies the same codec to a sequence. The one-shot helper sizes and executes the full lifecycle while the caller owns the buffer:
 
 ```rust
 use qubit_codec::{CodecTranscodeEncoder, Transcoder};
@@ -217,121 +151,62 @@ output.truncate(written);
 assert_eq!(vec![0x12, 0x34, 0xab, 0xcd], output);
 ```
 
-Use `CodecTranscodeDecoder` for units-to-values and
-`CodecTranscodeConverter` for a strict decode-plus-encode pipeline. Choose an
-engine only when a side needs a real policy decision.
+Use `CodecTranscodeDecoder` for units-to-values and `CodecTranscodeConverter` for a strict decode-then-encode pipeline. Choose a transcode engine with hooks only when a side needs a real policy decision rather than a plain domain error.
 
-### 5. Drive an incremental stream correctly
+### Types used on this path
 
-The explicit lifecycle is:
+| Type | Role |
+| --- | --- |
+| `Codec` | Low-level value/unit contract; unsafe `encode` / `decode` with declared bounds. |
+| `DecodeFailure` | Distinguishes incomplete visible prefix from invalid domain input inside `Codec::decode`. |
+| `CodecValueEncoder` / `CodecValueDecoder` | Owned whole-value facade over one `Codec`. |
+| `CodecTranscodeEncoder` | Caller-buffered encode path with reset/finish lifecycle and progress reporting. |
+| `TranscodeFailure` | Caller misuse, shape errors, allocation limits, or lifecycle ordering problems at the adapter layer. |
+| `Transcoder` | Trait implemented by `CodecTranscode*` adapters and custom streaming engines. |
+
+Conceptually, format-owned rules sit on `Codec`; adapters add checked capacity, lifecycle, and progress without duplicating the representation rule:
 
 ```text
-size reset output -> reset
-                       |
-                       v
-preserve input tail <- transcode/transcode_eof -> drain or extend output
-                       |
-                       v
-                 size finish output -> finish
+format-owned rules
+      |
+    Codec --------------> CodecValueEncoder / CodecValueDecoder
+      |                              owned output
+      |
+      +-----------------> CodecTranscodeEncoder / Decoder / Converter
+      |                              strict buffered conversion
+      |
+      +-----------------> Transcode*Engine + hooks
+                                     policy-aware conversion
+
+ValueEncoder / ValueDecoder          whole-value formats without a useful
+                                     single-value codec quantum
+
+Transcoder                           custom streaming or EOF/framing behavior
 ```
 
-`TranscodeProgress::read()` and `written()` are relative to the indices passed
-to that call. Advance both cursors before retrying.
+## Verify conversion results
 
-| Status | Meaning | Caller action |
-| --- | --- | --- |
-| `Complete` | All visible input from `input_index` was consumed. | Supply another segment, or finish at EOF. |
-| `NeedInput` | The incomplete tail was not consumed. | Preserve the tail and refill; at EOF use the format's explicit EOF policy. |
-| `NeedOutput` | Conversion stopped before exceeding output capacity. | Drain or extend output and continue from the reported progress. |
+Owned encode/decode succeeding with the expected bytes and integers means the fixed-width scenario is integrated at the whole-value layer. Streaming and batch paths must also be checked separately when you expose them.
 
-Call `transcode_eof` only after the caller knows no more source units will
-arrive. The default converts a remaining `NeedInput` into
-`TranscodeFailure::IncompleteInput`. `finish` receives no source tail and
-cannot reinterpret it.
+### What success looks like
 
-Built-in transcode engines start uninitialized. The first successful operation
-must be `reset`; after a successful `finish`, call `reset` before reuse. A
-failed lifecycle operation may poison the instance until a successful reset.
-
-## Advanced Usage
-
-### Lifecycle output
-
-Stateless codecs use zero reset and finish bounds. A stateful encoder that
-writes a header or trailer declares `MAX_ENCODE_RESET_UNITS` or
-`MAX_ENCODE_FINISH_UNITS`; a decoder that emits lifecycle values declares
-`MAX_DECODE_RESET_VALUES` or `MAX_DECODE_FINISH_VALUES`. Bounds must cover
-every reachable transient state, not only the current one.
-
-### Policy hooks
-
-Strict `CodecTranscode*` adapters return domain failures. When the format needs
-replacement, skipping, counting, or phase-specific reporting, keep the shared
-loop and implement hooks:
-
-- `TranscodeEncodeEngine` with `TranscodeEncodeHooks` handles unencodable
-  values and encode reset/finish policy.
-- `TranscodeDecodeEngine` with `TranscodeDecodeHooks` handles invalid input
-  and incomplete input after EOF.
-- `TranscodeConvertEngine` composes decode and encode engines with both hook
-  sets.
-
-Use a custom `Transcoder` for delayed framing, bespoke stream state, or EOF
-behavior that cannot be expressed by a codec plus hooks.
-
-### EOF-incomplete decode policy
-
-Call `transcode_eof` only after the input source has confirmed EOF. For a
-`TranscodeDecodeEngine`, its hook then receives
-`handle_incomplete_decode`. The default action is `Reject`; it preserves a
-codec-domain incomplete error when one is available and otherwise reports the
-framework's `TranscodeFailure::IncompleteInput`.
-
-Hooks that intentionally recover can return one of the other public actions:
+After the steps above, these checks pass in tests or REPL:
 
 ```rust
-use qubit_codec::engine::DecodeIncompleteAction;
+use qubit_codec::{CodecValueDecoder, CodecValueEncoder, ValueEncoder};
 
-let skip = DecodeIncompleteAction::<char>::Skip;
-let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
+let mut encoder = CodecValueEncoder::new(U16BeCodec);
+assert_eq!(encoder.encode(&0x1234).unwrap(), vec![0x12, 0x34]);
+
+let mut decoder = CodecValueDecoder::new(U16BeCodec);
+assert_eq!(decoder.decode(&[0x12, 0x34]).unwrap(), 0x1234);
 ```
 
-`Skip` consumes the whole remaining tail without producing a value. `Emit`
-also consumes that tail and writes one replacement value, so the caller must
-provide an output slot. The hook receives `Some(source)` when the codec was
-called and reported incomplete input, and `None` when the tail was shorter than
-`Codec::MIN_UNITS_PER_VALUE`. Format crates can therefore apply one explicit
-EOF policy to both cases without treating an open-stream `NeedInput` as an
-error.
+That confirms representation, owned adapters, and strict single-value shape. It does **not** prove incremental streaming, EOF policy, or lifecycle decode behavior; add tests when those APIs are public.
 
-### Byte order and I/O
+### Incomplete input versus invalid input
 
-Use `ByteOrder` in runtime configuration. Use `ByteOrderSpec` with
-`BigEndian`, `LittleEndian`, or `NativeEndian` when static selection is useful.
-These types describe byte-order policy; they do not implement a concrete
-integer codec.
-
-With feature `io`, `TranscodeDecodeInput` and `TranscodeEncodeOutput` bridge
-buffered `qubit-io` traits. `TranscodeDecodeInput::transcode` applies
-`transcode_eof` to a retained tail after a refill confirms EOF. For explicit
-stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async
-counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call
-`AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
-
-## Errors and Diagnostics
-
-| Error | Boundary | Recovery |
-| --- | --- | --- |
-| `DecodeFailure::Incomplete` | Open-stream codec input is a valid prefix but too short. | Preserve the tail and retry, or make an explicit EOF decision. |
-| `DecodeFailure::Invalid` | Units are malformed, non-canonical, or unmappable. | Apply domain policy or return the codec error. |
-| `TranscodeFailure` | Indices, capacity, complete-input shape, allocation, or lifecycle usage is invalid. | Correct caller state; inspect the structured variant. |
-| `CapacityError` | Capacity arithmetic cannot produce a valid `usize` bound. | Reject the planned operation before allocating or writing. |
-| `TranscodeDomainError<E>` | A codec or hook failed during reset, main, or finish. | Preserve its phase and domain source when reporting. |
-| Directional transcode error | Encode, decode, or conversion failed. | Keep the direction; encode/conversion errors may retain an unencodable value. |
-| `TranscodeContractError` | A custom transcoder returned inconsistent progress. | Fix the transcoder implementation; this is not recoverable input. |
-
-For the scenario, the checked decoder rejects a one-byte complete input before
-calling unsafe `decode`:
+The checked decoder rejects a one-byte buffer before calling unsafe `decode`:
 
 ```rust
 use qubit_codec::{CodecValueDecoder, TranscodeFailure};
@@ -348,36 +223,183 @@ assert!(matches!(
 ));
 ```
 
-Do not flatten incomplete and invalid input unless every downstream caller
-genuinely takes the same action for both.
+`DecodeFailure::Incomplete` inside `Codec::decode` means the visible prefix could still become valid with more units. `DecodeFailure::Invalid` means the domain rejects the input. Adapters map those distinctions into `TranscodeFailure` or domain errors; do not flatten incomplete and invalid unless every downstream caller truly handles both the same way.
 
-## Troubleshooting
+The basic fixed-width path ends here. The following sections are optional: streaming lifecycle first, then lifecycle decode output, policy hooks, byte-order helpers, I/O bridges, and registry lookup.
 
-| Symptom | Check in this order |
+## Drive an incremental stream
+
+Explicit transcoder lifecycle:
+
+```text
+size reset output -> reset
+                       |
+                       v
+preserve input tail <- transcode/transcode_eof -> drain or extend output
+                       |
+                       v
+                 size finish output -> finish
+```
+
+`TranscodeProgress::read()` and `written()` are relative to the indices passed to that call. Advance both cursors before retrying.
+
+| Status | Meaning | Caller action |
+| --- | --- | --- |
+| `Complete` | All visible input from `input_index` was consumed. | Supply another segment, or move to finish at EOF. |
+| `NeedInput` | The incomplete tail was not consumed. | Preserve the tail and refill; at EOF use the format's explicit EOF policy (`transcode_eof` or hooks). |
+| `NeedOutput` | Conversion stopped before exceeding output capacity. | Drain or extend output and continue from the reported progress. |
+
+Call `transcode_eof` only after the caller knows no more source units will arrive. The default converts a remaining `NeedInput` into `TranscodeFailure::IncompleteInput`. `finish` receives no source tail and cannot reinterpret it.
+
+Built-in transcode engines start uninitialized. The first successful operation must be `reset`; after a successful `finish`, call `reset` before reuse. A failed lifecycle operation may poison the instance until a successful `reset`.
+
+## Handle lifecycle decode output
+
+Stateless codecs use zero reset and finish bounds. A decoder that emits values from `decode_reset` or `decode_finish` must declare `MAX_DECODE_RESET_VALUES` or `MAX_DECODE_FINISH_VALUES`. Strict `CodecValueDecoder::decode` rejects inputs that emit lifecycle values; use `decode_lifecycle` or `decode_lifecycle_with_scratch` instead.
+
+The runnable [lifecycle example](../examples/decode_lifecycle.rs) shows a one-byte codec that emits marker values when decode state opens and closes. After `decode_lifecycle`, inspect reset, main, and finish parts separately rather than collapsing them into one main value.
+
+## Apply policy for malformed input or EOF
+
+Strict `CodecTranscode*` adapters surface domain failures directly. When the format needs replacement, skipping, counting, or phase-specific reporting, keep the shared loop and implement hooks:
+
+- `TranscodeEncodeEngine` with `TranscodeEncodeHooks` for unencodable values and encode reset/finish policy.
+- `TranscodeDecodeEngine` with `TranscodeDecodeHooks` for invalid input and incomplete input after EOF.
+- `TranscodeConvertEngine` composing both hook sets.
+
+Call `transcode_eof` only after the input source confirms EOF. For `TranscodeDecodeEngine`, the hook's `handle_incomplete_decode` runs then. The default action is `Reject`, preserving a codec-domain incomplete error when available. Intentional recovery can use:
+
+```rust
+use qubit_codec::engine::DecodeIncompleteAction;
+
+let skip = DecodeIncompleteAction::<char>::Skip;
+let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
+```
+
+`Skip` consumes the whole remaining tail without producing a value. `Emit` also consumes the tail and writes one replacement value, so the caller must provide an output slot. The hook receives `Some(source)` when the codec was invoked and reported incomplete input, and `None` when the tail is shorter than `Codec::MIN_UNITS_PER_VALUE`.
+
+Use a custom `Transcoder` when framing, stream state, or EOF behavior cannot be expressed as a `Codec` plus hooks.
+
+## Choose byte-order helpers
+
+`ByteOrder` supports runtime configuration. `ByteOrderSpec` with `BigEndian`, `LittleEndian`, or `NativeEndian` supports static selection. These types describe byte-order policy; they do not implement a concrete integer codec. The `U16BeCodec` scenario encodes endianness in the representation rule itself.
+
+## Connect buffered I/O
+
+Enable feature `io` only when using the `qubit-io` bridges:
+
+```toml
+[dependencies]
+qubit-io = "0.17"
+qubit-codec = { version = "0.16", features = ["io"] }
+```
+
+`TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. `TranscodeDecodeInput::transcode` applies `transcode_eof` to a retained tail after a refill confirms EOF. For explicit stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call `AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
+
+## Register codecs for runtime lookup
+
+Enable feature `registry` when several crates must discover bidirectional whole-value codecs (string or bytes wire) by stable ID at link time:
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.16", features = ["registry"] }
+```
+
+Implement paired `ValueEncoder` and `ValueDecoder` for a fixed value type, then register. String and bytes wires use different codec types, macros, and process-wide registries; the same `ValueCodecId` may appear in both.
+
+String wire example:
+
+```rust
+use qubit_codec::{ValueDecoder, ValueEncoder, register_value_string_codec};
+
+#[derive(Default)]
+struct U32StringCodec;
+
+impl ValueEncoder<u32> for U32StringCodec {
+    type Output = String;
+    type Error = std::io::Error;
+
+    fn encode(&mut self, input: &u32) -> Result<Self::Output, Self::Error> {
+        Ok(input.to_string())
+    }
+}
+
+impl ValueDecoder<str> for U32StringCodec {
+    type Output = u32;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
+        input.parse().map_err(std::io::Error::other)
+    }
+}
+
+register_value_string_codec!(id = "example.u32", codec = U32StringCodec, value = u32,);
+```
+
+Bytes whole-value wire example (`Vec<u8>` encode output, `&[u8]` decode input):
+
+```rust
+use qubit_codec::{ValueDecoder, ValueEncoder, register_value_bytes_codec};
+
+#[derive(Default)]
+struct U32BeBytesCodec;
+
+impl ValueEncoder<u32> for U32BeBytesCodec {
+    type Output = Vec<u8>;
+    type Error = std::io::Error;
+
+    fn encode(&mut self, input: &u32) -> Result<Self::Output, Self::Error> {
+        Ok(input.to_be_bytes().to_vec())
+    }
+}
+
+impl ValueDecoder<[u8]> for U32BeBytesCodec {
+    type Output = u32;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
+        let bytes: [u8; 4] = input.try_into().map_err(|_| std::io::Error::other("expected four bytes"))?;
+        Ok(u32::from_be_bytes(bytes))
+    }
+}
+
+register_value_bytes_codec!(id = "example.u32", codec = U32BeBytesCodec, value = u32,);
+```
+
+`ValueStringCodecRegistry::global()` and `ValueBytesCodecRegistry::global()` (or each `try_global()` when you need the error) collect linked registrations once per process. Lookup is by validated `ValueCodecId`; execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
+
+## Errors, diagnostics, and troubleshooting
+
+| Error | Boundary | Recovery |
+| --- | --- | --- |
+| `DecodeFailure::Incomplete` | Open-stream codec input is a valid prefix but too short. | Preserve the tail and retry, or make an explicit EOF decision. |
+| `DecodeFailure::Invalid` | Units are malformed, non-canonical, or unmappable. | Apply domain policy or return the codec error. |
+| `TranscodeFailure` | Indices, capacity, complete-input shape, allocation, or lifecycle usage is invalid. | Correct caller state; inspect the structured variant. |
+| `CapacityError` | Capacity arithmetic cannot produce a valid `usize` bound. | Reject the planned operation before allocating or writing. |
+| `TranscodeDomainError<E>` | A codec or hook failed during reset, main, or finish. | Preserve phase and domain source when reporting. |
+| `TranscodeContractError` | A custom transcoder returned inconsistent progress. | Fix the transcoder; not recoverable input. |
+| `ValueCodecExecutionError` | Registry dispatch: type mismatch or encode/decode failure. | Match value type and ID; inspect domain error source. |
+
+| Symptom | What to check |
 | --- | --- |
-| `NeedInput` at file end | Confirm the tail was preserved; call `transcode_eof`; apply format-specific EOF rules before `finish`. |
-| Repeated `NeedOutput` | Advance both progress counters; provide the reported capacity; verify custom bounds and counters. |
-| Owned decode rejects otherwise valid input | Check for trailing units or declared decode reset/finish output; use lifecycle-aware decode when needed. |
-| Capacity is rejected before conversion | Include reset, main, and finish bounds and check for arithmetic overflow. |
+| `NeedInput` at end of file | Preserve the tail; call `transcode_eof`; apply format EOF rules before `finish`. |
+| Repeated `NeedOutput` | Advance both progress counters; provide reported capacity; verify custom bounds. |
+| Owned decode rejects valid-looking input | Trailing units, or decode reset/finish output; use lifecycle-aware decode. |
+| Capacity rejected before conversion | Include reset, main, and finish bounds; check for arithmetic overflow. |
 | `TranscodeBeforeReset` or `TranscodeAfterFinish` | Call `reset` before the first stream and before reuse. |
-| A malformed-input replacement path is becoming a second loop | Move the decision into the appropriate engine hooks. |
+| Replacement logic duplicates the transcode loop | Move decisions into engine hooks. |
+| Registry lookup fails or executes wrong type | Confirm the matching `register_value_string_codec!` / `register_value_bytes_codec!` is linked, the ID is unique in that registry, and input type matches registration. |
 
-## Limitations and Best Practices
+## Boundaries and a practice checklist
 
-- Keep concrete formats, character sets, and high-level reader/writer adapters
-  in their domain crates.
-- Keep unsafe codec methods small; test success, incomplete, invalid, boundary,
-  and stateful lifecycle behavior through checked public adapters.
-- Treat capacity methods as state-independent safety bounds over every
-  reachable state, not estimates of typical output.
-- Owned adapters allocate `Vec` output. Prefer caller-buffered APIs when
-  allocation ownership matters.
-- `NeedInput` is a streaming boundary signal, not final EOF.
-- Enable `io` only for crates that use the `qubit-io` bridge types.
+- Concrete formats, character sets, and high-level reader/writer adapters belong in domain crates, not in `qubit-codec`.
+- `NeedInput` is a streaming signal, not final EOF; only the caller or an explicit EOF hook decides what incomplete tail means at end of input.
+- Capacity methods must cover every reachable transient state, not typical output size alone.
+- Owned adapters may allocate `Vec` output; prefer caller-buffered APIs when allocation ownership matters.
+- Test success, incomplete, invalid, boundary, and stateful lifecycle behavior through checked public adapters, not only unsafe `Codec` methods.
+- Enable `io` and `registry` only in crates that use those integration paths.
 
-## Further Reading
+## Further reading
 
-- [README](../README.md)
-- [中文用户手册](user_guide.zh_CN.md)
-- [API documentation](https://docs.rs/qubit-codec)
+- [README](../README.md) · [中文 README](../README.zh_CN.md) · [API reference](https://docs.rs/qubit-codec)
 - [Lifecycle-aware decode example](../examples/decode_lifecycle.rs)

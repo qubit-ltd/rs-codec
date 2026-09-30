@@ -160,7 +160,14 @@ pub use value::CodecValueEncoder;
 pub use value::DecodeLifecycleOutput;
 pub use value::DecodeLifecycleProgress;
 #[cfg(feature = "registry")]
-pub use value::ValueCodecDescriptor;
+pub use value::ValueBytesCodecDescriptor;
+#[cfg(feature = "registry")]
+pub use value::ValueBytesCodecRegistration;
+#[cfg(feature = "registry")]
+#[doc(hidden)]
+pub use value::ValueBytesCodecRegistrationFactory;
+#[cfg(feature = "registry")]
+pub use value::ValueBytesCodecRegistry;
 #[cfg(feature = "registry")]
 pub use value::ValueCodecExecutionError;
 #[cfg(feature = "registry")]
@@ -170,9 +177,6 @@ pub use value::ValueCodecIdError;
 #[cfg(feature = "registry")]
 pub use value::ValueCodecRegistration;
 #[cfg(feature = "registry")]
-#[doc(hidden)]
-pub use value::ValueCodecRegistrationFactory;
-#[cfg(feature = "registry")]
 pub use value::ValueCodecRegistrationSource;
 #[cfg(feature = "registry")]
 pub use value::ValueCodecRegistry;
@@ -180,6 +184,15 @@ pub use value::ValueCodecRegistry;
 pub use value::ValueCodecRegistryError;
 pub use value::ValueDecoder;
 pub use value::ValueEncoder;
+#[cfg(feature = "registry")]
+pub use value::ValueStringCodecDescriptor;
+#[cfg(feature = "registry")]
+pub use value::ValueStringCodecRegistration;
+#[cfg(feature = "registry")]
+#[doc(hidden)]
+pub use value::ValueStringCodecRegistrationFactory;
+#[cfg(feature = "registry")]
+pub use value::ValueStringCodecRegistry;
 
 #[cfg(feature = "registry")]
 #[doc(hidden)]
