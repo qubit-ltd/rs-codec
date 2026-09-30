@@ -9,6 +9,7 @@
 
 use std::convert::Infallible;
 use std::hint::black_box;
+use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use criterion::BenchmarkGroup;
@@ -54,8 +55,8 @@ impl Codec for CopyCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -76,7 +77,7 @@ impl TranscodeDecodeHooks<CopyCodec> for CopyHooks {
         &mut self,
         _codec: &mut CopyCodec,
         error: &Infallible,
-        _consumed: Option<core::num::NonZeroUsize>,
+        _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, TranscodeDecodeError<Infallible>> {
         match *error {}
@@ -228,7 +229,6 @@ fn copy_safe(input: &[u8], output: &mut [u8]) {
 /// comparison. The caller guarantees equal input and output lengths.
 #[inline(never)]
 unsafe fn copy_unchecked(input: &[u8], output: &mut [u8]) {
-    debug_assert_eq!(input.len(), output.len());
     for index in 0..input.len() {
         // SAFETY: `index` is bounded by both slices' equal lengths.
         let source = unsafe { *input.get_unchecked(index) };
@@ -248,6 +248,7 @@ fn bench_safe_vs_unchecked(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
     });
 
     let mut unchecked_output = vec![0_u8; input.len()];
+    assert_eq!(input.len(), unchecked_output.len());
     group.bench_function("unchecked_indexing", |bencher| {
         bencher.iter(|| {
             // SAFETY: both output buffers are allocated to `input.len()`.

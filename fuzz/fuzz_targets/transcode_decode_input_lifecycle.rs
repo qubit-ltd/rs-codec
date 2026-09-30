@@ -9,7 +9,9 @@
 #![no_main]
 
 use core::convert::Infallible;
+use core::iter::once;
 use std::io::Cursor;
+use std::io::Error;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::CapacityError;
@@ -29,11 +31,11 @@ fuzz_target!(|data: &[u8]| {
     let data = &data[..data.len().min(MAX_INPUT_LEN)];
     let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(data.to_vec()), 1);
     let mut decoder = MarkerDecoder;
-    let mut mapper = |_error: TranscodeDecodeError<Infallible>| std::io::Error::other("marker decoder cannot fail");
+    let mut mapper = |_error: TranscodeDecodeError<Infallible>| Error::other("marker decoder cannot fail");
     let mut lifecycle = Vec::new();
     let mut decoded = Vec::new();
 
-    for action in data.iter().copied().chain(core::iter::once(2)) {
+    for action in data.iter().copied().chain(once(2)) {
         match action % 3 {
             0 => {
                 let mut output = [0_u8; 1];
