@@ -6,10 +6,19 @@
 
 //! Inventory value-codec registration factories.
 
-use crate::ValueCodecRegistration;
+use crate::ValueBytesCodecRegistration;
+use crate::ValueStringCodecRegistration;
 
-/// Factory submitted by [`register_value_codec!`](crate::register_value_codec).
+/// Factory submitted by
+/// [`register_value_string_codec!`](crate::register_value_string_codec).
 #[doc(hidden)]
-pub struct ValueCodecRegistrationFactory(pub fn() -> ValueCodecRegistration);
+pub struct ValueStringCodecRegistrationFactory(pub fn() -> ValueStringCodecRegistration);
 
-inventory::collect!(ValueCodecRegistrationFactory);
+inventory::collect!(ValueStringCodecRegistrationFactory);
+
+/// Factory submitted by
+/// [`register_value_bytes_codec!`](crate::register_value_bytes_codec).
+#[doc(hidden)]
+pub struct ValueBytesCodecRegistrationFactory(pub fn() -> ValueBytesCodecRegistration);
+
+inventory::collect!(ValueBytesCodecRegistrationFactory);

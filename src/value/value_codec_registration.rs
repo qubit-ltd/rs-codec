@@ -6,27 +6,30 @@
 
 //! Distributed value-codec registrations.
 
-use crate::ValueCodecDescriptor;
+use crate::ValueBytesCodecDescriptor;
 use crate::ValueCodecId;
 use crate::ValueCodecRegistrationSource;
+use crate::ValueStringCodecDescriptor;
 
 /// One statically linked value-codec implementation.
 #[derive(Clone, Copy, Debug)]
-pub struct ValueCodecRegistration {
+pub struct ValueCodecRegistration<D: 'static> {
     id: ValueCodecId,
-    descriptor: &'static ValueCodecDescriptor,
+    descriptor: &'static D,
     source: ValueCodecRegistrationSource,
 }
 
-impl ValueCodecRegistration {
+/// A string-wire value-codec registration.
+pub type ValueStringCodecRegistration = ValueCodecRegistration<ValueStringCodecDescriptor>;
+
+/// A bytes-wire value-codec registration.
+pub type ValueBytesCodecRegistration = ValueCodecRegistration<ValueBytesCodecDescriptor>;
+
+impl<D: 'static> ValueCodecRegistration<D> {
     /// Creates a registration from validated static facts.
     #[doc(hidden)]
     #[must_use]
-    pub const fn new(
-        id: ValueCodecId,
-        descriptor: &'static ValueCodecDescriptor,
-        source: ValueCodecRegistrationSource,
-    ) -> Self {
+    pub const fn new(id: ValueCodecId, descriptor: &'static D, source: ValueCodecRegistrationSource) -> Self {
         Self { id, descriptor, source }
     }
 
@@ -38,7 +41,7 @@ impl ValueCodecRegistration {
 
     /// Returns the executable descriptor.
     #[must_use]
-    pub const fn descriptor(&self) -> &'static ValueCodecDescriptor {
+    pub const fn descriptor(&self) -> &'static D {
         self.descriptor
     }
 
@@ -51,12 +54,13 @@ impl ValueCodecRegistration {
 
 /// Registers a default-constructible bidirectional string codec.
 #[macro_export]
-macro_rules! register_value_codec {
+macro_rules! register_value_string_codec {
     (id = $id:literal, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
-            static DESCRIPTOR: $crate::ValueCodecDescriptor = $crate::ValueCodecDescriptor::of::<$codec, $value>();
+            static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
+                $crate::ValueStringCodecDescriptor::of::<$codec, $value>();
 
-            fn registration() -> $crate::ValueCodecRegistration {
+            fn registration() -> $crate::ValueStringCodecRegistration {
                 $crate::ValueCodecRegistration::new(
                     $crate::ValueCodecId::new($id),
                     &DESCRIPTOR,
@@ -65,7 +69,30 @@ macro_rules! register_value_codec {
             }
 
             $crate::__private::inventory::submit! {
-                $crate::ValueCodecRegistrationFactory(registration)
+                $crate::ValueStringCodecRegistrationFactory(registration)
+            }
+        };
+    };
+}
+
+/// Registers a default-constructible bidirectional bytes codec.
+#[macro_export]
+macro_rules! register_value_bytes_codec {
+    (id = $id:literal, codec = $codec:ty, value = $value:ty $(,)?) => {
+        const _: () = {
+            static DESCRIPTOR: $crate::ValueBytesCodecDescriptor =
+                $crate::ValueBytesCodecDescriptor::of::<$codec, $value>();
+
+            fn registration() -> $crate::ValueBytesCodecRegistration {
+                $crate::ValueCodecRegistration::new(
+                    $crate::ValueCodecId::new($id),
+                    &DESCRIPTOR,
+                    $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
+                )
+            }
+
+            $crate::__private::inventory::submit! {
+                $crate::ValueBytesCodecRegistrationFactory(registration)
             }
         };
     };

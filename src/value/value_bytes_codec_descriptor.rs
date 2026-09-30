@@ -4,7 +4,7 @@
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
 
-//! Safe type-erased value-codec descriptors.
+//! Safe type-erased bidirectional bytes value-codec descriptors.
 
 use std::any::Any;
 use std::any::TypeId;
@@ -13,12 +13,12 @@ use crate::ValueCodecExecutionError;
 use crate::ValueDecoder;
 use crate::ValueEncoder;
 
-type EncodeFn = fn(&dyn Any) -> Result<String, ValueCodecExecutionError>;
-type DecodeFn = fn(&str) -> Result<Box<dyn Any>, ValueCodecExecutionError>;
+type EncodeFn = fn(&dyn Any) -> Result<Vec<u8>, ValueCodecExecutionError>;
+type DecodeFn = fn(&[u8]) -> Result<Box<dyn Any>, ValueCodecExecutionError>;
 
-/// An immutable, safely erased bidirectional string codec for one value type.
+/// An immutable, safely erased bidirectional bytes codec for one value type.
 #[derive(Clone, Copy)]
-pub struct ValueCodecDescriptor {
+pub struct ValueBytesCodecDescriptor {
     codec_type_id: fn() -> TypeId,
     codec_type_name: fn() -> &'static str,
     value_type_id: fn() -> TypeId,
@@ -27,14 +27,14 @@ pub struct ValueCodecDescriptor {
     decode: DecodeFn,
 }
 
-impl ValueCodecDescriptor {
+impl ValueBytesCodecDescriptor {
     /// Creates a descriptor for codec `C` and value type `V`.
     #[must_use]
     pub const fn of<C, V>() -> Self
     where
-        C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
+        C: Default + ValueEncoder<V, Output = Vec<u8>> + ValueDecoder<[u8], Output = V> + 'static,
         <C as ValueEncoder<V>>::Error: std::error::Error + 'static,
-        <C as ValueDecoder<str>>::Error: std::error::Error + 'static,
+        <C as ValueDecoder<[u8]>>::Error: std::error::Error + 'static,
         V: 'static,
     {
         Self {
@@ -76,25 +76,25 @@ impl ValueCodecDescriptor {
     /// # Errors
     ///
     /// Returns a type mismatch or the typed encoder source error.
-    pub fn encode(&self, value: &dyn Any) -> Result<String, ValueCodecExecutionError> {
+    pub fn encode(&self, value: &dyn Any) -> Result<Vec<u8>, ValueCodecExecutionError> {
         (self.encode)(value)
     }
 
-    /// Decodes one string into a safely erased value of the declared type.
+    /// Decodes one byte slice into a safely erased value of the declared type.
     ///
     /// # Errors
     ///
     /// Returns the typed decoder source error.
-    pub fn decode(&self, input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError> {
+    pub fn decode(&self, input: &[u8]) -> Result<Box<dyn Any>, ValueCodecExecutionError> {
         (self.decode)(input)
     }
 }
 
-impl core::fmt::Debug for ValueCodecDescriptor {
+impl core::fmt::Debug for ValueBytesCodecDescriptor {
     /// Formats descriptor metadata without invoking either codec function.
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         formatter
-            .debug_struct("ValueCodecDescriptor")
+            .debug_struct("ValueBytesCodecDescriptor")
             .field("codec_type_name", &self.codec_type_name())
             .field("value_type_name", &self.value_type_name())
             .finish_non_exhaustive()
@@ -102,11 +102,11 @@ impl core::fmt::Debug for ValueCodecDescriptor {
 }
 
 /// Downcasts and encodes one typed value.
-fn encode<C, V>(value: &dyn Any) -> Result<String, ValueCodecExecutionError>
+fn encode<C, V>(value: &dyn Any) -> Result<Vec<u8>, ValueCodecExecutionError>
 where
-    C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
+    C: Default + ValueEncoder<V, Output = Vec<u8>> + ValueDecoder<[u8], Output = V> + 'static,
     <C as ValueEncoder<V>>::Error: std::error::Error + 'static,
-    <C as ValueDecoder<str>>::Error: std::error::Error + 'static,
+    <C as ValueDecoder<[u8]>>::Error: std::error::Error + 'static,
     V: 'static,
 {
     let value = value
@@ -123,12 +123,12 @@ where
         })
 }
 
-/// Decodes one string and erases the typed output safely.
-fn decode<C, V>(input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError>
+/// Decodes one byte slice and erases the typed output safely.
+fn decode<C, V>(input: &[u8]) -> Result<Box<dyn Any>, ValueCodecExecutionError>
 where
-    C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
+    C: Default + ValueEncoder<V, Output = Vec<u8>> + ValueDecoder<[u8], Output = V> + 'static,
     <C as ValueEncoder<V>>::Error: std::error::Error + 'static,
-    <C as ValueDecoder<str>>::Error: std::error::Error + 'static,
+    <C as ValueDecoder<[u8]>>::Error: std::error::Error + 'static,
     V: 'static,
 {
     C::default()

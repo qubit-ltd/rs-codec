@@ -9,35 +9,44 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use crate::ValueBytesCodecDescriptor;
+use crate::ValueBytesCodecRegistrationFactory;
 use crate::ValueCodecId;
 use crate::ValueCodecRegistration;
-use crate::ValueCodecRegistrationFactory;
 use crate::ValueCodecRegistryError;
+use crate::ValueStringCodecDescriptor;
+use crate::ValueStringCodecRegistrationFactory;
+
+/// An immutable string-wire value-codec registry sorted by stable ID.
+pub type ValueStringCodecRegistry = ValueCodecRegistry<ValueStringCodecDescriptor>;
+
+/// An immutable bytes-wire value-codec registry sorted by stable ID.
+pub type ValueBytesCodecRegistry = ValueCodecRegistry<ValueBytesCodecDescriptor>;
 
 /// An immutable value-codec registry sorted by stable ID.
 ///
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::ValueCodecRegistry;
+/// use qubit_codec::ValueStringCodecRegistry;
 ///
-/// let registry = ValueCodecRegistry::empty();
+/// let registry = ValueStringCodecRegistry::empty();
 /// assert!(registry.get("missing.example").is_none());
 /// ```
 #[derive(Debug)]
-pub struct ValueCodecRegistry {
-    registrations: Box<[ValueCodecRegistration]>,
+pub struct ValueCodecRegistry<D: 'static> {
+    registrations: Box<[ValueCodecRegistration<D>]>,
     indices: BTreeMap<ValueCodecId, usize>,
 }
 
-impl ValueCodecRegistry {
+impl<D: Copy + 'static> ValueCodecRegistry<D> {
     /// Builds a local registry from static registrations.
     ///
     /// # Errors
     ///
     /// Returns a duplicate-ID error when multiple entries claim one ID.
     pub fn from_registrations(
-        registrations: impl IntoIterator<Item = &'static ValueCodecRegistration>,
+        registrations: impl IntoIterator<Item = &'static ValueCodecRegistration<D>>,
     ) -> Result<Self, ValueCodecRegistryError> {
         Self::build(registrations.into_iter().copied().collect())
     }
@@ -51,53 +60,23 @@ impl ValueCodecRegistry {
         }
     }
 
-    /// Initializes and returns the process-wide linked registry.
-    ///
-    /// # Errors
-    ///
-    /// Returns the cached construction error when linked registrations
-    /// conflict.
-    pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
-        static REGISTRY: OnceLock<Result<ValueCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
-        match REGISTRY.get_or_init(|| {
-            let registrations = inventory::iter::<ValueCodecRegistrationFactory>
-                .into_iter()
-                .map(|factory| (factory.0)())
-                .collect();
-            Self::build(registrations)
-        }) {
-            Ok(registry) => Ok(registry),
-            Err(error) => Err(error.clone()),
-        }
-    }
-
-    /// Returns the process-wide registry or panics with a stable diagnostic.
-    ///
-    /// # Panics
-    ///
-    /// Panics when linked registrations conflict.
-    #[must_use]
-    pub fn global() -> &'static Self {
-        Self::try_global().unwrap_or_else(|error| panic!("invalid global value codec registry: {error}"))
-    }
-
     /// Finds a registration by stable ID.
     ///
     /// Returns `None` when `id` is absent.
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration> {
+    pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration<D>> {
         let index = *self.indices.get(id)?;
         self.registrations.get(index)
     }
 
     /// Returns registrations in deterministic ID order.
     #[must_use]
-    pub fn registrations(&self) -> &[ValueCodecRegistration] {
+    pub fn registrations(&self) -> &[ValueCodecRegistration<D>] {
         &self.registrations
     }
 
     /// Freezes registrations and rejects duplicate IDs.
-    fn build(mut registrations: Vec<ValueCodecRegistration>) -> Result<Self, ValueCodecRegistryError> {
+    fn build(mut registrations: Vec<ValueCodecRegistration<D>>) -> Result<Self, ValueCodecRegistryError> {
         registrations.sort_by_key(ValueCodecRegistration::id);
         for pair in registrations.windows(2) {
             if pair[0].id() == pair[1].id() {
@@ -118,5 +97,71 @@ impl ValueCodecRegistry {
             registrations: registrations.into_boxed_slice(),
             indices,
         })
+    }
+}
+
+impl ValueStringCodecRegistry {
+    /// Initializes and returns the process-wide linked string registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns the cached construction error when linked registrations
+    /// conflict.
+    pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
+        static REGISTRY: OnceLock<Result<ValueStringCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
+        match REGISTRY.get_or_init(|| {
+            let registrations = inventory::iter::<ValueStringCodecRegistrationFactory>
+                .into_iter()
+                .map(|factory| (factory.0)())
+                .collect();
+            Self::build(registrations)
+        }) {
+            Ok(registry) => Ok(registry),
+            Err(error) => Err(error.clone()),
+        }
+    }
+
+    /// Returns the process-wide string registry or panics with a stable
+    /// diagnostic.
+    ///
+    /// # Panics
+    ///
+    /// Panics when linked registrations conflict.
+    #[must_use]
+    pub fn global() -> &'static Self {
+        Self::try_global().unwrap_or_else(|error| panic!("invalid global value string codec registry: {error}"))
+    }
+}
+
+impl ValueBytesCodecRegistry {
+    /// Initializes and returns the process-wide linked bytes registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns the cached construction error when linked registrations
+    /// conflict.
+    pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
+        static REGISTRY: OnceLock<Result<ValueBytesCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
+        match REGISTRY.get_or_init(|| {
+            let registrations = inventory::iter::<ValueBytesCodecRegistrationFactory>
+                .into_iter()
+                .map(|factory| (factory.0)())
+                .collect();
+            Self::build(registrations)
+        }) {
+            Ok(registry) => Ok(registry),
+            Err(error) => Err(error.clone()),
+        }
+    }
+
+    /// Returns the process-wide bytes registry or panics with a stable
+    /// diagnostic.
+    ///
+    /// # Panics
+    ///
+    /// Panics when linked registrations conflict.
+    #[must_use]
+    pub fn global() -> &'static Self {
+        Self::try_global().unwrap_or_else(|error| panic!("invalid global value bytes codec registry: {error}"))
     }
 }
