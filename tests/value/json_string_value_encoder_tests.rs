@@ -9,6 +9,7 @@
 use qubit_codec::JsonStringValueEncoder;
 use qubit_codec::ValueEncoder;
 use serde::Serialize;
+use serde_json::Value;
 use serde_json::json;
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -18,7 +19,7 @@ struct Sample {
 }
 
 #[test]
-fn encodes_struct_to_json_string() {
+fn test_encodes_struct_to_json_string() {
     let value = Sample {
         name: "alpha".to_owned(),
         count: 3,
@@ -31,10 +32,10 @@ fn encodes_struct_to_json_string() {
 }
 
 #[test]
-fn encodes_serde_json_value() {
+fn test_encodes_serde_json_value() {
     let value = json!({"nested": [1, null, false]});
 
-    let encoded = JsonStringValueEncoder::<serde_json::Value>::default()
+    let encoded = JsonStringValueEncoder::<Value>::default()
         .encode(&value)
         .expect("encode should succeed");
 
@@ -42,7 +43,7 @@ fn encodes_serde_json_value() {
 }
 
 #[test]
-fn dispatches_through_value_encoder_trait() {
+fn test_dispatches_through_value_encoder_trait() {
     let value = Sample {
         name: "trait".to_owned(),
         count: 9,
@@ -55,13 +56,13 @@ fn dispatches_through_value_encoder_trait() {
 }
 
 #[test]
-fn default_constructor_matches_new() {
+fn test_default_constructor_matches_new() {
     let value = json!(42);
 
-    let from_new = JsonStringValueEncoder::<serde_json::Value>::new()
+    let from_new = JsonStringValueEncoder::<Value>::new()
         .encode(&value)
         .expect("new encoder should succeed");
-    let from_default = JsonStringValueEncoder::<serde_json::Value>::default()
+    let from_default = JsonStringValueEncoder::<Value>::default()
         .encode(&value)
         .expect("default encoder should succeed");
 

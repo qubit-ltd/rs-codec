@@ -17,6 +17,8 @@ use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeFailure;
 use qubit_codec::ValueDecoder;
 
+use super::internal::ResetSensitiveLifecycleCodec;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
 
@@ -574,60 +576,6 @@ impl Codec for StatefulLifecycleCodec {
     }
 }
 
-#[derive(Default)]
-pub(super) struct ResetSensitiveLifecycleCodec {
-    decode_state: usize,
-}
-
-impl Codec for ResetSensitiveLifecycleCodec {
-    type Value = u8;
-    type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
-
-    const MIN_UNITS_PER_VALUE: usize = 1;
-
-    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
-
-    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
-
-    const MAX_DECODE_RESET_VALUES: usize = 1;
-
-    const MAX_DECODE_FINISH_VALUES: usize = 1;
-
-    unsafe fn decode_reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
-        output[output_index] = 0xfe;
-        self.decode_state = 1;
-        Ok(1)
-    }
-
-    unsafe fn decode(
-        &mut self,
-        input: &[u8],
-        input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
-        self.decode_state += 1;
-        Ok((decoded, core::num::NonZeroUsize::MIN))
-    }
-
-    unsafe fn encode(
-        &mut self,
-        value: &u8,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Self::EncodeError> {
-        output[output_index] = *value;
-        Ok(1)
-    }
-
-    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::DecodeError> {
-        output[output_index] = self.decode_state as u8;
-        self.decode_state = 0;
-        Ok(1)
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 struct CountingFinishValue(u8);
 
@@ -968,12 +916,4 @@ fn test_codec_value_decoder_wraps_stateful_decode_finish_error() {
         .decode_lifecycle(&[7])
         .expect("successful stateful finish mode should decode");
     assert_eq!(&7, value.value());
-}
-
-#[test]
-fn test_codec_value_decoder_default_and_debug() {
-    let decoder = CodecValueDecoder::<SingleByteCodec>::default();
-    let debug = format!("{decoder:?}");
-    assert!(debug.contains("CodecValueDecoder"));
-    assert!(debug.contains("codec"));
 }

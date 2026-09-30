@@ -10,7 +10,7 @@
 use qubit_codec::CodecValueDecoder;
 use qubit_codec::DecodeLifecycleProgress;
 
-use super::codec_value_decoder_tests::ResetSensitiveLifecycleCodec;
+use super::internal::ResetSensitiveLifecycleCodec;
 
 #[test]
 fn test_decode_lifecycle_progress_uses_separate_phase_storage() {

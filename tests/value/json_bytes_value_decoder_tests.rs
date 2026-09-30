@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Tests JSON-bytes decoding into serde values.
 
 use qubit_codec::JsonBytesValueDecoder;
 use qubit_codec::JsonBytesValueEncoder;
@@ -12,6 +13,7 @@ use qubit_codec::ValueDecoder;
 use qubit_codec::ValueEncoder;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 use serde_json::json;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -21,7 +23,7 @@ struct Sample {
 }
 
 #[test]
-fn decodes_struct_from_json_bytes() {
+fn test_decodes_struct_from_json_bytes() {
     let mut decoder = JsonBytesValueDecoder::<Sample>::new();
     let decoded = decoder
         .decode(br#"{"name":"epsilon","count":13}"#)
@@ -37,7 +39,7 @@ fn decodes_struct_from_json_bytes() {
 }
 
 #[test]
-fn round_trips_with_bytes_encoder() {
+fn test_round_trips_with_bytes_encoder() {
     let value = Sample {
         name: "round".to_owned(),
         count: 2,
@@ -54,8 +56,8 @@ fn round_trips_with_bytes_encoder() {
 }
 
 #[test]
-fn decodes_serde_json_value() {
-    let mut decoder = JsonBytesValueDecoder::<serde_json::Value>::default();
+fn test_decodes_serde_json_value() {
+    let mut decoder = JsonBytesValueDecoder::<Value>::default();
     let decoded = decoder
         .decode(br#"{"n":3.5,"s":"text"}"#)
         .expect("decode should succeed");
@@ -64,15 +66,15 @@ fn decodes_serde_json_value() {
 }
 
 #[test]
-fn dispatches_through_value_decoder_trait() {
-    let decoded = ValueDecoder::<[u8]>::decode(&mut JsonBytesValueDecoder::<serde_json::Value>::new(), br#""hello""#)
+fn test_dispatches_through_value_decoder_trait() {
+    let decoded = ValueDecoder::<[u8]>::decode(&mut JsonBytesValueDecoder::<Value>::new(), br#""hello""#)
         .expect("trait dispatch should succeed");
 
     assert_eq!(decoded, json!("hello"));
 }
 
 #[test]
-fn rejects_malformed_json_bytes() {
+fn test_rejects_malformed_json_bytes() {
     JsonBytesValueDecoder::<Sample>::new()
         .decode(b"{not-json")
         .expect_err("malformed JSON should fail");
