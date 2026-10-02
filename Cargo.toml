@@ -25,6 +25,10 @@ include = [
     "/benches/**",
 ]
 
+[workspace]
+members = ["."]
+resolver = "3"
+
 [package.metadata.rs-infra]
 miri = true
 
