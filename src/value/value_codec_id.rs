@@ -42,7 +42,7 @@ impl ValueCodecId {
     ///
     /// # Panics
     ///
-    /// Panics when `value` violates the point-separated ASCII protocol.
+    /// Panics when `value` violates the dot-separated ASCII protocol.
     #[must_use]
     pub const fn new(value: &'static str) -> Self {
         match Self::try_new(value) {
@@ -98,7 +98,7 @@ impl Borrow<str> for ValueCodecId {
     }
 }
 
-/// Validates one point-separated ASCII identifier in linear time.
+/// Validates one dot-separated ASCII identifier in linear time.
 ///
 /// # Parameters
 ///

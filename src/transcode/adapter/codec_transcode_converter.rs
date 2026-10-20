@@ -193,7 +193,6 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
     /// arithmetic overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.engine.max_transcode_output_len(input_len)
@@ -211,7 +210,6 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
     /// arithmetic overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_finish_output_len()
@@ -228,7 +226,6 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when component-bound
     /// arithmetic overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         self.engine.max_reset_output_len()

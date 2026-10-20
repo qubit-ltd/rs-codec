@@ -313,7 +313,6 @@ pub trait Transcoder {
     ///
     /// Implementations return [`CapacityError::OutputLengthOverflow`] when
     /// capacity arithmetic overflows. The default never fails.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)
@@ -345,7 +344,6 @@ pub trait Transcoder {
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when capacity arithmetic
     /// overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
     /// Returns an upper bound for a complete `reset -> transcode -> finish`
@@ -370,7 +368,6 @@ pub trait Transcoder {
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when a component bound
     /// or the sum of lifecycle bounds overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
@@ -397,7 +394,6 @@ pub trait Transcoder {
     ///
     /// Implementations return [`CapacityError::OutputLengthOverflow`] when
     /// capacity arithmetic overflows. The default never fails.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         Ok(0)

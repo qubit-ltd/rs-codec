@@ -37,8 +37,8 @@ impl codec::Codec for UnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -84,11 +84,8 @@ impl codec::Codec for WideUnitCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((
-            input[input_index],
-            core::num::NonZeroUsize::new(2).expect("two is non-zero"),
-        ))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::new(2).expect("two is non-zero")))
     }
 
     unsafe fn encode(

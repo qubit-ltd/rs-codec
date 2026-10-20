@@ -15,7 +15,9 @@ use crate::ValueStringCodecRegistration;
 /// [`register_value_string_codec!`](crate::register_value_string_codec).
 #[doc(hidden)]
 pub struct ValueStringCodecRegistrationFactory(
-    /// Creates one owned registration when the inventory is assembled.
+    /// Builds an owned string-codec registration when inventory entries are
+    /// collected into a registry. The callback takes no arguments and
+    /// supplies its own codec identifier, metadata, and construction logic.
     pub fn() -> ValueStringCodecRegistration,
 );
 

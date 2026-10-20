@@ -214,7 +214,6 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// Panics when an emitted or skipped outcome exceeds the input or output
     /// units available at the current cursors.
     #[inline]
-    #[must_use]
     pub(in crate::transcode) fn apply_decode_outcome(&mut self, outcome: DecodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             DecodeOutcome::Emitted { read, emitted } => {

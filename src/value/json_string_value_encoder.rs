@@ -57,7 +57,18 @@ where
     type Error = serde_json::Error;
     type Output = String;
 
-    /// Serializes `input` into a JSON string.
+    /// Serializes `input` into a compact JSON string.
+    ///
+    /// # Parameters
+    /// - `input`: Value to serialize.
+    ///
+    /// # Returns
+    /// The serialized JSON text as an owned UTF-8 string.
+    ///
+    /// # Errors
+    /// Returns the `serde_json` error if serialization fails, such as when a
+    /// custom serializer reports an error or the value contains unsupported
+    /// data.
     #[inline]
     fn encode(&mut self, input: &T) -> Result<Self::Output, Self::Error> {
         serde_json::to_string(input)

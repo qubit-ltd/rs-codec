@@ -167,6 +167,7 @@ impl ValueBytesCodecDescriptor {
     /// # Errors
     ///
     /// Returns a type mismatch or the typed encoder source error.
+    #[inline]
     pub fn encode(&self, value: &dyn Any) -> Result<Vec<u8>, ValueCodecExecutionError> {
         (self.encode)(value)
     }
@@ -184,6 +185,7 @@ impl ValueBytesCodecDescriptor {
     /// # Errors
     ///
     /// Returns the typed decoder source error.
+    #[inline]
     pub fn decode(&self, input: &[u8]) -> Result<Box<dyn Any>, ValueCodecExecutionError> {
         (self.decode)(input)
     }

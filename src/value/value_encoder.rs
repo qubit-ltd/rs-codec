@@ -13,6 +13,12 @@
 /// single-value buffer encoding and [`crate::Transcoder`] for batch
 /// conversion over caller-provided buffers.
 ///
+/// # Type Parameters
+///
+/// - `Input`: Borrowed source type accepted by [`encode`](Self::encode). It may
+///   be unsized, so implementations can accept slices and string types without
+///   an extra reference layer.
+///
 /// # Examples
 ///
 /// ```
@@ -41,9 +47,9 @@ pub trait ValueEncoder<Input: ?Sized> {
     type Output;
     /// Failure reported when one input value cannot be represented.
     ///
-    /// Implementations choose the error type; anything convertible into it from
-    /// a codec or allocation failure is accepted. Callers observe it only as
-    /// the `Err` of [`Self::encode`].
+    /// Implementations choose the error type and determine which encoding
+    /// failures it represents. Callers observe it as the `Err` of
+    /// [`Self::encode`].
     type Error;
 
     /// Encodes `input`.

@@ -19,6 +19,8 @@ use qubit_codec::TranscodeFailure;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
+use crate::nonzero;
+
 /// Decodes 0x80 plus one byte as a pair, rejects 0xff, and copies other bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct VariableByteCodec;
@@ -47,7 +49,7 @@ impl Codec for VariableByteCodec {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(DecodeFailure::incomplete(crate::nonzero(2)))
+                    Err(DecodeFailure::incomplete(nonzero(2)))
                 } else {
                     Ok((input[input_index + 1], unsafe { NonZeroUsize::new_unchecked(2) }))
                 }
@@ -107,10 +109,7 @@ impl Codec for FixedPairCodec {
     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
-        Ok((
-            input[input_index].wrapping_add(input[input_index + 1]),
-            crate::nonzero(2),
-        ))
+        Ok((input[input_index].wrapping_add(input[input_index + 1]), nonzero(2)))
     }
 
     unsafe fn encode(
@@ -223,12 +222,7 @@ fn test_codec_transcode_decoder_decodes_until_output_needs_capacity() {
         .transcode(&[1, 2, 3], 0, &mut output, 0)
         .expect("input should decode");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(1),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(1) }, progress.status(),);
     assert_eq!(2, progress.read());
     assert_eq!(2, progress.written());
     assert_eq!([1, 2], output);
@@ -246,12 +240,7 @@ fn test_codec_transcode_decoder_does_not_decode_after_output_is_full() {
         .transcode(&[1, 0xff], 0, &mut output, 0)
         .expect("full output should stop before invalid trailing input");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(1),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(1) }, progress.status(),);
     assert_eq!(1, progress.read());
     assert_eq!(1, progress.written());
     assert_eq!([1], output);
@@ -283,12 +272,7 @@ fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     let progress = decoder
         .transcode(&[0x80], 0, &mut output, 0)
         .expect("incomplete codec failure should request more input");
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 
@@ -410,7 +394,7 @@ fn test_codec_transcode_decoder_wraps_invalid_codec_error() {
         .expect_err("invalid input should fail");
 
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(TestDecodeError::Invalid, 0, Some(crate::nonzero(1)),),
+        TranscodeDecodeError::domain_main_with_consumed(TestDecodeError::Invalid, 0, Some(nonzero(1)),),
         error,
     );
 }

@@ -8,9 +8,11 @@
 
 use qubit_codec::engine::DecodeInvalidAction;
 
+use crate::nonzero;
+
 #[test]
 fn test_decode_invalid_actions_preserve_consumption_and_replacement() {
-    let consumed = crate::nonzero(2);
+    let consumed = nonzero(2);
     let skip = DecodeInvalidAction::<u8>::Skip { consumed };
     let replacement = DecodeInvalidAction::Emit { value: b'?', consumed };
 

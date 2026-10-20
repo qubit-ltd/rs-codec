@@ -14,9 +14,9 @@ use crate::ValueCodecRegistrationSource;
 
 /// Failure while freezing a value-codec registry.
 ///
-/// Freezing rejects a registry that files two registrations under one stable
-/// ID, and reports the first conflicting ID together with every declaration
-/// site that claimed it.
+/// Freezing rejects a registry that has two registrations under one stable
+/// ID, and reports the first conflicting ID together with the two declaration
+/// sites that form the first conflicting pair.
 ///
 /// # Examples
 ///

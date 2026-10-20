@@ -252,7 +252,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Panics if an emitted outcome contains other than one value, or if the
     /// outcome consumes more input units than remain.
     #[inline]
-    #[must_use]
     pub(crate) fn apply_decode_outcome(&mut self, outcome: DecodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             DecodeOutcome::Emitted { read, emitted } => {
@@ -289,7 +288,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Panics if an outcome writes beyond the remaining output or requests
     /// output capacity that is already available.
     #[inline]
-    #[must_use]
     pub(crate) fn apply_encode_outcome(&mut self, outcome: EncodeOutcome) -> Option<TranscodeProgress> {
         match outcome {
             EncodeOutcome::Consumed { written } => {

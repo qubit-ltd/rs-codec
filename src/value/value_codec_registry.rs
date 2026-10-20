@@ -36,9 +36,12 @@ pub type ValueBytesCodecRegistry = ValueCodecRegistry<ValueBytesCodecDescriptor>
 /// # Examples
 ///
 /// ```
+/// use qubit_codec::ValueCodecRegistry;
+/// use qubit_codec::ValueStringCodecDescriptor;
 /// use qubit_codec::ValueStringCodecRegistry;
 ///
-/// let registry = ValueStringCodecRegistry::empty();
+/// let registry: ValueCodecRegistry<ValueStringCodecDescriptor> =
+///     ValueStringCodecRegistry::empty();
 /// assert!(registry.get("missing.example").is_none());
 /// ```
 #[derive(Debug)]

@@ -28,7 +28,7 @@ use qubit_io::Output;
 use thiserror::Error as ThisError;
 
 #[test]
-fn try_with_capacity_allocates_encode_buffer() {
+fn test_try_with_capacity_allocates_encode_buffer() {
     let output = TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), 1).expect("encode buffer should allocate");
 
     assert!(output.spare_capacity() >= 1);

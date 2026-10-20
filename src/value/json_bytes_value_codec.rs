@@ -69,6 +69,19 @@ where
     type Output = Vec<u8>;
 
     /// Serializes `input` into UTF-8 JSON bytes.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Value borrowed for the duration of serialization.
+    ///
+    /// # Returns
+    ///
+    /// Returns a newly allocated vector containing the serialized JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JSON error if `T` rejects serialization or contains a map key
+    /// that cannot be represented as a JSON object key.
     #[inline]
     fn encode(&mut self, input: &T) -> Result<Self::Output, Self::Error> {
         JsonBytesValueEncoder::<T>::new().encode(input)
@@ -85,6 +98,21 @@ where
     type Output = T;
 
     /// Deserializes `input` from UTF-8 JSON bytes.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: One complete UTF-8 JSON value, optionally surrounded by
+    ///   whitespace.
+    ///
+    /// # Returns
+    ///
+    /// Returns an owned `T`; decoding may allocate according to the target
+    /// type.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JSON error for invalid UTF-8, malformed or incomplete input,
+    /// trailing non-whitespace data, or a value incompatible with `T`.
     #[inline]
     fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
         JsonBytesValueDecoder::<T>::new().decode(input)

@@ -162,6 +162,8 @@ impl Transcoder for PairDecoder {
     }
 }
 
+/// Decoder that preserves an incomplete pair until EOF, then emits its last
+/// byte.
 #[derive(Debug, Default)]
 struct EofTailDecoder;
 
@@ -170,14 +172,17 @@ impl Transcoder for EofTailDecoder {
     type Output = u16;
     type Error = TranscodeDecodeError<TestDecodeError>;
 
+    /// Reserves enough output for EOF handling of every input byte.
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
     }
 
+    /// Resets the stateless decoder without writing output.
     fn reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 
+    /// Requests more input while retaining an incomplete pair.
     fn transcode(
         &mut self,
         _input: &[u8],
@@ -188,6 +193,7 @@ impl Transcoder for EofTailDecoder {
         Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0))
     }
 
+    /// Emits a single remaining byte as a value when the source reaches EOF.
     fn transcode_eof(
         &mut self,
         input: &[u8],
@@ -199,6 +205,7 @@ impl Transcoder for EofTailDecoder {
         Ok(TranscodeProgress::complete(1, 1))
     }
 
+    /// Finishes without additional output after EOF-tail processing.
     fn finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
