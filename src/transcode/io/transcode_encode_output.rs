@@ -18,8 +18,8 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 
-use qubit_io::Buffer;
 use qubit_io::BufferedOutput;
+use qubit_io::BufferedOutputRecovery;
 use qubit_io::Output;
 use qubit_io::Seekable;
 use qubit_utils::SliceRange;
@@ -204,16 +204,17 @@ where
 
     /// Consumes this adapter without flushing the wrapped output.
     ///
-    /// This method does not call [`Self::flush`] and performs no I/O. Pending
-    /// units remain in the returned buffer, which transfers their delivery
-    /// responsibility to the caller.
+    /// This method does not call [`Self::flush`] and performs no I/O. `Pending`
+    /// units were not reported as written and may be retried. `Indeterminate`
+    /// means an inner write panicked and may have produced an external prefix;
+    /// do not replay it automatically.
     ///
     /// # Returns
     ///
-    /// The wrapped output and the buffer holding pending units.
-    #[must_use = "the returned output and pending buffer must be handled"]
+    /// The wrapped output and pending or indeterminate units.
+    #[must_use = "the returned output and recovery status must be handled"]
     #[inline]
-    pub fn into_parts(self) -> (O, Buffer<O::Item>) {
+    pub fn into_parts(self) -> (O, BufferedOutputRecovery<O::Item>) {
         self.output.into_parts()
     }
 

@@ -24,6 +24,7 @@ use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
+use qubit_io::BufferedOutputRecovery;
 use qubit_io::Output;
 use thiserror::Error as ThisError;
 
@@ -1085,7 +1086,10 @@ fn test_buffered_encode_output_exposes_parts_and_debug() {
     assert!(debug.contains("TranscodeEncodeOutput"));
     assert!(output.inner().units.is_empty());
 
-    let (inner, pending) = output.into_parts();
+    let (inner, recovery) = output.into_parts();
+    let BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("unexpected indeterminate recovery");
+    };
     assert!(inner.units.is_empty());
     assert!(pending.is_empty());
 }
@@ -1971,4 +1975,36 @@ fn test_buffered_encode_output_debug_shows_wrapped_output() {
 
     assert!(debug.contains("TranscodeEncodeOutput"));
     assert!(debug.contains("output"));
+}
+
+
+#[derive(Default)]
+struct PanicOutput {
+    bytes: Vec<u8>,
+}
+
+impl Output for PanicOutput {
+    type Item = u8;
+
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+        let committed = count.min(1);
+        self.bytes.extend_from_slice(&input[index..index + committed]);
+        panic!("scripted output panic after committing a prefix");
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
+    let mut output = TranscodeEncodeOutput::new(PanicOutput::default());
+    Write::write_all(&mut output, b"buffered").expect("bytes should be buffered");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Write::flush(&mut output)));
+    assert!(result.is_err());
+
+    let (inner, recovery) = output.into_parts();
+    assert_eq!(b"b", inner.bytes.as_slice());
+    assert!(matches!(recovery, BufferedOutputRecovery::Indeterminate(_)));
 }
