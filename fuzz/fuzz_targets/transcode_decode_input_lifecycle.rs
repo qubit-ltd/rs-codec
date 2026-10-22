@@ -20,7 +20,7 @@ use qubit_codec::TranscodeDecodeInput;
 use qubit_codec::TranscodeDecoder;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
-use qubit_utils as utils_crate;
+use qubit_utils::nonzero;
 
 const RESET: u8 = 0xa2;
 const FINISH: u8 = 0xf2;
@@ -93,7 +93,7 @@ impl Transcoder for MarkerDecoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output_index == output.len() {
-            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
+            return Ok(TranscodeProgress::need_output(nonzero(1), 0, 0));
         }
         output[output_index] = input[input_index];
         Ok(TranscodeProgress::complete(1, 1))

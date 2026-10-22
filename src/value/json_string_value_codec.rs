@@ -72,6 +72,14 @@ where
     /// The codec holds no state, so this delegates to a freshly created
     /// [`JsonStringValueEncoder`] and `self` stays usable for further calls.
     ///
+    /// # Parameters
+    ///
+    /// - `input`: Value to serialize as JSON.
+    ///
+    /// # Returns
+    ///
+    /// Returns the serialized JSON text as an owned UTF-8 string.
+    ///
     /// # Errors
     ///
     /// Returns [`serde_json::Error`] when `input` cannot be serialized to
@@ -96,6 +104,14 @@ where
     ///
     /// The codec holds no state, so this delegates to a freshly created
     /// [`JsonStringValueDecoder`] and `self` stays usable for further calls.
+    ///
+    /// # Parameters
+    ///
+    /// - `input`: Complete JSON value to deserialize.
+    ///
+    /// # Returns
+    ///
+    /// Returns an owned `T` deserialized independently of `input`'s lifetime.
     ///
     /// # Errors
     ///

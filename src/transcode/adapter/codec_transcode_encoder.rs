@@ -129,7 +129,8 @@ where
     #[inline]
     #[must_use]
     pub fn into_codec(self) -> C {
-        self.engine.into_parts().0
+        let (codec, _) = self.engine.into_parts();
+        codec
     }
 }
 
@@ -153,7 +154,7 @@ where
     ///
     /// # Returns
     ///
-    /// a conservative upper bound for output units.
+    /// A conservative upper bound for output units.
     ///
     /// # Errors
     ///
@@ -168,7 +169,7 @@ where
     ///
     /// # Returns
     ///
-    /// the maximum units emitted when resetting internal state.
+    /// The maximum units emitted when resetting internal state.
     ///
     /// # Errors
     ///
@@ -183,7 +184,7 @@ where
     ///
     /// # Returns
     ///
-    /// the number of units that may be emitted by finishing state.
+    /// The number of units that may be emitted by finishing state.
     ///
     /// # Errors
     ///

@@ -639,6 +639,7 @@ where
     /// already finished and has not been reset, or
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
     /// failed after execution started.
+    #[inline]
     pub fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -666,6 +667,7 @@ where
     ///
     /// Returns an error for invalid indices, a missing reset, a finished or
     /// poisoned stream, or codec/hook conversion failure.
+    #[inline]
     pub fn transcode_eof(
         &mut self,
         input: &[D::Unit],
@@ -769,6 +771,7 @@ where
     ///
     /// Panics if codec/hook lifecycle output exceeds its declared capacity
     /// bound.
+    #[inline]
     pub fn transcode_complete_into(
         &mut self,
         input: &[D::Unit],
@@ -1197,6 +1200,7 @@ where
     ///
     /// Panics if a codec/hook output bound fails to reserve enough space for
     /// emitted values.
+    #[inline]
     fn reset(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::reset(self, output, output_index)
     }
@@ -1218,6 +1222,7 @@ where
     ///
     /// Returns an error for invalid indices, a missing reset, a finished or
     /// poisoned stream, or codec/hook conversion failure.
+    #[inline]
     fn transcode(
         &mut self,
         input: &[D::Unit],
@@ -1249,6 +1254,7 @@ where
     ///
     /// Returns an error for invalid indices, a missing reset, a finished or
     /// poisoned stream, or codec/hook conversion failure.
+    #[inline]
     fn transcode_eof(
         &mut self,
         input: &[D::Unit],
@@ -1281,6 +1287,7 @@ where
     ///
     /// Panics if a codec/hook output bound fails to reserve enough space for
     /// emitted values.
+    #[inline]
     fn finish(&mut self, output: &mut [E::Unit], output_index: usize) -> Result<usize, TranscodeConvertErrorOf<D, E>> {
         TranscodeConvertEngine::finish(self, output, output_index)
     }

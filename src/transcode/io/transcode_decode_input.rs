@@ -812,6 +812,7 @@ where
     /// # Errors
     ///
     /// Returns seek errors from the wrapped input.
+    #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.input.seek_to(position)
     }
@@ -914,6 +915,7 @@ where
     /// # Errors
     ///
     /// Propagates errors from the wrapped input while refilling.
+    #[inline]
     fn fill_more(&mut self) -> Result<bool> {
         self.input.fill_more()
     }

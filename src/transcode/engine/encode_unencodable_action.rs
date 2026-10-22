@@ -36,6 +36,7 @@ pub type EncodeUnencodableActionOf<C> = EncodeUnencodableAction<<C as Codec>::Va
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum EncodeUnencodableAction<Value> {
     /// Reject the current input value.
     ///
@@ -64,7 +65,6 @@ impl<Value> EncodeUnencodableAction<Value> {
     ///
     /// Returns [`Self::Reject`].
     #[inline]
-    #[must_use]
     pub const fn reject() -> Self {
         Self::Reject
     }
@@ -79,7 +79,6 @@ impl<Value> EncodeUnencodableAction<Value> {
     ///
     /// Returns [`Self::Replace`] carrying `value`.
     #[inline]
-    #[must_use]
     pub const fn replace(value: Value) -> Self {
         Self::Replace { value }
     }

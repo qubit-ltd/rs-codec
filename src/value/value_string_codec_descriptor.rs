@@ -20,7 +20,7 @@ use crate::ValueCodecExecutionError;
 use crate::ValueDecoder;
 use crate::ValueEncoder;
 
-/// Checked type-erased encoding entry point returning an owned JSON string.
+/// Checked type-erased encoding entry point returning an owned string.
 type EncodeFn = fn(&dyn Any) -> Result<String, ValueCodecExecutionError>;
 /// Type-erased decoding entry point returning a boxed owned value.
 type DecodeFn = fn(&str) -> Result<Box<dyn Any>, ValueCodecExecutionError>;
@@ -166,7 +166,7 @@ impl ValueStringCodecDescriptor {
     ///
     /// # Returns
     ///
-    /// Returns an owned JSON string produced by a fresh default codec.
+    /// Returns an owned string produced by a fresh default codec.
     ///
     /// # Errors
     ///

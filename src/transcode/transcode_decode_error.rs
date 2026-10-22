@@ -174,7 +174,6 @@ impl<E> TranscodeDecodeError<E> {
     ///
     /// Some(borrowed failure) for Failure, or None for Domain.
     #[inline]
-    #[must_use]
     pub const fn failure_ref(&self) -> Option<&TranscodeFailure> {
         match self {
             Self::Failure(failure) => Some(failure),
@@ -188,7 +187,6 @@ impl<E> TranscodeDecodeError<E> {
     ///
     /// Some(borrowed context) for Domain, or None for Failure.
     #[inline]
-    #[must_use]
     pub const fn domain_error_ref(&self) -> Option<&TranscodeDomainError<E>> {
         match self {
             Self::Domain(error) => Some(error),
@@ -202,7 +200,6 @@ impl<E> TranscodeDecodeError<E> {
     ///
     /// Some(borrowed source) for Domain, or None for Failure.
     #[inline]
-    #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
             Self::Domain(error) => Some(error.source()),

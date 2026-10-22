@@ -128,7 +128,8 @@ where
     #[inline]
     #[must_use]
     pub fn into_codec(self) -> C {
-        self.engine.into_parts().0
+        let (codec, _) = self.engine.into_parts();
+        codec
     }
 }
 
@@ -206,6 +207,7 @@ where
     ///
     /// Returns a contract error for invalid indices or insufficient capacity,
     /// or a codec error when resetting codec state fails.
+    #[inline]
     fn reset(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
@@ -227,6 +229,7 @@ where
     ///
     /// Returns a decode error when indices are invalid or when conversion fails
     /// under hook policy.
+    #[inline]
     fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -257,6 +260,7 @@ where
     ///
     /// Returns contract errors for invalid indices or lifecycle transitions,
     /// or decode errors for malformed or incomplete final input.
+    #[inline]
     fn transcode_eof(
         &mut self,
         input: &[C::Unit],
@@ -282,6 +286,7 @@ where
     ///
     /// Returns contract errors for invalid indices, insufficient capacity, or
     /// invalid lifecycle transitions, or a codec error for invalid EOF state.
+    #[inline]
     fn finish(&mut self, output: &mut [C::Value], output_index: usize) -> Result<usize, TranscodeDecodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }

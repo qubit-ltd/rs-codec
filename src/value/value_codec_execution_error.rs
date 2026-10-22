@@ -9,6 +9,7 @@
 //! Type-erased value-codec execution errors.
 
 use std::any::TypeId;
+use std::error::Error;
 
 use thiserror::Error;
 
@@ -21,8 +22,9 @@ use thiserror::Error;
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::ValueCodecExecutionError;
 /// use std::any::TypeId;
+///
+/// use qubit_codec::ValueCodecExecutionError;
 ///
 /// let error = ValueCodecExecutionError::TypeMismatch {
 ///     expected_type: "u32",
@@ -51,7 +53,7 @@ pub enum ValueCodecExecutionError {
         codec_type: &'static str,
         /// Typed encoder source error.
         #[source]
-        source: Box<dyn std::error::Error>,
+        source: Box<dyn Error>,
     },
     /// The typed decoder failed.
     #[error("value codec {codec_type} failed to decode: {source}")]
@@ -60,6 +62,6 @@ pub enum ValueCodecExecutionError {
         codec_type: &'static str,
         /// Typed decoder source error.
         #[source]
-        source: Box<dyn std::error::Error>,
+        source: Box<dyn Error>,
     },
 }

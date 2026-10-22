@@ -36,6 +36,7 @@ pub type DecodeIncompleteActionOf<C> = DecodeIncompleteAction<<C as Codec>::Valu
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
+#[must_use]
 pub enum DecodeIncompleteAction<Value> {
     /// Reject the incomplete source tail.
     ///

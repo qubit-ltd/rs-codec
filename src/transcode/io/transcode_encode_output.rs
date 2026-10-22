@@ -583,6 +583,7 @@ where
     /// # Errors
     ///
     /// Propagates buffer allocation or wrapped-output flush errors.
+    #[inline]
     fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
         self.ensure_spare_capacity(required.get())
     }
@@ -627,6 +628,7 @@ where
     /// # Errors
     ///
     /// Propagates wrapped-output errors when buffer delivery is needed.
+    #[inline]
     fn write(&mut self, input: &[u8]) -> Result<usize> {
         Output::write(&mut self.output, input)
     }
@@ -667,6 +669,7 @@ where
     /// # Errors
     ///
     /// Propagates wrapped-output flush errors.
+    #[inline]
     fn flush(&mut self) -> Result<()> {
         TranscodeEncodeOutput::flush(self)
     }
@@ -689,6 +692,7 @@ where
     /// # Errors
     ///
     /// Propagates flush or seek errors from the wrapped output.
+    #[inline]
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }

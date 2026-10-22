@@ -366,7 +366,6 @@ where
     /// This query cannot fail.
     /// Stateless decoders always return `0`.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(C::MAX_DECODE_RESET_VALUES)
     }

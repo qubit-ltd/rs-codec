@@ -7,6 +7,8 @@
 // =============================================================================
 //! Tests for the encoder trait contract.
 
+use core::convert::Infallible;
+
 use qubit_codec::ValueEncoder;
 
 #[derive(Default)]
@@ -14,7 +16,7 @@ struct StringEncoder;
 
 impl ValueEncoder<str> for StringEncoder {
     type Output = String;
-    type Error = core::convert::Infallible;
+    type Error = Infallible;
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_owned())
@@ -33,7 +35,7 @@ struct UppercaseEncoder;
 
 impl ValueEncoder<str> for UppercaseEncoder {
     type Output = String;
-    type Error = core::convert::Infallible;
+    type Error = Infallible;
 
     fn encode(&mut self, input: &str) -> Result<Self::Output, Self::Error> {
         Ok(input.to_ascii_uppercase())

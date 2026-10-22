@@ -134,7 +134,7 @@ fn test_global_registries_collect_json_value_codec_registrations() {
 }
 
 #[test]
-fn test_same_id_may_exist_in_string_and_bytes_json_registries() {
+fn test_json_string_and_bytes_registries_have_distinct_codec_ids() {
     let string = ValueStringCodecRegistry::global()
         .get(JSON_STRING_VALUE_CODEC_ID)
         .expect("string registration");

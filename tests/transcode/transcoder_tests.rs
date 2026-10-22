@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
+
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeDecodeError;
@@ -20,7 +22,7 @@ struct DomainFailure;
 
 macro_rules! infallible_transcoder_error {
     () => {
-        type Error = TranscodeDecodeError<core::convert::Infallible>;
+        type Error = TranscodeDecodeError<Infallible>;
     };
 }
 
@@ -103,7 +105,7 @@ impl Transcoder for CopyTranscoder {
             Ok(TranscodeProgress::complete(read, written))
         } else {
             let status = TranscodeStatus::NeedOutput {
-                required: crate::nonzero(1),
+                required: utils_crate::nonzero(1),
             };
             Ok(TranscodeProgress::new(status, read, written))
         }
@@ -241,7 +243,7 @@ impl Transcoder for PairTranscoder {
             }
             return Ok(TranscodeProgress::new(
                 TranscodeStatus::NeedInput {
-                    required: crate::nonzero(2),
+                    required: utils_crate::nonzero(2),
                 },
                 complete_len,
                 complete_len / 2,

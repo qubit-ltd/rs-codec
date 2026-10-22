@@ -7,6 +7,8 @@
 // =============================================================================
 //! Tests for the semantic transcode converter marker trait.
 
+use core::convert::Infallible;
+
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeConvertError;
@@ -20,7 +22,7 @@ struct ByteToWord;
 impl Transcoder for ByteToWord {
     type Input = u8;
     type Output = u16;
-    type Error = TranscodeConvertError<core::convert::Infallible, core::convert::Infallible, u8>;
+    type Error = TranscodeConvertError<Infallible, Infallible, u8>;
 
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         Ok(input_len)
@@ -54,8 +56,8 @@ impl Transcoder for ByteToWord {
 }
 
 impl TranscodeConverter for ByteToWord {
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
     type Value = u8;
 }
 
