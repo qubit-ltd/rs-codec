@@ -59,6 +59,31 @@ impl ValueEncoder<String> for MirrorTextStringCodec {
     }
 }
 
+#[derive(Default)]
+struct FreshStringCodec {
+    calls: usize,
+}
+
+impl ValueEncoder<String> for FreshStringCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &String) -> Result<String, Error> {
+        self.calls += 1;
+        Ok(format!("{}:{input}", self.calls))
+    }
+}
+
+impl ValueDecoder<str> for FreshStringCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<String, Error> {
+        self.calls += 1;
+        Ok(format!("{}:{input}", self.calls))
+    }
+}
+
 impl ValueDecoder<str> for MirrorTextStringCodec {
     type Output = String;
     type Error = Error;
@@ -70,6 +95,7 @@ impl ValueDecoder<str> for MirrorTextStringCodec {
 
 static U32_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorU32StringCodec, u32>();
 static TEXT_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorTextStringCodec, String>();
+static FRESH_STRING: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<FreshStringCodec, String>();
 
 #[test]
 fn test_metadata_matches_the_types_selected_at_construction() {
@@ -265,5 +291,35 @@ fn test_decode_of_empty_input_reports_the_codec_failure() {
     assert!(
         matches!(error, ValueCodecExecutionError::DecodeFailed { .. }),
         "an empty string must surface as a decode failure, got {error:?}"
+    );
+}
+
+#[test]
+fn test_each_operation_uses_a_fresh_default_stateful_codec() {
+    let mut direct = FreshStringCodec::default();
+    assert_eq!(direct.encode(&String::from("payload")).unwrap(), "1:payload");
+    assert_eq!(direct.encode(&String::from("payload")).unwrap(), "2:payload");
+
+    let payload = String::from("payload");
+    assert_eq!(FRESH_STRING.encode(&payload).unwrap(), "1:payload");
+    assert_eq!(FRESH_STRING.encode(&payload).unwrap(), "1:payload");
+    let decoded = FRESH_STRING.decode("payload").unwrap();
+    assert_eq!(decoded.downcast_ref::<String>().unwrap(), "1:payload");
+    let decoded_again = FRESH_STRING.decode("payload").unwrap();
+    assert_eq!(decoded_again.downcast_ref::<String>().unwrap(), "1:payload");
+    assert_eq!(FRESH_STRING.encode(&payload).unwrap(), "1:payload");
+    let decoded_after_encode = FRESH_STRING.decode("payload").unwrap();
+    assert_eq!(
+        decoded_after_encode.downcast_ref::<String>().unwrap(),
+        "1:payload"
+    );
+    let copied = FRESH_STRING;
+    assert_eq!(copied.encode(&payload).unwrap(), "1:payload");
+    let copied_decoded = copied.decode("payload").unwrap();
+    assert_eq!(copied_decoded.downcast_ref::<String>().unwrap(), "1:payload");
+    let copied_decoded_again = copied.decode("payload").unwrap();
+    assert_eq!(
+        copied_decoded_again.downcast_ref::<String>().unwrap(),
+        "1:payload"
     );
 }

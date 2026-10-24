@@ -60,6 +60,35 @@ impl ValueEncoder<Vec<u8>> for MirrorVecU8BytesCodec {
     }
 }
 
+#[derive(Default)]
+struct FreshBytesCodec {
+    calls: usize,
+}
+
+impl ValueEncoder<Vec<u8>> for FreshBytesCodec {
+    type Output = Vec<u8>;
+    type Error = Error;
+
+    fn encode(&mut self, input: &Vec<u8>) -> Result<Vec<u8>, Error> {
+        self.calls += 1;
+        let mut result = vec![self.calls as u8];
+        result.extend_from_slice(input);
+        Ok(result)
+    }
+}
+
+impl ValueDecoder<[u8]> for FreshBytesCodec {
+    type Output = Vec<u8>;
+    type Error = Error;
+
+    fn decode(&mut self, input: &[u8]) -> Result<Vec<u8>, Error> {
+        self.calls += 1;
+        let mut result = vec![self.calls as u8];
+        result.extend_from_slice(input);
+        Ok(result)
+    }
+}
+
 impl ValueDecoder<[u8]> for MirrorVecU8BytesCodec {
     type Output = Vec<u8>;
     type Error = Error;
@@ -71,6 +100,7 @@ impl ValueDecoder<[u8]> for MirrorVecU8BytesCodec {
 
 static U32_DESCRIPTOR: ValueBytesCodecDescriptor = ValueBytesCodecDescriptor::of::<MirrorU32BytesCodec, u32>();
 static VEC_DESCRIPTOR: ValueBytesCodecDescriptor = ValueBytesCodecDescriptor::of::<MirrorVecU8BytesCodec, Vec<u8>>();
+static FRESH_BYTES: ValueBytesCodecDescriptor = ValueBytesCodecDescriptor::of::<FreshBytesCodec, Vec<u8>>();
 
 #[test]
 fn test_metadata_matches_the_types_selected_at_construction() {
@@ -267,5 +297,35 @@ fn test_decode_of_empty_input_reports_the_codec_failure() {
     assert!(
         matches!(error, ValueCodecExecutionError::DecodeFailed { .. }),
         "empty input must surface as a decode failure, got {error:?}"
+    );
+}
+
+#[test]
+fn test_each_operation_uses_a_fresh_default_stateful_codec() {
+    let mut direct = FreshBytesCodec::default();
+    assert_eq!(direct.encode(&vec![9_u8]).unwrap(), vec![1, 9]);
+    assert_eq!(direct.encode(&vec![9_u8]).unwrap(), vec![2, 9]);
+
+    let payload = vec![9_u8];
+    assert_eq!(FRESH_BYTES.encode(&payload).unwrap(), vec![1, 9]);
+    assert_eq!(FRESH_BYTES.encode(&payload).unwrap(), vec![1, 9]);
+    let decoded = FRESH_BYTES.decode(&[9]).unwrap();
+    assert_eq!(decoded.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
+    let decoded_again = FRESH_BYTES.decode(&[9]).unwrap();
+    assert_eq!(decoded_again.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
+    assert_eq!(FRESH_BYTES.encode(&payload).unwrap(), vec![1, 9]);
+    let decoded_after_encode = FRESH_BYTES.decode(&[9]).unwrap();
+    assert_eq!(
+        decoded_after_encode.downcast_ref::<Vec<u8>>().unwrap(),
+        &vec![1, 9]
+    );
+    let copied = FRESH_BYTES;
+    assert_eq!(copied.encode(&payload).unwrap(), vec![1, 9]);
+    let copied_decoded = copied.decode(&[9]).unwrap();
+    assert_eq!(copied_decoded.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
+    let copied_decoded_again = copied.decode(&[9]).unwrap();
+    assert_eq!(
+        copied_decoded_again.downcast_ref::<Vec<u8>>().unwrap(),
+        &vec![1, 9]
     );
 }

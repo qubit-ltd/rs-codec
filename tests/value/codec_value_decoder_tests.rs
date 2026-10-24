@@ -22,6 +22,41 @@ use super::internal::ResetSensitiveLifecycleCodec;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
 
+#[derive(Default, Eq, PartialEq)]
+struct NonDebugValue(u8);
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct NonDebugValueCodec;
+
+impl Codec for NonDebugValueCodec {
+    type Value = NonDebugValue;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(NonDebugValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((NonDebugValue(input[input_index]), core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &NonDebugValue,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = value.0;
+        Ok(1)
+    }
+}
+
 impl Codec for SingleByteCodec {
     type Value = u8;
     type Unit = u8;
@@ -762,6 +797,18 @@ fn test_codec_value_decoder_default_and_debug_do_not_require_value_debug() {
     assert_eq!(9, output);
     assert!(debug.contains("CodecValueDecoder"));
     assert!(debug.contains("codec"));
+}
+
+#[test]
+fn test_codec_value_decoder_debug_does_not_require_value_debug() {
+    let mut decoder = CodecValueDecoder::<NonDebugValueCodec>::default();
+
+    let debug = format!("{decoder:?}");
+    let output =
+        ValueDecoder::<[u8]>::decode(&mut decoder, &[11]).expect("default decoder should decode non-Debug value");
+
+    assert!(debug.contains("CodecValueDecoder"));
+    assert_eq!(11, output.0);
 }
 
 #[test]

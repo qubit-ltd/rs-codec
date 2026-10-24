@@ -33,11 +33,13 @@ fuzz_target!(|data: &[u8]| {
     let mut decoder = MarkerDecoder;
     let mut mapper = |_error: TranscodeDecodeError<Infallible>| Error::other("marker decoder cannot fail");
     let mut lifecycle = Vec::new();
+    let mut expected_lifecycle = Vec::new();
     let mut decoded = Vec::new();
 
     for action in data.iter().copied().chain(once(2)) {
         match action % 3 {
             0 => {
+                expected_lifecycle.push(RESET);
                 let mut output = [0_u8; 1];
                 let written = input.reset(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap();
                 lifecycle.extend_from_slice(&output[..written]);
@@ -48,6 +50,7 @@ fuzz_target!(|data: &[u8]| {
                 decoded.extend_from_slice(&output[..written]);
             }
             _ => {
+                expected_lifecycle.push(FINISH);
                 let mut output = [0_u8; 1];
                 let written = input.finish(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap();
                 lifecycle.extend_from_slice(&output[..written]);
@@ -57,7 +60,7 @@ fuzz_target!(|data: &[u8]| {
 
     assert!(decoded.len() <= data.len());
     assert_eq!(&data[..decoded.len()], decoded.as_slice());
-    assert!(lifecycle.iter().all(|unit| *unit == RESET || *unit == FINISH));
+    assert_eq!(expected_lifecycle, lifecycle);
     let (_inner, unread) = input.into_parts();
     assert!(unread.available() <= 1);
 });
