@@ -328,7 +328,7 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 
 为固定 value 类型成对实现 `ValueEncoder` 与 `ValueDecoder` 后注册。字符串 wire 与字节 wire 使用不同的 codec 类型与注册宏，各自进入独立的进程级注册表；同一 `ValueCodecId` 可以同时出现在两张表中。
 
-注册宏的 ID 必须是编译期常量表达式，例如字面量、`const` 或 `const fn` 调用。运行时计算的 ID 应通过 `ValueCodecId::try_new` 校验并使用 descriptor API 注册，这样非法声明会在编译时失败。同一 ID 有两个以上来源时，诊断会按稳定顺序列出全部来源。
+注册 ID 与注册表内容都是静态的：宏 ID 必须是编译期常量表达式，`ValueCodecId::try_new` 接受 `&'static str`，`ValueCodecRegistry::from_registrations` 也要求静态注册项。每个进程级 `global()` 注册表会从已链接注册项构建一次，此后保持不可变；没有运行时追加注册项的 API。运行时仍可在已有注册 codec 中选择：将配置 ID 保留为字符串，并用接受 `&str` 的 `registry.get(configured_id.as_str())` 查找。一个 ID 若有两个以上来源，诊断会按稳定顺序列出全部来源。
 
 字符串 wire 示例：
 
@@ -389,7 +389,22 @@ impl ValueDecoder<[u8]> for U32BeBytesCodec {
 register_value_bytes_codec!(id = "example.u32", codec = U32BeBytesCodec, value = u32,);
 ```
 
-`ValueStringCodecRegistry::global()` 与 `ValueBytesCodecRegistry::global()`（需要错误值时用各自的 `try_global()`）在每个进程内分别收集一次已链接的注册项。查找使用经校验的 `ValueCodecId`；执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
+在上述 `U32BeBytesCodec` 注册已链接进程序后，可以用运行时持有的字符串 ID 完成查找与往返：
+
+```rust
+use qubit_codec::ValueBytesCodecRegistry;
+
+let configured_id = String::from("example.u32");
+let registry = ValueBytesCodecRegistry::try_global().expect("valid registrations");
+let registration = registry.get(configured_id.as_str()).expect("known codec ID");
+let descriptor = registration.descriptor();
+let bytes = descriptor.encode(&42_u32).expect("u32 encoding succeeds");
+let decoded = descriptor.decode(&bytes).expect("u32 decoding succeeds");
+let value = decoded.downcast::<u32>().expect("registered value type is u32");
+assert_eq!(42, *value);
+```
+
+`ValueStringCodecRegistry::global()` 与 `ValueBytesCodecRegistry::global()`（需要错误值时用各自的 `try_global()`）在每个进程内分别收集一次已链接的注册项。宏与注册 ID 使用静态 ID 并在声明编译时校验；运行时查找使用接受 `&str` 的 `get`，并按原样 ID 字符串匹配，不做规范化。执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
 
 ## 错误、诊断与排障
 

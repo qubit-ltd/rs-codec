@@ -329,7 +329,7 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 
 Implement paired `ValueEncoder` and `ValueDecoder` for a fixed value type, then register. String and bytes wires use different codec types, macros, and process-wide registries; the same `ValueCodecId` may appear in both.
 
-Registration macro IDs must be compile-time constant expressions, such as a literal, `const`, or `const fn` call. Runtime-computed IDs should be checked with `ValueCodecId::try_new` and used with the descriptor APIs instead. This lets invalid declarations fail when compiled. If one ID has more than two sources, diagnostics list every source in stable order.
+Registration IDs and registry contents are static: macro IDs must be compile-time constant expressions, and `ValueCodecId::try_new` accepts an `&'static str`. `ValueCodecRegistry::from_registrations` also takes static registration entries. Each process-wide `global()` registry is built once from linked registrations and is immutable afterward; there is no API for adding registrations at runtime. Runtime selection among already registered codecs is supported: keep the selected ID as a string and look it up with `registry.get(configured_id.as_str())`, which accepts `&str`. If one ID has more than two sources, diagnostics list every source in stable order.
 
 String wire example:
 
@@ -390,7 +390,22 @@ impl ValueDecoder<[u8]> for U32BeBytesCodec {
 register_value_bytes_codec!(id = "example.u32", codec = U32BeBytesCodec, value = u32,);
 ```
 
-`ValueStringCodecRegistry::global()` and `ValueBytesCodecRegistry::global()` (or each `try_global()` when you need the error) collect linked registrations once per process. Lookup is by validated `ValueCodecId`; execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
+With the `U32BeBytesCodec` registration above linked into the program, this complete lookup and round trip uses a runtime-owned string ID:
+
+```rust
+use qubit_codec::ValueBytesCodecRegistry;
+
+let configured_id = String::from("example.u32");
+let registry = ValueBytesCodecRegistry::try_global().expect("valid registrations");
+let registration = registry.get(configured_id.as_str()).expect("known codec ID");
+let descriptor = registration.descriptor();
+let bytes = descriptor.encode(&42_u32).expect("u32 encoding succeeds");
+let decoded = descriptor.decode(&bytes).expect("u32 decoding succeeds");
+let value = decoded.downcast::<u32>().expect("registered value type is u32");
+assert_eq!(42, *value);
+```
+
+`ValueStringCodecRegistry::global()` and `ValueBytesCodecRegistry::global()` (or each `try_global()` when you need the error) collect linked registrations once per process. Macro and registration IDs are validated from static IDs when declarations are compiled; runtime lookup uses `get(&str)` with the exact ID string, without normalization. Execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
 
 ## Errors, diagnostics, and troubleshooting
 

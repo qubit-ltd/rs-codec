@@ -46,9 +46,10 @@ enum TranscodeConvertError<DE, EE, V> {
 }
 ```
 
-`TranscodeFailure` 是结构性错误的唯一实现来源。方向错误为了保持调用方迁移成本低，
-仍保留 `invalid_*`、`ensure_*`、`map_*` 等转发便利方法；这些方法只把结果转换成
-`Failure`，不复制或扩展框架语义。
+`TranscodeFailure` 是结构性错误的唯一实现来源；结构错误的 `invalid_*` 与
+`ensure_*` 构造和校验方法都定义在该类型上。方向错误可通过 `From` 实现或 `?`
+包装结构错误。`map_domain` 与 `map_value` 分别映射方向错误各自分支中的领域错误或
+value 类型，不会把错误统一转换为 `Failure`。
 
 ## 强制生命周期
 
@@ -113,8 +114,8 @@ EOF 后，可使用 codec-backed decoder 的 `transcode_eof`，由 codec 的
 
 - 不恢复旧的 phantom `FailureValue`/统一错误枚举；方向错误直接表达 decode、encode
   和 convert 语义。
-- 保留方向错误的 forwarding helper，因为它们是零语义的 API 便利层，并不造成错误
-  模型重复。
+- 方向错误保留各自的错误分支；结构错误继续复用 `TranscodeFailure`，不恢复已移除的
+  forwarding helper。
 - `D::Value: Default` 对 converter finish 冷路径的限制暂不改变；普通 transcode 热
   路不依赖该 bound，后续可另行设计无需 Default 的 finish scratch。
 - 不把 `EncodeContext` 的内部输出权限暴露给公共 hook API；若未来确需更强扩展点，

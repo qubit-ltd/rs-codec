@@ -659,6 +659,12 @@ where
     ///
     /// Returns input errors, invalid output ranges, capacity errors from the
     /// internal buffer, or transcode errors mapped by `map_error`.
+    /// This operation is not transactional. An error may be returned after
+    /// source units have been consumed and values have been written to
+    /// output. Progress is not rolled back, and the error does not report
+    /// the accumulated output length. Use `transcode_step` and commit each
+    /// successful progress result when previously decoded values must
+    /// remain observable after a later failure.
     pub fn transcode<D, M, Value>(
         &mut self,
         decoder: &mut D,

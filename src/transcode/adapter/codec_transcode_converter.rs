@@ -265,8 +265,10 @@ where
 
     /// Converts source units into target units.
     ///
-    /// This is the main streaming operation and does not require `D::Value` to
-    /// implement [`Default`].
+    /// This method's signature does not require `D::Value: Default`. Starting
+    /// and finishing a usable stream through the current reset/finish APIs
+    /// still requires that bound. Removing the lifecycle scratch bound is
+    /// deferred.
     ///
     /// # Parameters
     ///
