@@ -24,6 +24,7 @@ use qubit_codec::TranscodeEncodeError;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
 use qubit_codec::TranscodeProgress;
+use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 use qubit_io::BufferedOutputRecovery;
 use qubit_io::Output;
@@ -35,6 +36,487 @@ fn test_try_with_capacity_allocates_encode_buffer() {
 
     assert!(output.spare_capacity() >= 1);
     assert!(TranscodeEncodeOutput::try_with_capacity(Vec::<u8>::new(), usize::MAX).is_err());
+}
+
+#[test]
+fn test_transcode_step_completes_one_encoder_call() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 8);
+    let mut encoder = CountedEncoder::default();
+    let mut map_error = |_| Error::other("encode error");
+    let input = [0x1234_5678_u32, 0x9abc_def0];
+
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 0, input.len())
+        .expect("step succeeds");
+
+    assert_eq!(progress, TranscodeProgress::complete(2, 2));
+    assert_eq!(encoder.calls, 1);
+    output.flush().expect("flush succeeds");
+    assert_eq!(output.inner().units, &[0x5678, 0xdef0]);
+}
+
+#[test]
+fn test_transcode_step_returns_partial_progress() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 2);
+    let mut encoder = PairEncoder;
+    let mut map_error = |_| Error::other("encode error");
+    let input = [1_u32, 2, 3];
+
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 0, input.len())
+        .expect("step succeeds");
+
+    assert_eq!(progress.read(), 1);
+    assert_eq!(progress.written(), 2);
+    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+
+    let mut offset = progress.read();
+    while offset < input.len() {
+        let next = output
+            .transcode_step(&mut encoder, &mut map_error, &input, offset, input.len() - offset)
+            .expect("next step succeeds");
+        offset += next.read();
+        if let TranscodeStatus::NeedOutput { required, .. } = next.status() {
+            output
+                .ensure_spare_capacity(required.get())
+                .expect("space can be provided");
+        }
+    }
+    output.flush().expect("flush succeeds");
+    assert_eq!(output.inner().units, &[0, 1, 0, 2, 0, 3]);
+}
+
+#[test]
+fn test_transcode_step_keeps_window_bounded() {
+    for count in [64, 65_536] {
+        let values: Vec<u16> = (0..count).map(|value| value as u16).collect();
+        let mut output = TranscodeEncodeOutput::with_capacity(CountingSink::default(), 8);
+        let mut encoder = WindowEncoder::default();
+        let mut map_error = |_| Error::other("encode error");
+        let mut offset = 0;
+        while offset < values.len() {
+            let progress = output
+                .transcode_step(&mut encoder, &mut map_error, &values, offset, values.len() - offset)
+                .expect("step succeeds");
+            offset += progress.read();
+            if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+                output
+                    .ensure_spare_capacity(required.get())
+                    .expect("space can be provided");
+            }
+        }
+        output.flush().expect("flush succeeds");
+        let expected_sum: u64 = values.iter().map(|value| u64::from(*value)).sum();
+        assert_eq!(output.inner().count, count);
+        assert_eq!(output.inner().sum, expected_sum);
+        assert!(encoder.max_window <= 8);
+    }
+}
+
+#[derive(Debug, Default)]
+struct CountingSink {
+    count: usize,
+    sum: u64,
+}
+
+impl Output for CountingSink {
+    type Item = u16;
+
+    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
+        for value in &input[index..index + count] {
+            self.sum += u64::from(*value);
+        }
+        self.count += count;
+        Ok(count)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct WindowEncoder {
+    max_window: usize,
+}
+
+impl Transcoder for WindowEncoder {
+    type Input = u16;
+    type Output = u16;
+    type Error = TranscodeEncodeError<PairEncodeError, u16>;
+
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+    fn reset(&mut self, output: &mut [u16], index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+    fn transcode(
+        &mut self,
+        input: &[u16],
+        index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.max_window = self.max_window.max(output.len() - output_index);
+        let mut read = 0;
+        while index + read < input.len() && output_index + read < output.len() {
+            output[output_index + read] = input[index + read];
+            read += 1;
+        }
+        if index + read < input.len() {
+            Ok(TranscodeProgress::need_output(crate::nonzero(1), read, read))
+        } else {
+            Ok(TranscodeProgress::complete(read, read))
+        }
+    }
+    fn finish(&mut self, output: &mut [u16], index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for WindowEncoder {
+    type EncodeError = PairEncodeError;
+}
+
+#[test]
+fn test_transcode_step_honors_indices() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
+    let mut encoder = PairEncoder;
+    let mut map_error = |_| Error::other("encode error");
+    let input = [u32::MAX, 7, 8, u32::MAX];
+
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 1, 2)
+        .expect("selected range encodes");
+
+    assert_eq!(progress, TranscodeProgress::complete(2, 4));
+    output.flush().expect("flush succeeds");
+    assert_eq!(output.inner().units, &[0, 7, 0, 8]);
+}
+
+#[test]
+fn test_transcode_step_validates_empty_range() {
+    let mut output = TranscodeEncodeOutput::with_capacity(
+        UnitOutput {
+            fail_write: true,
+            ..UnitOutput::default()
+        },
+        4,
+    );
+    let mut encoder = CountedEncoder::default();
+    let mut map_error = |_| Error::other("encode error");
+    let input = [1_u32];
+    unsafe {
+        output.advance(1);
+    }
+
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 1, 0)
+        .expect("empty range is valid");
+    assert_eq!(progress, TranscodeProgress::complete(0, 0));
+    assert_eq!(encoder.calls, 0);
+    assert!(output.inner().units.is_empty(), "pending units are not delivered");
+    let error = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 2, 0)
+        .expect_err("out-of-range empty range fails");
+    assert_eq!(error.kind(), ErrorKind::InvalidInput);
+}
+
+#[test]
+fn test_transcode_step_rejects_invalid_progress() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
+    let mut encoder = OverreadingProgressEncoder;
+    let mut map_error = |_| Error::other("encode error");
+    let error = output
+        .transcode_step(&mut encoder, &mut map_error, &[1_u32], 0, 1)
+        .expect_err("over-read is rejected");
+    assert_eq!(error.kind(), ErrorKind::InvalidData);
+
+    let mut encoder = NeedInputEncoder;
+    let error = output
+        .transcode_step(&mut encoder, &mut map_error, &[1_u32], 0, 1)
+        .expect_err("encoder cannot request more input");
+    assert_eq!(error.kind(), ErrorKind::InvalidData);
+}
+
+#[test]
+fn test_transcode_step_returns_need_output_without_progress() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 1);
+    let mut encoder = AtomicPairEncoder;
+    let mut map_error = |_| Error::other("encode error");
+    let input = [3_u32, 4];
+
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 0, input.len())
+        .expect("insufficient output is progress");
+    assert_eq!(progress, TranscodeProgress::need_output(crate::nonzero(2), 0, 0));
+
+    output.ensure_spare_capacity(2).expect("larger window can be requested");
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &input, 0, input.len())
+        .expect("retry succeeds");
+    assert_eq!(progress, TranscodeProgress::complete(2, 2));
+}
+
+#[derive(Debug, Default)]
+struct AtomicPairEncoder;
+
+impl Transcoder for AtomicPairEncoder {
+    type Input = u32;
+    type Output = u16;
+    type Error = TranscodeEncodeError<PairEncodeError, u32>;
+
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+    fn reset(&mut self, output: &mut [u16], index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let count = (input.len() - index).min(2);
+        if output.len() - output_index < count {
+            return Ok(TranscodeProgress::need_output(crate::nonzero(count), 0, 0));
+        }
+        for offset in 0..count {
+            output[output_index + offset] = input[index + offset] as u16;
+        }
+        Ok(TranscodeProgress::complete(count, count))
+    }
+    fn finish(&mut self, output: &mut [u16], index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), index)?;
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for AtomicPairEncoder {
+    type EncodeError = PairEncodeError;
+}
+
+#[test]
+fn test_transcode_step_does_not_call_encoder_on_prepare_error() {
+    let mut output = TranscodeEncodeOutput::with_capacity(
+        UnitOutput {
+            fail_write: true,
+            ..UnitOutput::default()
+        },
+        1,
+    );
+    let mut encoder = CountedEncoder::default();
+    let mut map_error = |_| Error::other("encode error");
+    unsafe {
+        output.advance(1);
+    }
+
+    let error = output
+        .transcode_step(&mut encoder, &mut map_error, &[1_u32], 0, 1)
+        .expect_err("pending delivery fails");
+
+    assert_eq!(error.kind(), ErrorKind::BrokenPipe);
+    assert_eq!(encoder.calls, 0);
+}
+
+#[derive(Debug, Eq, PartialEq, ThisError)]
+#[error("bad boundary input")]
+struct BoundaryDomainError;
+
+#[derive(Debug, Default)]
+struct BoundaryEncoder {
+    encoded: Vec<u8>,
+    resets: usize,
+}
+
+impl Transcoder for BoundaryEncoder {
+    type Input = u8;
+    type Output = u8;
+    type Error = TranscodeEncodeError<BoundaryDomainError, u8>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        self.encoded.clear();
+        self.resets += 1;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let mut read = 0;
+        while input_index + read < input.len() {
+            let value = input[input_index + read];
+            if value == u8::MAX {
+                return Err(TranscodeEncodeError::domain_main(
+                    BoundaryDomainError,
+                    input_index + read,
+                ));
+            }
+            output[output_index + read] = value;
+            self.encoded.push(value);
+            read += 1;
+        }
+        Ok(TranscodeProgress::complete(read, read))
+    }
+
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for BoundaryEncoder {
+    type EncodeError = BoundaryDomainError;
+}
+
+fn boundary_mapper(error: TranscodeEncodeError<BoundaryDomainError, u8>) -> Error {
+    Error::other(error)
+}
+
+fn assert_boundary_error(error: &Error) {
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert!(
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeEncodeError<BoundaryDomainError, u8>>())
+            .and_then(TranscodeEncodeError::domain_ref)
+            == Some(&BoundaryDomainError)
+    );
+}
+
+#[test]
+fn test_encode_error_commit_boundary_sync_batch() {
+    let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 8);
+    let mut encoder = BoundaryEncoder::default();
+    let mut map_error = boundary_mapper;
+    let (pending, index, _) = output.spare_raw_parts_mut();
+    pending[index] = 0x11;
+    unsafe {
+        output.advance(1);
+    }
+
+    let error = output
+        .transcode(&mut encoder, &mut map_error, &[0x22, u8::MAX], 0, 2)
+        .expect_err("bad second value fails the encoder call");
+    assert_boundary_error(&error);
+    assert_eq!(&[0x22], encoder.encoded.as_slice());
+    output.flush().expect("old committed pending unit flushes");
+    assert_eq!(&[0x11], output.inner().get_ref().as_slice());
+}
+
+#[test]
+fn test_encode_error_commit_boundary_sync_step_and_reset() {
+    let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 8);
+    let mut encoder = BoundaryEncoder::default();
+    let mut map_error = boundary_mapper;
+    let (pending, index, _) = output.spare_raw_parts_mut();
+    pending[index] = 0x11;
+    unsafe {
+        output.advance(1);
+    }
+
+    let error = output
+        .transcode_step(&mut encoder, &mut map_error, &[0x22, u8::MAX], 0, 2)
+        .expect_err("bad second value fails the encoder call");
+    assert_boundary_error(&error);
+    assert_eq!(&[0x22], encoder.encoded.as_slice());
+    output
+        .reset(&mut encoder, &mut map_error)
+        .expect("new stream reset succeeds");
+    let progress = output
+        .transcode_step(&mut encoder, &mut map_error, &[0x33], 0, 1)
+        .expect("new stream value succeeds");
+    assert_eq!(TranscodeProgress::complete(1, 1), progress);
+    output.flush().expect("only committed units flush");
+    assert_eq!(&[0x11, 0x33], output.inner().get_ref().as_slice());
+}
+
+#[test]
+fn test_encode_error_commit_boundary_sink_failure_keeps_old_pending() {
+    let mut output = TranscodeEncodeOutput::with_capacity(
+        UnitOutput {
+            fail_write: true,
+            ..UnitOutput::default()
+        },
+        1,
+    );
+    let mut encoder = CountedEncoder::default();
+    let mut map_error = |_| Error::other("encoder error");
+    let (pending, index, _) = output.spare_raw_parts_mut();
+    pending[index] = 0x11;
+    unsafe {
+        output.advance(1);
+    }
+
+    let error = output
+        .transcode(&mut encoder, &mut map_error, &[1], 0, 1)
+        .expect_err("delivery of the older pending unit fails");
+    assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    assert_eq!(0, encoder.calls);
+    let (_inner, recovery) = output.into_parts();
+    let BufferedOutputRecovery::Pending(pending) = recovery else {
+        panic!("failed sink write must retain pending units");
+    };
+    assert_eq!(&[0x11], pending.readable());
+}
+
+#[derive(Debug, Default)]
+struct CountedEncoder {
+    calls: usize,
+}
+
+impl Transcoder for CountedEncoder {
+    type Input = u32;
+    type Output = u16;
+    type Error = TranscodeEncodeError<PairEncodeError, u32>;
+
+    fn max_transcode_output_len(&self, _input_len: usize) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+    fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+    fn transcode(
+        &mut self,
+        input: &[u32],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.calls += 1;
+        let mut read = 0;
+        while input_index + read < input.len() && output_index + read < output.len() {
+            output[output_index + read] = input[input_index + read] as u16;
+            read += 1;
+        }
+        if input_index + read < input.len() {
+            Ok(TranscodeProgress::need_output(crate::nonzero(1), read, read))
+        } else {
+            Ok(TranscodeProgress::complete(read, read))
+        }
+    }
+    fn finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        codec::TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for CountedEncoder {
+    type EncodeError = PairEncodeError;
 }
 
 #[derive(Debug, Default)]

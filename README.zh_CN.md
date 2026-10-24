@@ -212,6 +212,11 @@ pub fn encode_batch(values: &[u16]) -> Result<Vec<u8>, Box<dyn std::error::Error
 }
 ```
 
+`TranscodeEncodeOutput::transcode` 保留整批处理行为，并会在编码前预留整批输出上界。大输入也可在
+`io` feature 下使用 `transcode_step`：每次只调用一次 encoder，并返回 `TranscodeProgress`，由调用方
+推进输入游标并处理输出背压。分步路径每次调用初始只按单值上界预留，但缓冲区历史容量不会缩小，
+自定义 encoder 也可能请求更多空间。现有缓冲 writer 不会自动改用该入口。
+
 checked adapter 会在进入 unsafe `Codec` 入口前建立下标与容量前置条件，因此 1 字节输入
 会表现为不完整或 transcode 失败，而不是未定义行为。增量 `transcode`、EOF 处理以及带
 hooks 的 engine 见[用户手册](doc/user_guide.zh_CN.md)。

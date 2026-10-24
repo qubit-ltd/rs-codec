@@ -21,6 +21,7 @@ use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
 use qubit_io::AsyncOutput;
 use qubit_utils as utils_crate;
+use thiserror::Error as ThisError;
 
 #[derive(Debug)]
 struct ChunkedAsyncOutput {
@@ -383,6 +384,93 @@ impl Transcoder for LifecycleFailingEncoder {
 
 impl TranscodeEncoder for LifecycleFailingEncoder {
     type EncodeError = ();
+}
+
+#[derive(Debug, Eq, PartialEq, ThisError)]
+#[error("bad async boundary input")]
+struct AsyncBoundaryError;
+
+#[derive(Debug, Default)]
+struct BoundaryEncoder {
+    encoded: Vec<u8>,
+}
+
+impl Transcoder for BoundaryEncoder {
+    type Input = u8;
+    type Output = u8;
+    type Error = TranscodeEncodeError<AsyncBoundaryError, u8>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        self.encoded.clear();
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let mut read = 0;
+        while input_index + read < input.len() {
+            let value = input[input_index + read];
+            if value == u8::MAX {
+                return Err(TranscodeEncodeError::domain_main(
+                    AsyncBoundaryError,
+                    input_index + read,
+                ));
+            }
+            output[output_index + read] = value;
+            self.encoded.push(value);
+            read += 1;
+        }
+        Ok(TranscodeProgress::complete(read, read))
+    }
+
+    fn finish(&mut self, _output: &mut [u8], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for BoundaryEncoder {
+    type EncodeError = AsyncBoundaryError;
+}
+
+#[test]
+fn test_encode_error_commit_boundary_async_poll() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(8), 8);
+    let mut encoder = BoundaryEncoder::default();
+    let mut map_error = |error: TranscodeEncodeError<AsyncBoundaryError, u8>| io::Error::other(error);
+    assert_eq!(
+        TranscodeProgress::complete(1, 1),
+        complete(output.transcode_async(&mut encoder, &mut map_error, &[0x11], 0, 1))?,
+    );
+    assert_eq!(1, output.pending_len());
+
+    let mut context = Context::from_waker(Waker::noop());
+    match Pin::new(&mut output).poll_transcode(&mut context, &mut encoder, &mut map_error, &[0x22, u8::MAX], 0, 2) {
+        Poll::Ready(Err(error)) => {
+            assert_eq!(io::ErrorKind::Other, error.kind());
+            assert!(
+                error
+                    .get_ref()
+                    .and_then(|source| { source.downcast_ref::<TranscodeEncodeError<AsyncBoundaryError, u8>>() })
+                    .and_then(TranscodeEncodeError::domain_ref)
+                    == Some(&AsyncBoundaryError)
+            );
+        }
+        other => panic!("expected mapped encoder error, got {other:?}"),
+    }
+    assert_eq!(&[0x11, 0x22], encoder.encoded.as_slice());
+    assert_eq!(1, output.pending_len());
+    complete(output.drain_async())?;
+    assert_eq!(&[0x11], output.inner().bytes.as_slice());
+    Ok(())
 }
 
 #[test]

@@ -31,6 +31,7 @@ use crate::Codec;
 use crate::TranscodeEncodeError;
 use crate::TranscodeEncodeErrorOf;
 use crate::TranscodeEncoder;
+use crate::TranscodeProgress;
 use crate::TranscodeStatus;
 use crate::Transcoder;
 use crate::value::codec_value_lifecycle::encode_complete_value_into_reserved;
@@ -328,6 +329,115 @@ where
         Ok(())
     }
 
+    /// Encodes at most one step of the selected input range.
+    ///
+    /// Unlike [`Self::transcode`], this method does not reserve output space
+    /// for the entire range and calls the encoder exactly once. The returned
+    /// progress is relative to this call's input and output windows. Advance
+    /// the input index by [`TranscodeProgress::read`]; if the status is
+    /// `NeedOutput`, provide the requested spare capacity before retrying.
+    /// Written units have already been committed to this adapter's pending
+    /// buffer and must not be advanced again. A zero count validates the range
+    /// and returns complete progress without delivering pending units or
+    /// calling the encoder.
+    ///
+    /// # Parameters
+    ///
+    /// * `encoder` - Encoder that processes one progress step.
+    /// * `map_error` - Maps encoder errors to I/O errors.
+    /// * `input` - Source values.
+    /// * `input_index` - Start index inside `input`.
+    /// * `count` - Number of values available from `input_index`.
+    ///
+    /// # Returns
+    ///
+    /// Progress for the single encoder call, including consumed input,
+    /// committed output, and whether more output capacity is needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid input ranges, capacity, encoder, or output errors. An
+    /// invalid encoder progress report is returned as `ErrorKind::InvalidData`.
+    /// An error does not provide general transactional rollback or complete
+    /// progress. The encoder may already have advanced, but units written by
+    /// its failing call are not committed to this adapter's pending output.
+    /// Do not replay the original input range without an encoder-specific
+    /// recovery protocol. Earlier pending units retain the wrapped output's
+    /// recovery contract; reset starts a new logical stream and does not undo
+    /// output already delivered.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io::Cursor;
+    ///
+    /// use qubit_codec::TranscodeEncodeOutput;
+    /// use qubit_codec::TranscodeEncoder;
+    /// use qubit_codec::TranscodeStatus;
+    ///
+    /// fn encode<E>(encoder: &mut E, values: &[E::Input]) -> std::io::Result<Vec<u8>>
+    /// where
+    ///     E: TranscodeEncoder<Output = u8>,
+    /// {
+    ///     let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 8);
+    ///     let mut map_error = |_| std::io::Error::other("encode error");
+    ///     let mut offset = 0;
+    ///     while offset < values.len() {
+    ///         let progress = output.transcode_step(
+    ///             encoder,
+    ///             &mut map_error,
+    ///             values,
+    ///             offset,
+    ///             values.len() - offset,
+    ///         )?;
+    ///         offset += progress.read();
+    ///         if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+    ///             output.ensure_spare_capacity(required.get())?;
+    ///         }
+    ///     }
+    ///     output.finish(encoder, &mut map_error)?;
+    ///     let (cursor, _) = output.into_parts();
+    ///     Ok(cursor.into_inner())
+    /// }
+    /// ```
+    pub fn transcode_step<E, M, Value>(
+        &mut self,
+        encoder: &mut E,
+        map_error: &mut M,
+        input: &[Value],
+        input_index: usize,
+        count: usize,
+    ) -> Result<TranscodeProgress>
+    where
+        E: TranscodeEncoder<Input = Value, Output = O::Item>,
+        M: FnMut(E::Error) -> Error,
+    {
+        let input_end = SliceRange::checked_range_end(
+            input.len(),
+            input_index,
+            count,
+            "encode input range exceeds source buffer",
+        )?;
+        if count == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        let required = encoder
+            .max_transcode_output_len(1)
+            .map_err(capacity_error_to_invalid_data)?
+            .max(1);
+        self.ensure_spare_capacity(required)?;
+        let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
+        let progress = encoder
+            .transcode(&input[..input_end], input_index, units, output_index)
+            .map_err(&mut *map_error)?;
+        let progress = validate_encode_progress(progress, input_index, count, output_index, available_output)?;
+        // SAFETY: Validated progress fits the spare output window.
+        unsafe {
+            self.output.advance(progress.written());
+        }
+        Ok(progress)
+    }
+
     /// Encodes values from an indexed input range using a streaming
     /// [`Transcoder`].
     ///
@@ -359,6 +469,14 @@ where
     ///
     /// Returns invalid input ranges, capacity, transcode, or output errors. An
     /// output-bound contract violation is reported as `ErrorKind::InvalidData`.
+    /// An error does not provide general transactional rollback or complete
+    /// progress. The encoder may already have advanced, while units written by
+    /// its failing call are not committed to this adapter's pending output.
+    /// Do not replay the original input range unless the concrete encoder
+    /// provides an explicit recovery protocol. Previously committed pending
+    /// output remains subject to the wrapped output's recovery contract, and
+    /// reset starts a new logical stream without undoing output already
+    /// delivered.
     ///
     /// # Examples
     ///

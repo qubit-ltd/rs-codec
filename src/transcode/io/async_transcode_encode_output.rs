@@ -319,7 +319,14 @@ where
     ///
     /// Returns invalid input ranges, output delivery, allocation, contract, or
     /// mapped transcoder errors. Pending units remain retained after a failed
-    /// asynchronous delivery.
+    /// asynchronous delivery. An encoder error does not provide general
+    /// transactional rollback or complete progress: the encoder may already
+    /// have advanced, but units written by its failing call are not committed
+    /// to this adapter's pending output. Do not replay the original input
+    /// range unless the concrete encoder provides an explicit recovery
+    /// protocol. Previously committed pending units follow the wrapped output's
+    /// recovery contract; reset starts a new logical stream and does not undo
+    /// output already delivered.
     pub fn poll_transcode<E, M, Value>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -415,7 +422,7 @@ where
     ///
     /// Returns range, capacity, allocation, delivery, contract or mapped
     /// encoder errors, with pending units retained as described by
-    /// `poll_transcode`.
+    /// [`Self::poll_transcode`].
     pub async fn transcode_async<E, M, Value>(
         &mut self,
         encoder: &mut E,

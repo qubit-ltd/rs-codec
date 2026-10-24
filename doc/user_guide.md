@@ -316,7 +316,43 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 For async input, reset the decoder and collect its actual output first. Each `AsyncTranscodeDecodeInput::poll_transcode` progress result commits `read()` inside the bridge, so the caller advances its output cursor by `written()` and must not consume the source again. On `NeedInput { required }`, await `fill_until_async(required.get())`: `true` resumes ordinary polling; `false` confirms EOF while preserving any short unread tail. Pass that tail to `transcode_eof_step`, collect each step's `written()` values, and retry `NeedOutput` with enough output capacity. When the EOF step is `Complete`, call `finish` and collect its output. `AsyncTranscodeDecodeStep::EndOfInput` means refill confirmed EOF with no unread units; it is only the empty-buffer EOF path. The bridge may conservatively request output capacity for a whole policy action, so even `Skip` or `Reject` can first report `NeedOutput`. See [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs).
 
-Before a synchronous `transcode` batch, the bridge reserves the codec's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch, so split large batches when needed. The operation may deliver already buffered output before accepting the next batch; async polling establishes backpressure first and can return `Pending` before calling the encoder. Explicit `flush` remains the sink flush boundary. `finish_to_buffer` only appends encoder finalization output to memory; `finish` delivers buffered bytes and flushes the sink.
+Before a synchronous `transcode` batch, the bridge reserves the encoder's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch. Keep this API when whole-range consumption is useful; use `transcode_step` when the caller needs to drive a large input incrementally:
+
+```rust
+use std::io::Cursor;
+use std::io::Error;
+use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::TranscodeEncodeOutput;
+use qubit_codec::TranscodeStatus;
+
+let values = [0x1234_u16, 0xabcd];
+let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
+let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
+let mut map_error = |_| Error::other("encode error");
+
+output.reset(&mut encoder, &mut map_error)?;
+let mut offset = 0;
+while offset < values.len() {
+    let progress = output.transcode_step(
+        &mut encoder,
+        &mut map_error,
+        &values,
+        offset,
+        values.len() - offset,
+    )?;
+    offset += progress.read();
+    if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+        output.ensure_spare_capacity(required.get())?;
+    }
+}
+output.finish(&mut encoder, &mut map_error)?;
+assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
+# Ok::<(), std::io::Error>(())
+```
+
+The returned `written()` units are already committed to the adapter; do not advance them again. Advance the source by `read()` before requesting more space. A zero `count` validates the range but does not call the encoder or deliver pending output. The single-value bound is only a preflight estimate: `NeedOutput` may request more, and buffer capacity retained from earlier calls does not shrink. This path does not automatically change downstream buffered writers. The operation may deliver previously buffered output before accepting the next step; async polling establishes backpressure first and can return `Pending` before calling the encoder. Explicit `flush` remains the sink flush boundary. `finish_to_buffer` only appends finalization output to memory; `finish` delivers pending units and flushes the sink.
+
+Errors do not provide general transactional rollback or complete progress. A range or capacity error occurs before the encoder runs, although preparing capacity may deliver older pending units. A sink delivery error follows the wrapped output's pending/recovery contract. If the encoder or progress validation fails, the encoder may already have advanced, while units written by that failed call are not committed to this adapter's pending output. Do not replay the original input range unless that encoder defines a recovery protocol. A successful reset may start a new logical stream; it does not undo output already delivered from the old one.
 
 ## Register codecs for runtime lookup
 
@@ -423,6 +459,7 @@ assert_eq!(42, *value);
 | --- | --- |
 | `NeedInput` at end of file | Preserve the tail; call `transcode_eof`; apply format EOF rules before `finish`. |
 | Repeated `NeedOutput` | Advance both progress counters; provide reported capacity; verify custom bounds. |
+| Streaming encode returns an error | Distinguish preflight, sink delivery, and encoder/progress failures; an encoder failure may advance state without returning full progress. |
 | Owned decode rejects valid-looking input | Trailing units, or decode reset/finish output; use lifecycle-aware decode. |
 | Capacity rejected before conversion | Include reset, main, and finish bounds; check for arithmetic overflow. |
 | `TranscodeBeforeReset` or `TranscodeAfterFinish` | Call `reset` before the first stream and before reuse. |

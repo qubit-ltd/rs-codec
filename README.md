@@ -169,6 +169,15 @@ assert_eq!(
 );
 ```
 
+`TranscodeEncodeOutput::transcode` keeps this whole-range behavior and reserves
+the batch's full output bound before encoding. For large inputs, the `io`
+feature also provides `transcode_step`, which calls the encoder once and
+returns `TranscodeProgress` so the caller can advance through the input while
+handling output backpressure. The stepwise path limits each call's initial
+reservation to a single-value bound, but retained buffer capacity does not
+shrink and a custom encoder may request more space. Existing buffered writers
+do not adopt this path automatically.
+
 Checked adapters establish index and capacity preconditions before the unsafe
 `Codec` entry points; a one-byte input therefore surfaces as incomplete or
 transcode failure rather than undefined behavior. See the [user guide](doc/user_guide.md)

@@ -315,7 +315,43 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把该尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。`AsyncTranscodeDecodeStep::EndOfInput` 表示 refill 确认 EOF 时 unread 已空，它只是空缓冲 EOF 路径。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
 
-同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存，必要时应拆分。接受下一批前，操作可能先交付已缓冲输出；异步 poll 则先建立背压，编码器尚未调用时就可能返回 `Pending`。显式 `flush` 仍是 sink 刷新边界。`finish_to_buffer` 只把 encoder 收尾输出追加到内存，不执行 I/O；`finish` 会交付缓存并刷新 sink。
+同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存。需要整批消费时继续使用该入口；需要逐步驱动大输入时，可使用 `transcode_step`：
+
+```rust
+use std::io::Cursor;
+use std::io::Error;
+use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::TranscodeEncodeOutput;
+use qubit_codec::TranscodeStatus;
+
+let values = [0x1234_u16, 0xabcd];
+let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
+let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
+let mut map_error = |_| Error::other("encode error");
+
+output.reset(&mut encoder, &mut map_error)?;
+let mut offset = 0;
+while offset < values.len() {
+    let progress = output.transcode_step(
+        &mut encoder,
+        &mut map_error,
+        &values,
+        offset,
+        values.len() - offset,
+    )?;
+    offset += progress.read();
+    if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+        output.ensure_spare_capacity(required.get())?;
+    }
+}
+output.finish(&mut encoder, &mut map_error)?;
+assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
+# Ok::<(), std::io::Error>(())
+```
+
+返回的 `written()` 已提交到 bridge，不能再次 advance；先按 `read()` 推进源游标，再申请下一步空间。`count` 为零时只验证范围，不调用 encoder，也不交付 pending 输出。单值上界只是预检估算：`NeedOutput` 可能请求更多空间，且历史缓冲容量不会自动缩小。现有下游缓冲 writer 不会自动改用此入口。操作可能先交付已缓冲输出再接受下一步；异步 poll 则先建立背压，encoder 尚未调用时就可能返回 `Pending`。显式 `flush` 仍是 sink 刷新边界。`finish_to_buffer` 只把 encoder 收尾输出追加到内存，不执行 I/O；`finish` 会交付 pending 并刷新 sink。
+
+错误不提供通用事务回滚或完整进度。范围或容量预检错误发生在 encoder 调用前，但准备容量时可能已交付旧 pending；sink 交付错误遵循底层输出的 pending 与恢复契约。如果 encoder 或进度验证失败，encoder 可能已经推进，但失败调用写入的单位不会提交到该 bridge 的 pending 输出。除非具体 encoder 定义了恢复协议，否则不要从原输入范围起点重放。成功的 reset 可以开始新的逻辑流，但不能撤销旧流已交付的输出。
 
 ## 在链接期注册 codec 供运行时查找
 
@@ -422,6 +458,7 @@ assert_eq!(42, *value);
 | --- | --- |
 | 文件末尾出现 `NeedInput` | 确认已保留尾部；调用 `transcode_eof`；在 `finish` 前采用格式专属 EOF 规则。 |
 | `NeedOutput` 持续重复 | 推进两个进度计数；提供报告的容量；核对自定义上界。 |
+| 流式编码返回错误 | 区分预检、sink 交付及 encoder/进度失败；encoder 出错时可能已推进状态但没有完整进度。 |
 | 自有 decode 拒绝看似有效的输入 | 检查 trailing unit 或 decode reset/finish 输出；必要时使用生命周期感知 decode。 |
 | 转换前容量被拒绝 | 纳入 reset、main 与 finish 上界，并检查算术溢出。 |
 | `TranscodeBeforeReset` 或 `TranscodeAfterFinish` | 在第一条流及复用前调用 `reset`。 |

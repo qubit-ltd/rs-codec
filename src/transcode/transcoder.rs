@@ -464,7 +464,11 @@ pub trait Transcoder {
     /// Returns framework failures for invalid indices, insufficient output,
     /// incomplete input, and capacity overflow. Returns domain errors for
     /// semantic conversion failures that the transcoder's policy does not
-    /// absorb.
+    /// absorb. An error does not provide general transactional rollback or
+    /// complete progress: the transcoder may already have advanced. Callers
+    /// must not replay the original input range unless the concrete
+    /// transcoder provides an explicit recovery protocol. Reset may begin a
+    /// new logical stream but cannot undo output already delivered.
     fn transcode(
         &mut self,
         input: &[Self::Input],
@@ -501,6 +505,10 @@ pub trait Transcoder {
     ///
     /// Returns invalid-index errors before calling `transcode`, forwards its
     /// errors, and rejects invalid progress or an incomplete final input tail.
+    /// It has the same non-transactional error boundary as [`Self::transcode`]:
+    /// the transcoder may have advanced, and callers must not replay the
+    /// original input range without an explicit recovery protocol. Reset only
+    /// begins a new logical stream; it cannot undo output already delivered.
     #[inline]
     fn transcode_eof(
         &mut self,
