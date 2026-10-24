@@ -221,6 +221,60 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
+    /// Applies the hook policy to an incomplete input tail.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Optional codec error associated with the incomplete tail.
+    /// - `required_total`: Minimum total input width needed to decode a value.
+    /// - `context`: Decode cursors and the number of visible source units.
+    /// - `consume`: Callback used once when the policy emits a value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the resulting decode outcome and an optional consumer result.
+    ///
+    /// # Errors
+    ///
+    /// Returns the hook error or the appropriate incomplete-input rejection,
+    /// preserving a codec error source when one was supplied.
+    fn apply_incomplete_decode<R, F>(
+        &mut self,
+        source: Option<C::DecodeError>,
+        required_total: NonZeroUsize,
+        context: DecodeContext,
+        consume: F,
+    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeErrorOf<C>>
+    where
+        F: FnOnce(C::Value, usize) -> R,
+    {
+        match self
+            .hooks
+            .handle_incomplete_decode(&mut self.codec, source.as_ref(), required_total, context)?
+        {
+            DecodeIncompleteAction::Reject => match source {
+                Some(source) => Err(TranscodeDecodeError::domain_main(source, context.input_index())),
+                None => Err(TranscodeFailure::incomplete_input(
+                    context.input_index(),
+                    required_total.get(),
+                    context.available(),
+                )
+                .into()),
+            },
+            DecodeIncompleteAction::Skip => {
+                let read =
+                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
+                Ok((DecodeOutcome::skipped(read), None))
+            }
+            DecodeIncompleteAction::Emit { value } => {
+                let read =
+                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
+                let result = consume(value, context.input_index());
+                Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(result)))
+            }
+        }
+    }
+
     /// Creates a buffered decoder engine.
     ///
     /// # Parameters
@@ -668,28 +722,7 @@ where
             if !end_of_input {
                 return Ok((DecodeOutcome::need_input(required_total), None));
             }
-            return match self
-                .hooks
-                .handle_incomplete_decode(&mut self.codec, None, required_total, context)?
-            {
-                DecodeIncompleteAction::Reject => Err(TranscodeFailure::incomplete_input(
-                    context.input_index(),
-                    required_total.get(),
-                    context.available(),
-                )
-                .into()),
-                DecodeIncompleteAction::Skip => {
-                    let read = NonZeroUsize::new(context.available())
-                        .expect("incomplete decode tail must contain source units");
-                    Ok((DecodeOutcome::skipped(read), None))
-                }
-                DecodeIncompleteAction::Emit { value } => {
-                    let read = NonZeroUsize::new(context.available())
-                        .expect("incomplete decode tail must contain source units");
-                    let consumed_value = consume(value, context.input_index());
-                    Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value)))
-                }
-            };
+            return self.apply_incomplete_decode(None, required_total, context, consume);
         }
 
         // SAFETY: The context reports at least `MIN_UNITS_PER_VALUE` source
@@ -729,31 +762,7 @@ where
                 if !end_of_input {
                     return Ok((DecodeOutcome::need_input(required_total), None));
                 }
-                match self
-                    .hooks
-                    .handle_incomplete_decode(&mut self.codec, source.as_ref(), required_total, context)?
-                {
-                    DecodeIncompleteAction::Reject => match source {
-                        Some(source) => Err(TranscodeDecodeError::domain_main(source, context.input_index())),
-                        None => Err(TranscodeFailure::incomplete_input(
-                            context.input_index(),
-                            required_total.get(),
-                            context.available(),
-                        )
-                        .into()),
-                    },
-                    DecodeIncompleteAction::Skip => {
-                        let read = NonZeroUsize::new(context.available())
-                            .expect("incomplete decode tail must contain source units");
-                        Ok((DecodeOutcome::skipped(read), None))
-                    }
-                    DecodeIncompleteAction::Emit { value } => {
-                        let read = NonZeroUsize::new(context.available())
-                            .expect("incomplete decode tail must contain source units");
-                        let consumed_value = consume(value, context.input_index());
-                        Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value)))
-                    }
-                }
+                self.apply_incomplete_decode(source, required_total, context, consume)
             }
             Err(DecodeFailure::Invalid { source, consumed }) => {
                 let action = match self
@@ -828,46 +837,18 @@ where
                 if state.needs_output() {
                     return Ok(state.need_output_progress());
                 }
-                match self
-                    .hooks
-                    .handle_incomplete_decode(&mut self.codec, None, min_units, context)?
-                {
-                    DecodeIncompleteAction::Reject => {
-                        return Err(TranscodeFailure::incomplete_input(
-                            context.input_index(),
-                            min_units.get(),
-                            available,
-                        )
-                        .into());
+                let output_index = state.output_cursor();
+                let output = state.output_mut();
+                let (outcome, _) = self.decode_one(input, context, true, |value, _input_index| {
+                    // SAFETY: The empty-output check above proved this slot writable.
+                    unsafe {
+                        *output.get_unchecked_mut(output_index) = value;
                     }
-                    DecodeIncompleteAction::Skip => {
-                        let read =
-                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
-                        if let Some(progress) = state.apply_decode_outcome(DecodeOutcome::skipped(read)) {
-                            return Ok(progress);
-                        }
-                        continue;
-                    }
-                    DecodeIncompleteAction::Emit { value } => {
-                        if state.needs_output() {
-                            return Ok(state.need_output_progress());
-                        }
-                        let output_index = state.output_cursor();
-                        // SAFETY: `needs_output()` returned false, so the
-                        // output cursor points at a writable initialized slot.
-                        unsafe {
-                            *state.output_mut().get_unchecked_mut(output_index) = value;
-                        }
-                        let read =
-                            NonZeroUsize::new(available).expect("incomplete decode tail must contain source units");
-                        if let Some(progress) =
-                            state.apply_decode_outcome(DecodeOutcome::emitted(read, NonZeroUsize::MIN))
-                        {
-                            return Ok(progress);
-                        }
-                        continue;
-                    }
+                })?;
+                if let Some(progress) = state.apply_decode_outcome(outcome) {
+                    return Ok(progress);
                 }
+                continue;
             }
             if state.needs_output() {
                 return Ok(state.need_output_progress());
