@@ -13,6 +13,7 @@ mod decode_outcome_tests;
 mod encode_context_tests;
 mod encode_outcome_tests;
 mod encode_unencodable_action_tests;
+mod transcode_convert_engine_partition_tests;
 mod transcode_convert_engine_tests;
 mod transcode_decode_engine_tests;
 mod transcode_decode_hooks_tests;
