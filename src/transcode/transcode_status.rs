@@ -31,11 +31,14 @@ pub enum TranscodeStatus {
 
     /// More input is needed to complete the next output value.
     ///
-    /// The transcoder does not consume incomplete input tails. The caller
-    /// should preserve `input[input_index..]`, refill the input buffer when
-    /// more data is available, or apply its EOF policy when the upstream
-    /// source is closed. Calling [`crate::Transcoder::finish`] does not pass
-    /// this tail back to the transcoder.
+    /// The transcoder does not consume incomplete input tails. If the call
+    /// started at `start` and returned `progress`, preserve
+    /// `input[start + progress.read()..]` before refilling the input buffer.
+    /// If the caller has already advanced its input cursor by
+    /// `progress.read()`, it can slice from that updated cursor directly.
+    /// Apply the EOF policy when the upstream source is closed. Calling
+    /// [`crate::Transcoder::finish`] does not pass this tail back to the
+    /// transcoder.
     ///
     /// - `required`: Current minimum total input units required before retrying
     ///   from the current input position. A later retry may raise this lower

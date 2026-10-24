@@ -34,6 +34,21 @@ use crate::Transcoder;
 /// The adapter owns unit buffering but not decoder state. Callers supply a
 /// streaming decoder and error mapper for each operation.
 ///
+/// # Driving input through EOF
+///
+/// Reset the decoder first and collect the number of values it writes. For
+/// each [`Self::poll_transcode`] progress result, add `written()` to the output
+/// cursor; the bridge has already consumed `read()` from its unread buffer.
+/// When the status is `NeedInput { required }`, call
+/// [`Self::fill_until_async`] with `required.get()`. If it returns `true`, poll
+/// the decoder again. If it returns `false`, EOF has been confirmed and any
+/// short tail remains unread; pass that tail to [`Self::transcode_eof_step`].
+/// Keep stepping on `NeedOutput` with a sufficiently large output range. Once
+/// EOF processing returns `Complete`, call [`Self::finish`] and collect its
+/// returned output count. `EndOfInput` from polling means the unread buffer was
+/// already empty when refill confirmed EOF; it is not required to discover an
+/// EOF that follows an incomplete tail.
+///
 /// # Type Parameters
 ///
 /// - `I`: Wrapped asynchronous unit input.
@@ -60,6 +75,90 @@ use crate::Transcoder;
 /// assert_eq!(input.unread_len(), 0);
 /// input.consume(0);
 /// assert!(input.unread().is_empty());
+/// ```
+///
+/// The following driver decodes one complete pair, preserves a one-unit tail,
+/// retries EOF processing after `NeedOutput`, and collects lifecycle output
+/// without an async runtime. The source and decoder are small fixtures; real
+/// applications use their own `AsyncInput` and `Transcoder` implementations.
+///
+/// ```
+/// use qubit_codec::{AsyncTranscodeDecodeInput, AsyncTranscodeDecodeStep, CapacityError, TranscodeDecodeError, TranscodeProgress, Transcoder};
+/// use qubit_io::AsyncInput;
+/// use std::convert::Infallible;
+/// use std::future::{poll_fn, Future};
+/// use std::io;
+/// use std::num::NonZeroUsize;
+/// use std::pin::{pin, Pin};
+/// use std::task::{Context, Poll, Waker};
+///
+/// # #[derive(Debug)] struct ThreeBytes { bytes: [u8; 3], position: usize }
+/// # impl AsyncInput for ThreeBytes {
+/// #     type Item = u8;
+/// #     unsafe fn poll_read_unchecked(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, output: &mut [u8], index: usize, count: usize) -> Poll<io::Result<usize>> {
+/// #         let read = count.min(self.bytes.len() - self.position);
+/// #         output[index..index + read].copy_from_slice(&self.bytes[self.position..self.position + read]);
+/// #         self.position += read;
+/// #         Poll::Ready(Ok(read))
+/// #     }
+/// # }
+/// # #[derive(Debug)] struct TailDecoder;
+/// # impl Transcoder for TailDecoder {
+/// #     type Input = u8; type Output = u16; type Error = TranscodeDecodeError<Infallible>;
+/// #     fn max_transcode_output_len(&self, n: usize) -> Result<usize, CapacityError> { Ok(n) }
+/// #     fn max_reset_output_len(&self) -> Result<usize, CapacityError> { Ok(1) }
+/// #     fn reset(&mut self, out: &mut [u16], index: usize) -> Result<usize, Self::Error> { out[index] = 0xaaaa; Ok(1) }
+/// #     fn transcode(&mut self, input: &[u8], ii: usize, out: &mut [u16], oi: usize) -> Result<TranscodeProgress, Self::Error> {
+/// #         let available = input.len() - ii;
+/// #         if available < 2 { return Ok(TranscodeProgress::need_input(NonZeroUsize::new(2).unwrap(), 0, 0)); }
+/// #         if out.len() == oi { return Ok(TranscodeProgress::need_output(NonZeroUsize::new(1).unwrap(), 0, 0)); }
+/// #         out[oi] = u16::from_be_bytes([input[ii], input[ii + 1]]);
+/// #         Ok(TranscodeProgress::complete(2, 1))
+/// #     }
+/// #     fn transcode_eof(&mut self, input: &[u8], ii: usize, out: &mut [u16], oi: usize) -> Result<TranscodeProgress, Self::Error> {
+/// #         let available = input.len() - ii;
+/// #         if available == 0 { return Ok(TranscodeProgress::complete(0, 0)); }
+/// #         if available == 1 {
+/// #             if out.len() - oi < 2 { return Ok(TranscodeProgress::need_output(NonZeroUsize::new(2).unwrap(), 0, 0)); }
+/// #             out[oi] = u16::from(input[ii]);
+/// #             return Ok(TranscodeProgress::complete(1, 1));
+/// #         }
+/// #         self.transcode(input, ii, out, oi)
+/// #     }
+/// #     fn max_finish_output_len(&self) -> Result<usize, CapacityError> { Ok(1) }
+/// #     fn finish(&mut self, out: &mut [u16], index: usize) -> Result<usize, Self::Error> { out[index] = 0xbbbb; Ok(1) }
+/// # }
+/// # fn block_on<F: Future>(future: F) -> F::Output {
+/// #     let mut future = pin!(future); let mut cx = Context::from_waker(Waker::noop());
+/// #     loop { if let Poll::Ready(value) = future.as_mut().poll(&mut cx) { return value; } }
+/// # }
+/// let source = ThreeBytes { bytes: [0x12, 0x34, 0x56], position: 0 };
+/// let mut input = AsyncTranscodeDecodeInput::with_capacity(source, 2);
+/// let mut decoder = TailDecoder;
+/// let mut output = [0_u16; 4];
+/// let output_len = output.len();
+/// let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+/// let mut written = input.reset(&mut decoder, &mut map_error, &mut output, 0, output_len)?;
+/// assert_eq!(1, written);
+/// let first = block_on(poll_fn(|cx| Pin::new(&mut input).poll_transcode(cx, &mut decoder, &mut map_error, &mut output, written, output_len - written)))?;
+/// let AsyncTranscodeDecodeStep::Progress(progress) = first else { panic!("expected decoded pair") };
+/// assert_eq!(TranscodeProgress::complete(2, 1), progress);
+/// written += progress.written();
+/// assert_eq!(0x1234, output[1]);
+/// let second = block_on(poll_fn(|cx| Pin::new(&mut input).poll_transcode(cx, &mut decoder, &mut map_error, &mut output, written, output_len - written)))?;
+/// assert!(matches!(second, AsyncTranscodeDecodeStep::Progress(progress) if matches!(progress.status(), qubit_codec::TranscodeStatus::NeedInput { .. })));
+/// assert!(!block_on(input.fill_until_async(2))?);
+/// assert_eq!([0x56], input.unread());
+/// let eof = input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, written, 1)?;
+/// assert_eq!(TranscodeProgress::need_output(NonZeroUsize::new(2).unwrap(), 0, 0), eof);
+/// let eof = input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, written, 2)?;
+/// assert_eq!(TranscodeProgress::complete(1, 1), eof);
+/// written += eof.written();
+/// let finished = input.finish(&mut decoder, &mut map_error, &mut output, written, output_len - written)?;
+/// written += finished;
+/// assert_eq!([0xaaaa, 0x1234, 0x56, 0xbbbb], output);
+/// assert_eq!(4, written);
+/// # Ok::<(), io::Error>(())
 /// ```
 #[must_use]
 pub struct AsyncTranscodeDecodeInput<I>

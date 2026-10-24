@@ -1000,6 +1000,42 @@ fn test_transcoder_transcode_complete_into_reports_incomplete_input() {
 }
 
 #[test]
+fn test_pair_transcoder_need_input_preserves_only_unconsumed_tail_from_nonzero_start() {
+    let mut transcoder = PairTranscoder;
+    let input = [0xff, b'a', b'b', b'c'];
+    let mut output = [0_u8; 2];
+    let start = 1;
+
+    let progress = transcoder
+        .transcode(&input, start, &mut output, 0)
+        .expect("transcoding the complete pair should succeed");
+
+    assert_eq!(
+        TranscodeStatus::NeedInput {
+            required: utils_crate::nonzero(2),
+        },
+        progress.status()
+    );
+    assert_eq!(2, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!(b'a' ^ b'b', output[0]);
+    assert_eq!(&input[start + progress.read()..], b"c");
+
+    let refilled_input = [0xff, b'a', b'b', b'c', b'd'];
+    let resumed = transcoder
+        .transcode(
+            &refilled_input,
+            start + progress.read(),
+            &mut output,
+            progress.written(),
+        )
+        .expect("the preserved tail and refill should form a complete pair");
+
+    assert_eq!(TranscodeProgress::complete(2, 1), resumed);
+    assert_eq!(b'c' ^ b'd', output[1]);
+}
+
+#[test]
 fn test_transcode_eof_rejects_progress_that_reads_beyond_available_input() {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut transcoder = OverreadingEofTranscoder;

@@ -26,14 +26,14 @@ use crate::Transcoder;
 /// that value with the encoder codec. If the current output buffer cannot hold
 /// the encoded value, the already decoded value is retained by the common
 /// converter engine and must be drained before more source input is consumed.
-/// Incomplete source tails are left in the caller-provided input slice; callers
-/// own input-buffer refill and EOF incomplete-tail policy.
-///
-/// Because finalization receives no source input, the source codec should have
-/// locally decidable decode boundaries for the default converter bridge. Source
-/// formats that require EOF-aware maximal-munch parsing or delayed boundary
-/// decisions should implement that source-side policy in a custom transcoder or
-/// facade before conversion.
+/// Incomplete source tails are left in the caller-provided input slice while
+/// the stream is open; callers own input-buffer refill. After upstream EOF,
+/// call [`Transcoder::transcode_eof`] to let the source codec apply
+/// [`Codec::decode_eof`] and the configured incomplete-input policy to the
+/// remaining tail, then call [`Transcoder::finish`] to finalize the stream.
+/// This supports EOF-aware maximal-munch decoding when the codec expresses it
+/// through `decode_eof`. A custom transcoder or facade is needed only when the
+/// source framing requires behavior outside that codec EOF contract.
 ///
 /// # Type Parameters
 ///

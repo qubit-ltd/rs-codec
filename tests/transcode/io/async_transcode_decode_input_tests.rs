@@ -211,6 +211,77 @@ impl Transcoder for EofTailDecoder {
     }
 }
 
+/// Decoder that handles complete pairs and resolves one byte at EOF.
+#[derive(Debug, Default)]
+struct PairAndTailDecoder;
+
+impl Transcoder for PairAndTailDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len / 2)
+    }
+
+    fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xaaaa;
+        Ok(1)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let available = input.len() - input_index;
+        if available < 2 {
+            return Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0));
+        }
+        if output.len() == output_index {
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
+        }
+        output[output_index] = u16::from_be_bytes([input[input_index], input[input_index + 1]]);
+        Ok(TranscodeProgress::complete(2, 1))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let available = input.len() - input_index;
+        if available == 0 {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if available == 1 && output.len() - output_index < 2 {
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0));
+        }
+        if available == 1 {
+            output[output_index] = u16::from(input[input_index]);
+            return Ok(TranscodeProgress::complete(1, 1));
+        }
+        <Self as Transcoder>::transcode(self, input, input_index, output, output_index)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
+        output[output_index] = 0xbbbb;
+        Ok(1)
+    }
+}
+
 /// Decoder with observable lifecycle output.
 #[derive(Debug, Default)]
 struct LifecycleDecoder;
@@ -442,6 +513,7 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
 #[test]
 fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Result<()> {
     let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 2);
+    assert!(!complete(input.fill_until_async(2))?);
     let mut decoder = PairDecoder;
     let mut output = [0_u16; 1];
     let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
@@ -452,6 +524,122 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Re
         AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0,)),
         step
     );
+    assert_eq!([0x12], input.unread());
+    Ok(())
+}
+
+/// Verifies the full async lifecycle with a complete prefix and retained EOF
+/// tail.
+#[test]
+fn test_async_transcode_decode_input_drives_complete_prefix_and_eof_tail() -> io::Result<()> {
+    let source = ChunkedAsyncInput::new(vec![0x12, 0x34, 0x56], 2);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(source, 2);
+    let mut decoder = PairAndTailDecoder;
+    let mut output = [0_u16; 4];
+    assert_eq!(
+        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::complete(0, 0)),
+        complete(input.transcode_async(
+            &mut decoder,
+            &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+            &mut output,
+            0,
+            0,
+        ))?,
+        "zero output capacity is not evidence of EOF",
+    );
+    let mut written = input.reset(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        0,
+        4,
+    )?;
+    assert_eq!(1, written);
+
+    let first = complete(input.transcode_async(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        written,
+        4 - written,
+    ))?;
+    let AsyncTranscodeDecodeStep::Progress(progress) = first else {
+        panic!("first read should produce progress");
+    };
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    written += progress.written();
+    assert_eq!(0, input.unread_len(), "bridge already applied progress.read()");
+    assert_eq!(0x1234, output[1]);
+
+    let second = complete(input.transcode_async(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        written,
+        4 - written,
+    ))?;
+    let AsyncTranscodeDecodeStep::Progress(progress) = second else {
+        panic!("the final source chunk should be decoded before EOF");
+    };
+    assert!(matches!(progress.status(), TranscodeStatus::NeedInput { .. }));
+    assert_eq!(0, progress.read());
+    written += progress.written();
+    assert_eq!([0x56], input.unread(), "NeedInput retains the incomplete suffix");
+
+    assert!(
+        !complete(input.fill_until_async(2))?,
+        "one retained byte cannot satisfy a pair"
+    );
+    assert_eq!([0x56], input.unread());
+    let tail = input.transcode_eof_step(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        written,
+        1,
+    )?;
+    assert_eq!(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0), tail);
+    let tail = input.transcode_eof_step(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        written,
+        2,
+    )?;
+    assert_eq!(TranscodeProgress::complete(1, 1), tail);
+    written += tail.written();
+    assert_eq!(0, input.unread_len(), "EOF tail must be consumed exactly once");
+
+    written += input.finish(
+        &mut decoder,
+        &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+        &mut output,
+        written,
+        4 - written,
+    )?;
+    assert_eq!([0xaaaa, 0x1234, 0x56, 0xbbbb], output);
+    assert_eq!(4, written);
+    Ok(())
+}
+
+/// Verifies the default EOF policy rejects an incomplete retained suffix.
+#[test]
+fn test_async_transcode_decode_input_strict_eof_rejects_incomplete_tail() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x12], 1), 2);
+    assert!(!complete(input.fill_until_async(2))?);
+    let mut decoder = PairDecoder;
+    let mut output = [0_u16; 1];
+    let error = input
+        .transcode_eof_step(
+            &mut decoder,
+            &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
+            &mut output,
+            0,
+            1,
+        )
+        .expect_err("the default EOF policy must reject an incomplete pair");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert!(error.to_string().contains("incomplete input"));
     assert_eq!([0x12], input.unread());
     Ok(())
 }

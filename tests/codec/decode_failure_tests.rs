@@ -18,8 +18,11 @@ struct DomainDecodeError;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct PlainCodec;
 
+#[derive(Debug, Eq, PartialEq)]
+struct NonDefaultValue(Vec<u8>);
+
 impl Codec for PlainCodec {
-    type Value = Vec<u8>;
+    type Value = NonDefaultValue;
     type Unit = u8;
     type DecodeError = DomainDecodeError;
     type EncodeError = Infallible;
@@ -34,20 +37,20 @@ impl Codec for PlainCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(Vec<u8>, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonDefaultValue, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
             return Err(DecodeFailure::invalid(DomainDecodeError, NonZeroUsize::MIN));
         }
-        Ok((vec![input[input_index]], NonZeroUsize::MIN))
+        Ok((NonDefaultValue(vec![input[input_index]]), NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
-        value: &Vec<u8>,
+        value: &NonDefaultValue,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
-        output[output_index] = value[0];
+        output[output_index] = value.0[0];
         Ok(1)
     }
 }
@@ -103,9 +106,10 @@ fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let mut output = [0_u8; 1];
 
     let (decoded_value, _) = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
-    assert_eq!(vec![0x41], decoded_value);
+    assert_eq!(NonDefaultValue(vec![0x41]), decoded_value);
 
-    let written = unsafe { codec.encode(&vec![0x42], &mut output, 0) }.expect("plain codec encode is infallible");
+    let written = unsafe { codec.encode(&NonDefaultValue(vec![0x42]), &mut output, 0) }
+        .expect("plain codec encode is infallible");
     assert_eq!(1, written);
     assert_eq!([0x42], output);
 }

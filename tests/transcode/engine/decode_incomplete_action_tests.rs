@@ -47,12 +47,15 @@ fn test_decode_incomplete_action_emit_compares_payload_value() {
 /// constructed action carrying the same payload.
 #[test]
 fn test_decode_incomplete_action_copy_matches_fresh_construction() {
+    fn assert_copy<T: Copy>() {}
+
+    assert_copy::<DecodeIncompleteAction<u8>>();
+
     let original = DecodeIncompleteAction::<u8>::Emit { value: 7 };
     let copied = original;
 
     assert_eq!(
-        copied,
-        DecodeIncompleteAction::<u8>::Emit { value: 7 },
+        original, copied,
         "a copied action still carries the payload it was copied from"
     );
 }

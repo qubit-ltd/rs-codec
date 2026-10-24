@@ -20,9 +20,14 @@ pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
 
 /// Action selected after a codec reports invalid encoded input.
 ///
-/// Incomplete input is not a policy action. Codecs report it with
-/// [`crate::DecodeFailure::Incomplete`], and the decode engine converts it
-/// directly into [`crate::TranscodeStatus::NeedInput`].
+/// While the stream is open, incomplete input is not an invalid-input policy
+/// action. Codecs report it with [`crate::DecodeFailure::Incomplete`], and the
+/// decode engine converts it into [`crate::TranscodeStatus::NeedInput`]. After
+/// upstream EOF, [`crate::Transcoder::transcode_eof`] asks the codec to resolve
+/// a trailing incomplete sequence through [`crate::Codec::decode_eof`]; if it
+/// remains incomplete, the engine calls
+/// [`crate::engine::DecodeIncompleteAction`] through
+/// [`crate::engine::TranscodeDecodeHooks::handle_incomplete_decode`].
 ///
 /// # Type Parameters
 ///

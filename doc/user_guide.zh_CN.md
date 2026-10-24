@@ -311,7 +311,9 @@ qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
-`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。异步对应物会报告 `AsyncTranscodeDecodeStep::EndOfInput`，随后在 `finish` 前调用 `AsyncTranscodeDecodeInput::transcode_eof_step`。
+`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。
+
+异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把该尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。`AsyncTranscodeDecodeStep::EndOfInput` 表示 refill 确认 EOF 时 unread 已空，它只是空缓冲 EOF 路径。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
 
 同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存，必要时应拆分。接受下一批前，操作可能先交付已缓冲输出；异步 poll 则先建立背压，编码器尚未调用时就可能返回 `Pending`。显式 `flush` 仍是 sink 刷新边界。`finish_to_buffer` 只把 encoder 收尾输出追加到内存，不执行 I/O；`finish` 会交付缓存并刷新 sink。
 
