@@ -2298,7 +2298,7 @@ impl Codec for ScratchByteCodec {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_refills_to_maximum_window() {
+fn test_buffered_decode_input_read_decoded_refills_after_incomplete_hint() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     let mut codec = GrowingPairReadCodec::default();
@@ -2306,7 +2306,7 @@ fn test_buffered_decode_input_read_decoded_refills_to_maximum_window() {
     assert!(input.fill_until(3).expect("prefill should succeed"));
     let value = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect("decoder should refill to the codec maximum window");
+        .expect("decoder should refill to satisfy its incomplete hint");
 
     assert_eq!(0x0001_0002, value);
 }
@@ -3091,13 +3091,13 @@ fn test_buffered_decode_input_read_decoded_propagates_initial_refill_error() {
 }
 
 #[test]
-fn test_buffered_decode_input_read_decoded_propagates_max_window_refill_error() {
+fn test_buffered_decode_input_read_decoded_propagates_codec_required_refill_error() {
     let mut input = TranscodeDecodeInput::with_capacity(ErrorAfterTwoUnitInput::default(), 4);
     let mut codec = GrowingPairReadCodec::default();
 
     let error = input
         .read_decoded_with(&mut codec, map_codec_error)
-        .expect_err("refill errors while reserving the maximum window should propagate");
+        .expect_err("refill errors required by an incomplete decode should propagate");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
 }

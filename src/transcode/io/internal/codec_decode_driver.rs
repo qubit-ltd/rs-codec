@@ -179,11 +179,11 @@ where
 
     /// Prepares the buffered window for one codec decode attempt.
     ///
-    /// The buffer is filled up to the codec minimum first, then
-    /// opportunistically up to the codec maximum without exceeding the
-    /// existing buffer capacity. All unread units are consumed before
-    /// reporting the unexpected end of input, so the caller never observes
-    /// a partially drained window.
+    /// The buffer is filled only up to the codec minimum before decoding.
+    /// Additional units are read only when the codec reports that its current
+    /// window is incomplete. All unread units are consumed before reporting
+    /// the unexpected end of input, so the caller never observes a partially
+    /// drained window.
     ///
     /// # Parameters
     ///
@@ -218,13 +218,6 @@ where
                 self.input.consume(available);
             }
             return Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value"));
-        }
-
-        if self.input.unread_len() < max_units_per_value
-            && max_units_per_value <= self.input.capacity()
-            && !self.input.fill_until(max_units_per_value)?
-        {
-            end_of_input = true;
         }
         Ok((self.input.unread_len().min(max_units_per_value), end_of_input))
     }

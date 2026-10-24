@@ -16,8 +16,87 @@ use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeInput;
 use qubit_utils as utils_crate;
+use qubit_io::Input;
 
 use crate::common::IdentityCodec;
+
+struct ShortThenErrorInput {
+    calls: usize,
+    kind: ErrorKind,
+}
+
+impl Input for ShortThenErrorInput {
+    type Item = u8;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
+        if count == 0 {
+            return Ok(0);
+        }
+        self.calls += 1;
+        if self.calls == 1 {
+            output[index] = 7;
+            Ok(1)
+        } else {
+            Err(Error::new(self.kind, "next input is unavailable"))
+        }
+    }
+}
+
+struct ShortValueCodec;
+
+impl Codec for ShortValueCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 10;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Infallible> {
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
+#[test]
+fn test_codec_decode_driver_returns_short_value_before_next_io_error() {
+    for kind in [ErrorKind::BrokenPipe, ErrorKind::WouldBlock] {
+        let source = ShortThenErrorInput { calls: 0, kind };
+        let mut input = TranscodeDecodeInput::with_capacity(source, 10);
+        let mut codec = ShortValueCodec;
+        let value = input
+            .read_decoded_with(&mut codec, Error::other)
+            .expect("first short value should decode before another input read");
+        assert_eq!(7, value);
+        assert_eq!(1, input.inner().calls);
+
+        let error = input
+            .read_decoded_with(&mut codec, Error::other)
+            .expect_err("the next call should report the underlying input error");
+        assert_eq!(kind, error.kind());
+        assert_eq!(2, input.inner().calls);
+    }
+}
 
 #[test]
 fn test_codec_decode_driver_consumes_one_buffered_value_per_call() {
