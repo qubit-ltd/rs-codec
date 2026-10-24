@@ -7,6 +7,7 @@
 // =============================================================================
 
 use core::cell::Cell;
+use std::collections::VecDeque;
 use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -1872,6 +1873,88 @@ fn test_buffered_encode_output_write_all_reports_write_zero() {
     let error = Write::write_all(&mut output, &[1, 2, 3]).expect_err("zero-length writes should surface WriteZero");
 
     assert_eq!(ErrorKind::WriteZero, error.kind());
+}
+
+#[derive(Debug)]
+struct ScriptedByteOutput {
+    steps: VecDeque<Result<usize, ErrorKind>>,
+    received: Vec<u8>,
+    calls: usize,
+}
+
+impl ScriptedByteOutput {
+    fn new(steps: impl IntoIterator<Item = Result<usize, ErrorKind>>) -> Self {
+        Self {
+            steps: steps.into_iter().collect(),
+            received: Vec::new(),
+            calls: 0,
+        }
+    }
+}
+
+impl Output for ScriptedByteOutput {
+    type Item = u8;
+
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+        self.calls += 1;
+        let result = self.steps.pop_front().unwrap_or(Ok(count));
+        let written = match result {
+            Ok(written) => written,
+            Err(kind) => return Err(Error::new(kind, "scripted byte output error")),
+        };
+        assert!(written <= count);
+        self.received.extend_from_slice(&input[index..index + written]);
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_buffered_encode_output_write_all_retries_interrupted_direct_write() {
+    let inner = ScriptedByteOutput::new([Err(ErrorKind::Interrupted), Ok(3)]);
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 1);
+
+    Write::write_all(&mut output, b"abc").expect("interrupted direct write should be retried");
+
+    assert_eq!(b"abc", output.inner().received.as_slice());
+    assert_eq!(2, output.inner().calls);
+}
+
+#[test]
+fn test_buffered_encode_output_write_all_retries_interrupted_after_short_write() {
+    let inner = ScriptedByteOutput::new([Ok(1), Err(ErrorKind::Interrupted), Ok(2)]);
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 1);
+
+    Write::write_all(&mut output, b"abc").expect("short write followed by interruption should complete");
+
+    assert_eq!(b"abc", output.inner().received.as_slice());
+    assert_eq!(3, output.inner().calls);
+}
+
+#[test]
+fn test_buffered_encode_output_write_all_preserves_prefix_on_error_after_short_write() {
+    let inner = ScriptedByteOutput::new([Ok(1), Err(ErrorKind::Other)]);
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 1);
+
+    let error = Write::write_all(&mut output, b"abc").expect_err("non-interrupted error should be returned");
+
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(b"a", output.inner().received.as_slice());
+    assert_eq!(2, output.inner().calls);
+}
+
+#[test]
+fn test_buffered_encode_output_write_all_empty_input_does_not_call_output() {
+    let inner = ScriptedByteOutput::new([]);
+    let mut output = TranscodeEncodeOutput::with_capacity(inner, 1);
+
+    Write::write_all(&mut output, &[]).expect("empty input should succeed");
+
+    assert_eq!(0, output.inner().calls);
+    assert!(output.inner().received.is_empty());
 }
 
 #[derive(Debug, Default)]

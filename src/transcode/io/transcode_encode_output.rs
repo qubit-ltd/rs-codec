@@ -282,7 +282,10 @@ where
     /// Runs encoder reset and buffers any stream-prefix units.
     ///
     /// This method reserves enough persistent buffer capacity for all reset
-    /// output before calling `encoder`. It does not flush pending units.
+    /// output before calling `encoder`. Preparing that space may deliver
+    /// previously buffered units to the wrapped output and can return an I/O
+    /// error before `encoder.reset` runs. This delivery does not call the
+    /// wrapped output's `flush` method.
     ///
     /// # Type Parameters
     ///
@@ -639,7 +642,11 @@ where
     fn write_all(&mut self, input: &[u8]) -> Result<()> {
         let mut written = 0;
         while written < input.len() {
-            let count = Output::write(&mut self.output, &input[written..])?;
+            let count = match Output::write(&mut self.output, &input[written..]) {
+                Ok(count) => count,
+                Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error),
+            };
             if count == 0 {
                 return Err(Error::from(ErrorKind::WriteZero));
             }
