@@ -130,8 +130,24 @@ impl<D: 'static> ValueCodecRegistration<D> {
 ///
 /// The macro must be invoked at module scope; it defines the descriptor, a
 /// registration function, and an inventory submission in an anonymous const.
+/// The `id` must be a constant expression. Use a literal, constant, or
+/// `const fn` result; a runtime function call cannot define a static ID.
 ///
 /// # Examples
+///
+/// ```compile_fail
+/// use qubit_codec::JsonStringValueCodec;
+/// use qubit_codec::register_value_string_codec;
+///
+/// fn invalid_id() -> &'static str { "example.u32" }
+/// register_value_string_codec!(id = invalid_id(), codec = JsonStringValueCodec<u32>, value = u32);
+/// ```
+///
+/// ```compile_fail
+/// use qubit_codec::JsonStringValueCodec;
+/// use qubit_codec::register_value_string_codec;
+/// register_value_string_codec!(id = "invalid-id", codec = JsonStringValueCodec<u32>, value = u32);
+/// ```
 ///
 /// ```
 /// use qubit_codec::JsonStringValueCodec;
@@ -147,12 +163,13 @@ impl<D: 'static> ValueCodecRegistration<D> {
 macro_rules! register_value_string_codec {
     (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
+            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
             static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
                 $crate::ValueStringCodecDescriptor::of::<$codec, $value>();
 
             fn registration() -> $crate::ValueStringCodecRegistration {
                 $crate::ValueCodecRegistration::new(
-                    $crate::ValueCodecId::new($id),
+                    ID,
                     &DESCRIPTOR,
                     $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
                 )
@@ -169,8 +186,16 @@ macro_rules! register_value_string_codec {
 ///
 /// The macro must be invoked at module scope; it defines the descriptor, a
 /// registration function, and an inventory submission in an anonymous const.
+/// The `id` must be a constant expression. Use a literal, constant, or
+/// `const fn` result; a runtime function call cannot define a static ID.
 ///
 /// # Examples
+///
+/// ```compile_fail
+/// use qubit_codec::JsonBytesValueCodec;
+/// use qubit_codec::register_value_bytes_codec;
+/// register_value_bytes_codec!(id = "invalid-id", codec = JsonBytesValueCodec<u32>, value = u32);
+/// ```
 ///
 /// ```
 /// use qubit_codec::JsonBytesValueCodec;
@@ -186,12 +211,13 @@ macro_rules! register_value_string_codec {
 macro_rules! register_value_bytes_codec {
     (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
+            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
             static DESCRIPTOR: $crate::ValueBytesCodecDescriptor =
                 $crate::ValueBytesCodecDescriptor::of::<$codec, $value>();
 
             fn registration() -> $crate::ValueBytesCodecRegistration {
                 $crate::ValueCodecRegistration::new(
-                    $crate::ValueCodecId::new($id),
+                    ID,
                     &DESCRIPTOR,
                     $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
                 )

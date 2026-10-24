@@ -99,16 +99,22 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     ///
     /// # Errors
     ///
-    /// Returns `DuplicateId` with the first conflicting ID and its two sorted
-    /// sources.
+    /// Returns `DuplicateId` with the lexically first conflicting ID and all
+    /// of its sources sorted by source fields. Repeated identical sources are
+    /// retained because each registration is reported.
     fn build(mut registrations: Vec<ValueCodecRegistration<D>>) -> Result<Self, ValueCodecRegistryError> {
         registrations.sort_by_key(ValueCodecRegistration::id);
-        for pair in registrations.windows(2) {
+        for (index, pair) in registrations.windows(2).enumerate() {
             if pair[0].id() == pair[1].id() {
-                let mut sources = pair.iter().map(ValueCodecRegistration::source).collect::<Vec<_>>();
+                let id = pair[0].id();
+                let mut sources = registrations[index..]
+                    .iter()
+                    .take_while(|registration| registration.id() == id)
+                    .map(ValueCodecRegistration::source)
+                    .collect::<Vec<_>>();
                 sources.sort_unstable();
                 return Err(ValueCodecRegistryError::DuplicateId {
-                    id: pair[0].id().as_str(),
+                    id: id.as_str(),
                     sources,
                 });
             }
@@ -167,7 +173,8 @@ impl ValueStringCodecRegistry {
     /// # Errors
     ///
     /// Returns the cached construction error when linked registrations
-    /// conflict.
+    /// conflict. The error identifies the lexically first duplicate ID and
+    /// all declarations for that ID in source-field order.
     pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
         // Caches both successful construction and duplicate-ID failures.
         static REGISTRY: OnceLock<Result<ValueStringCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();
@@ -212,7 +219,8 @@ impl ValueBytesCodecRegistry {
     /// # Errors
     ///
     /// Returns the cached construction error when linked registrations
-    /// conflict.
+    /// conflict. The error identifies the lexically first duplicate ID and
+    /// all declarations for that ID in source-field order.
     pub fn try_global() -> Result<&'static Self, ValueCodecRegistryError> {
         // Caches both successful construction and duplicate-ID failures.
         static REGISTRY: OnceLock<Result<ValueBytesCodecRegistry, ValueCodecRegistryError>> = OnceLock::new();

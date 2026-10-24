@@ -30,6 +30,10 @@ const MACRO_STRING_ID: &str = "mirror.registration.string";
 /// Registration ID linked by `register_value_bytes_codec!` below.
 const MACRO_BYTES_ID: &str = "mirror.registration.bytes";
 
+const fn macro_bytes_id() -> &'static str {
+    MACRO_BYTES_ID
+}
+
 #[derive(Default)]
 struct MirrorU32StringCodec;
 
@@ -76,12 +80,12 @@ impl ValueDecoder<[u8]> for MirrorU32BytesCodec {
 }
 
 register_value_string_codec!(
-    id = "mirror.registration.string",
+    id = MACRO_STRING_ID,
     codec = MirrorU32StringCodec,
     value = u32,
 );
 register_value_bytes_codec!(
-    id = "mirror.registration.bytes",
+    id = macro_bytes_id(),
     codec = MirrorU32BytesCodec,
     value = u32,
 );

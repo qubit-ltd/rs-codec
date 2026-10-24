@@ -13,8 +13,9 @@
 /// The four parts are captured at compile time by the registration macros from
 /// `CARGO_PKG_NAME`, `module_path!`, `file!`, and `line!`, so they point at the
 /// declaration site rather than at the call site that later looks the
-/// registration up. Ordering follows declaration order, which makes duplicate
-/// reports deterministic.
+/// registration up. Ordering compares the source fields in derived order:
+/// crate name, module path, file, then line. Duplicate reports therefore have
+/// stable source-field ordering independent of registration iteration order.
 ///
 /// # Examples
 ///

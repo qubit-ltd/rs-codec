@@ -13,6 +13,7 @@ use std::ptr;
 use std::thread;
 
 use qubit_codec::ValueBytesCodecDescriptor;
+use qubit_codec::ValueBytesCodecRegistration;
 use qubit_codec::ValueBytesCodecRegistry;
 use qubit_codec::ValueCodecExecutionError;
 use qubit_codec::ValueCodecId;
@@ -88,6 +89,41 @@ static SECOND: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
     ValueCodecId::new("example.local"),
     &STRING_DESCRIPTOR,
     ValueCodecRegistrationSource::new("fixture", "second", "second.rs", 2),
+);
+static THIRD: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.local"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "third", "third.rs", 3),
+);
+static SAME_SOURCE: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.local"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "first", "first.rs", 1),
+);
+static SMALLER_ID: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.aaa"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "small", "small.rs", 4),
+);
+static SMALLER_ID_DUPLICATE: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.aaa"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "small_duplicate", "small_duplicate.rs", 5),
+);
+static BYTES_FIRST: ValueBytesCodecRegistration = ValueBytesCodecRegistration::new(
+    ValueCodecId::new("example.local"),
+    &BYTES_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "first", "first.rs", 1),
+);
+static BYTES_SECOND: ValueBytesCodecRegistration = ValueBytesCodecRegistration::new(
+    ValueCodecId::new("example.local"),
+    &BYTES_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "second", "second.rs", 2),
+);
+static BYTES_THIRD: ValueBytesCodecRegistration = ValueBytesCodecRegistration::new(
+    ValueCodecId::new("example.local"),
+    &BYTES_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "third", "third.rs", 3),
 );
 
 #[test]
@@ -181,6 +217,74 @@ fn test_value_string_codec_registry_rejects_duplicate_ids() {
         ),
         "the Display message carries the conflicting ID and both sources"
     );
+}
+
+#[test]
+fn test_value_string_codec_registry_reports_all_duplicate_sources_in_any_input_order() {
+    let expected_sources = [FIRST.source(), SECOND.source(), THIRD.source()];
+    let permutations = [
+        [&FIRST, &SECOND, &THIRD],
+        [&FIRST, &THIRD, &SECOND],
+        [&SECOND, &FIRST, &THIRD],
+        [&SECOND, &THIRD, &FIRST],
+        [&THIRD, &FIRST, &SECOND],
+        [&THIRD, &SECOND, &FIRST],
+    ];
+    let mut expected_display = None;
+
+    for permutation in permutations {
+        let error = ValueStringCodecRegistry::from_registrations(permutation)
+            .expect_err("all three entries claim the same ID");
+        let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
+        assert_eq!(*id, "example.local");
+        assert_eq!(sources.as_slice(), &expected_sources);
+        let display = error.to_string();
+        assert_eq!(expected_display.get_or_insert(display.clone()), &display);
+    }
+}
+
+#[test]
+fn test_value_bytes_codec_registry_reports_all_duplicate_sources_in_any_input_order() {
+    let expected_sources = [BYTES_FIRST.source(), BYTES_SECOND.source(), BYTES_THIRD.source()];
+    let permutations = [
+        [&BYTES_FIRST, &BYTES_SECOND, &BYTES_THIRD],
+        [&BYTES_FIRST, &BYTES_THIRD, &BYTES_SECOND],
+        [&BYTES_SECOND, &BYTES_FIRST, &BYTES_THIRD],
+        [&BYTES_SECOND, &BYTES_THIRD, &BYTES_FIRST],
+        [&BYTES_THIRD, &BYTES_FIRST, &BYTES_SECOND],
+        [&BYTES_THIRD, &BYTES_SECOND, &BYTES_FIRST],
+    ];
+
+    for permutation in permutations {
+        let error = ValueBytesCodecRegistry::from_registrations(permutation)
+            .expect_err("all three entries claim the same ID");
+        let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
+        assert_eq!(*id, "example.local");
+        assert_eq!(sources.as_slice(), &expected_sources);
+    }
+}
+
+#[test]
+fn test_value_string_codec_registry_keeps_duplicate_sources_and_selects_smallest_id() {
+    let error = ValueStringCodecRegistry::from_registrations([
+        &FIRST,
+        &SAME_SOURCE,
+        &SMALLER_ID,
+        &SMALLER_ID_DUPLICATE,
+    ])
+    .expect_err("both IDs have duplicates");
+    let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
+
+    assert_eq!(*id, "example.aaa", "the lexically smallest conflicting ID wins");
+    assert_eq!(
+        sources.as_slice(),
+        &[SMALLER_ID.source(), SMALLER_ID_DUPLICATE.source()],
+    );
+
+    let error = ValueStringCodecRegistry::from_registrations([&FIRST, &SAME_SOURCE])
+        .expect_err("the same source still represents two registrations");
+    let ValueCodecRegistryError::DuplicateId { sources, .. } = &error;
+    assert_eq!(sources.as_slice(), &[FIRST.source(), SAME_SOURCE.source()]);
 }
 
 #[test]
