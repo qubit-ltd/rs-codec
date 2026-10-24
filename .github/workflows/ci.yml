@@ -55,27 +55,6 @@ jobs:
           }]}' "$config")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
-
-  documentation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - name: Prepare local path dependencies
-        run: ./.infra/bin/prepare-local-path-dependencies.sh
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
-        with:
-          toolchain: 1.94
-      - name: Build strict API documentation
-        env:
-          RUSTDOCFLAGS: -D warnings -D missing-docs
-        run: cargo doc --locked --all-features --no-deps --verbose
-      - name: Upload Rust documentation
-        uses: actions/upload-artifact@v7
-        with:
-          name: rustdoc
-          path: target/doc
-
-
   publish-readiness:
     runs-on: ubuntu-latest
     steps:
