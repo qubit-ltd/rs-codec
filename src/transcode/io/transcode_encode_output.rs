@@ -371,16 +371,48 @@ where
     /// ```
     /// use std::io::Cursor;
     ///
+    /// # use core::convert::Infallible;
+    /// # use core::num::NonZeroUsize;
+    /// # use qubit_codec::Codec;
+    /// # use qubit_codec::CodecTranscodeEncoder;
+    /// # use qubit_codec::DecodeFailure;
     /// use qubit_codec::TranscodeEncodeOutput;
     /// use qubit_codec::TranscodeEncoder;
     /// use qubit_codec::TranscodeStatus;
     ///
+    /// # struct ByteCodec;
+    /// # impl Codec for ByteCodec {
+    /// #     type Value = u8;
+    /// #     type Unit = u8;
+    /// #     type DecodeError = Infallible;
+    /// #     type EncodeError = Infallible;
+    /// #     const MIN_UNITS_PER_VALUE: usize = 1;
+    /// #     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    /// #     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    /// #     unsafe fn decode(
+    /// #         &mut self,
+    /// #         input: &[u8],
+    /// #         index: usize,
+    /// #     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+    /// #         Ok((input[index], NonZeroUsize::MIN))
+    /// #     }
+    /// #     unsafe fn encode(
+    /// #         &mut self,
+    /// #         value: &u8,
+    /// #         output: &mut [u8],
+    /// #         index: usize,
+    /// #     ) -> Result<usize, Infallible> {
+    /// #         output[index] = *value;
+    /// #         Ok(1)
+    /// #     }
+    /// # }
     /// fn encode<E>(encoder: &mut E, values: &[E::Input]) -> std::io::Result<Vec<u8>>
     /// where
     ///     E: TranscodeEncoder<Output = u8>,
     /// {
     ///     let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 8);
     ///     let mut map_error = |_| std::io::Error::other("encode error");
+    ///     output.reset(encoder, &mut map_error)?;
     ///     let mut offset = 0;
     ///     while offset < values.len() {
     ///         let progress = output.transcode_step(
@@ -399,6 +431,11 @@ where
     ///     let (cursor, _) = output.into_parts();
     ///     Ok(cursor.into_inner())
     /// }
+    ///
+    /// let mut encoder = CodecTranscodeEncoder::new(ByteCodec);
+    /// assert_eq!(encode(&mut encoder, &[1, 2, 3]).unwrap(), vec![1, 2, 3]);
+    /// let mut empty_encoder = CodecTranscodeEncoder::new(ByteCodec);
+    /// assert_eq!(encode(&mut empty_encoder, &[]).unwrap(), Vec::<u8>::new());
     /// ```
     pub fn transcode_step<E, M, Value>(
         &mut self,
