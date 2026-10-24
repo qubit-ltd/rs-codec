@@ -79,16 +79,8 @@ impl ValueDecoder<[u8]> for MirrorU32BytesCodec {
     }
 }
 
-register_value_string_codec!(
-    id = MACRO_STRING_ID,
-    codec = MirrorU32StringCodec,
-    value = u32,
-);
-register_value_bytes_codec!(
-    id = macro_bytes_id(),
-    codec = MirrorU32BytesCodec,
-    value = u32,
-);
+register_value_string_codec!(id = MACRO_STRING_ID, codec = MirrorU32StringCodec, value = u32,);
+register_value_bytes_codec!(id = macro_bytes_id(), codec = MirrorU32BytesCodec, value = u32,);
 
 static STRING_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorU32StringCodec, u32>();
 static BYTES_DESCRIPTOR: ValueBytesCodecDescriptor = ValueBytesCodecDescriptor::of::<MirrorU32BytesCodec, u32>();

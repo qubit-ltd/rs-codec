@@ -233,8 +233,8 @@ fn test_value_string_codec_registry_reports_all_duplicate_sources_in_any_input_o
     let mut expected_display = None;
 
     for permutation in permutations {
-        let error = ValueStringCodecRegistry::from_registrations(permutation)
-            .expect_err("all three entries claim the same ID");
+        let error =
+            ValueStringCodecRegistry::from_registrations(permutation).expect_err("all three entries claim the same ID");
         let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
         assert_eq!(*id, "example.local");
         assert_eq!(sources.as_slice(), &expected_sources);
@@ -256,8 +256,8 @@ fn test_value_bytes_codec_registry_reports_all_duplicate_sources_in_any_input_or
     ];
 
     for permutation in permutations {
-        let error = ValueBytesCodecRegistry::from_registrations(permutation)
-            .expect_err("all three entries claim the same ID");
+        let error =
+            ValueBytesCodecRegistry::from_registrations(permutation).expect_err("all three entries claim the same ID");
         let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
         assert_eq!(*id, "example.local");
         assert_eq!(sources.as_slice(), &expected_sources);
@@ -266,13 +266,9 @@ fn test_value_bytes_codec_registry_reports_all_duplicate_sources_in_any_input_or
 
 #[test]
 fn test_value_string_codec_registry_keeps_duplicate_sources_and_selects_smallest_id() {
-    let error = ValueStringCodecRegistry::from_registrations([
-        &FIRST,
-        &SAME_SOURCE,
-        &SMALLER_ID,
-        &SMALLER_ID_DUPLICATE,
-    ])
-    .expect_err("both IDs have duplicates");
+    let error =
+        ValueStringCodecRegistry::from_registrations([&FIRST, &SAME_SOURCE, &SMALLER_ID, &SMALLER_ID_DUPLICATE])
+            .expect_err("both IDs have duplicates");
     let ValueCodecRegistryError::DuplicateId { id, sources } = &error;
 
     assert_eq!(*id, "example.aaa", "the lexically smallest conflicting ID wins");

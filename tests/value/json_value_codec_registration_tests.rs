@@ -174,16 +174,30 @@ fn test_json_string_and_bytes_registries_have_distinct_codec_ids() {
 #[test]
 fn test_json_codecs_register_required_dto_without_value_traits() {
     let bytes = REQUIRED_BYTES
-        .encode(&RequiredDto { text: "bytes".to_owned() })
+        .encode(&RequiredDto {
+            text: "bytes".to_owned(),
+        })
         .expect("bytes descriptor should encode the required DTO");
     assert_eq!(bytes, br#"{"text":"bytes"}"#);
     let decoded_bytes = REQUIRED_BYTES.decode(&bytes).expect("bytes descriptor should decode");
-    assert_eq!(decoded_bytes.downcast_ref::<RequiredDto>().map(|dto| dto.text.as_str()), Some("bytes"));
+    assert_eq!(
+        decoded_bytes.downcast_ref::<RequiredDto>().map(|dto| dto.text.as_str()),
+        Some("bytes")
+    );
 
     let string = REQUIRED_STRING
-        .encode(&RequiredDto { text: "string".to_owned() })
+        .encode(&RequiredDto {
+            text: "string".to_owned(),
+        })
         .expect("string descriptor should encode the required DTO");
     assert_eq!(string, r#"{"text":"string"}"#);
-    let decoded_string = REQUIRED_STRING.decode(&string).expect("string descriptor should decode");
-    assert_eq!(decoded_string.downcast_ref::<RequiredDto>().map(|dto| dto.text.as_str()), Some("string"));
+    let decoded_string = REQUIRED_STRING
+        .decode(&string)
+        .expect("string descriptor should decode");
+    assert_eq!(
+        decoded_string
+            .downcast_ref::<RequiredDto>()
+            .map(|dto| dto.text.as_str()),
+        Some("string")
+    );
 }

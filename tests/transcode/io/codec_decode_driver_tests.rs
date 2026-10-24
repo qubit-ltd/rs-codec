@@ -15,8 +15,8 @@ use std::io::ErrorKind;
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeInput;
-use qubit_utils as utils_crate;
 use qubit_io::Input;
+use qubit_utils as utils_crate;
 
 use crate::common::IdentityCodec;
 
@@ -28,12 +28,7 @@ struct ShortThenErrorInput {
 impl Input for ShortThenErrorInput {
     type Item = u8;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> std::io::Result<usize> {
         if count == 0 {
             return Ok(0);
         }
@@ -59,20 +54,11 @@ impl Codec for ShortValueCodec {
     const MAX_DECODE_UNITS_PER_VALUE: usize = 10;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
 
-    unsafe fn decode(
-        &mut self,
-        input: &[u8],
-        index: usize,
-    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+    unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
         Ok((input[index], NonZeroUsize::MIN))
     }
 
-    unsafe fn encode(
-        &mut self,
-        value: &u8,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
         output[index] = *value;
         Ok(1)
     }
