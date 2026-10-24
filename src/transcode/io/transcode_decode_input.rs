@@ -21,8 +21,9 @@ use std::result::Result as StdResult;
 
 use qubit_io::Buffer;
 use qubit_io::BufferedInput;
+use qubit_io::ByteInput;
 use qubit_io::Input;
-use qubit_io::Seekable;
+use qubit_io::SeekableByteInput;
 use qubit_utils::SliceRange;
 use qubit_utils::UncheckedSlice;
 use qubit_utils::allocation_error;
@@ -797,7 +798,7 @@ where
 
 impl<I> TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seekable<Unit = u8>,
+    I: SeekableByteInput,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     ///
@@ -923,7 +924,7 @@ where
 
 impl<I> Read for TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8>,
+    I: ByteInput,
 {
     /// Reads raw bytes through the internal buffer.
     ///
@@ -947,7 +948,7 @@ where
 
 impl<I> Seek for TranscodeDecodeInput<I>
 where
-    I: Input<Item = u8> + Seekable<Unit = u8>,
+    I: SeekableByteInput,
 {
     /// Seeks the wrapped byte input and discards buffered bytes after success.
     ///

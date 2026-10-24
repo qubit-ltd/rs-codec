@@ -1977,7 +1977,6 @@ fn test_buffered_encode_output_debug_shows_wrapped_output() {
     assert!(debug.contains("output"));
 }
 
-
 #[derive(Default)]
 struct PanicOutput {
     bytes: Vec<u8>,

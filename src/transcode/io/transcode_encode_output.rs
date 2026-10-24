@@ -20,8 +20,9 @@ use std::io::Write;
 
 use qubit_io::BufferedOutput;
 use qubit_io::BufferedOutputRecovery;
+use qubit_io::ByteOutput;
 use qubit_io::Output;
-use qubit_io::Seekable;
+use qubit_io::SeekableByteOutput;
 use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
@@ -592,7 +593,7 @@ where
 
 impl<O> TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seekable<Unit = u8>,
+    O: SeekableByteOutput,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     ///
@@ -614,7 +615,7 @@ where
 
 impl<O> Write for TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8>,
+    O: ByteOutput,
 {
     /// Writes raw bytes through the internal buffer without encoding them.
     ///
@@ -678,7 +679,7 @@ where
 
 impl<O> Seek for TranscodeEncodeOutput<O>
 where
-    O: Output<Item = u8> + Seekable<Unit = u8>,
+    O: SeekableByteOutput,
 {
     /// Flushes pending bytes, then seeks the wrapped byte output.
     ///
