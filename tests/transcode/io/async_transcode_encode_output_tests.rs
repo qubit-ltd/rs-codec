@@ -434,32 +434,33 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending() ->
 /// cancellation.
 #[test]
 fn test_async_transcode_encode_output_applies_backpressure_before_next_step() -> io::Result<()> {
-    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 2);
     let mut encoder = CountingCopyEncoder::default();
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
     assert_eq!(
-        TranscodeProgress::complete(1, 1),
-        complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?,
+        TranscodeProgress::complete(2, 2),
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a', 'b'], 0, 2))?,
     );
-    assert_eq!(1, output.pending_len());
+    assert_eq!(2, output.pending_len());
 
+    output.inner_mut().pending = false;
     let calls_before_pending = encoder.transcode_calls;
-    let mut future = Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['b'], 0, 1));
+    let mut future = Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['c'], 0, 1));
     let is_pending = matches!(poll_once(future.as_mut()), Poll::Pending);
     drop(future);
     assert!(is_pending);
     assert_eq!(calls_before_pending, encoder.transcode_calls);
+    assert_eq!(b"a", output.inner().bytes.as_slice());
     assert_eq!(1, output.pending_len());
-    assert!(output.inner().bytes.is_empty());
 
     assert_eq!(
         TranscodeProgress::complete(1, 1),
-        complete(output.transcode_async(&mut encoder, &mut map_error, &['b'], 0, 1))?,
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['c'], 0, 1))?,
     );
     complete(output.drain_async())?;
     let (inner, pending) = output.into_parts();
     assert!(pending.is_empty());
-    assert_eq!(b"ab", inner.bytes.as_slice());
+    assert_eq!(b"abc", inner.bytes.as_slice());
     Ok(())
 }
 
