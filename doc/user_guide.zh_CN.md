@@ -229,7 +229,7 @@ assert!(matches!(
 
 ## 使用通用 JSON value codec
 
-启用 `json` 后，可使用基于 Serde 的 codec，将 value 编码为自有 `String` 或 `Vec<u8>`，也可从完整 JSON 字符串或字节切片解码：
+启用 `json` 后，可使用基于 Serde 的 codec，将 value 编码为自有 `String` 或 `Vec<u8>`，也可从完整 JSON 字符串或字节切片解码。编码要求 `T: serde::Serialize`；解码要求 `T: serde::de::DeserializeOwned`，确保结果自有数据。两个方向均返回 `serde_json::Error`：
 
 ```rust
 use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};

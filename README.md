@@ -67,7 +67,11 @@ let encoded = bytes.encode(&String::from("hello")).unwrap();
 assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
 ```
 
-These are generic Serde JSON codecs, not concrete domain formats.
+`T` must implement `serde::Serialize` for encoding and `serde::de::DeserializeOwned`
+for decoding; both directions return `serde_json::Error`. These are generic
+Serde JSON codecs, not concrete domain formats. With both `json` and `registry`,
+the built-in IDs register only `serde_json::Value`; a custom DTO needs its own
+descriptor and unique registry ID.
 
 ## Quick start
 

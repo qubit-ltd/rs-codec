@@ -61,7 +61,10 @@ let encoded = bytes.encode(&String::from("hello")).unwrap();
 assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
 ```
 
-这是通用 JSON 序列化能力，不包含具体领域格式。
+编码类型 `T` 需实现 `serde::Serialize`，解码类型需实现
+`serde::de::DeserializeOwned`；两种方向的错误均为 `serde_json::Error`。这是通用
+Serde JSON 能力，不包含具体领域格式。同时启用 `json` 和 `registry` 时，内置 ID 只注册
+`serde_json::Value`；自定义 DTO 需要自己的 descriptor 和唯一注册 ID。
 
 ## 快速开始
 

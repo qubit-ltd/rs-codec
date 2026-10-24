@@ -230,7 +230,7 @@ The basic fixed-width path ends here. The following sections are optional: strea
 
 ## Use generic JSON value codecs
 
-Enable `json` for the built-in Serde-backed codecs. They encode a value to an owned JSON `String` or `Vec<u8>` and decode a complete JSON string or byte slice:
+Enable `json` for the built-in Serde-backed codecs. Encoding requires `T: serde::Serialize`; decoding requires `T: serde::de::DeserializeOwned` so the result owns its data. Both directions return `serde_json::Error`. The codecs encode a value to an owned JSON `String` or `Vec<u8>` and decode a complete JSON string or byte slice:
 
 ```rust
 use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};
