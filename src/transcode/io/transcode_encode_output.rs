@@ -8,7 +8,6 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use core::num::NonZeroUsize;
 use core::result::Result as CoreResult;
 use std::collections::TryReserveError;
 use std::io::Error;
@@ -193,12 +192,10 @@ where
     /// # Errors
     ///
     /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
-    /// errors from the wrapped output while flushing pending units.
+    /// errors from the wrapped output while delivering pending units.
     pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
-        let pending = self.output.capacity() - self.output.spare_capacity();
-        let required_capacity = pending.saturating_add(count);
         self.output
-            .try_reserve_capacity(required_capacity)
+            .try_reserve_capacity(count)
             .map_err(allocation_error)?;
         self.output.ensure_spare_capacity(count)
     }
@@ -333,9 +330,11 @@ where
     /// Encodes values from an indexed input range using a streaming
     /// [`Transcoder`].
     ///
-    /// This streaming path writes directly into the internal spare buffer and
-    /// grows it for any larger `NeedOutput.required` value reported by
-    /// `encoder`.
+    /// This streaming path reserves the encoder's conservative output bound
+    /// for the whole batch before calling it. Preparing that space may deliver
+    /// previously buffered units to the wrapped output and can return an I/O
+    /// error before consuming source values. Split large batches into smaller
+    /// calls when you need to limit the memory required for one operation.
     ///
     /// # Type Parameters
     ///
@@ -357,7 +356,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns invalid input ranges, capacity, transcode, or output errors.
+    /// Returns invalid input ranges, capacity, transcode, or output errors. An
+    /// output-bound contract violation is reported as `ErrorKind::InvalidData`.
     ///
     /// # Examples
     ///
@@ -447,16 +447,15 @@ where
         if count == 0 {
             return Ok(0);
         }
+        let required = encoder
+            .max_transcode_output_len(count)
+            .map_err(capacity_error_to_invalid_data)?
+            .max(1);
+        self.ensure_spare_capacity(required)?;
         let input = &input[..input_end];
         let mut read_total = 0;
-        let mut required_spare = NonZeroUsize::MIN;
         while read_total < count {
-            self.ensure_transcode_spare_capacity(required_spare)?;
             let (units, output_index, available_output) = self.output.spare_raw_parts_mut();
-            debug_assert!(
-                available_output >= required_spare.get(),
-                "reserved spare buffer is smaller than required encoder output",
-            );
             let remaining_input = count - read_total;
             let progress = encoder
                 .transcode(input, input_index + read_total, units, output_index)
@@ -480,9 +479,8 @@ where
                 return Ok(read_total);
             }
             if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
-                required_spare = required;
-                if read_total == count {
-                    self.ensure_transcode_spare_capacity(required)?;
+                if read_total == count || available_output - written < required.get() || (read == 0 && written == 0) {
+                    return Err(Error::new(ErrorKind::InvalidData, "encoder output bound was insufficient"));
                 }
             }
         }
@@ -543,7 +541,8 @@ where
     /// # Errors
     ///
     /// Returns capacity planning, allocation, or transcoder finalization
-    /// errors. It does not perform output I/O.
+    /// errors. It does not perform output I/O; use [`Self::finish`] to deliver
+    /// the buffered final units and flush the wrapped output.
     ///
     /// # Panics
     ///
@@ -557,7 +556,11 @@ where
             Ok(required) => required,
             Err(error) => return Err(capacity_error_to_invalid_data(error)),
         };
-        self.ensure_spare_capacity(required)?;
+        let pending = self.output.capacity() - self.output.spare_capacity();
+        let capacity = pending
+            .checked_add(required)
+            .ok_or_else(|| capacity_error_to_invalid_data(CapacityError::OutputLengthOverflow))?;
+        self.output.try_reserve_capacity(capacity).map_err(allocation_error)?;
         let (units, output_index, available) = self.output.spare_raw_parts_mut();
         debug_assert!(
             available >= required,
@@ -571,23 +574,6 @@ where
             self.output.advance(written);
         }
         Ok(())
-    }
-
-    /// Ensures enough output capacity for one non-zero required unit count.
-    ///
-    /// The non-zero wrapper preserves the engine's progress contract while
-    /// this adapter performs any necessary allocation.
-    ///
-    /// # Parameters
-    ///
-    /// * `required` - Minimum writable unit count requested by the engine.
-    ///
-    /// # Errors
-    ///
-    /// Propagates buffer allocation or wrapped-output flush errors.
-    #[inline]
-    fn ensure_transcode_spare_capacity(&mut self, required: NonZeroUsize) -> Result<()> {
-        self.ensure_spare_capacity(required.get())
     }
 }
 

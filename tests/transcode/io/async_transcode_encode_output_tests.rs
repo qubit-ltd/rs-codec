@@ -384,6 +384,36 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending() ->
     Ok(())
 }
 
+/// Verifies pending output blocks the next encoder call and survives cancellation.
+#[test]
+fn test_async_transcode_encode_output_applies_backpressure_before_next_step() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
+    let mut encoder = CopyEncoder;
+    let mut map_error = |_| io::Error::other("copy encoder cannot fail");
+    assert_eq!(
+        TranscodeProgress::complete(1, 1),
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['a'], 0, 1))?,
+    );
+    assert_eq!(1, output.pending_len());
+
+    let mut future = Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['b'], 0, 1));
+    let is_pending = matches!(poll_once(future.as_mut()), Poll::Pending);
+    drop(future);
+    assert!(is_pending);
+    assert_eq!(1, output.pending_len());
+    assert!(output.inner().bytes.is_empty());
+
+    assert_eq!(
+        TranscodeProgress::complete(1, 1),
+        complete(output.transcode_async(&mut encoder, &mut map_error, &['b'], 0, 1))?,
+    );
+    complete(output.drain_async())?;
+    let (inner, pending) = output.into_parts();
+    assert!(pending.is_empty());
+    assert_eq!(b"ab", inner.bytes.as_slice());
+    Ok(())
+}
+
 /// Verifies constructors and draining expose buffered output state correctly.
 #[test]
 fn test_async_transcode_encode_output_exposes_buffer_operations() -> io::Result<()> {

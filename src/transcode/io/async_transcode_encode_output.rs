@@ -351,8 +351,7 @@ where
             }
         };
         let required_spare = this.required_spare.max(per_value);
-        let required_capacity = this.output.pending_len().saturating_add(required_spare);
-        if let Err(error) = this.output.try_reserve_capacity(required_capacity) {
+        if let Err(error) = this.output.try_reserve_capacity(required_spare) {
             return Poll::Ready(Err(allocation_error(error)));
         }
         match Pin::new(&mut this.output).poll_ensure_spare_capacity(cx, required_spare) {
@@ -481,7 +480,9 @@ where
     }
 
     /// Reserves enough total buffer capacity and makes `count` spare slots
-    /// available for one transcoder operation.
+    /// available for one transcoder operation. Pending units may be delivered
+    /// before the codec operation, and an async poll can return `Pending` until
+    /// the wrapped output accepts them.
     ///
     /// # Parameters
     ///
@@ -496,9 +497,8 @@ where
     /// Returns allocation or wrapped output errors; undelivered units remain
     /// buffered.
     async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
-        let required_capacity = self.output.pending_len().saturating_add(count);
         self.output
-            .try_reserve_capacity(required_capacity)
+            .try_reserve_capacity(count)
             .map_err(allocation_error)?;
         self.output.ensure_spare_capacity_async(count).await
     }
