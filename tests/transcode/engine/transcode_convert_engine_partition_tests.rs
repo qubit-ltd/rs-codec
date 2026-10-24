@@ -49,15 +49,10 @@ impl Codec for PairSource {
         index: usize,
     ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<InvalidToken>> {
         if input[index] == 0xff {
-            return Err(codec::DecodeFailure::invalid(
-                InvalidToken,
-                NonZeroUsize::MIN,
-            ));
+            return Err(codec::DecodeFailure::invalid(InvalidToken, NonZeroUsize::MIN));
         }
         if input.len() - index < 2 {
-            return Err(codec::DecodeFailure::incomplete(
-                NonZeroUsize::new(2).unwrap(),
-            ));
+            return Err(codec::DecodeFailure::incomplete(NonZeroUsize::new(2).unwrap()));
         }
         Ok((
             input[index].wrapping_add(input[index + 1]),
@@ -65,12 +60,7 @@ impl Codec for PairSource {
         ))
     }
 
-    unsafe fn encode(
-        &mut self,
-        _value: &u8,
-        _output: &mut [u8],
-        _index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode(&mut self, _value: &u8, _output: &mut [u8], _index: usize) -> Result<usize, Infallible> {
         unreachable!()
     }
 }
@@ -107,11 +97,7 @@ impl Codec for VariableTarget {
         Ok((input[index], NonZeroUsize::MIN))
     }
 
-    unsafe fn encode_reset(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode_reset(&mut self, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
         if self.markers {
             output[index] = 0xa0;
             Ok(1)
@@ -120,11 +106,7 @@ impl Codec for VariableTarget {
         }
     }
 
-    unsafe fn encode_finish(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode_finish(&mut self, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
         if self.markers {
             output[index] = 0xa1;
             Ok(1)
@@ -133,12 +115,7 @@ impl Codec for VariableTarget {
         }
     }
 
-    unsafe fn encode(
-        &mut self,
-        value: &u8,
-        output: &mut [u8],
-        index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
         output[index] = *value;
         if self.encode_len(value) == 2 {
             output[index + 1] = !*value;
@@ -226,16 +203,11 @@ impl TranscodeEncodeHooks<VariableTarget> for EncodePolicy {
     }
 }
 
-type PartitionEngine =
-    TranscodeConvertEngine<PairSource, VariableTarget, DecodePolicy, EncodePolicy>;
+type PartitionEngine = TranscodeConvertEngine<PairSource, VariableTarget, DecodePolicy, EncodePolicy>;
 type DecisionCounter = Rc<Cell<usize>>;
 type EngineWithCounters = (PartitionEngine, DecisionCounter, DecisionCounter);
 
-fn engine(
-    invalid: InvalidMode,
-    incomplete: IncompleteMode,
-    unencodable: UnencodableMode,
-) -> PartitionEngine {
+fn engine(invalid: InvalidMode, incomplete: IncompleteMode, unencodable: UnencodableMode) -> PartitionEngine {
     engine_with_markers(invalid, incomplete, unencodable, true).0
 }
 
@@ -286,17 +258,9 @@ fn partitions(payload: &[u8]) -> Vec<(usize, Vec<usize>)> {
 
 #[derive(Debug, Eq, PartialEq)]
 enum ModelFailure {
-    Decode {
-        source: InvalidToken,
-        input_index: usize,
-    },
-    EncodeUnencodable {
-        input_index: usize,
-        value: u8,
-    },
-    Incomplete {
-        input_index: usize,
-    },
+    Decode { source: InvalidToken, input_index: usize },
+    EncodeUnencodable { input_index: usize, value: u8 },
+    Incomplete { input_index: usize },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -306,7 +270,8 @@ struct ModelResult {
     encode_decisions: usize,
 }
 
-// This parser/model is intentionally independent of Codec and TranscodeConvertEngine.
+// This parser/model is intentionally independent of Codec and
+// TranscodeConvertEngine.
 fn semantic_oracle(
     payload: &[u8],
     invalid: InvalidMode,
@@ -387,19 +352,11 @@ fn semantic_oracle(
     })
 }
 
-fn drive(
-    payload: &[u8],
-    ends: &[usize],
-    engine: PartitionEngine,
-) -> Result<(Vec<u8>, usize), String> {
+fn drive(payload: &[u8], ends: &[usize], engine: PartitionEngine) -> Result<(Vec<u8>, usize), String> {
     drive_engine(payload, ends, engine)
 }
 
-fn drive_engine(
-    payload: &[u8],
-    ends: &[usize],
-    mut engine: PartitionEngine,
-) -> Result<(Vec<u8>, usize), String> {
+fn drive_engine(payload: &[u8], ends: &[usize], mut engine: PartitionEngine) -> Result<(Vec<u8>, usize), String> {
     let mut output = Vec::new();
     let mut pending = Vec::new();
     let mut offset = 0;
@@ -411,9 +368,7 @@ fn drive_engine(
     let mut steps = 0;
     let bound = 64 * (payload.len() + 1) + 64;
     let mut reset = vec![0; engine.max_reset_output_len().unwrap()];
-    let reset_written = engine
-        .reset(&mut reset, 0)
-        .map_err(|e| format!("reset: {e:?}"))?;
+    let reset_written = engine.reset(&mut reset, 0).map_err(|e| format!("reset: {e:?}"))?;
     pending.extend_from_slice(&reset[..reset_written]);
     loop {
         steps += 1;
@@ -429,9 +384,7 @@ fn drive_engine(
             part += 1;
         }
         let visible = &payload[..chunk_end];
-        let window = next_window_override
-            .take()
-            .unwrap_or([0, 1, 2, 3, 5][(steps - 1) % 5]);
+        let window = next_window_override.take().unwrap_or([0, 1, 2, 3, 5][(steps - 1) % 5]);
         let mut out = vec![0; window];
         if eof_done {
             break;
@@ -473,9 +426,7 @@ fn drive_engine(
         if eof_done {
             output.append(&mut pending);
             let mut finish = vec![0; engine.max_finish_output_len().unwrap()];
-            let n = engine
-                .finish(&mut finish, 0)
-                .map_err(|e| format!("finish: {e:?}"))?;
+            let n = engine.finish(&mut finish, 0).map_err(|e| format!("finish: {e:?}"))?;
             output.extend_from_slice(&finish[..n]);
             break;
         }
@@ -491,8 +442,7 @@ fn drive_observed(
     unencodable: UnencodableMode,
     markers: bool,
 ) -> Result<(Vec<u8>, usize, usize, usize), String> {
-    let (engine, decode_calls, encode_calls) =
-        engine_with_markers(invalid, incomplete, unencodable, markers);
+    let (engine, decode_calls, encode_calls) = engine_with_markers(invalid, incomplete, unencodable, markers);
     let result = drive_engine(payload, ends, engine)?;
     Ok((result.0, result.1, decode_calls.get(), encode_calls.get()))
 }
@@ -545,14 +495,10 @@ fn test_partition_normal_values_and_backpressure() {
                 UnencodableMode::Reject,
                 markers,
             );
-            let (actual, steps) = drive(&payload, &ends, configured_engine).unwrap_or_else(|e| {
-                panic!("payload={payload:?}, markers={markers}, mask={mask}, ends={ends:?}: {e}")
-            });
+            let (actual, steps) = drive(&payload, &ends, configured_engine)
+                .unwrap_or_else(|e| panic!("payload={payload:?}, markers={markers}, mask={mask}, ends={ends:?}: {e}"));
             assert!(steps <= 64 * (payload.len() + 1) + 64);
-            assert_eq!(
-                actual, expected,
-                "markers={markers}, mask={mask}, ends={ends:?}"
-            );
+            assert_eq!(actual, expected, "markers={markers}, mask={mask}, ends={ends:?}");
             assert_eq!(
                 actual, large,
                 "large-buffer comparison, markers={markers}, mask={mask}, ends={ends:?}"
@@ -568,34 +514,15 @@ fn test_partition_invalid_and_unencodable_policies() {
         for invalid in [InvalidMode::Skip, InvalidMode::Emit] {
             for unencodable in [UnencodableMode::Skip, UnencodableMode::Replace] {
                 for (mask, ends) in partitions(&payload) {
-                    let model = semantic_oracle(
-                        &payload,
-                        invalid,
-                        IncompleteMode::Reject,
-                        unencodable,
-                        markers,
-                    )
-                    .unwrap();
-                    let large = drive_large_buffer(
-                        &payload,
-                        invalid,
-                        IncompleteMode::Reject,
-                        unencodable,
-                        markers,
-                    )
-                    .unwrap();
+                    let model =
+                        semantic_oracle(&payload, invalid, IncompleteMode::Reject, unencodable, markers).unwrap();
+                    let large =
+                        drive_large_buffer(&payload, invalid, IncompleteMode::Reject, unencodable, markers).unwrap();
                     assert_eq!(
                         large, model.output,
                         "large-buffer oracle, markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}"
                     );
-                    let result = drive_observed(
-                        &payload,
-                        &ends,
-                        invalid,
-                        IncompleteMode::Reject,
-                        unencodable,
-                        markers,
-                    );
+                    let result = drive_observed(&payload, &ends, invalid, IncompleteMode::Reject, unencodable, markers);
                     let (actual, _, decode_calls, encode_calls) = result.unwrap_or_else(|e| {
                     panic!("markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}, mask={mask}, ends={ends:?}: {e}")
                 });
@@ -604,18 +531,9 @@ fn test_partition_invalid_and_unencodable_policies() {
                         actual, expected.output,
                         "markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}, mask={mask}, ends={ends:?}"
                     );
-                    assert_eq!(
-                        decode_calls, expected.decode_decisions,
-                        "decode decisions, mask={mask}"
-                    );
-                    assert_eq!(
-                        encode_calls, expected.encode_decisions,
-                        "encode decisions, mask={mask}"
-                    );
-                    assert_eq!(
-                        actual, large,
-                        "large-buffer comparison, markers={markers}, mask={mask}"
-                    );
+                    assert_eq!(decode_calls, expected.decode_decisions, "decode decisions, mask={mask}");
+                    assert_eq!(encode_calls, expected.encode_decisions, "encode decisions, mask={mask}");
+                    assert_eq!(actual, large, "large-buffer comparison, markers={markers}, mask={mask}");
                 }
             }
         }
@@ -652,11 +570,7 @@ fn test_partition_invalid_and_unencodable_policies() {
             ..
         })
     ));
-    assert_eq!(
-        decode_calls.get(),
-        1,
-        "invalid decode policy decision count"
-    );
+    assert_eq!(decode_calls.get(), 1, "invalid decode policy decision count");
 
     let (mut encode_engine, _, encode_calls) = engine_with_markers(
         InvalidMode::Reject,
@@ -665,9 +579,7 @@ fn test_partition_invalid_and_unencodable_policies() {
         true,
     );
     encode_engine.reset(&mut output, 0).unwrap();
-    let error = encode_engine
-        .transcode(&[0xfe, 0], 0, &mut output, 0)
-        .unwrap_err();
+    let error = encode_engine.transcode(&[0xfe, 0], 0, &mut output, 0).unwrap_err();
     assert_eq!(
         semantic_oracle(
             &[0xfe, 0],
@@ -688,11 +600,7 @@ fn test_partition_invalid_and_unencodable_policies() {
             value: Some(254)
         }
     ));
-    assert_eq!(
-        encode_calls.get(),
-        1,
-        "unencodable encode policy decision count"
-    );
+    assert_eq!(encode_calls.get(), 1, "unencodable encode policy decision count");
 }
 
 #[test]
@@ -701,22 +609,10 @@ fn test_partition_incomplete_eof_policies() {
     for markers in [false, true] {
         for mode in [IncompleteMode::Skip, IncompleteMode::Emit] {
             for (mask, ends) in partitions(&payload) {
-                let expected = semantic_oracle(
-                    &payload,
-                    InvalidMode::Reject,
-                    mode,
-                    UnencodableMode::Reject,
-                    markers,
-                )
-                .unwrap();
-                let large = drive_large_buffer(
-                    &payload,
-                    InvalidMode::Reject,
-                    mode,
-                    UnencodableMode::Reject,
-                    markers,
-                )
-                .unwrap();
+                let expected =
+                    semantic_oracle(&payload, InvalidMode::Reject, mode, UnencodableMode::Reject, markers).unwrap();
+                let large =
+                    drive_large_buffer(&payload, InvalidMode::Reject, mode, UnencodableMode::Reject, markers).unwrap();
                 let (actual, _, decode_calls, encode_calls) = drive_observed(
                     &payload,
                     &ends,
@@ -725,9 +621,7 @@ fn test_partition_incomplete_eof_policies() {
                     UnencodableMode::Reject,
                     markers,
                 )
-                .unwrap_or_else(|e| {
-                    panic!("markers={markers}, mode={mode:?}, mask={mask}, ends={ends:?}: {e}")
-                });
+                .unwrap_or_else(|e| panic!("markers={markers}, mode={mode:?}, mask={mask}, ends={ends:?}: {e}"));
                 assert_eq!(
                     actual, expected.output,
                     "markers={markers}, mode={mode:?}, mask={mask}, ends={ends:?}"
@@ -745,11 +639,7 @@ fn test_partition_incomplete_eof_policies() {
         drive(
             &payload,
             &[3],
-            engine(
-                InvalidMode::Reject,
-                IncompleteMode::Reject,
-                UnencodableMode::Reject
-            )
+            engine(InvalidMode::Reject, IncompleteMode::Reject, UnencodableMode::Reject)
         )
         .is_err()
     );
@@ -772,9 +662,7 @@ fn test_partition_incomplete_eof_policies() {
     let mut output = [0; 16];
     reject_engine.reset(&mut output, 0).unwrap();
     assert_eq!(
-        reject_engine
-            .transcode_eof(&payload, 0, &mut output, 0)
-            .unwrap_err(),
+        reject_engine.transcode_eof(&payload, 0, &mut output, 0).unwrap_err(),
         TranscodeConvertError::Failure(TranscodeFailure::incomplete_input(2, 2, 1))
     );
     assert_eq!(reject_calls.get(), 1, "incomplete reject decision count");
@@ -786,11 +674,7 @@ fn test_partition_empty_input_and_lifecycle() {
     let (empty, _) = drive(
         &[],
         &[],
-        engine(
-            InvalidMode::Reject,
-            IncompleteMode::Reject,
-            UnencodableMode::Reject,
-        ),
+        engine(InvalidMode::Reject, IncompleteMode::Reject, UnencodableMode::Reject),
     )
     .unwrap();
     assert_eq!(empty, [0xa0, 0xa1]);
@@ -808,12 +692,9 @@ fn test_partition_empty_input_and_lifecycle() {
     assert_eq!(progress.written(), 0);
     assert_eq!(no_markers.finish(&mut no_marker_scratch, 0).unwrap(), 0);
 
-    // A decoded value retained by backpressure is drained by an empty visible-input call.
-    let mut draining = engine(
-        InvalidMode::Reject,
-        IncompleteMode::Reject,
-        UnencodableMode::Reject,
-    );
+    // A decoded value retained by backpressure is drained by an empty visible-input
+    // call.
+    let mut draining = engine(InvalidMode::Reject, IncompleteMode::Reject, UnencodableMode::Reject);
     let mut lifecycle = [0; 2];
     assert_eq!(draining.reset(&mut lifecycle, 0).unwrap(), 1);
     let payload = [1, 1];
@@ -825,9 +706,7 @@ fn test_partition_empty_input_and_lifecycle() {
     assert_eq!(first.read(), 2);
     assert_eq!(first.written(), 0);
     let mut drained = [0; 2];
-    let empty_drain = draining
-        .transcode(&payload, first.read(), &mut drained, 0)
-        .unwrap();
+    let empty_drain = draining.transcode(&payload, first.read(), &mut drained, 0).unwrap();
     assert_eq!(empty_drain.read(), 0);
     assert_eq!(empty_drain.written(), 2);
     assert_eq!(drained, [2, !2]);
@@ -846,11 +725,7 @@ fn test_partition_empty_input_and_lifecycle() {
         let (actual, _) = drive(
             &payload,
             &ends,
-            engine(
-                InvalidMode::Reject,
-                IncompleteMode::Reject,
-                UnencodableMode::Reject,
-            ),
+            engine(InvalidMode::Reject, IncompleteMode::Reject, UnencodableMode::Reject),
         )
         .unwrap_or_else(|e| panic!("mask={mask}, ends={ends:?}: {e}"));
         assert_eq!(actual, [0xa0, 2, !2, 0xa1]);

@@ -309,17 +309,11 @@ fn test_each_operation_uses_a_fresh_default_stateful_codec() {
     assert_eq!(decoded_again.downcast_ref::<String>().unwrap(), "1:payload");
     assert_eq!(FRESH_STRING.encode(&payload).unwrap(), "1:payload");
     let decoded_after_encode = FRESH_STRING.decode("payload").unwrap();
-    assert_eq!(
-        decoded_after_encode.downcast_ref::<String>().unwrap(),
-        "1:payload"
-    );
+    assert_eq!(decoded_after_encode.downcast_ref::<String>().unwrap(), "1:payload");
     let copied = FRESH_STRING;
     assert_eq!(copied.encode(&payload).unwrap(), "1:payload");
     let copied_decoded = copied.decode("payload").unwrap();
     assert_eq!(copied_decoded.downcast_ref::<String>().unwrap(), "1:payload");
     let copied_decoded_again = copied.decode("payload").unwrap();
-    assert_eq!(
-        copied_decoded_again.downcast_ref::<String>().unwrap(),
-        "1:payload"
-    );
+    assert_eq!(copied_decoded_again.downcast_ref::<String>().unwrap(), "1:payload");
 }

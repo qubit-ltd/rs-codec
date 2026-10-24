@@ -315,17 +315,11 @@ fn test_each_operation_uses_a_fresh_default_stateful_codec() {
     assert_eq!(decoded_again.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
     assert_eq!(FRESH_BYTES.encode(&payload).unwrap(), vec![1, 9]);
     let decoded_after_encode = FRESH_BYTES.decode(&[9]).unwrap();
-    assert_eq!(
-        decoded_after_encode.downcast_ref::<Vec<u8>>().unwrap(),
-        &vec![1, 9]
-    );
+    assert_eq!(decoded_after_encode.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
     let copied = FRESH_BYTES;
     assert_eq!(copied.encode(&payload).unwrap(), vec![1, 9]);
     let copied_decoded = copied.decode(&[9]).unwrap();
     assert_eq!(copied_decoded.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
     let copied_decoded_again = copied.decode(&[9]).unwrap();
-    assert_eq!(
-        copied_decoded_again.downcast_ref::<Vec<u8>>().unwrap(),
-        &vec![1, 9]
-    );
+    assert_eq!(copied_decoded_again.downcast_ref::<Vec<u8>>().unwrap(), &vec![1, 9]);
 }
