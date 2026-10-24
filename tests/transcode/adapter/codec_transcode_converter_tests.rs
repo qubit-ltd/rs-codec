@@ -16,6 +16,8 @@ use qubit_codec::TranscodeConverter;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
+use crate::common::EofAwareCodec;
+
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct VariableByteDecoder;
 
@@ -468,6 +470,74 @@ fn test_codec_transcode_converter_transcoder_trait_methods_forward() {
 
     <Converter as Transcoder>::reset(&mut converter, &mut output, 0).expect("reset");
     assert_eq!(Ok(0), <Converter as Transcoder>::finish(&mut converter, &mut output, 0),);
+}
+
+#[test]
+fn test_codec_transcode_converter_inherent_eof_dispatches_to_codec_eof() {
+    let mut converter = CodecTranscodeConverter::new(EofAwareCodec, EofAwareCodec);
+    let mut output = [0xa1];
+    converter.reset(&mut output, 0).expect("initialize stream");
+
+    let progress = converter
+        .transcode(&[0xfe], 0, &mut output, 0)
+        .expect("ordinary transcode should retain an incomplete marker");
+    assert_eq!(
+        TranscodeStatus::NeedInput {
+            required: core::num::NonZeroUsize::new(2).unwrap()
+        },
+        progress.status()
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
+    assert_eq!([0xa1], output);
+
+    let progress = converter
+        .transcode_eof(&[0xfe], 0, &mut output, 0)
+        .expect("inherent EOF transcode should dispatch to codec EOF decoding");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([b'?'], output);
+}
+
+#[test]
+fn test_codec_transcode_converter_trait_eof_dispatches_to_codec_eof() {
+    type Converter = CodecTranscodeConverter<EofAwareCodec, EofAwareCodec>;
+
+    let mut converter = Converter::new(EofAwareCodec, EofAwareCodec);
+    let mut output = [0xa1];
+    <Converter as Transcoder>::reset(&mut converter, &mut output, 0).expect("initialize stream");
+
+    let progress = <Converter as Transcoder>::transcode(&mut converter, &[0xfe], 0, &mut output, 0)
+        .expect("ordinary trait transcode should retain an incomplete marker");
+    assert_eq!(
+        TranscodeStatus::NeedInput {
+            required: core::num::NonZeroUsize::new(2).unwrap()
+        },
+        progress.status()
+    );
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
+    assert_eq!([0xa1], output);
+
+    let progress = <Converter as Transcoder>::transcode_eof(&mut converter, &[0xfe], 0, &mut output, 0)
+        .expect("trait EOF transcode should dispatch to codec EOF decoding");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([b'?'], output);
+}
+
+#[test]
+fn test_codec_transcode_converter_complete_into_dispatches_to_codec_eof() {
+    let mut converter = CodecTranscodeConverter::new(EofAwareCodec, EofAwareCodec);
+    let mut output = [0xa1, 0xa2, 0xa3];
+
+    assert_eq!(
+        Ok(1),
+        Transcoder::transcode_complete_into(&mut converter, &[0xfe], &mut output)
+    );
+    assert_eq!([b'?', 0xa2, 0xa3], output);
 }
 
 #[test]

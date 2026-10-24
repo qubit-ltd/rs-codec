@@ -19,6 +19,7 @@ use qubit_codec::TranscodeFailure;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
+use crate::common::EofAwareCodec;
 use crate::nonzero;
 
 /// Decodes 0x80 plus one byte as a pair, rejects 0xff, and copies other bytes.
@@ -300,6 +301,29 @@ fn test_codec_transcode_decoder_transcode_eof_maps_incomplete_input() {
         TranscodeDecodeError::Failure(TranscodeFailure::incomplete_input(0, 2, 1)),
         error,
     );
+}
+
+#[test]
+fn test_codec_transcode_decoder_eof_dispatches_to_codec_eof() {
+    type Decoder = CodecTranscodeDecoder<EofAwareCodec>;
+
+    let mut decoder = Decoder::new(EofAwareCodec);
+    let mut output = [0xa1];
+    <Decoder as Transcoder>::reset(&mut decoder, &mut output, 0).expect("initialize stream");
+
+    let progress = <Decoder as Transcoder>::transcode(&mut decoder, &[0xfe], 0, &mut output, 0)
+        .expect("ordinary transcode should retain an incomplete marker");
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status());
+    assert_eq!(0, progress.read());
+    assert_eq!(0, progress.written());
+    assert_eq!([0xa1], output);
+
+    let progress = <Decoder as Transcoder>::transcode_eof(&mut decoder, &[0xfe], 0, &mut output, 0)
+        .expect("EOF transcode should dispatch to codec EOF decoding");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([b'?'], output);
 }
 
 #[test]
