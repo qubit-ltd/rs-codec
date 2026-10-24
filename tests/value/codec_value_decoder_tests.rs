@@ -19,6 +19,55 @@ use qubit_codec::ValueDecoder;
 
 use super::internal::ResetSensitiveLifecycleCodec;
 
+#[derive(Default)]
+struct EofAwarePrefixCodec;
+
+impl Codec for EofAwarePrefixCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        if input[input_index] == 0xfe && input.len() - input_index == 1 {
+            return Err(codec::DecodeFailure::incomplete(
+                core::num::NonZeroUsize::new(2).unwrap(),
+            ));
+        }
+        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    }
+
+    unsafe fn decode_eof(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        if input[input_index] == 0xfe && input.len() - input_index == 1 {
+            return Ok((b'?', core::num::NonZeroUsize::MIN));
+        }
+        // SAFETY: decode_eof has the same input preconditions as decode.
+        unsafe { self.decode(input, input_index) }
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct SingleByteCodec;
 
@@ -963,4 +1012,26 @@ fn test_codec_value_decoder_wraps_stateful_decode_finish_error() {
         .decode_lifecycle(&[7])
         .expect("successful stateful finish mode should decode");
     assert_eq!(&7, value.value());
+}
+
+#[test]
+fn test_codec_value_decoder_uses_eof_specialization() {
+    let mut decoder = CodecValueDecoder::new(EofAwarePrefixCodec);
+    assert_eq!(b'?', decoder.decode(&[0xfe]).unwrap());
+
+    let output = decoder.decode_lifecycle(&[0xfe]).unwrap();
+    assert_eq!(b'?', *output.value());
+    assert!(output.reset().is_empty());
+    assert!(output.finish().is_empty());
+
+    let progress = decoder
+        .decode_lifecycle_with_scratch(&[0xfe], &mut [], &mut [])
+        .unwrap();
+    assert_eq!(b'?', *progress.value());
+    assert_eq!(0, progress.reset_written());
+    assert_eq!(0, progress.finish_written());
+
+    let failure = unsafe { EofAwarePrefixCodec.decode(&[0xfe], 0) }
+        .expect_err("the ordinary decode entry must report an incomplete prefix");
+    assert_eq!(Some(core::num::NonZeroUsize::new(2).unwrap()), failure.required_total());
 }

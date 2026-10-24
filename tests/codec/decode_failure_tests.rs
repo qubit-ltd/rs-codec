@@ -29,7 +29,7 @@ impl Codec for PlainCodec {
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
-    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
 
     const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
@@ -103,13 +103,16 @@ fn test_decode_failure_reports_invalid_unknown_consumption() {
 #[test]
 fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let mut codec = PlainCodec;
-    let mut output = [0_u8; 1];
 
     let (decoded_value, _) = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
     assert_eq!(NonDefaultValue(vec![0x41]), decoded_value);
 
-    let written = unsafe { codec.encode(&NonDefaultValue(vec![0x42]), &mut output, 0) }
-        .expect("plain codec encode is infallible");
-    assert_eq!(1, written);
+    let value = NonDefaultValue(vec![0x42]);
+    let expected_len = codec.encode_len(&value);
+    assert_eq!(1, expected_len);
+    let mut output = [0_u8; 1];
+    // SAFETY: The one-slot output satisfies PlainCodec's declared encoding bound.
+    let written = unsafe { codec.encode(&value, &mut output, 0) }.expect("plain codec encode is infallible");
+    assert_eq!(expected_len, written);
     assert_eq!([0x42], output);
 }

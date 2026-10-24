@@ -298,13 +298,13 @@ impl Codec for FlushValueDecoder {
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
-struct NonDefaultValue(u8);
+struct NonCloneValue(u8);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct NonDefaultDecoder;
 
 impl Codec for NonDefaultDecoder {
-    type Value = NonDefaultValue;
+    type Value = NonCloneValue;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
@@ -319,15 +319,15 @@ impl Codec for NonDefaultDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((NonDefaultValue(input[input_index]), core::num::NonZeroUsize::MIN))
+        Ok((NonCloneValue(input[input_index]), core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
-        value: &NonDefaultValue,
+        value: &NonCloneValue,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
@@ -342,7 +342,7 @@ impl Codec for NonDefaultDecoder {
 struct NonDefaultEncoder;
 
 impl Codec for NonDefaultEncoder {
-    type Value = NonDefaultValue;
+    type Value = NonCloneValue;
     type Unit = u8;
     type DecodeError = core::convert::Infallible;
     type EncodeError = core::convert::Infallible;
@@ -353,7 +353,7 @@ impl Codec for NonDefaultEncoder {
 
     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
-    fn can_encode_value(&self, value: &NonDefaultValue) -> bool {
+    fn can_encode_value(&self, value: &NonCloneValue) -> bool {
         value.0 != 13
     }
 
@@ -361,15 +361,15 @@ impl Codec for NonDefaultEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(NonDefaultValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((NonDefaultValue(input[input_index]), core::num::NonZeroUsize::MIN))
+        Ok((NonCloneValue(input[input_index]), core::num::NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
         &mut self,
-        value: &NonDefaultValue,
+        value: &NonCloneValue,
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, Self::EncodeError> {
@@ -433,7 +433,7 @@ fn test_codec_transcode_converter_transcodes_non_clone_values_with_inherent_api(
     let error = converter
         .transcode(&[13], 0, &mut output, 0)
         .expect_err("unencodable non-clone value should retain owned context");
-    assert_eq!(TranscodeConvertError::unencodable(0, NonDefaultValue(13)), error,);
+    assert_eq!(TranscodeConvertError::unencodable(0, NonCloneValue(13)), error,);
 }
 
 #[test]
