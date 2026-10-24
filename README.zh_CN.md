@@ -10,8 +10,8 @@
 `qubit-codec` 帮助 Rust 格式 crate 与 adapter crate 在实现「逻辑 value ↔ 编码 unit」
 规则之后，仍能用同一套表示层公开自有输出 API、调用方缓冲区流式转换，以及可选的策略
 hooks。若每一层各自处理下标、容量上界、进度和 reset/finish 生命周期，同一格式很容易
-长出互不兼容的公开面。本库统一这些机制，领域编码与错误仍由格式 crate 拥有。本库不
-提供现成的 JSON、hex、Base64、percent encoding 或通用 `std::io` 扩展。
+长出互不兼容的公开面。本库统一这些机制，领域编码与错误仍由格式 crate 拥有。本库提供
+通用 Serde JSON value codec，但不提供 hex、Base64、percent encoding 或通用 `std::io` 扩展。
 
 ## 二进制格式 crate 实战场景
 
@@ -28,12 +28,13 @@ hooks。若每一层各自处理下标、容量上界、进度和 reset/finish �
 qubit-codec = "0.17"
 ```
 
-默认 feature 集为空。只有使用 `qubit-io` 缓冲 bridge 时才启用 `io`；全局 value codec
-注册表和 `register_value_string_codec!` / `register_value_bytes_codec!` 宏需要启用 `registry`。两项 feature 相互独立：
+默认 feature 集为空。通用 Serde JSON value codec 使用 `json`；`qubit-io` 缓冲 bridge 使用
+`io`；全局 value codec 注册表和 `register_value_string_codec!` /
+`register_value_bytes_codec!` 宏使用 `registry`。这些 feature 相互独立：
 
 ```toml
 [dependencies]
-qubit-io = "0.17"
+qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
@@ -41,6 +42,26 @@ qubit-codec = { version = "0.17", features = ["io"] }
 [dependencies]
 qubit-codec = { version = "0.17", features = ["registry"] }
 ```
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.17", features = ["json"] }
+```
+
+启用 `json` 后，可将 Serde value 编码为 JSON 字符串或字节，并从完整 JSON 输入解码：
+
+```rust
+use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};
+
+let mut text = JsonStringValueCodec::<String>::new();
+let encoded = text.encode(&String::from("hello")).unwrap();
+assert_eq!(text.decode(&encoded).unwrap(), "hello");
+let mut bytes = JsonBytesValueCodec::<String>::new();
+let encoded = bytes.encode(&String::from("hello")).unwrap();
+assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
+```
+
+这是通用 JSON 序列化能力，不包含具体领域格式。
 
 ## 快速开始
 

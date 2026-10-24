@@ -14,6 +14,7 @@ This guide covers `qubit-codec` 0.17 on Rust 1.94 or later. It is for authors of
   - [Expose owned one-value operations](#expose-owned-one-value-operations)
   - [Encode many values into a caller-owned buffer](#encode-many-values-into-a-caller-owned-buffer)
   - [Types used on this path](#types-used-on-this-path)
+- [Use generic JSON value codecs](#use-generic-json-value-codecs)
 - [Verify conversion results](#verify-conversion-results)
   - [What success looks like](#what-success-looks-like)
   - [Incomplete input versus invalid input](#incomplete-input-versus-invalid-input)
@@ -39,7 +40,7 @@ With `qubit-codec`, the format crate implements the representation rule once on 
 2. [Verify conversion results](#verify-conversion-results) shows what success looks like and how incomplete input differs from invalid input. The basic integration path ends there.
 3. Read on as needed: [Drive an incremental stream](#drive-an-incremental-stream), [Handle lifecycle decode output](#handle-lifecycle-decode-output), [Apply policy for malformed input or EOF](#apply-policy-for-malformed-input-or-eof), [Connect buffered I/O](#connect-buffered-io), or [Register codecs for runtime lookup](#register-codecs-for-runtime-lookup).
 
-Optional features `io` and `registry` are independent; enable only what the crate uses.
+Optional features `json`, `io`, and `registry` are independent; enable only what the crate uses. `json` provides generic Serde JSON codecs for complete JSON string or byte inputs.
 
 ## Publish a fixed-width codec
 
@@ -227,6 +228,23 @@ assert!(matches!(
 
 The basic fixed-width path ends here. The following sections are optional: streaming lifecycle first, then lifecycle decode output, policy hooks, byte-order helpers, I/O bridges, and registry lookup.
 
+## Use generic JSON value codecs
+
+Enable `json` for the built-in Serde-backed codecs. They encode a value to an owned JSON `String` or `Vec<u8>` and decode a complete JSON string or byte slice:
+
+```rust
+use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};
+
+let mut text = JsonStringValueCodec::<String>::new();
+let encoded = text.encode(&String::from("hello")).unwrap();
+assert_eq!(text.decode(&encoded).unwrap(), "hello");
+let mut bytes = JsonBytesValueCodec::<String>::new();
+let encoded = bytes.encode(&String::from("hello")).unwrap();
+assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
+```
+
+With both `json` and `registry`, the built-in registry descriptors cover `serde_json::Value`, under IDs `qubit.codec.json.string` and `qubit.codec.json.bytes`. A custom DTO can use the generic codecs directly, but registration requires its own unique ID and descriptor; generic DTO types are not automatically registered. See [registry lookup](#register-codecs-for-runtime-lookup).
+
 ## Drive an incremental stream
 
 Explicit transcoder lifecycle:
@@ -267,7 +285,7 @@ Strict `CodecTranscode*` adapters surface domain failures directly. When the for
 - `TranscodeDecodeEngine` with `TranscodeDecodeHooks` for invalid input and incomplete input after EOF.
 - `TranscodeConvertEngine` composing both hook sets.
 
-Call `transcode_eof` only after the input source confirms EOF. For `TranscodeDecodeEngine`, the hook's `handle_incomplete_decode` runs then. The default action is `Reject`, preserving a codec-domain incomplete error when available. Intentional recovery can use:
+Call `transcode_eof` only after the input source confirms EOF. Once at least `Codec::MIN_UNITS_PER_VALUE` units are available, the engine calls `Codec::decode_eof` first; the incomplete hook runs only if that call still reports incomplete input. A shorter tail may reach the hook without a codec source. The default action is `Reject`, preserving a codec-domain incomplete error when available. Intentional recovery can use:
 
 ```rust
 use qubit_codec::engine::DecodeIncompleteAction;
@@ -290,11 +308,13 @@ Enable feature `io` only when using the `qubit-io` bridges:
 
 ```toml
 [dependencies]
-qubit-io = "0.17"
+qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
-`TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. `TranscodeDecodeInput::transcode` applies `transcode_eof` to a retained tail after a refill confirms EOF. For explicit stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call `AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
+`TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. At confirmed EOF, `decode_eof` is tried when the retained tail reaches the codec minimum; the incomplete hook runs only if it still reports incomplete. A shorter tail may reach the hook with no codec source. `rs-codec-misc`'s percent codec uses this boundary to interpret a trailing `%` or `%A` as a malformed escape; the adapter decides when input is final, while the format codec owns that interpretation. For explicit stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call `AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
+
+Before a synchronous `transcode` batch, the bridge reserves the codec's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch, so split large batches when needed. The operation may deliver already buffered output before accepting the next batch; async polling establishes backpressure first and can return `Pending` before calling the encoder. Explicit `flush` remains the sink flush boundary. `finish_to_buffer` only appends encoder finalization output to memory; `finish` delivers buffered bytes and flushes the sink.
 
 ## Register codecs for runtime lookup
 
@@ -306,6 +326,8 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 Implement paired `ValueEncoder` and `ValueDecoder` for a fixed value type, then register. String and bytes wires use different codec types, macros, and process-wide registries; the same `ValueCodecId` may appear in both.
+
+Registration macro IDs must be compile-time constant expressions, such as a literal, `const`, or `const fn` call. Runtime-computed IDs should be checked with `ValueCodecId::try_new` and used with the descriptor APIs instead. This lets invalid declarations fail when compiled. If one ID has more than two sources, diagnostics list every source in stable order.
 
 String wire example:
 

@@ -14,6 +14,7 @@
   - [提供自有单值操作](#提供自有单值操作)
   - [把多个 value 编码到调用方缓冲区](#把多个-value-编码到调用方缓冲区)
   - [涉及的核心类型](#涉及的核心类型)
+- [使用通用 JSON value codec](#使用通用-json-value-codec)
 - [检查转换结果](#检查转换结果)
   - [成功时能看到什么](#成功时能看到什么)
   - [不完整输入与非法输入](#不完整输入与非法输入)
@@ -39,7 +40,7 @@
 2. [检查转换结果](#检查转换结果) 说明成功时的可观察结果，以及不完整输入与非法输入的区别。基础接入到这里结束。
 3. 按需要查阅[驱动增量流](#驱动增量流)、[处理生命周期 decode 输出](#处理生命周期-decode-输出)、[为畸形输入或 EOF 配置策略](#为畸形输入或-eof-配置策略)、[接入缓冲 I/O](#接入缓冲-io)或[在链接期注册 codec 供运行时查找](#在链接期注册-codec-供运行时查找)。
 
-可选 feature `io` 与 `registry` 相互独立，只在 crate 实际使用时启用。
+可选 feature `json`、`io` 与 `registry` 相互独立，只在 crate 实际使用时启用。`json` 提供基于 Serde 的通用 JSON codec，输入必须是完整 JSON 字符串或字节。
 
 ## 发布一个定宽 codec
 
@@ -226,6 +227,23 @@ assert!(matches!(
 
 定宽 codec 的基础路径到这里结束。下面各节按需查阅：先是增量流生命周期，再是生命周期 decode 输出、策略 hooks、字节序辅助类型、I/O bridge 与注册表查找。
 
+## 使用通用 JSON value codec
+
+启用 `json` 后，可使用基于 Serde 的 codec，将 value 编码为自有 `String` 或 `Vec<u8>`，也可从完整 JSON 字符串或字节切片解码：
+
+```rust
+use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};
+
+let mut text = JsonStringValueCodec::<String>::new();
+let encoded = text.encode(&String::from("hello")).unwrap();
+assert_eq!(text.decode(&encoded).unwrap(), "hello");
+let mut bytes = JsonBytesValueCodec::<String>::new();
+let encoded = bytes.encode(&String::from("hello")).unwrap();
+assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
+```
+
+同时启用 `json` 和 `registry` 时，内置描述符只注册 `serde_json::Value`，ID 为 `qubit.codec.json.string` 和 `qubit.codec.json.bytes`。自定义 DTO 可以直接使用通用 codec；若要注册，需提供自己的描述符和唯一 ID，不会自动注册所有泛型 DTO。详见[注册表查找](#在链接期注册-codec-供运行时查找)。
+
 ## 驱动增量流
 
 显式 transcoder 生命周期如下：
@@ -266,7 +284,7 @@ assert!(matches!(
 - `TranscodeDecodeEngine` 与 `TranscodeDecodeHooks` 处理非法输入，以及 EOF 后的不完整输入；
 - `TranscodeConvertEngine` 组合上述两组 hooks。
 
-只有在输入源确认 EOF 后才调用 `transcode_eof`。对 `TranscodeDecodeEngine`，此时会调用 hook 的 `handle_incomplete_decode`。默认动作为 `Reject`，在 codec 提供不完整输入的领域错误时会保留该错误。需要恢复时可以返回：
+只有在输入源确认 EOF 后才调用 `transcode_eof`。保留尾部达到 `Codec::MIN_UNITS_PER_VALUE` 时，会先调用 `Codec::decode_eof`；只有它仍报告不完整输入时才调用 incomplete hook。尾部更短时，hook 可能收到没有 codec source 的上下文。默认动作为 `Reject`，在 codec 提供不完整输入的领域错误时会保留该错误。需要恢复时可以返回：
 
 ```rust
 use qubit_codec::engine::DecodeIncompleteAction;
@@ -289,11 +307,13 @@ let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
 
 ```toml
 [dependencies]
-qubit-io = "0.17"
+qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
-`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。`TranscodeDecodeInput::transcode` 在 refill 确认 EOF 后，会把保留尾部交给 `transcode_eof`；需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。异步对应物会报告 `AsyncTranscodeDecodeStep::EndOfInput`，随后在 `finish` 前调用 `AsyncTranscodeDecodeInput::transcode_eof_step`。
+`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。异步对应物会报告 `AsyncTranscodeDecodeStep::EndOfInput`，随后在 `finish` 前调用 `AsyncTranscodeDecodeInput::transcode_eof_step`。
+
+同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存，必要时应拆分。接受下一批前，操作可能先交付已缓冲输出；异步 poll 则先建立背压，编码器尚未调用时就可能返回 `Pending`。显式 `flush` 仍是 sink 刷新边界。`finish_to_buffer` 只把 encoder 收尾输出追加到内存，不执行 I/O；`finish` 会交付缓存并刷新 sink。
 
 ## 在链接期注册 codec 供运行时查找
 
@@ -305,6 +325,8 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 为固定 value 类型成对实现 `ValueEncoder` 与 `ValueDecoder` 后注册。字符串 wire 与字节 wire 使用不同的 codec 类型与注册宏，各自进入独立的进程级注册表；同一 `ValueCodecId` 可以同时出现在两张表中。
+
+注册宏的 ID 必须是编译期常量表达式，例如字面量、`const` 或 `const fn` 调用。运行时计算的 ID 应通过 `ValueCodecId::try_new` 校验并使用 descriptor API 注册，这样非法声明会在编译时失败。同一 ID 有两个以上来源时，诊断会按稳定顺序列出全部来源。
 
 字符串 wire 示例：
 

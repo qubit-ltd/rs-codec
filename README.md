@@ -32,13 +32,14 @@ buffer use `CodecTranscodeEncoder` without duplicating bound arithmetic.
 qubit-codec = "0.17"
 ```
 
-The default feature set is empty. Enable `io` only for the `qubit-io` buffered
-bridges, and enable `registry` for global value codec registration and the
-`register_value_string_codec!` / `register_value_bytes_codec!` macros. The features are independent:
+The default feature set is empty. Enable `json` for generic Serde JSON value
+codecs, `io` for the `qubit-io` buffered bridges, and `registry` for global
+value codec registration and the `register_value_string_codec!` /
+`register_value_bytes_codec!` macros. The features are independent:
 
 ```toml
 [dependencies]
-qubit-io = "0.17"
+qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
@@ -46,6 +47,27 @@ qubit-codec = { version = "0.17", features = ["io"] }
 [dependencies]
 qubit-codec = { version = "0.17", features = ["registry"] }
 ```
+
+```toml
+[dependencies]
+qubit-codec = { version = "0.17", features = ["json"] }
+```
+
+With `json`, the generic codecs encode and decode complete JSON values as
+strings or bytes. For example:
+
+```rust
+use qubit_codec::{JsonBytesValueCodec, JsonStringValueCodec, ValueDecoder, ValueEncoder};
+
+let mut text = JsonStringValueCodec::<String>::new();
+let encoded = text.encode(&String::from("hello")).unwrap();
+assert_eq!(text.decode(&encoded).unwrap(), "hello");
+let mut bytes = JsonBytesValueCodec::<String>::new();
+let encoded = bytes.encode(&String::from("hello")).unwrap();
+assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
+```
+
+These are generic Serde JSON codecs, not concrete domain formats.
 
 ## Quick start
 
