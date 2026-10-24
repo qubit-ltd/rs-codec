@@ -8,6 +8,8 @@
 //! Tests the bidirectional JSON string codec that combines the encoder and
 //! decoder.
 
+use std::collections::BTreeMap;
+
 use qubit_codec::JsonStringValueCodec;
 use qubit_codec::JsonStringValueDecoder;
 use qubit_codec::JsonStringValueEncoder;
@@ -196,4 +198,22 @@ fn test_round_trip_preserves_nested_json() {
     let decoded = codec.decode(&encoded).expect("decode should succeed");
 
     assert_eq!(decoded, value, "a JSON round trip must be lossless");
+}
+
+#[test]
+fn test_json_map_key_integer_round_trip() {
+    let value = BTreeMap::from([(7_u32, String::from("seven"))]);
+    let mut codec = JsonStringValueCodec::<BTreeMap<u32, String>>::new();
+    let encoded = codec.encode(&value).expect("integer key is supported");
+    assert_eq!(encoded, r#"{"7":"seven"}"#);
+    assert_eq!(codec.decode(&encoded).expect("decode integer key"), value);
+}
+
+#[test]
+fn test_json_map_key_composite_is_rejected() {
+    let value = BTreeMap::from([((1_u8, 2_u8), String::from("pair"))]);
+    let error = JsonStringValueCodec::<BTreeMap<(u8, u8), String>>::new()
+        .encode(&value)
+        .expect_err("tuple key is not a JSON object key");
+    assert!(error.is_syntax(), "unsupported JSON object key must be a syntax error");
 }

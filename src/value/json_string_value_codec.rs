@@ -100,8 +100,8 @@ where
     /// # Errors
     ///
     /// Returns [`serde_json::Error`] when `input` cannot be serialized to
-    /// JSON, including when a custom `Serialize` implementation fails or when
-    /// the value contains a map key that is not a string.
+    /// JSON, including when a custom `Serialize` implementation fails or a map
+    /// key cannot be represented as a JSON object key.
     #[inline]
     fn encode(&mut self, input: &T) -> Result<Self::Output, Self::Error> {
         JsonStringValueEncoder::<T>::new().encode(input)
