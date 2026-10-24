@@ -20,6 +20,10 @@ use qubit_codec::ValueCodecExecutionError;
 use qubit_codec::ValueCodecId;
 use qubit_codec::ValueStringCodecDescriptor;
 use qubit_codec::ValueStringCodecRegistry;
+use qubit_codec::register_value_bytes_codec;
+use qubit_codec::register_value_string_codec;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use serde_json::json;
 
@@ -27,6 +31,27 @@ static STRING_DESCRIPTOR: ValueStringCodecDescriptor =
     ValueStringCodecDescriptor::of::<JsonStringValueCodec<Value>, Value>();
 static BYTES_DESCRIPTOR: ValueBytesCodecDescriptor =
     ValueBytesCodecDescriptor::of::<JsonBytesValueCodec<Value>, Value>();
+
+#[derive(Deserialize, Serialize)]
+struct RequiredDto {
+    text: String,
+}
+
+static REQUIRED_BYTES: ValueBytesCodecDescriptor =
+    ValueBytesCodecDescriptor::of::<JsonBytesValueCodec<RequiredDto>, RequiredDto>();
+static REQUIRED_STRING: ValueStringCodecDescriptor =
+    ValueStringCodecDescriptor::of::<JsonStringValueCodec<RequiredDto>, RequiredDto>();
+
+register_value_bytes_codec!(
+    id = "review.required.bytes",
+    codec = JsonBytesValueCodec<RequiredDto>,
+    value = RequiredDto,
+);
+register_value_string_codec!(
+    id = "review.required.string",
+    codec = JsonStringValueCodec<RequiredDto>,
+    value = RequiredDto,
+);
 
 #[test]
 fn test_json_value_codec_ids_match_stable_constants() {
@@ -144,4 +169,21 @@ fn test_json_string_and_bytes_registries_have_distinct_codec_ids() {
 
     assert_ne!(string.id(), bytes.id());
     assert_ne!(string.descriptor().codec_type_id(), bytes.descriptor().codec_type_id());
+}
+
+#[test]
+fn test_json_codecs_register_required_dto_without_value_traits() {
+    let bytes = REQUIRED_BYTES
+        .encode(&RequiredDto { text: "bytes".to_owned() })
+        .expect("bytes descriptor should encode the required DTO");
+    assert_eq!(bytes, br#"{"text":"bytes"}"#);
+    let decoded_bytes = REQUIRED_BYTES.decode(&bytes).expect("bytes descriptor should decode");
+    assert_eq!(decoded_bytes.downcast_ref::<RequiredDto>().map(|dto| dto.text.as_str()), Some("bytes"));
+
+    let string = REQUIRED_STRING
+        .encode(&RequiredDto { text: "string".to_owned() })
+        .expect("string descriptor should encode the required DTO");
+    assert_eq!(string, r#"{"text":"string"}"#);
+    let decoded_string = REQUIRED_STRING.decode(&string).expect("string descriptor should decode");
+    assert_eq!(decoded_string.downcast_ref::<RequiredDto>().map(|dto| dto.text.as_str()), Some("string"));
 }

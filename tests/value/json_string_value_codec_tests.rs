@@ -20,6 +20,11 @@ use serde::ser::Error as _;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 
+#[derive(Deserialize, Serialize)]
+struct RequiredDto {
+    text: String,
+}
+
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 struct MirrorSample {
     name: String,
@@ -166,6 +171,20 @@ fn test_codec_is_copy_and_debug() {
         rendered.contains("JsonStringValueCodec"),
         "the Debug output must name the codec type"
     );
+}
+
+fn assert_marker_traits<C: Copy + Clone + Default>() {}
+
+#[test]
+fn test_json_markers_do_not_require_value_traits() {
+    assert_marker_traits::<JsonStringValueCodec<RequiredDto>>();
+    assert_marker_traits::<JsonStringValueEncoder<RequiredDto>>();
+    assert_marker_traits::<JsonStringValueDecoder<RequiredDto>>();
+
+    let original = JsonStringValueCodec::<RequiredDto>::new();
+    let copied = original;
+    let original_again = original;
+    let _ = (copied, original_again);
 }
 
 #[test]

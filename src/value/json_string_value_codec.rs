@@ -21,8 +21,9 @@ use super::ValueEncoder;
 ///
 /// This type combines [`JsonStringValueEncoder`] and [`JsonStringValueDecoder`]
 /// for registry-backed or bidirectional call sites. It holds no state between
-/// calls, so it is `Copy` and `Default`, and encoding and decoding can share
-/// one value through [`ValueEncoder`] and [`ValueDecoder`].
+/// calls, so it is `Copy` and `Default` without requiring those traits on `T`;
+/// encoding and decoding can share one value through [`ValueEncoder`] and
+/// [`ValueDecoder`].
 ///
 /// # Type Parameters
 ///
@@ -40,10 +41,26 @@ use super::ValueEncoder;
 /// assert_eq!(codec.decode(r#""hello""#).unwrap(), "hello");
 /// ```
 #[must_use]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug)]
 pub struct JsonStringValueCodec<T> {
     /// Associates the codec with `T` without retaining a value.
     _marker: PhantomData<T>,
+}
+
+impl<T> Copy for JsonStringValueCodec<T> {}
+
+impl<T> Clone for JsonStringValueCodec<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Default for JsonStringValueCodec<T> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> JsonStringValueCodec<T> {

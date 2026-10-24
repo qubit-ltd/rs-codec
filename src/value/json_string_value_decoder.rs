@@ -16,6 +16,8 @@ use serde_json::from_str;
 use super::ValueDecoder;
 
 /// Decodes one JSON string into an owned value via `serde_json`.
+/// Its stateless marker implements `Clone`, `Copy`, and `Default` without
+/// requiring those traits on `T`.
 ///
 /// # Type Parameters
 ///
@@ -39,10 +41,26 @@ use super::ValueDecoder;
 /// assert_eq!(point, Point { x: 1, y: 2 });
 /// ```
 #[must_use]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug)]
 pub struct JsonStringValueDecoder<T> {
     /// Tracks the owned output type without storing a value between calls.
     _marker: PhantomData<T>,
+}
+
+impl<T> Copy for JsonStringValueDecoder<T> {}
+
+impl<T> Clone for JsonStringValueDecoder<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Default for JsonStringValueDecoder<T> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> JsonStringValueDecoder<T> {

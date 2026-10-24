@@ -16,6 +16,8 @@ use serde_json::to_vec;
 use super::ValueEncoder;
 
 /// Encodes one serializable value into UTF-8 JSON bytes via `serde_json`.
+/// Its stateless marker implements `Clone`, `Copy`, and `Default` without
+/// requiring those traits on `T`.
 ///
 /// # Type Parameters
 ///
@@ -39,10 +41,26 @@ use super::ValueEncoder;
 /// assert_eq!(json, br#"{"x":1,"y":2}"#);
 /// ```
 #[must_use]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug)]
 pub struct JsonBytesValueEncoder<T> {
     /// Associates the encoder with `T` without retaining a source value.
     _marker: PhantomData<T>,
+}
+
+impl<T> Copy for JsonBytesValueEncoder<T> {}
+
+impl<T> Clone for JsonBytesValueEncoder<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Default for JsonBytesValueEncoder<T> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> JsonBytesValueEncoder<T> {
