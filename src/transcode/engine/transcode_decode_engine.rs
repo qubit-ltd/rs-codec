@@ -498,6 +498,11 @@ where
     ///
     /// # Errors
     ///
+    /// At confirmed EOF, an incomplete tail requires one writable output slot
+    /// before the incomplete-input hook runs, including when that hook might
+    /// skip or reject. A capacity shortage leaves both the tail and hook state
+    /// untouched; errors after hook execution do not roll back hook mutations.
+    ///
     /// Returns framework errors for invalid lifecycle state or slice indices,
     /// and policy/domain errors for rejected input, including incomplete EOF
     /// tails.
@@ -819,6 +824,9 @@ where
             if available < min_units_len {
                 if !end_of_input {
                     return Ok(state.need_input_progress_with(min_units));
+                }
+                if state.needs_output() {
+                    return Ok(state.need_output_progress());
                 }
                 match self
                     .hooks

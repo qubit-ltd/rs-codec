@@ -580,6 +580,24 @@ impl TranscodeDecodeHooks<ErrorSourceCodec> for ImpossibleFailureDecodeHooks {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct StrictEncodeHooks;
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CountedTargetReplacementHooks {
+    calls: usize,
+}
+
+impl TranscodeEncodeHooks<TargetCodec> for CountedTargetReplacementHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut TargetCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, codec::TranscodeEncodeErrorOf<TargetCodec>> {
+        self.calls += 1;
+        Ok(EncodeUnencodableAction::Replace {
+            value: 40 + self.calls as u8,
+        })
+    }
+}
+
 impl<C> TranscodeEncodeHooks<C> for StrictEncodeHooks
 where
     C: Codec<Value = u8, Unit = u8, EncodeError = EngineError>,
@@ -1114,7 +1132,7 @@ fn test_transcode_convert_engine_skips_incomplete_eof_tail() {
         StrictEncodeHooks,
     );
     engine.reset(&mut [], 0).expect("initialize stream");
-    let mut output = [];
+    let mut output = [0_u8; 1];
 
     let progress = engine
         .transcode_eof(&[0x5a], 0, &mut output, 0)
@@ -1136,7 +1154,7 @@ fn test_transcode_convert_engine_rejects_incomplete_eof_tail() {
         StrictEncodeHooks,
     );
     engine.reset(&mut [], 0).expect("initialize stream");
-    let mut output = [];
+    let mut output = [0_u8; 1];
 
     let error = engine
         .transcode_eof(&[0x5a], 0, &mut output, 0)
@@ -1394,6 +1412,40 @@ fn test_buffered_convert_engine_owns_pending_value_between_calls() {
     assert_eq!((1, 2), (progress.read(), progress.written()));
     assert_eq!([2, 10], output);
     assert_eq!(Ok(1), engine.max_finish_output_len());
+}
+
+#[test]
+fn test_buffered_convert_engine_preserves_pending_value_before_encode_hook_capacity() {
+    let mut engine = TranscodeConvertEngine::new(
+        SourceCodec,
+        TargetCodec,
+        StrictDecodeHooks,
+        CountedTargetReplacementHooks::default(),
+    );
+    engine.reset(&mut [], 0).expect("initialize stream");
+
+    let progress = engine
+        .transcode(&[98], 0, &mut [], 0)
+        .expect("decoded value should remain pending under output pressure");
+    assert_eq!(
+        TranscodeStatus::NeedOutput {
+            required: crate::nonzero(1)
+        },
+        progress.status()
+    );
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
+    assert_eq!(0, engine.encode_hooks().calls);
+
+    let mut output = [0_u8; 1];
+    let progress = engine
+        .transcode(&[98], progress.read(), &mut output, 0)
+        .expect("pending value should encode before new source input");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(0, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([41], output);
+    assert_eq!(1, engine.encode_hooks().calls);
 }
 
 #[test]

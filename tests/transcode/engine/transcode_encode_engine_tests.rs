@@ -90,6 +90,10 @@ impl Codec for FullyBufferedCodec {
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 0;
     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
 
+    fn can_encode_value(&self, value: &u8) -> bool {
+        *value != 0
+    }
+
     unsafe fn decode(
         &mut self,
         input: &[u8],
@@ -117,7 +121,20 @@ impl TranscodeEncodeHooks<FullyBufferedCodec> for FullyBufferedHooks {
         _codec: &mut FullyBufferedCodec,
         _context: &EncodeContext<'_, u8>,
     ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<FullyBufferedCodec>> {
-        Ok(EncodeUnencodableAction::Reject)
+        Ok(EncodeUnencodableAction::Skip)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct FullyBufferedZeroWidthHooks;
+
+impl TranscodeEncodeHooks<FullyBufferedCodec> for FullyBufferedZeroWidthHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut FullyBufferedCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<FullyBufferedCodec>> {
+        Ok(EncodeUnencodableAction::Replace { value: 1 })
     }
 }
 
@@ -234,6 +251,50 @@ impl TranscodeEncodeHooks<WideCodec> for RejectingHooks {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ReplacingHooks {
     replacement: u8,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CountedReplacingHooks {
+    calls: usize,
+}
+
+impl TranscodeEncodeHooks<WideCodec> for CountedReplacingHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut WideCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<WideCodec>> {
+        self.calls += 1;
+        Ok(EncodeUnencodableAction::Replace {
+            value: 4 + self.calls as u8,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CountedNoOutputAction {
+    Skip,
+    Reject,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CountedNoOutputHooks {
+    calls: usize,
+    action: CountedNoOutputAction,
+}
+
+impl TranscodeEncodeHooks<WideCodec> for CountedNoOutputHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut WideCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<WideCodec>> {
+        self.calls += 1;
+        Ok(match self.action {
+            CountedNoOutputAction::Skip => EncodeUnencodableAction::Skip,
+            CountedNoOutputAction::Reject => EncodeUnencodableAction::Reject,
+        })
+    }
 }
 
 impl TranscodeEncodeHooks<WideCodec> for ReplacingHooks {
@@ -594,6 +655,24 @@ fn test_buffered_encode_engine_allows_zero_encode_unit_bound() {
         .expect("fully buffered values should not require immediate output");
     assert_eq!(3, progress.read());
     assert_eq!(0, progress.written());
+
+    let progress = engine
+        .transcode(&[0], 0, &mut [], 0)
+        .expect("zero-width skip must not require output capacity");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
+
+    let mut engine = TranscodeEncodeEngine::new(FullyBufferedCodec, FullyBufferedZeroWidthHooks);
+    engine
+        .reset(&mut [], 0)
+        .expect("initialize zero-width replacement stream");
+    let progress = engine
+        .transcode(&[0], 0, &mut [], 0)
+        .expect("zero-width replacement must not require nonzero capacity");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(0, progress.written());
 }
 
 #[test]
@@ -807,7 +886,7 @@ fn test_buffered_encode_engine_allows_zero_width_value_to_consume_input() {
     let mut reset_output = [];
     encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
-    let mut output = [];
+    let mut output = [0_u8; 4];
 
     let progress = encoder
         .transcode(&[0, 0, 0], 0, &mut output, 0)
@@ -854,7 +933,7 @@ fn test_buffered_encode_engine_encodes_replacement_for_unencodable() {
     let mut reset_output = [];
     encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
-    let mut output = [0_u8; 1];
+    let mut output = [0_u8; 4];
 
     let progress = encoder
         .transcode(&[0], 0, &mut output, 0)
@@ -863,7 +942,7 @@ fn test_buffered_encode_engine_encodes_replacement_for_unencodable() {
     assert_eq!(TranscodeStatus::Complete, progress.status());
     assert_eq!(1, progress.read());
     assert_eq!(1, progress.written());
-    assert_eq!([15], output);
+    assert_eq!([15], output[..progress.written()]);
 }
 
 #[test]
@@ -872,20 +951,87 @@ fn test_buffered_encode_engine_replacement_waits_for_output_capacity() {
     let mut reset_output = [];
     encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
-    let mut output = [];
+    let mut output = [0_u8; 4];
+    for available in [0, 1, 3] {
+        let progress = encoder
+            .transcode(&[0], 0, &mut output[..available], 0)
+            .expect("replacement should report output pressure");
 
+        assert_eq!(
+            TranscodeStatus::NeedOutput {
+                required: crate::nonzero(4),
+            },
+            progress.status(),
+        );
+        assert_eq!(0, progress.read());
+        assert_eq!(0, progress.written());
+    }
+}
+
+#[test]
+fn test_buffered_encode_engine_does_not_retry_replacement_hook_under_output_pressure() {
+    let mut encoder = TranscodeEncodeEngine::new(WideCodec, CountedReplacingHooks::default());
+    encoder.reset(&mut [], 0).expect("initialize stream");
+
+    for _ in 0..2 {
+        let progress = encoder
+            .transcode(&[0], 0, &mut [], 0)
+            .expect("insufficient capacity should be reported");
+        assert_eq!(
+            TranscodeStatus::NeedOutput {
+                required: crate::nonzero(4)
+            },
+            progress.status()
+        );
+        assert_eq!(0, progress.read());
+        assert_eq!(0, encoder.hooks().calls);
+    }
+
+    let mut output = [0_u8; 4];
     let progress = encoder
         .transcode(&[0], 0, &mut output, 0)
-        .expect("replacement should report output pressure");
+        .expect("replacement should encode after capacity is supplied");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([15], output[..progress.written()]);
+    assert_eq!(1, encoder.hooks().calls);
+}
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(1),
-        },
-        progress.status(),
-    );
-    assert_eq!(0, progress.read());
-    assert_eq!(0, progress.written());
+#[test]
+fn test_buffered_encode_engine_gates_skip_and_reject_hooks_on_capacity() {
+    for action in [CountedNoOutputAction::Skip, CountedNoOutputAction::Reject] {
+        let mut encoder = TranscodeEncodeEngine::new(WideCodec, CountedNoOutputHooks { calls: 0, action });
+        encoder.reset(&mut [], 0).expect("initialize stream");
+        let mut output = [0_u8; 4];
+
+        for capacity in [0, 1, 3] {
+            let progress = encoder
+                .transcode(&[0], 0, &mut output[..capacity], 0)
+                .expect("insufficient output should be reported before policy");
+            assert_eq!(
+                TranscodeStatus::NeedOutput {
+                    required: crate::nonzero(4)
+                },
+                progress.status()
+            );
+            assert_eq!((0, 0), (progress.read(), progress.written()));
+            assert_eq!(0, encoder.hooks().calls);
+        }
+
+        let result = encoder.transcode(&[0], 0, &mut output, 0);
+        match action {
+            CountedNoOutputAction::Skip => {
+                let progress = result.expect("Skip should consume after capacity is available");
+                assert_eq!(TranscodeStatus::Complete, progress.status());
+                assert_eq!((1, 0), (progress.read(), progress.written()));
+            }
+            CountedNoOutputAction::Reject => {
+                assert_eq!(Err(TranscodeEncodeError::unencodable_without_context(0)), result,);
+            }
+        }
+        assert_eq!(1, encoder.hooks().calls);
+    }
 }
 
 #[test]
@@ -895,7 +1041,7 @@ fn test_buffered_encode_engine_panics_when_replacement_is_unencodable() {
     let mut reset_output = [];
     encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
-    let mut output = [0_u8; 1];
+    let mut output = [0_u8; 4];
 
     let _ = encoder.transcode(&[0], 0, &mut output, 0);
 }

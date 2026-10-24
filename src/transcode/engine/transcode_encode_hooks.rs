@@ -190,6 +190,12 @@ where
     /// The engine treats unencodable replacements as hook contract violations
     /// and panics.
     ///
+    /// Before invoking this method, the engine requires writable capacity for
+    /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`]. This conservative bound also
+    /// applies when the selected action is `Skip` or `Reject`; it may exceed
+    /// the replacement's actual encoded width. A capacity shortage does not
+    /// invoke the hook, so hook state is not changed by output backpressure.
+    ///
     /// # Errors
     ///
     /// Returns [`crate::TranscodeEncodeError`] when the policy rejects the

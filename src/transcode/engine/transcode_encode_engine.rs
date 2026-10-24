@@ -534,6 +534,12 @@ where
     ///
     /// Returns whether the value was consumed or needs more output capacity.
     ///
+    /// For an unencodable value, this checks capacity for the codec's maximum
+    /// value width before invoking policy hooks. A shortage returns
+    /// `NeedOutput` without changing hook state; this conservative requirement
+    /// also applies when the hook would skip or reject. Errors after a hook
+    /// runs do not roll back mutations made by that hook.
+    ///
     /// # Errors
     ///
     /// Returns an engine-domain error when the codec fails or when the hook
@@ -553,6 +559,12 @@ where
         };
         if encodable {
             return self.encode_encodable_value(attempt);
+        }
+        let required = C::MAX_ENCODE_UNITS_PER_VALUE;
+        if attempt.available_output() < required {
+            return Ok(EncodeOutcome::need_output(
+                NonZeroUsize::new(required).expect("required output is non-zero when capacity is insufficient"),
+            ));
         }
         let action = {
             let context = attempt.context();

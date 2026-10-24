@@ -248,7 +248,10 @@ where
     ///
     /// Returns the EOF policy action. `Skip` and `Emit` consume every source
     /// unit available in `context`; `Emit` additionally requires one writable
-    /// output slot.
+    /// output slot. At confirmed EOF, the engine checks for that slot before
+    /// invoking this method, even when the eventual action is `Skip` or
+    /// `Reject`. A capacity shortage does not invoke the hook or change its
+    /// state.
     ///
     /// # Errors
     ///

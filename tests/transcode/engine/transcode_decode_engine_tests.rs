@@ -762,6 +762,49 @@ impl TranscodeDecodeHooks<MinTwoCodec> for ReplacingHooks {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct EofSkippingHooks;
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct CountedIncompleteHooks {
+    calls: usize,
+    action: CountedIncompleteAction,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CountedIncompleteAction {
+    #[default]
+    Emit,
+    Skip,
+    Reject,
+}
+
+impl TranscodeDecodeHooks<MinTwoCodec> for CountedIncompleteHooks {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut MinTwoCodec,
+        _error: &PrefixDecodeError,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<MinTwoCodec>> {
+        Ok(DecodeInvalidAction::Reject)
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut MinTwoCodec,
+        _source: Option<&PrefixDecodeError>,
+        _required_total: NonZeroUsize,
+        _context: DecodeContext,
+    ) -> Result<DecodeIncompleteAction<u8>, codec::TranscodeDecodeErrorOf<MinTwoCodec>> {
+        self.calls += 1;
+        Ok(match self.action {
+            CountedIncompleteAction::Emit => DecodeIncompleteAction::Emit {
+                value: 90 + self.calls as u8,
+            },
+            CountedIncompleteAction::Skip => DecodeIncompleteAction::Skip,
+            CountedIncompleteAction::Reject => DecodeIncompleteAction::Reject,
+        })
+    }
+}
+
 impl TranscodeDecodeHooks<MinTwoCodec> for EofSkippingHooks {
     fn handle_invalid_decode(
         &mut self,
@@ -1050,7 +1093,7 @@ fn test_transcode_decode_engine_applies_emit_policy_to_incomplete_eof() {
 fn test_transcode_decode_engine_applies_skip_policy_to_short_eof_tail() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, EofSkippingHooks);
     decoder.reset(&mut [], 0).expect("initialize stream");
-    let mut output = [];
+    let mut output = [0_u8; 1];
 
     let progress = decoder
         .transcode_eof(&[7], 0, &mut output, 0)
@@ -1065,7 +1108,7 @@ fn test_transcode_decode_engine_applies_skip_policy_to_short_eof_tail() {
 fn test_transcode_decode_engine_rejects_short_eof_tail_by_default() {
     let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, ReplacingHooks);
     decoder.reset(&mut [], 0).expect("initialize stream");
-    let mut output = [];
+    let mut output = [0_u8; 1];
 
     let error = decoder
         .transcode_eof(&[7], 0, &mut output, 0)
@@ -1095,6 +1138,78 @@ fn test_transcode_decode_engine_keeps_incomplete_eof_tail_when_emit_needs_output
     );
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
+}
+
+#[test]
+fn test_transcode_decode_engine_does_not_retry_incomplete_hook_without_output() {
+    let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, CountedIncompleteHooks::default());
+    decoder.reset(&mut [], 0).expect("initialize stream");
+
+    for _ in 0..2 {
+        let progress = decoder
+            .transcode_eof(&[7], 0, &mut [], 0)
+            .expect("missing output should be reported");
+        assert_eq!(
+            TranscodeStatus::NeedOutput {
+                required: NonZeroUsize::MIN
+            },
+            progress.status()
+        );
+        assert_eq!(0, progress.read());
+        assert_eq!(0, decoder.hooks().calls);
+    }
+
+    let mut output = [0_u8; 1];
+    let progress = decoder
+        .transcode_eof(&[7], 0, &mut output, 0)
+        .expect("incomplete policy should emit after capacity is supplied");
+    assert_eq!(TranscodeStatus::Complete, progress.status());
+    assert_eq!(1, progress.read());
+    assert_eq!(1, progress.written());
+    assert_eq!([91], output);
+    assert_eq!(1, decoder.hooks().calls);
+}
+
+#[test]
+fn test_transcode_decode_engine_gates_incomplete_skip_and_reject_on_capacity() {
+    for action in [CountedIncompleteAction::Skip, CountedIncompleteAction::Reject] {
+        let mut decoder = TranscodeDecodeEngine::new(MinTwoCodec, CountedIncompleteHooks { calls: 0, action });
+        decoder.reset(&mut [], 0).expect("initialize stream");
+        let mut output = [0_u8; 1];
+
+        for _ in 0..2 {
+            let progress = decoder
+                .transcode_eof(&[7], 0, &mut [], 0)
+                .expect("EOF policy should wait for one output slot");
+            assert_eq!(
+                TranscodeStatus::NeedOutput {
+                    required: NonZeroUsize::MIN,
+                },
+                progress.status(),
+            );
+            assert_eq!((0, 0), (progress.read(), progress.written()));
+            assert_eq!(0, decoder.hooks().calls);
+        }
+
+        let result = decoder.transcode_eof(&[7], 0, &mut output, 0);
+        match action {
+            CountedIncompleteAction::Skip => {
+                let progress = result.expect("Skip should consume the EOF tail");
+                assert_eq!(TranscodeStatus::Complete, progress.status());
+                assert_eq!((1, 0), (progress.read(), progress.written()));
+            }
+            CountedIncompleteAction::Reject => {
+                assert_eq!(
+                    Err(TranscodeDecodeError::Failure(TranscodeFailure::incomplete_input(
+                        0, 2, 1
+                    )),),
+                    result,
+                );
+            }
+            CountedIncompleteAction::Emit => unreachable!(),
+        }
+        assert_eq!(1, decoder.hooks().calls);
+    }
 }
 
 #[test]
