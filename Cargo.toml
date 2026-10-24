@@ -62,6 +62,11 @@ harness = false
 name = "tests"
 path = "tests/mod.rs"
 
+[[test]]
+name = "value_codec_registry_global_conflict_tests"
+path = "tests/value/value_codec_registry_global_conflict_tests.rs"
+required-features = ["registry"]
+
 [profile.release]
 opt-level = 3
 lto = true
