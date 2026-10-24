@@ -30,6 +30,8 @@ use crate::ValueStringCodecDescriptor;
 /// # Examples
 ///
 /// ```
+/// # #[cfg(feature = "json")]
+/// # {
 /// use qubit_codec::JsonStringValueCodec;
 /// use qubit_codec::ValueCodecId;
 /// use qubit_codec::ValueCodecRegistration;
@@ -51,6 +53,7 @@ use crate::ValueStringCodecDescriptor;
 ///     ),
 /// );
 /// assert_eq!(registration.id().as_str(), "example.u32");
+/// # }
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct ValueCodecRegistration<D: 'static> {
@@ -150,6 +153,8 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// ```
 ///
 /// ```
+/// # #[cfg(feature = "json")]
+/// # {
 /// use qubit_codec::JsonStringValueCodec;
 /// use qubit_codec::register_value_string_codec;
 ///
@@ -158,6 +163,7 @@ impl<D: 'static> ValueCodecRegistration<D> {
 ///     codec = JsonStringValueCodec<u32>,
 ///     value = u32,
 /// );
+/// # }
 /// ```
 #[macro_export]
 macro_rules! register_value_string_codec {
@@ -198,6 +204,8 @@ macro_rules! register_value_string_codec {
 /// ```
 ///
 /// ```
+/// # #[cfg(feature = "json")]
+/// # {
 /// use qubit_codec::JsonBytesValueCodec;
 /// use qubit_codec::register_value_bytes_codec;
 ///
@@ -206,6 +214,7 @@ macro_rules! register_value_string_codec {
 ///     codec = JsonBytesValueCodec<u32>,
 ///     value = u32,
 /// );
+/// # }
 /// ```
 #[macro_export]
 macro_rules! register_value_bytes_codec {
