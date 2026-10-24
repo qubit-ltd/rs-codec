@@ -29,7 +29,7 @@ buffer use `CodecTranscodeEncoder` without duplicating bound arithmetic.
 
 ```toml
 [dependencies]
-qubit-codec = "0.16"
+qubit-codec = "0.17"
 ```
 
 The default feature set is empty. Enable `io` only for the `qubit-io` buffered
@@ -39,12 +39,12 @@ bridges, and enable `registry` for global value codec registration and the
 ```toml
 [dependencies]
 qubit-io = "0.17"
-qubit-codec = { version = "0.16", features = ["io"] }
+qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.16", features = ["registry"] }
+qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 ## Quick start

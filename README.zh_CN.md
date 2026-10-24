@@ -25,7 +25,7 @@ hooks。若每一层各自处理下标、容量上界、进度和 reset/finish �
 
 ```toml
 [dependencies]
-qubit-codec = "0.16"
+qubit-codec = "0.17"
 ```
 
 默认 feature 集为空。只有使用 `qubit-io` 缓冲 bridge 时才启用 `io`；全局 value codec
@@ -34,12 +34,12 @@ qubit-codec = "0.16"
 ```toml
 [dependencies]
 qubit-io = "0.17"
-qubit-codec = { version = "0.16", features = ["io"] }
+qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.16", features = ["registry"] }
+qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 ## 快速开始

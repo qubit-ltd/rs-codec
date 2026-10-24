@@ -2,7 +2,7 @@
 
 [中文 README](../README.zh_CN.md) · [English user guide](user_guide.md) · [API 文档](https://docs.rs/qubit-codec)
 
-本文适用于 `qubit-codec` 0.16.0，要求 Rust 1.94 或更高版本。它面向需要在本地保留格式规则、同时复用容量规划、生命周期和流式转换机制的 codec 与 adapter crate 作者。若你只想直接使用现成的 hex、Base64 或字符集实现，应选用对应的领域 crate，而不是本库。读到[检查转换结果](#检查转换结果)，就能发布一个带自有输出与调用方缓冲区 adapter 的定宽 `Codec`；后面章节供你按需查阅增量流、生命周期 decode、策略 hooks、可选 I/O bridge 以及 `registry` feature。
+本文适用于 `qubit-codec` 0.17，要求 Rust 1.94 或更高版本。它面向需要在本地保留格式规则、同时复用容量规划、生命周期和流式转换机制的 codec 与 adapter crate 作者。若你只想直接使用现成的 hex、Base64 或字符集实现，应选用对应的领域 crate，而不是本库。读到[检查转换结果](#检查转换结果)，就能发布一个带自有输出与调用方缓冲区 adapter 的定宽 `Codec`；后面章节供你按需查阅增量流、生命周期 decode、策略 hooks、可选 I/O bridge 以及 `registry` feature。
 
 ## 目录
 
@@ -290,7 +290,7 @@ let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
 ```toml
 [dependencies]
 qubit-io = "0.17"
-qubit-codec = { version = "0.16", features = ["io"] }
+qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
 `TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。`TranscodeDecodeInput::transcode` 在 refill 确认 EOF 后，会把保留尾部交给 `transcode_eof`；需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。异步对应物会报告 `AsyncTranscodeDecodeStep::EndOfInput`，随后在 `finish` 前调用 `AsyncTranscodeDecodeInput::transcode_eof_step`。
@@ -301,7 +301,7 @@ qubit-codec = { version = "0.16", features = ["io"] }
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.16", features = ["registry"] }
+qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 为固定 value 类型成对实现 `ValueEncoder` 与 `ValueDecoder` 后注册。字符串 wire 与字节 wire 使用不同的 codec 类型与注册宏，各自进入独立的进程级注册表；同一 `ValueCodecId` 可以同时出现在两张表中。

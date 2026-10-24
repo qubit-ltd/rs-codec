@@ -2,7 +2,7 @@
 
 [Chinese user guide](user_guide.zh_CN.md) · [README](../README.md) · [API reference](https://docs.rs/qubit-codec)
 
-This guide covers `qubit-codec` 0.16.0 on Rust 1.94 or later. It is for authors of codec and adapter crates who need shared capacity, lifecycle, and streaming mechanics while keeping format rules local. Application developers looking for a ready-made hex, Base64, or character-set implementation should use a domain crate instead. Reading through [Verify conversion results](#verify-conversion-results) is enough to ship a fixed-width `Codec` with owned and caller-buffered adapters. Later sections cover incremental streams, lifecycle decode, policy hooks, optional I/O bridges, and the `registry` feature.
+This guide covers `qubit-codec` 0.17 on Rust 1.94 or later. It is for authors of codec and adapter crates who need shared capacity, lifecycle, and streaming mechanics while keeping format rules local. Application developers looking for a ready-made hex, Base64, or character-set implementation should use a domain crate instead. Reading through [Verify conversion results](#verify-conversion-results) is enough to ship a fixed-width `Codec` with owned and caller-buffered adapters. Later sections cover incremental streams, lifecycle decode, policy hooks, optional I/O bridges, and the `registry` feature.
 
 ## Contents
 
@@ -291,7 +291,7 @@ Enable feature `io` only when using the `qubit-io` bridges:
 ```toml
 [dependencies]
 qubit-io = "0.17"
-qubit-codec = { version = "0.16", features = ["io"] }
+qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
 `TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. `TranscodeDecodeInput::transcode` applies `transcode_eof` to a retained tail after a refill confirms EOF. For explicit stepwise control, use `TranscodeDecodeInput::transcode_eof_step`. The async counterpart reports `AsyncTranscodeDecodeStep::EndOfInput`; then call `AsyncTranscodeDecodeInput::transcode_eof_step` before `finish`.
@@ -302,7 +302,7 @@ Enable feature `registry` when several crates must discover bidirectional whole-
 
 ```toml
 [dependencies]
-qubit-codec = { version = "0.16", features = ["registry"] }
+qubit-codec = { version = "0.17", features = ["registry"] }
 ```
 
 Implement paired `ValueEncoder` and `ValueDecoder` for a fixed value type, then register. String and bytes wires use different codec types, macros, and process-wide registries; the same `ValueCodecId` may appear in both.
