@@ -497,9 +497,7 @@ where
     /// Returns allocation or wrapped output errors; undelivered units remain
     /// buffered.
     async fn ensure_spare_capacity_async(&mut self, count: usize) -> Result<()> {
-        self.output
-            .try_reserve_capacity(count)
-            .map_err(allocation_error)?;
+        self.output.try_reserve_capacity(count).map_err(allocation_error)?;
         self.output.ensure_spare_capacity_async(count).await
     }
 }

@@ -1309,6 +1309,27 @@ fn test_buffered_encode_output_reserves_the_complete_operation_bound() {
     assert_eq!(1, encode_with(&mut output, &mut encoder, &[0x0001_0002], 0, 1).unwrap());
 }
 
+#[test]
+fn test_buffered_encode_output_reserves_and_consumes_a_batch_larger_than_capacity() {
+    let output = UnitOutput::default();
+    let mut encoder = PairEncoder;
+    let mut output = TranscodeEncodeOutput::with_capacity(output, 1);
+    let input = [0x0001_0002, 0x0003_0004, 0x0005_0006];
+
+    assert_eq!(
+        3,
+        encode_with(&mut output, &mut encoder, &input, 0, input.len()).unwrap()
+    );
+    assert!(output.inner().units.is_empty());
+    let (buffer, initialized_len, capacity) = output.spare_raw_parts_mut();
+    assert_eq!(6, initialized_len);
+    assert!(buffer.len() >= 6);
+    assert!(initialized_len + capacity >= 6);
+
+    output.flush().unwrap();
+    assert_eq!([1, 2, 3, 4, 5, 6], output.inner().units.as_slice());
+}
+
 #[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_rejects_satisfied_need_output_after_consuming_input() {
@@ -1603,7 +1624,9 @@ fn test_buffered_encode_output_retries_after_need_output_without_reading() {
     assert!(error.to_string().contains("reported required"));
     assert!(output.inner().units.is_empty());
 
-    output.flush().expect("flush should remain harmless without committed units");
+    output
+        .flush()
+        .expect("flush should remain harmless without committed units");
     assert!(output.inner().units.is_empty());
 }
 

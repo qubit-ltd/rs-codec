@@ -194,9 +194,7 @@ where
     /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
     /// errors from the wrapped output while delivering pending units.
     pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
-        self.output
-            .try_reserve_capacity(count)
-            .map_err(allocation_error)?;
+        self.output.try_reserve_capacity(count).map_err(allocation_error)?;
         self.output.ensure_spare_capacity(count)
     }
 
@@ -478,10 +476,13 @@ where
             if progress.is_complete() {
                 return Ok(read_total);
             }
-            if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
-                if read_total == count || available_output - written < required.get() || (read == 0 && written == 0) {
-                    return Err(Error::new(ErrorKind::InvalidData, "encoder output bound was insufficient"));
-                }
+            if let TranscodeStatus::NeedOutput { required, .. } = progress.status()
+                && (read_total == count || available_output - written < required.get() || (read == 0 && written == 0))
+            {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "encoder output bound was insufficient",
+                ));
             }
         }
         Ok(read_total)

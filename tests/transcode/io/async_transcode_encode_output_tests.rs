@@ -157,6 +157,52 @@ impl TranscodeEncoder for CopyEncoder {
     type EncodeError = ();
 }
 
+#[derive(Debug, Default)]
+struct CountingCopyEncoder {
+    transcode_calls: usize,
+}
+
+impl Transcoder for CountingCopyEncoder {
+    type Input = char;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), char>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        CopyEncoder.reset(output, output_index)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[char],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.transcode_calls += 1;
+        CopyEncoder.transcode(input, input_index, output, output_index)
+    }
+
+    fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
+        Ok(1)
+    }
+
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        CopyEncoder.finish(output, output_index)
+    }
+}
+
+impl TranscodeEncoder for CountingCopyEncoder {
+    type EncodeError = ();
+}
+
 /// Encoder whose capacity query fails before writing output.
 #[derive(Debug, Default)]
 struct CapacityFailingEncoder {
@@ -384,11 +430,12 @@ fn test_async_transcode_encode_output_commits_progress_before_later_pending() ->
     Ok(())
 }
 
-/// Verifies pending output blocks the next encoder call and survives cancellation.
+/// Verifies pending output blocks the next encoder call and survives
+/// cancellation.
 #[test]
 fn test_async_transcode_encode_output_applies_backpressure_before_next_step() -> io::Result<()> {
     let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 1);
-    let mut encoder = CopyEncoder;
+    let mut encoder = CountingCopyEncoder::default();
     let mut map_error = |_| io::Error::other("copy encoder cannot fail");
     assert_eq!(
         TranscodeProgress::complete(1, 1),
@@ -396,10 +443,12 @@ fn test_async_transcode_encode_output_applies_backpressure_before_next_step() ->
     );
     assert_eq!(1, output.pending_len());
 
+    let calls_before_pending = encoder.transcode_calls;
     let mut future = Box::pin(output.transcode_async(&mut encoder, &mut map_error, &['b'], 0, 1));
     let is_pending = matches!(poll_once(future.as_mut()), Poll::Pending);
     drop(future);
     assert!(is_pending);
+    assert_eq!(calls_before_pending, encoder.transcode_calls);
     assert_eq!(1, output.pending_len());
     assert!(output.inner().bytes.is_empty());
 
