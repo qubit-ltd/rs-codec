@@ -29,6 +29,39 @@ use qubit_codec::engine::TranscodeEncodeHooks;
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct WideCodec;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct UnderfilledFinishCodec;
+
+impl Codec for UnderfilledFinishCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+}
+
 impl Codec for WideCodec {
     type Value = u8;
     type Unit = u8;
@@ -542,9 +575,37 @@ impl TranscodeEncodeHooks<WideCodec> for OverwritingFinishHooks {
         output: &mut [u8],
         output_index: usize,
     ) -> Result<usize, TranscodeEncodeErrorOf<WideCodec>> {
+        assert_eq!(3, output.len());
         output[output_index] = 0xee;
-        output[output_index + 1] = 0xdd;
         Ok(1)
+    }
+}
+
+struct UnderfilledFinishHooks {
+    bound: usize,
+    reported: usize,
+}
+
+impl TranscodeEncodeHooks<UnderfilledFinishCodec> for UnderfilledFinishHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut UnderfilledFinishCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<UnderfilledFinishCodec>> {
+        Ok(EncodeUnencodableAction::Reject)
+    }
+
+    fn max_finish_output_len(&self, _codec: &UnderfilledFinishCodec) -> usize {
+        self.bound
+    }
+
+    fn finish_hooks(
+        &mut self,
+        _codec: &mut UnderfilledFinishCodec,
+        _output: &mut [u8],
+        _output_index: usize,
+    ) -> Result<usize, TranscodeEncodeErrorOf<UnderfilledFinishCodec>> {
+        Ok(self.reported)
     }
 }
 
@@ -787,14 +848,43 @@ fn test_buffered_encode_engine_finish_passes_full_output_to_hooks() {
     let mut reset_output = [];
     encoder.reset(&mut reset_output, 0).expect("initialize stream");
 
-    let mut output = [0_u8; 2];
+    let mut output = [0xa1, 0, 0xb2];
 
     let written = encoder
-        .finish(&mut output, 0)
+        .finish(&mut output, 1)
         .expect("hook should receive the caller-provided output slice");
 
     assert_eq!(1, written);
-    assert_eq!([0xee, 0xdd], output);
+    assert_eq!([0xa1, 0xee, 0xb2], output);
+}
+
+#[test]
+#[should_panic(expected = "TranscodeEncodeEngine hook wrote beyond its finish bound")]
+fn test_buffered_encode_engine_finish_panics_when_hook_exceeds_zero_bound() {
+    let hooks = UnderfilledFinishHooks { bound: 0, reported: 1 };
+    let mut encoder = TranscodeEncodeEngine::new(UnderfilledFinishCodec, hooks);
+    encoder.reset(&mut [0; 2], 0).expect("initialize stream");
+    let _ = encoder.finish(&mut [0; 2], 0);
+}
+
+#[test]
+fn test_buffered_encode_engine_finish_accepts_hook_at_its_bound() {
+    let hooks = UnderfilledFinishHooks { bound: 1, reported: 1 };
+    let mut encoder = TranscodeEncodeEngine::new(UnderfilledFinishCodec, hooks);
+    encoder.reset(&mut [0; 2], 0).expect("initialize stream");
+    assert_eq!(1, encoder.finish(&mut [0; 3], 0).expect("finish within bound"));
+}
+
+#[test]
+#[should_panic(expected = "TranscodeEncodeEngine hook wrote beyond its finish bound")]
+fn test_buffered_encode_engine_finish_panics_when_hook_report_overflows() {
+    let hooks = UnderfilledFinishHooks {
+        bound: 1,
+        reported: usize::MAX,
+    };
+    let mut encoder = TranscodeEncodeEngine::new(UnderfilledFinishCodec, hooks);
+    encoder.reset(&mut [0; 2], 0).expect("initialize stream");
+    let _ = encoder.finish(&mut [0; 3], 0);
 }
 
 #[test]

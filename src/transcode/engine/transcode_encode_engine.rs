@@ -454,13 +454,14 @@ where
     ///
     /// # Panics
     ///
-    /// Panics when the codec finish writes beyond
-    /// [`Codec::MAX_ENCODE_FINISH_UNITS`] or when the combined codec and hook
-    /// finalization writes beyond
-    /// [`TranscodeEncodeEngine::max_finish_output_len`].
+    /// Panics when the codec finish or finish hooks write beyond their
+    /// independently declared output bounds.
     pub fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.lifecycle.on_finish_attempt()?;
-        let required = self.max_finish_output_len()?;
+        let hook_required = self.hooks.max_finish_output_len(&self.codec);
+        let required = C::MAX_ENCODE_FINISH_UNITS
+            .checked_add(hook_required)
+            .ok_or(CapacityError::OutputLengthOverflow)?;
         TranscodeFailure::ensure_output_capacity(output.len(), output_index, required)?;
         self.lifecycle.on_finish_start();
         let finished = unsafe {
@@ -477,7 +478,7 @@ where
             .hooks
             .finish_hooks(&mut self.codec, output, output_index + finished)?;
         assert!(
-            finished + written <= required,
+            written <= hook_required,
             "TranscodeEncodeEngine hook wrote beyond its finish bound",
         );
         self.lifecycle.on_finish_success();
