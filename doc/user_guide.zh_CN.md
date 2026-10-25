@@ -282,7 +282,7 @@ I/O bridge 可能在所有可见输入都已消费后，仍用空输入切片派
 - `TranscodeDecodeEngine` 与 `TranscodeDecodeHooks` 处理非法输入，以及 EOF 后的不完整输入；
 - `TranscodeConvertEngine` 组合上述两组 hooks。
 
-只有在输入源确认 EOF 后才调用 `transcode_eof`。保留尾部达到 `Codec::MIN_UNITS_PER_VALUE` 时，会先调用 `Codec::decode_eof`；只有它仍报告不完整输入时才调用 incomplete hook。尾部更短时，hook 可能收到没有 codec source 的上下文。默认动作为 `Reject`，在 codec 提供不完整输入的领域错误时会保留该错误。需要恢复时可以返回：
+只有在输入源确认 EOF 后才调用 `transcode_eof`。保留尾部达到 `Codec::MIN_UNITS_PER_VALUE` 时，会先调用 `Codec::decode_eof`；只有它仍报告不完整输入时才调用 incomplete hook。hook 的 `source` 只有在 codec 通过 `DecodeFailure::incomplete_with_source` 返回携带 source 的 incomplete failure 时才是 `Some`。仅仅调用过 codec 并不能保证有 source：`DecodeFailure::incomplete` 不携带 source；短于 `Codec::MIN_UNITS_PER_VALUE` 的尾部也会在未调用 codec 的情况下进入 hook。默认动作为 `Reject`，在 codec 提供不完整输入的领域错误时会保留该错误。需要恢复时可以返回：
 
 ```rust
 use qubit_codec::engine::DecodeIncompleteAction;
@@ -291,9 +291,98 @@ let skip = DecodeIncompleteAction::<char>::Skip;
 let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
 ```
 
-`Skip` 会消费整个剩余尾部但不产生 value。`Emit` 同样消费整个尾部并写入一个替代 value，因此调用方必须提供输出槽位。若 codec 已被调用并报告输入不完整，hook 收到 `Some(source)`；若尾部短于 `Codec::MIN_UNITS_PER_VALUE`，则收到 `None`。
+`Skip` 会消费整个剩余尾部但不产生 value。`Emit` 同样消费整个尾部并写入一个替代 value，因此调用方必须提供输出槽位。下面的完整示例使用 `DecodeFailure::incomplete`，因此 codec 虽然处理了 `~` 前缀，hook 收到的仍是 `None`。若 codec 使用 `DecodeFailure::incomplete_with_source`，hook 才会收到 `Some(source)`。
 
-当 framing、流状态或 EOF 行为无法用 `Codec` 加 hooks 表达时，应实现自定义 `Transcoder`。
+```rust
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
+use qubit_codec::{Codec, DecodeFailure, TranscodeDecodeErrorOf};
+use qubit_codec::engine::{
+    DecodeContext, DecodeIncompleteAction, TranscodeDecodeEngine, TranscodeDecodeHooks,
+};
+
+struct PrefixCodec;
+
+impl Codec for PrefixCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        if input[index] == b'~' && input.len() - index < 2 {
+            return Err(DecodeFailure::incomplete(NonZeroUsize::new(2).unwrap()));
+        }
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Infallible> {
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
+struct ReplaceIncomplete;
+
+impl TranscodeDecodeHooks<PrefixCodec> for ReplaceIncomplete {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        error: &Infallible,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+        match *error {}
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        source: Option<&Infallible>,
+        _required_total: NonZeroUsize,
+        _context: DecodeContext,
+    ) -> Result<DecodeIncompleteAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+        assert!(source.is_none());
+        Ok(DecodeIncompleteAction::Emit { value: b'?' })
+    }
+}
+
+let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplaceIncomplete);
+let mut output = [0_u8; 4];
+assert_eq!(0, decoder.reset(&mut output, 0).unwrap());
+
+// 普通流输入输出 `A`，并保留 `~` 等待后续 unit。
+let progress = decoder.transcode(b"A~", 0, &mut output, 0).unwrap();
+assert!(progress.is_need_input());
+assert_eq!((1, 1), (progress.read(), progress.written()));
+
+// EOF 后策略消费不完整的 `~` 并输出 `?`。
+let eof = decoder
+    .transcode_eof(b"A~", progress.read(), &mut output, progress.written())
+    .unwrap();
+assert!(eof.is_complete());
+assert_eq!((1, 1), (eof.read(), eof.written()));
+let written = progress.written() + eof.written();
+let finished = decoder.finish(&mut output, written).unwrap();
+assert_eq!(0, finished);
+assert_eq!(b"A?", &output[..written + finished]);
+```
+
+当 framing、流状态或 EOF 行为无法用 `Codec` 和 hooks 表达时，应实现自定义 `Transcoder`。
 
 ## 选择字节序辅助类型
 
@@ -477,7 +566,7 @@ let value = decoded.downcast::<u32>().expect("registered value type is u32");
 assert_eq!(42, *value);
 ```
 
-`ValueStringCodecRegistry::global()` 与 `ValueBytesCodecRegistry::global()`（需要错误值时用各自的 `try_global()`）在每个进程内分别收集一次已链接的注册项。宏与注册 ID 使用静态 ID 并在声明编译时校验；运行时查找使用接受 `&str` 的 `get`，并按原样 ID 字符串匹配，不做规范化。执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
+`ValueStringCodecRegistry::try_global()` 与 `ValueBytesCodecRegistry::try_global()` 在每个进程内分别收集一次已链接的注册项，并缓存初始化失败，包括重复 ID 冲突；之后每次调用都会返回缓存的冲突错误。对应的 `global()` 在注册冲突时会 panic，因此需要处理注册冲突的应用应使用 `try_global()`。成功构建的注册表保持不可变。宏与注册 ID 使用静态 ID 并在声明编译时校验；运行时查找使用接受 `&str` 的 `get`，并按原样 ID 字符串匹配，不做规范化。执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
 
 注册 codec 的关联错误必须实现 `Error + Send + Sync + 'static`，这样执行错误才能在线程间保留原始 source。成功解码值仍返回 `Box<dyn Any>`；这个约束不代表整个 decode 结果都能跨线程传递。直接调用 `ValueEncoder` 和 `ValueDecoder` 不受影响；registry descriptor 构造器要求错误类型满足线程安全约束。
 

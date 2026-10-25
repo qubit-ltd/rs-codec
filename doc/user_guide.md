@@ -283,7 +283,7 @@ Strict `CodecTranscode*` adapters surface domain failures directly. When the for
 - `TranscodeDecodeEngine` with `TranscodeDecodeHooks` for invalid input and incomplete input after EOF.
 - `TranscodeConvertEngine` composing both hook sets.
 
-Call `transcode_eof` only after the input source confirms EOF. Once at least `Codec::MIN_UNITS_PER_VALUE` units are available, the engine calls `Codec::decode_eof` first; the incomplete hook runs only if that call still reports incomplete input. A shorter tail may reach the hook without a codec source. The default action is `Reject`, preserving a codec-domain incomplete error when available. Intentional recovery can use:
+Call `transcode_eof` only after the input source confirms EOF. Once at least `Codec::MIN_UNITS_PER_VALUE` units are available, the engine calls `Codec::decode_eof` first; the incomplete hook runs only if that call still reports incomplete input. The hook's `source` is `Some` only when the codec returned an incomplete failure carrying a source through `DecodeFailure::incomplete_with_source`. A codec call alone does not guarantee a source: `DecodeFailure::incomplete` carries none, and a tail shorter than `Codec::MIN_UNITS_PER_VALUE` reaches the hook without calling the codec. The default action is `Reject`, preserving a codec-domain incomplete error when available. Intentional recovery can use:
 
 ```rust
 use qubit_codec::engine::DecodeIncompleteAction;
@@ -292,7 +292,96 @@ let skip = DecodeIncompleteAction::<char>::Skip;
 let replacement = DecodeIncompleteAction::Emit { value: '\u{fffd}' };
 ```
 
-`Skip` consumes the whole remaining tail without producing a value. `Emit` also consumes the tail and writes one replacement value, so the caller must provide an output slot. The hook receives `Some(source)` when the codec was invoked and reported incomplete input, and `None` when the tail is shorter than `Codec::MIN_UNITS_PER_VALUE`.
+`Skip` consumes the whole remaining tail without producing a value. `Emit` also consumes the tail and writes one replacement value, so the caller must provide an output slot. The complete example below uses `DecodeFailure::incomplete`, so the codec is called for the `~` prefix but the hook receives `None`. A codec using `DecodeFailure::incomplete_with_source` would provide `Some(source)` instead.
+
+```rust
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
+use qubit_codec::{Codec, DecodeFailure, TranscodeDecodeErrorOf};
+use qubit_codec::engine::{
+    DecodeContext, DecodeIncompleteAction, TranscodeDecodeEngine, TranscodeDecodeHooks,
+};
+
+struct PrefixCodec;
+
+impl Codec for PrefixCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        if input[index] == b'~' && input.len() - index < 2 {
+            return Err(DecodeFailure::incomplete(NonZeroUsize::new(2).unwrap()));
+        }
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u8,
+        output: &mut [u8],
+        index: usize,
+    ) -> Result<usize, Infallible> {
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
+struct ReplaceIncomplete;
+
+impl TranscodeDecodeHooks<PrefixCodec> for ReplaceIncomplete {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        error: &Infallible,
+        _consumed: Option<NonZeroUsize>,
+        _context: DecodeContext,
+    ) -> Result<qubit_codec::engine::DecodeInvalidAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+        match *error {}
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut PrefixCodec,
+        source: Option<&Infallible>,
+        _required_total: NonZeroUsize,
+        _context: DecodeContext,
+    ) -> Result<DecodeIncompleteAction<u8>, TranscodeDecodeErrorOf<PrefixCodec>> {
+        assert!(source.is_none());
+        Ok(DecodeIncompleteAction::Emit { value: b'?' })
+    }
+}
+
+let mut decoder = TranscodeDecodeEngine::new(PrefixCodec, ReplaceIncomplete);
+let mut output = [0_u8; 4];
+assert_eq!(0, decoder.reset(&mut output, 0).unwrap());
+
+// Open input emits `A` and retains `~` while waiting for another unit.
+let progress = decoder.transcode(b"A~", 0, &mut output, 0).unwrap();
+assert!(progress.is_need_input());
+assert_eq!((1, 1), (progress.read(), progress.written()));
+
+// At EOF, the policy consumes the incomplete `~` and emits `?`.
+let eof = decoder
+    .transcode_eof(b"A~", progress.read(), &mut output, progress.written())
+    .unwrap();
+assert!(eof.is_complete());
+assert_eq!((1, 1), (eof.read(), eof.written()));
+let written = progress.written() + eof.written();
+let finished = decoder.finish(&mut output, written).unwrap();
+assert_eq!(0, finished);
+assert_eq!(b"A?", &output[..written + finished]);
+```
 
 Use a custom `Transcoder` when framing, stream state, or EOF behavior cannot be expressed as a `Codec` plus hooks.
 
@@ -478,7 +567,7 @@ let value = decoded.downcast::<u32>().expect("registered value type is u32");
 assert_eq!(42, *value);
 ```
 
-`ValueStringCodecRegistry::global()` and `ValueBytesCodecRegistry::global()` (or each `try_global()` when you need the error) collect linked registrations once per process. Macro and registration IDs are validated from static IDs when declarations are compiled; runtime lookup uses `get(&str)` with the exact ID string, without normalization. Execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
+`ValueStringCodecRegistry::try_global()` and `ValueBytesCodecRegistry::try_global()` collect linked registrations once per process and cache initialization failures, including duplicate-ID conflicts. Every later call returns the cached conflict error. The corresponding `global()` methods panic when registrations conflict, so applications that need to handle registration conflicts should use `try_global()`. Successfully built registries remain immutable. Macro and registration IDs are validated from static IDs when declarations are compiled; runtime lookup uses `get(&str)` with the exact ID string, without normalization. Execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
 
 Each registered codec's associated errors must implement `Error + Send + Sync + 'static`, so an execution error can retain its source across threads. A successful decode still returns `Box<dyn Any>`; this constraint does not make the complete decode result transferable across threads. Direct calls to `ValueEncoder` and `ValueDecoder` are unchanged; the public registry descriptor constructors require thread-safe errors.
 
