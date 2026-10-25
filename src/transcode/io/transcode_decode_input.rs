@@ -286,8 +286,9 @@ where
     ///
     /// # Returns
     ///
-    /// Returns validated EOF progress; an empty input or zero count returns
-    /// zero progress.
+    /// Returns validated EOF progress. A zero output count returns zero
+    /// progress without calling the decoder; an empty input is still passed to
+    /// `transcode_eof` so decoders can handle EOF with retained state.
     ///
     /// # Errors
     ///
@@ -312,9 +313,6 @@ where
             "decoded EOF output range exceeds destination buffer",
         )?;
         if count == 0 {
-            return Ok(TranscodeProgress::complete(0, 0));
-        }
-        if self.unread_len() == 0 {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         let available_input = self.unread_len();
@@ -651,9 +649,10 @@ where
     ///
     /// # Returns
     ///
-    /// The number of values written. Once a refill confirms EOF, any retained
-    /// tail is passed to [`Transcoder::transcode_eof`] before this method
-    /// returns.
+    /// The number of values written. When this method is driven through EOF
+    /// with output capacity remaining, it passes the retained tail—or an empty
+    /// input when no tail remains—to [`Transcoder::transcode_eof`] before
+    /// returning.
     ///
     /// # Errors
     ///
@@ -690,6 +689,15 @@ where
         let mut written_total = 0;
         loop {
             if self.unread_len() == 0 && !self.fill_more()? {
+                let remaining_output = count - written_total;
+                let eof_progress = self.transcode_eof_step(
+                    decoder,
+                    map_error,
+                    output,
+                    output_index + written_total,
+                    remaining_output,
+                )?;
+                written_total += eof_progress.written();
                 return Ok(written_total);
             }
             let units = self.unread();

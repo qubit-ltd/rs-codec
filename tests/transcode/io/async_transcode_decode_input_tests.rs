@@ -201,11 +201,77 @@ impl Transcoder for EofTailDecoder {
         output: &mut [u16],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
+        if input_index == input.len() {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
         output[output_index] = u16::from(input[input_index]);
         Ok(TranscodeProgress::complete(1, 1))
     }
 
     /// Finishes without additional output after EOF-tail processing.
+    fn finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct EmptyEofDecoder {
+    retained: Option<u8>,
+    eof_calls: usize,
+    emitted: bool,
+}
+
+impl Transcoder for EmptyEofDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        input_len.checked_add(2).ok_or(CapacityError::OutputLengthOverflow)
+    }
+
+    fn reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
+        self.retained = None;
+        self.eof_calls = 0;
+        self.emitted = false;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        _output: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let consumed = input.len() - input_index;
+        if consumed > 0 {
+            self.retained = Some(input[input_index + consumed - 1]);
+        }
+        Ok(TranscodeProgress::complete(consumed, 0))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.eof_calls += 1;
+        if self.emitted {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if output.len() - output_index < 2 {
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0));
+        }
+        let value = self.retained.take().map_or(42, u16::from);
+        output[output_index] = value;
+        output[output_index + 1] = value + 1;
+        self.emitted = true;
+        Ok(TranscodeProgress::complete(0, 2))
+    }
+
     fn finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
@@ -834,6 +900,61 @@ fn test_async_transcode_decode_input_transcode_eof_step_consumes_buffered_tail()
         .transcode_eof_step(&mut decoder, &mut map_error, &mut output, 1, 1)
         .expect_err("invalid EOF output range must fail");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    Ok(())
+}
+
+#[test]
+fn test_async_transcode_decode_input_dispatches_empty_eof_and_retries_output() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(Vec::new(), 1));
+    let mut decoder = EmptyEofDecoder::default();
+    let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 2];
+
+    assert_eq!(
+        AsyncTranscodeDecodeStep::EndOfInput,
+        complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 2,))?
+    );
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, 0, 0)?,
+    );
+    assert_eq!(0, decoder.eof_calls);
+    assert_eq!(
+        TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0),
+        input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, 0, 1)?,
+    );
+    assert_eq!(1, decoder.eof_calls);
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 2),
+        input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, 0, 2)?,
+    );
+    assert_eq!([42, 43], output);
+    assert_eq!(2, decoder.eof_calls);
+    Ok(())
+}
+
+#[test]
+fn test_async_transcode_decode_input_empty_eof_flushes_decoder_state() -> io::Result<()> {
+    let mut input = AsyncTranscodeDecodeInput::new(ChunkedAsyncInput::new(vec![9], 1));
+    let mut decoder = EmptyEofDecoder::default();
+    let mut map_error = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [0_u16; 2];
+
+    assert!(complete(input.fill_more_async())?);
+    let AsyncTranscodeDecodeStep::Progress(progress) =
+        complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 2))?
+    else {
+        panic!("the input byte should be consumed before EOF");
+    };
+    assert_eq!(TranscodeProgress::complete(1, 0), progress);
+    assert!(!complete(input.fill_more_async())?);
+    assert_eq!(
+        TranscodeProgress::complete(0, 2),
+        input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, 0, 2)?,
+    );
+    assert_eq!([9, 10], output);
+    assert_eq!(1, decoder.eof_calls);
     Ok(())
 }
 

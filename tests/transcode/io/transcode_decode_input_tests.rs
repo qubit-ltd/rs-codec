@@ -130,8 +130,74 @@ impl Transcoder for EofTailDecoder {
         output: &mut [u32],
         output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
+        if input_index == input.len() {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
         output[output_index] = u32::from(input[input_index]);
         Ok(TranscodeProgress::complete(1, 1))
+    }
+
+    fn finish(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct EmptyEofDecoder {
+    retained: Option<u8>,
+    eof_calls: usize,
+    emitted: bool,
+}
+
+impl Transcoder for EmptyEofDecoder {
+    type Input = u8;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        input_len.checked_add(2).ok_or(CapacityError::OutputLengthOverflow)
+    }
+
+    fn reset(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
+        self.retained = None;
+        self.eof_calls = 0;
+        self.emitted = false;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        _output: &mut [u32],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let consumed = input.len() - input_index;
+        if consumed > 0 {
+            self.retained = Some(input[input_index + consumed - 1]);
+        }
+        Ok(TranscodeProgress::complete(consumed, 0))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.eof_calls += 1;
+        if self.emitted {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if output.len() - output_index < 2 {
+            return Ok(TranscodeProgress::need_output(crate::nonzero(2), 0, 0));
+        }
+        let value = self.retained.take().map_or(42, u32::from);
+        output[output_index] = value;
+        output[output_index + 1] = value + 1;
+        self.emitted = true;
+        Ok(TranscodeProgress::complete(0, 2))
     }
 
     fn finish(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
@@ -1786,6 +1852,56 @@ fn test_buffered_decode_input_transcode_eof_step_consumes_buffered_tail() {
         .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 1, 1)
         .expect_err("invalid EOF output range must fail");
     assert_eq!(ErrorKind::InvalidInput, error.kind());
+}
+
+#[test]
+fn test_buffered_decode_input_dispatches_empty_eof_and_retries_output() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(Vec::<u8>::new()));
+    let mut decoder = EmptyEofDecoder::default();
+    let mut mapper = map_error;
+    let mut output = [0_u32; 2];
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 0),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 0)
+            .expect("zero output capacity should not dispatch EOF"),
+    );
+    assert_eq!(0, decoder.eof_calls);
+
+    assert_eq!(
+        TranscodeProgress::need_output(crate::nonzero(2), 0, 0),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+            .expect("empty EOF must reach the decoder and report its output requirement"),
+    );
+    assert_eq!(1, decoder.eof_calls);
+
+    assert_eq!(
+        TranscodeProgress::complete(0, 2),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 2)
+            .expect("EOF output should complete after providing sufficient capacity"),
+    );
+    assert_eq!([42, 43], output);
+    assert_eq!(2, decoder.eof_calls);
+}
+
+#[test]
+fn test_buffered_decode_input_transcode_dispatches_empty_eof_event() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(vec![9_u8]));
+    let mut decoder = EmptyEofDecoder::default();
+    let mut mapper = map_error;
+    let mut output = [0_u32; 2];
+
+    assert_eq!(
+        2,
+        input
+            .transcode(&mut decoder, &mut mapper, &mut output, 0, 2)
+            .expect("complete input should be followed by an empty EOF event"),
+    );
+    assert_eq!([9, 10], output);
+    assert_eq!(1, decoder.eof_calls);
 }
 
 #[test]

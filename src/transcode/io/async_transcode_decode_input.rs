@@ -46,8 +46,9 @@ use crate::Transcoder;
 /// Keep stepping on `NeedOutput` with a sufficiently large output range. Once
 /// EOF processing returns `Complete`, call [`Self::finish`] and collect its
 /// returned output count. `EndOfInput` from polling means the unread buffer was
-/// already empty when refill confirmed EOF; it is not required to discover an
-/// EOF that follows an incomplete tail.
+/// already empty when refill confirmed EOF. In both cases, call
+/// [`Self::transcode_eof_step`] to dispatch the EOF event, including when no
+/// unread units remain.
 ///
 /// # Type Parameters
 ///
@@ -602,8 +603,9 @@ where
     ///
     /// # Returns
     ///
-    /// Validated progress with source consumption committed; zero progress when
-    /// the output range or unread input is empty.
+    /// Validated progress with source consumption committed. A zero output
+    /// count returns zero progress without calling the decoder; an empty input
+    /// is still dispatched to `transcode_eof`.
     ///
     /// # Errors
     ///
@@ -628,9 +630,6 @@ where
             "decoded EOF output range exceeds destination buffer",
         )?;
         if count == 0 {
-            return Ok(TranscodeProgress::complete(0, 0));
-        }
-        if self.unread_len() == 0 {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         let available_input = self.unread_len();

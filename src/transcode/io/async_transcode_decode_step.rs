@@ -22,7 +22,9 @@ use crate::TranscodeProgress;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum AsyncTranscodeDecodeStep {
-    /// The wrapped input reached EOF with no unread units.
+    /// The wrapped input reached EOF with no unread units. Call
+    /// [`crate::AsyncTranscodeDecodeInput::transcode_eof_step`] to dispatch
+    /// that EOF event to the decoder.
     EndOfInput,
     /// The decoder consumed input or initialized output without another await.
     Progress(
