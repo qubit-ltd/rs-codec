@@ -265,6 +265,8 @@ preserve input tail <- transcode/transcode_eof -> drain or extend output
 
 Call `transcode_eof` only after the caller knows no more source units will arrive. The default converts a remaining `NeedInput` into `TranscodeFailure::IncompleteInput`. `finish` receives no source tail and cannot reinterpret it.
 
+An I/O bridge may dispatch this EOF call with an empty input slice after all visible units have been consumed. The default implementation still reports `IncompleteInput` if the transcoder returns `NeedInput`, including when no unread units remain. A custom transcoder that uses EOF to drain buffered state or to finish an empty stream must override `transcode_eof` and return the appropriate progress for that case.
+
 Built-in transcode engines start uninitialized. The first successful operation must be `reset`; after a successful `finish`, call `reset` before reuse. A failed lifecycle operation may poison the instance until a successful `reset`.
 
 ## Handle lifecycle decode output
@@ -498,7 +500,7 @@ Update every crate that exchanges `ValueCodecId`, registration, descriptor, or r
 
 | Symptom | What to check |
 | --- | --- |
-| `NeedInput` at end of file | Preserve the tail; call `transcode_eof`; apply format EOF rules before `finish`. |
+| `NeedInput` at end of file, including with no unread units | Preserve any tail and call `transcode_eof`; if empty input is a valid EOF for the format, override the default EOF behavior to complete or drain retained state before `finish`. |
 | Repeated `NeedOutput` | Advance both progress counters; provide reported capacity; verify custom bounds. |
 | Streaming encode returns an error | Distinguish preflight, sink delivery, and encoder/progress failures; an encoder failure may advance state without returning full progress. |
 | Owned decode rejects valid-looking input | Trailing units, or decode reset/finish output; use lifecycle-aware decode. |
@@ -510,7 +512,7 @@ Update every crate that exchanges `ValueCodecId`, registration, descriptor, or r
 ## Boundaries and a practice checklist
 
 - Concrete formats, character sets, and high-level reader/writer adapters belong in domain crates, not in `qubit-codec`.
-- `NeedInput` is a streaming signal, not final EOF; only the caller or an explicit EOF hook decides what incomplete tail means at end of input.
+- `NeedInput` is a streaming signal, not final EOF. At confirmed EOF, bridges may call `transcode_eof` with an empty slice; the default still treats `NeedInput` as incomplete, so formats that accept empty EOF or drain internal state must implement that behavior explicitly.
 - Capacity methods must cover every reachable transient state, not typical output size alone.
 - Owned adapters may allocate `Vec` output; prefer caller-buffered APIs when allocation ownership matters.
 - Test success, incomplete, invalid, boundary, and stateful lifecycle behavior through checked public adapters, not only unsafe `Codec` methods.

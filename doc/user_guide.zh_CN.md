@@ -2,7 +2,7 @@
 
 [中文 README](../README.zh_CN.md) · [English user guide](user_guide.md) · [API 文档](https://docs.rs/qubit-codec)
 
-本文适用于 `qubit-codec` 0.17，要求 Rust 1.94 或更高版本。它面向需要在本地保留格式规则、同时复用容量规划、生命周期和流式转换机制的 codec 与 adapter crate 作者。若你只想直接使用现成的 hex、Base64 或字符集实现，应选用对应的领域 crate，而不是本库。读到[检查转换结果](#检查转换结果)，就能发布一个带自有输出与调用方缓冲区 adapter 的定宽 `Codec`；后面章节供你按需查阅增量流、生命周期 decode、策略 hooks、可选 I/O bridge 以及 `registry` feature。
+本文适用于 `qubit-codec` 0.17，要求 Rust 1.94 或更高版本。它面向需要在本地保留格式规则、同时复用容量规划、生命周期和流式转换机制的编解码器库与适配器库作者。若你只想直接使用现成的 hex、Base64 或字符集实现，应选用对应的领域库，而不是本库。读到[检查转换结果](#检查转换结果)，就能发布一个返回自有输出或写入调用方缓冲区的定宽 `Codec`；后续章节按需介绍增量流、生命周期解码、策略钩子、可选 I/O 接口以及 `registry` 功能。
 
 ## 目录
 
@@ -31,9 +31,9 @@
 
 ## 它解决什么问题
 
-以一个二进制协议 crate 为例。它要把 `u16` 字段编码成两个大端字节供报文使用，还要对外提供简单的 `encode(&u16) -> Vec<u8>` 供测试和一次性调用；之后还要从 socket 按块读入字节，不能把“只收到一个字节”误判成数据损坏。如果每一层各自实现下标运算、容量规划、reset/finish 生命周期，以及“还需要更多字节”和“字节本身不合法”的区分，同一格式很容易积累互不兼容的契约。
+以一个二进制协议库为例。它要把 `u16` 字段编码成两个大端字节供报文使用，还要对外提供简单的 `encode(&u16) -> Vec<u8>` 供测试和一次性调用；之后还要从 socket 按块读入字节，不能把“只收到一个字节”误判成数据损坏。如果每一层各自实现下标运算、容量规划、reset/finish 生命周期，以及“还需要更多字节”和“字节本身不合法”的区分，同一格式很容易积累互不兼容的契约。
 
-使用 `qubit-codec` 时，格式 crate 在 `Codec` 上实现表示规则一次；checked adapter 提供自有输出（`CodecValueEncoder` / `CodecValueDecoder`）、严格的调用方缓冲区转换（`CodecTranscode*`），以及可选的带 hooks 的策略 engine。本库**不**提供 hex、percent encoding、UTF-8 等具体格式，这些仍由领域 crate 负责。本库也**不**替调用方决定 EOF：在调用方确认输入结束或采用文档化的 EOF 策略之前，合法但不完整的 prefix 只会被报告为不完整，而不是非法。
+使用 `qubit-codec` 时，格式库在 `Codec` 上实现一次表示规则；带边界检查的适配器提供自有输出（`CodecValueEncoder` / `CodecValueDecoder`）、严格的调用方缓冲区转换（`CodecTranscode*`），以及可选的策略引擎钩子。本库**不**提供 hex、percent encoding、UTF-8 等具体格式，这些仍由领域库负责。本库也**不**替调用方决定 EOF：在调用方确认输入结束或采用文档化的 EOF 策略之前，合法但不完整的输入前缀只会被报告为不完整，而不是非法。
 
 ## 从哪里开始
 
@@ -41,7 +41,7 @@
 2. [检查转换结果](#检查转换结果) 说明成功时的可观察结果，以及不完整输入与非法输入的区别。基础接入到这里结束。
 3. 按需要查阅[驱动增量流](#驱动增量流)、[处理生命周期 decode 输出](#处理生命周期-decode-输出)、[为畸形输入或 EOF 配置策略](#为畸形输入或-eof-配置策略)、[接入缓冲 I/O](#接入缓冲-io)或[在链接期注册 codec 供运行时查找](#在链接期注册-codec-供运行时查找)。
 
-可选 feature `json`、`io` 与 `registry` 相互独立，只在 crate 实际使用时启用。`json` 提供基于 Serde 的通用 JSON codec，输入必须是完整 JSON 字符串或字节。
+可选功能 `json`、`io` 与 `registry` 相互独立，只在库实际需要相应能力时启用。`json` 提供基于 Serde 的通用 JSON 编解码器，输入必须是完整 JSON 字符串或字节。
 
 ## 发布一个定宽 codec
 
@@ -219,7 +219,7 @@ assert!(matches!(
 ));
 ```
 
-`Codec::decode` 内的 `DecodeFailure::Incomplete` 表示可见 prefix 在补充更多 unit 后仍可能合法；`DecodeFailure::Invalid` 表示领域拒绝该输入。adapter 会把这些区分映射为 `TranscodeFailure` 或领域错误；除非所有下游调用方对两种情况的处理确实相同，否则不要把不完整与非法压平为一种错误。
+`Codec::decode` 内的 `DecodeFailure::Incomplete` 表示可见输入前缀在补充更多单元后仍可能合法；`DecodeFailure::Invalid` 表示领域规则拒绝该输入。适配器会把这两类情况映射为 `TranscodeFailure` 或领域错误；除非所有下游调用方的处理确实相同，否则不要把“不完整”和“非法”合并成一种错误。
 
 定宽 codec 的基础路径到这里结束。下面各节按需查阅：先是增量流生命周期，再是生命周期 decode 输出、策略 hooks、字节序辅助类型、I/O bridge 与注册表查找。
 
@@ -263,6 +263,8 @@ assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
 | `NeedOutput` | 转换在超过输出容量之前停止。 | 排空或扩展输出，并按报告的进度继续。 |
 
 只有调用方确认不会再收到源 unit 后才调用 `transcode_eof`。默认实现会把仍存在的 `NeedInput` 转为 `TranscodeFailure::IncompleteInput`。`finish` 不接收源输入尾部，因此无法重新解释它。
+
+I/O bridge 可能在所有可见输入都已消费后，仍用空输入切片派发这次 EOF 调用。即使 unread 输入为空，只要 transcoder 返回 `NeedInput`，默认实现仍会报告 `IncompleteInput`。如果格式需要在 EOF 时排空内部缓存，或把空流视为正常结束，自定义 transcoder 必须覆盖 `transcode_eof`，并为这种情况返回相应进度。
 
 内置 transcode engine 新建时尚未初始化。第一次成功操作必须是 `reset`；成功 `finish` 后，复用前必须再次 `reset`。生命周期操作失败可能使实例进入 poisoned 状态，直到下一次成功 `reset`。
 
@@ -497,7 +499,7 @@ assert_eq!(42, *value);
 
 | 现象 | 检查顺序 |
 | --- | --- |
-| 文件末尾出现 `NeedInput` | 确认已保留尾部；调用 `transcode_eof`；在 `finish` 前采用格式专属 EOF 规则。 |
+| 文件末尾出现 `NeedInput`，包括 unread 输入为空时 | 保留尚未消费的尾部并调用 `transcode_eof`；若格式允许空输入结束，应覆盖默认 EOF 行为，在 `finish` 前完成转换或排空内部状态。 |
 | `NeedOutput` 持续重复 | 推进两个进度计数；提供报告的容量；核对自定义上界。 |
 | 流式编码返回错误 | 区分预检、sink 交付及 encoder/进度失败；encoder 出错时可能已推进状态但没有完整进度。 |
 | 自有 decode 拒绝看似有效的输入 | 检查 trailing unit 或 decode reset/finish 输出；必要时使用生命周期感知 decode。 |
@@ -509,7 +511,7 @@ assert_eq!(42, *value);
 ## 边界与实践清单
 
 - 具体格式、字符集和高层 reader/writer adapter 应留在领域 crate，而不是放进 `qubit-codec`。
-- `NeedInput` 是流式信号，不是最终 EOF；只有调用方或显式 EOF hook 才能决定输入结束时不完整尾部的含义。
+- `NeedInput` 是流式信号，不是最终 EOF。确认 EOF 后，bridge 可能用空切片调用 `transcode_eof`；默认实现仍把 `NeedInput` 视为不完整，因此允许空 EOF 或需排空内部状态的格式必须显式实现该行为。
 - 容量方法必须覆盖所有可达瞬态，不能只看典型输出大小。
 - 自有输出 adapter 可能分配 `Vec`；分配所有权很重要时使用调用方缓冲区 API。
 - 通过 checked 公开 adapter 测试成功、不完整、非法、边界和有状态生命周期行为，不要只测 unsafe `Codec` 方法。
