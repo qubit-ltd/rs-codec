@@ -42,8 +42,9 @@
 pub trait ValueDecoder<Input: ?Sized> {
     /// Owned value produced from one successfully decoded `Input`.
     ///
-    /// The output is returned by value, so an implementation that borrows from
-    /// `Input` cannot satisfy this associated type and must allocate or copy.
+    /// The output type is not tied to the temporary borrow of `input` passed to
+    /// [`decode`](Self::decode). It may still borrow data carried by `Input`,
+    /// such as an `&'a str` input whose output also has lifetime `'a`.
     type Output;
 
     /// Error reported when `Input` cannot be decoded.

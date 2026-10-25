@@ -251,6 +251,9 @@ hooks 的 engine 见[用户手册](doc/user_guide.zh_CN.md)。
 消费。容量上界须覆盖所有可达瞬态；自有 adapter 可能分配内存，流式 API 使用调用方缓冲
 区。
 
+同步输入 bridge 在仍有目标容量时会继续驱动到 EOF，即使 unread input 为空也会调用
+`transcode_eof`。异步调用方收到 `EndOfInput` 后，通过 `transcode_eof_step` 派发同一 EOF 事件。
+
 ## 延伸阅读
 
 - [用户手册](doc/user_guide.zh_CN.md)

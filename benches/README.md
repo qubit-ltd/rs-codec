@@ -1,10 +1,11 @@
 # Transcode benchmarks
 
-Compare the public codec adapter with a direct safe copy loop using:
+Run these commands from the `rs-codec` repository root. Compare the public
+codec adapter with a direct safe copy loop using:
 
 ```bash
-cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- codec_adapter
-cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- safe_copy_loop
+cargo bench --bench transcode -- codec_adapter
+cargo bench --bench transcode -- safe_copy_loop
 ```
 
 This measures the complete `CodecTranscodeDecoder` path, including progress
@@ -14,7 +15,7 @@ buffers and reset setup are allocated outside the timed iterations.
 Run the safe/unchecked indexing A/B benchmark with:
 
 ```bash
-cargo bench --manifest-path rs-codec/Cargo.toml --bench transcode -- safe_vs_unchecked
+cargo bench --bench transcode -- safe_vs_unchecked
 ```
 
 The benchmark compares the same copy loop implemented with safe indexing and
@@ -25,7 +26,7 @@ shows a measurable regression in a real hot path.
 Emit optimized assembly for inspection with:
 
 ```bash
-cargo rustc --manifest-path rs-codec/Cargo.toml --release --bench transcode -- --emit=asm
+cargo rustc --release --bench transcode -- --emit=asm
 ```
 
 Inspect the generated `target/release/deps/transcode-*.s` files and compare the
@@ -33,6 +34,6 @@ Inspect the generated `target/release/deps/transcode-*.s` files and compare the
 equivalent focused commands are:
 
 ```bash
-cargo asm --manifest-path rs-codec/Cargo.toml --bench transcode copy_safe
-cargo asm --manifest-path rs-codec/Cargo.toml --bench transcode copy_unchecked
+cargo asm --bench transcode copy_safe
+cargo asm --bench transcode copy_unchecked
 ```

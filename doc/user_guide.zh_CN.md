@@ -24,6 +24,7 @@
 - [选择字节序辅助类型](#选择字节序辅助类型)
 - [接入缓冲 I/O](#接入缓冲-io)
 - [在链接期注册 codec 供运行时查找](#在链接期注册-codec-供运行时查找)
+  - [从 0.16 升级 registry 消费者到 0.17](#从-016-升级-registry-消费者到-017)
 - [错误、诊断与排障](#错误诊断与排障)
 - [边界与实践清单](#边界与实践清单)
 - [延伸阅读](#延伸阅读)
@@ -306,9 +307,9 @@ qubit-io = "0.19"
 qubit-codec = { version = "0.17", features = ["io"] }
 ```
 
-`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。需要逐步控制时使用 `TranscodeDecodeInput::transcode_eof_step`。
+`TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。同步 `transcode` 在仍有目标容量且继续驱动到 EOF 时会调用 `transcode_eof`；如果 unread buffer 已空，就传入空输入，让 decoder 处理内部保留状态。显式逐步驱动时，`transcode_eof_step` 只要目标容量非零，也会把空输入交给 decoder。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。
 
-异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把该尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。`AsyncTranscodeDecodeStep::EndOfInput` 表示 refill 确认 EOF 时 unread 已空，它只是空缓冲 EOF 路径。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
+异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。如果 `poll_transcode` 返回 `AsyncTranscodeDecodeStep::EndOfInput`，即使 unread buffer 为空也要调用 `transcode_eof_step`；decoder 可能需要依据内部保留状态处理 EOF 并产出结果。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
 
 同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存。需要整批消费时继续使用该入口；需要逐步驱动大输入时，可使用 `transcode_step`：
 
@@ -476,7 +477,11 @@ assert_eq!(42, *value);
 
 `ValueStringCodecRegistry::global()` 与 `ValueBytesCodecRegistry::global()`（需要错误值时用各自的 `try_global()`）在每个进程内分别收集一次已链接的注册项。宏与注册 ID 使用静态 ID 并在声明编译时校验；运行时查找使用接受 `&str` 的 `get`，并按原样 ID 字符串匹配，不做规范化。执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
 
-注册 codec 的关联错误必须实现 `Error + Send + Sync + 'static`，这样执行错误才能在线程间保留原始 source。成功解码值仍返回 `Box<dyn Any>`；这个约束不代表整个 decode 结果都能跨线程传递。注册调用的源码约束因此收紧：泛型错误 bound 也要同步调整；若现有错误不满足线程安全要求，可在应用自己的 adapter 边界转换为拥有数据且满足线程安全约束的诊断类型。直接调用 `ValueEncoder` 和 `ValueDecoder` 不受影响；公开的 registry descriptor 构造器现在要求错误类型满足线程安全约束。这是需要在兼容性版本中发布的 API 变化，本指南不表示需要升级版本或依赖。
+注册 codec 的关联错误必须实现 `Error + Send + Sync + 'static`，这样执行错误才能在线程间保留原始 source。成功解码值仍返回 `Box<dyn Any>`；这个约束不代表整个 decode 结果都能跨线程传递。直接调用 `ValueEncoder` 和 `ValueDecoder` 不受影响；registry descriptor 构造器要求错误类型满足线程安全约束。
+
+### 从 0.16 升级 registry 消费者到 0.17
+
+凡是需要交换 `ValueCodecId`、registration、descriptor 或 registry 类型的 crate，都应统一依赖 `qubit-codec = "0.17"`。Cargo 可以同时编译 0.16 和 0.17，但两版的 Rust 类型与进程级 inventory 相互独立：通过 0.17 注册的 codec 不会出现在 0.16 的 registry 中。若泛型集成对外暴露已注册 codec 的错误类型，应把 bound 更新为 `Error + Send + Sync + 'static`；也可以在该集成边界转换不满足条件的错误。使用缓冲 I/O adapter 的 crate 也要在同一份 0.17 依赖上启用 `io` feature。
 
 ## 错误、诊断与排障
 

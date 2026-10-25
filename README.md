@@ -220,6 +220,10 @@ must cover every reachable transient state; owned adapters may allocate while
 streaming APIs use caller-provided buffers. Registry lookup is by validated ID
 and execution checks the erased input type before invoking user code.
 
+When a synchronous input bridge is driven through EOF with output capacity
+remaining, it dispatches `transcode_eof` even if no unread input remains. Async
+callers dispatch the same EOF event with `transcode_eof_step` after `EndOfInput`.
+
 ## Learn more
 
 - [User guide](doc/user_guide.md)
