@@ -58,6 +58,11 @@ serde = { version = "^1.0", features = ["derive"] }
 name = "transcode"
 harness = false
 
+[[example]]
+name = "io_transcode_step"
+required-features = ["io"]
+test = true
+
 [[test]]
 name = "tests"
 path = "tests/mod.rs"

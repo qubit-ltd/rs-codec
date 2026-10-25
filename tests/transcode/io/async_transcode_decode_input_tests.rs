@@ -221,7 +221,12 @@ impl Transcoder for PairAndTailDecoder {
     type Error = TranscodeDecodeError<TestDecodeError>;
 
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
-        Ok(input_len / 2)
+        // The ceiling covers an EOF tail; the extra slot covers this fixture's
+        // conservative two-slot preflight.
+        input_len
+            .div_ceil(2)
+            .checked_add(1)
+            .ok_or(CapacityError::OutputLengthOverflow)
     }
 
     fn reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::Error> {
@@ -620,6 +625,17 @@ fn test_async_transcode_decode_input_drives_complete_prefix_and_eof_tail() -> io
     assert_eq!([0xaaaa, 0x1234, 0x56, 0xbbbb], output);
     assert_eq!(4, written);
     Ok(())
+}
+
+#[test]
+fn test_pair_and_tail_complete_stream_fits_the_public_bound() {
+    let mut decoder = PairAndTailDecoder;
+    let capacity = decoder.max_total_output_len(1).unwrap();
+    let mut output = vec![0_u16; capacity];
+    let written = decoder.transcode_complete_into(&[0x56], &mut output).unwrap();
+    output.truncate(written);
+    assert_eq!(output, [0xaaaa, 0x56, 0xbbbb]);
+    assert_eq!(written, 3);
 }
 
 /// Verifies the default EOF policy rejects an incomplete retained suffix.

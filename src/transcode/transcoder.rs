@@ -318,13 +318,19 @@ pub trait Transcoder {
         Ok(0)
     }
 
-    /// Returns an upper bound for output units produced from `input_len` units
-    /// during the streaming transcode phase.
+    /// Returns an upper bound for the output capacity needed to transcode
+    /// `input_len` units during the streaming phase.
     ///
     /// This bound excludes stream-start output emitted by
     /// [`Transcoder::reset`] and final output emitted by
     /// [`Transcoder::finish`]. Callers that need a complete one-shot stream
     /// bound should use [`Transcoder::max_total_output_len`].
+    ///
+    /// The bound covers both [`Transcoder::transcode`] and
+    /// [`Transcoder::transcode_eof`], including any conservative capacity
+    /// preflight required by those operations. It must provide enough writable
+    /// capacity for the implementation to complete its preflight, even when
+    /// the actual output would use fewer units.
     ///
     /// The bound may depend on immutable transcoder configuration and
     /// `input_len`, but it must cover the streaming output reachable from every
@@ -346,10 +352,11 @@ pub trait Transcoder {
     /// overflows.
     fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError>;
 
-    /// Returns an upper bound for a complete `reset -> transcode -> finish`
+    /// Returns an upper bound for a complete `reset -> transcode_eof -> finish`
     /// stream.
     ///
-    /// This is a convenience sum of [`Transcoder::max_reset_output_len`],
+    /// This is the one-shot bound for [`Transcoder::transcode_complete_into`]
+    /// and a convenience sum of [`Transcoder::max_reset_output_len`],
     /// [`Transcoder::max_transcode_output_len`], and
     /// [`Transcoder::max_finish_output_len`]. Each component is independent of
     /// transient stream state, so the sum is valid before a full one-shot

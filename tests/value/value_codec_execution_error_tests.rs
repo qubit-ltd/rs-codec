@@ -155,3 +155,26 @@ fn test_execution_error_can_be_raised_through_the_standard_error_trait() {
         "a boxed execution error must keep its diagnostic, rendered as {boxed}",
     );
 }
+
+#[test]
+fn test_execution_errors_keep_their_source_across_threads() {
+    fn require_thread_safe_error<T: Error + Send + Sync + 'static>() {}
+    require_thread_safe_error::<ValueCodecExecutionError>();
+
+    let errors = [
+        ValueCodecExecutionError::EncodeFailed {
+            codec_type: "test.Encode",
+            source: Box::new(IoError::other("encode source")),
+        },
+        ValueCodecExecutionError::DecodeFailed {
+            codec_type: "test.Decode",
+            source: Box::new(IoError::other("decode source")),
+        },
+    ];
+    for (error, expected) in errors.into_iter().zip(["encode source", "decode source"]) {
+        let returned = std::thread::spawn(move || error).join().unwrap();
+        let source = returned.source().unwrap().downcast_ref::<IoError>().unwrap();
+        assert_eq!(source.to_string(), expected);
+        assert_eq!(source.kind(), std::io::ErrorKind::Other);
+    }
+}

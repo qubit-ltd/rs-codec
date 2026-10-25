@@ -83,12 +83,7 @@ impl Codec for U16BeCodec {
         Ok((value, NonZeroUsize::new(2).expect("two is non-zero")))
     }
 
-    unsafe fn encode(
-        &mut self,
-        value: &u16,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode(&mut self, value: &u16, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
         debug_assert!(output_index + 2 <= output.len());
         output[output_index..output_index + 2]
             .copy_from_slice(&value.to_be_bytes());
@@ -318,37 +313,76 @@ For async input, reset the decoder and collect its actual output first. Each `As
 
 Before a synchronous `transcode` batch, the bridge reserves the encoder's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch. Keep this API when whole-range consumption is useful; use `transcode_step` when the caller needs to drive a large input incrementally:
 
+The following standalone program can be copied into a file and run with the `io` feature. It uses a two-byte value encoder and checks the bytes delivered by the buffered bridge. The same source is maintained in [`examples/io_transcode_step.rs`](../examples/io_transcode_step.rs).
+
+<!-- io-guide-start -->
 ```rust
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
 use std::io::Cursor;
 use std::io::Error;
+
+use qubit_codec::Codec;
 use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeStatus;
 
-let values = [0x1234_u16, 0xabcd];
-let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
-let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
-let mut map_error = |_| Error::other("encode error");
+/// Encodes one fixed-width big-endian value.
+struct U16BeCodec;
 
-output.reset(&mut encoder, &mut map_error)?;
-let mut offset = 0;
-while offset < values.len() {
-    let progress = output.transcode_step(
-        &mut encoder,
-        &mut map_error,
-        &values,
-        offset,
-        values.len() - offset,
-    )?;
-    offset += progress.read();
-    if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
-        output.ensure_spare_capacity(required.get())?;
+impl Codec for U16BeCodec {
+    type Value = u16;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u16, NonZeroUsize), DecodeFailure<Infallible>> {
+        debug_assert!(input_index + 2 <= input.len());
+        Ok((
+            u16::from_be_bytes([input[input_index], input[input_index + 1]]),
+            NonZeroUsize::new(2).unwrap(),
+        ))
+    }
+
+    unsafe fn encode(&mut self, value: &u16, out: &mut [u8], index: usize) -> Result<usize, Infallible> {
+        debug_assert!(index + 2 <= out.len());
+        out[index..index + 2].copy_from_slice(&value.to_be_bytes());
+        Ok(2)
     }
 }
-output.finish(&mut encoder, &mut map_error)?;
-assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
-# Ok::<(), std::io::Error>(())
+
+/// Runs a complete stepwise encode lifecycle and checks the delivered bytes.
+fn main() -> Result<(), Error> {
+    let values = [0x1234_u16, 0xabcd];
+    let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
+    let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
+    let mut map_error = |_| Error::other("encode error");
+    output.reset(&mut encoder, &mut map_error)?;
+    let mut offset = 0;
+    while offset < values.len() {
+        let progress = output.transcode_step(&mut encoder, &mut map_error, &values, offset, values.len() - offset)?;
+        offset += progress.read();
+        if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+            output.ensure_spare_capacity(required.get())?;
+        }
+    }
+    output.finish(&mut encoder, &mut map_error)?;
+    assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
+    Ok(())
+}
 ```
+<!-- io-guide-end -->
+
+Run this program with `cargo run --example io_transcode_step --features io`.
 
 The returned `written()` units are already committed to the adapter; do not advance them again. Advance the source by `read()` before requesting more space. A zero `count` validates the range but does not call the encoder or deliver pending output. The single-value bound is only a preflight estimate: `NeedOutput` may request more, and buffer capacity retained from earlier calls does not shrink. This path does not automatically change downstream buffered writers. The operation may deliver previously buffered output before accepting the next step; async polling establishes backpressure first and can return `Pending` before calling the encoder. Explicit `flush` remains the sink flush boundary. `finish_to_buffer` only appends finalization output to memory; `finish` delivers pending units and flushes the sink.
 
@@ -442,6 +476,8 @@ assert_eq!(42, *value);
 ```
 
 `ValueStringCodecRegistry::global()` and `ValueBytesCodecRegistry::global()` (or each `try_global()` when you need the error) collect linked registrations once per process. Macro and registration IDs are validated from static IDs when declarations are compiled; runtime lookup uses `get(&str)` with the exact ID string, without normalization. Execution checks the erased input type before invoking user code. Duplicate IDs within one registry are a registration error, not a silent override. This path erases only bidirectional whole-value codecs whose value type was fixed at registration; it does not replace `Codec` streaming adapters.
+
+Each registered codec's associated errors must implement `Error + Send + Sync + 'static`, so an execution error can retain its source across threads. A successful decode still returns `Box<dyn Any>`; this constraint does not make the complete decode result transferable across threads. This is a source compatibility change for registration: update generic error bounds, and convert a non-thread-safe error at your own adapter boundary into an owned thread-safe diagnostic. Direct calls to `ValueEncoder` and `ValueDecoder` are unchanged; the public registry descriptor constructors now require thread-safe errors. The change belongs in a compatibility release; this guide does not imply a version or dependency upgrade.
 
 ## Errors, diagnostics, and troubleshooting
 

@@ -10,11 +10,14 @@ use core::convert::Infallible;
 
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
+use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 use qubit_utils as utils_crate;
+
+use crate::common::EofAwareCodec;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("domain error")]
@@ -1100,4 +1103,17 @@ fn test_transcoder_finish_requires_one_shot_output_capacity() {
         .reset(&mut output, 0)
         .expect("reset clears finish suffix state");
     assert_eq!(Ok(2), transcoder.max_finish_output_len());
+}
+
+#[test]
+fn test_eof_aware_adapter_complete_stream_fits_the_public_bound() {
+    let cases: &[(&[u8], &[u8])] = &[(&[], &[]), (b"A", b"A"), (&[0xfe], b"?"), (&[b'A', 0xfe], b"A?")];
+    for &(input, expected) in cases {
+        let mut decoder = CodecTranscodeDecoder::new(EofAwareCodec);
+        let capacity = decoder.max_total_output_len(input.len()).unwrap();
+        let mut output = vec![0_u8; capacity];
+        let written = decoder.transcode_complete_into(input, &mut output).unwrap();
+        output.truncate(written);
+        assert_eq!(output, expected, "EOF input {input:?} must fit its public bound");
+    }
 }

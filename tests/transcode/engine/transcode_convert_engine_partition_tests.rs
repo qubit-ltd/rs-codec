@@ -7,6 +7,7 @@
 // =============================================================================
 
 use core::cell::Cell;
+use core::cell::RefCell;
 use core::convert::Infallible;
 use core::num::NonZeroUsize;
 use std::rc::Rc;
@@ -23,6 +24,7 @@ use qubit_codec::engine::DecodeInvalidAction;
 use qubit_codec::engine::EncodeContext;
 use qubit_codec::engine::EncodeUnencodableAction;
 use qubit_codec::engine::TranscodeConvertEngine;
+use qubit_codec::engine::TranscodeDecodeEngine;
 use qubit_codec::engine::TranscodeDecodeHooks;
 use qubit_codec::engine::TranscodeEncodeHooks;
 
@@ -206,6 +208,51 @@ impl TranscodeEncodeHooks<VariableTarget> for EncodePolicy {
 type PartitionEngine = TranscodeConvertEngine<PairSource, VariableTarget, DecodePolicy, EncodePolicy>;
 type DecisionCounter = Rc<Cell<usize>>;
 type EngineWithCounters = (PartitionEngine, DecisionCounter, DecisionCounter);
+
+/// Records decode hook contexts while applying a fixed incomplete-input policy.
+struct ContextProbe {
+    incomplete: IncompleteMode,
+    contexts: Rc<RefCell<Vec<DecodeContext>>>,
+}
+
+impl TranscodeDecodeHooks<PairSource> for ContextProbe {
+    fn handle_invalid_decode(
+        &mut self,
+        _codec: &mut PairSource,
+        _error: &InvalidToken,
+        consumed: Option<NonZeroUsize>,
+        context: DecodeContext,
+    ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<PairSource>> {
+        self.contexts.borrow_mut().push(context);
+        Ok(DecodeInvalidAction::Skip {
+            consumed: consumed.unwrap_or(NonZeroUsize::MIN),
+        })
+    }
+
+    fn handle_incomplete_decode(
+        &mut self,
+        _codec: &mut PairSource,
+        _source: Option<&InvalidToken>,
+        _required: NonZeroUsize,
+        context: DecodeContext,
+    ) -> Result<DecodeIncompleteAction<u8>, codec::TranscodeDecodeErrorOf<PairSource>> {
+        self.contexts.borrow_mut().push(context);
+        Ok(match self.incomplete {
+            IncompleteMode::Reject => DecodeIncompleteAction::Reject,
+            IncompleteMode::Skip => DecodeIncompleteAction::Skip,
+            IncompleteMode::Emit => DecodeIncompleteAction::Emit { value: 9 },
+        })
+    }
+}
+
+fn context_probe(mode: IncompleteMode) -> (ContextProbe, Rc<RefCell<Vec<DecodeContext>>>) {
+    let contexts = Rc::new(RefCell::new(Vec::new()));
+    let hooks = ContextProbe {
+        incomplete: mode,
+        contexts: Rc::clone(&contexts),
+    };
+    (hooks, contexts)
+}
 
 fn engine(invalid: InvalidMode, incomplete: IncompleteMode, unencodable: UnencodableMode) -> PartitionEngine {
     engine_with_markers(invalid, incomplete, unencodable, true).0
@@ -730,4 +777,81 @@ fn test_partition_empty_input_and_lifecycle() {
         .unwrap_or_else(|e| panic!("mask={mask}, ends={ends:?}: {e}"));
         assert_eq!(actual, [0xa0, 2, !2, 0xa1]);
     }
+}
+
+#[test]
+fn test_decode_hook_context_counts_target_units_in_converter() {
+    let (hooks, contexts) = context_probe(IncompleteMode::Skip);
+    let mut engine = TranscodeConvertEngine::new(
+        PairSource,
+        VariableTarget { markers: false },
+        hooks,
+        EncodePolicy {
+            mode: UnencodableMode::Skip,
+            decisions: Rc::new(Cell::new(0)),
+        },
+    );
+    engine.reset(&mut [0_u8; 2], 0).unwrap();
+    let mut output = [0_u8; 8];
+    let progress = engine.transcode(&[99, 0, 2, 0xff, 0], 1, &mut output, 3).unwrap();
+    assert_eq!(progress.read(), 3);
+    assert_eq!(progress.written(), 2);
+    let recorded = contexts.borrow();
+    assert_eq!(recorded.len(), 1);
+    let context = recorded[0];
+    assert_eq!(context.input_start(), 1);
+    assert_eq!(context.input_index(), 3);
+    assert_eq!(context.output_start(), 3);
+    assert_eq!(context.output_index(), 5);
+    assert_eq!(context.output_written(), 2);
+    assert_eq!(&output[3..5], &[2, !2_u8]);
+}
+
+#[test]
+fn test_converter_eof_hook_can_run_without_target_capacity() {
+    for mode in [IncompleteMode::Skip, IncompleteMode::Emit] {
+        let (hooks, contexts) = context_probe(mode);
+        let mut engine = TranscodeConvertEngine::new(
+            PairSource,
+            VariableTarget { markers: false },
+            hooks,
+            EncodePolicy {
+                mode: UnencodableMode::Skip,
+                decisions: Rc::new(Cell::new(0)),
+            },
+        );
+        engine.reset(&mut [0_u8; 2], 0).unwrap();
+        let progress = engine.transcode_eof(&[5], 0, &mut [], 0).unwrap();
+        assert_eq!(progress.read(), 1);
+        assert_eq!(progress.written(), 0);
+        assert_eq!(contexts.borrow().len(), 1);
+        if mode == IncompleteMode::Skip {
+            assert_eq!(progress.status(), TranscodeStatus::Complete);
+        } else {
+            assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+            let mut output = [0_u8; 2];
+            let drained = engine.transcode_eof(&[], 0, &mut output, 0).unwrap();
+            assert_eq!(drained.read(), 0);
+            assert_eq!(drained.written(), 1);
+            assert_eq!(drained.status(), TranscodeStatus::Complete);
+            assert_eq!(output[0], 9);
+            assert_eq!(contexts.borrow().len(), 1);
+        }
+    }
+}
+
+#[test]
+fn test_decoder_defers_eof_hook_until_a_value_slot_is_available() {
+    let (hooks, contexts) = context_probe(IncompleteMode::Skip);
+    let mut engine = TranscodeDecodeEngine::new(PairSource, hooks);
+    engine.reset(&mut [0_u8; 1], 0).unwrap();
+    let progress = engine.transcode_eof(&[5], 0, &mut [], 0).unwrap();
+    assert_eq!(progress.read(), 0);
+    assert_eq!(progress.written(), 0);
+    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+    assert!(contexts.borrow().is_empty());
+    let progress = engine.transcode_eof(&[5], 0, &mut [0_u8; 1], 0).unwrap();
+    assert_eq!(progress.read(), 1);
+    assert_eq!(progress.status(), TranscodeStatus::Complete);
+    assert_eq!(contexts.borrow().len(), 1);
 }

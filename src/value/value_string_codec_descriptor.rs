@@ -87,6 +87,11 @@ pub struct ValueStringCodecDescriptor {
 impl ValueStringCodecDescriptor {
     /// Creates a descriptor for codec `C` and value type `V`.
     ///
+    /// Both codec error types must implement `Send + Sync` so execution errors
+    /// can retain their source across thread boundaries. The codec and value
+    /// types themselves need not implement these traits; `V` only needs to be
+    /// `'static` because decoded values are returned through `Any`.
+    ///
     /// # Type Parameters
     ///
     /// - `C`: Default-constructible string encoder/decoder with owned errors.
@@ -100,8 +105,8 @@ impl ValueStringCodecDescriptor {
     pub const fn of<C, V>() -> Self
     where
         C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
-        <C as ValueEncoder<V>>::Error: Error + 'static,
-        <C as ValueDecoder<str>>::Error: Error + 'static,
+        <C as ValueEncoder<V>>::Error: Error + Send + Sync + 'static,
+        <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
         V: 'static,
     {
         Self {
@@ -220,8 +225,8 @@ impl Debug for ValueStringCodecDescriptor {
 fn encode<C, V>(value: &dyn Any) -> Result<String, ValueCodecExecutionError>
 where
     C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
-    <C as ValueEncoder<V>>::Error: Error + 'static,
-    <C as ValueDecoder<str>>::Error: Error + 'static,
+    <C as ValueEncoder<V>>::Error: Error + Send + Sync + 'static,
+    <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
     V: 'static,
 {
     let value = value
@@ -242,8 +247,8 @@ where
 fn decode<C, V>(input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError>
 where
     C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
-    <C as ValueEncoder<V>>::Error: Error + 'static,
-    <C as ValueDecoder<str>>::Error: Error + 'static,
+    <C as ValueEncoder<V>>::Error: Error + Send + Sync + 'static,
+    <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
     V: 'static,
 {
     C::default()

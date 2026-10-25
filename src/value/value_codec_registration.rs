@@ -22,6 +22,10 @@ use crate::ValueStringCodecDescriptor;
 /// [`register_value_bytes_codec!`](crate::register_value_bytes_codec) rather
 /// than built by hand.
 ///
+/// The registration macros validate codecs through the matching descriptor.
+/// Encoder and decoder error types must implement `Error + Send + Sync +
+/// 'static`; codec and value types do not need those bounds.
+///
 /// # Type Parameters
 ///
 /// - `D`: Executable codec descriptor type; `'static` lets the registry keep a
@@ -135,6 +139,8 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// registration function, and an inventory submission in an anonymous const.
 /// The `id` must be a constant expression. Use a literal, constant, or
 /// `const fn` result; a runtime function call cannot define a static ID.
+/// The encoder and decoder error types must implement `Error + Send + Sync +
+/// 'static`, as required by [`ValueStringCodecDescriptor::of`].
 ///
 /// # Examples
 ///
@@ -194,6 +200,8 @@ macro_rules! register_value_string_codec {
 /// registration function, and an inventory submission in an anonymous const.
 /// The `id` must be a constant expression. Use a literal, constant, or
 /// `const fn` result; a runtime function call cannot define a static ID.
+/// The encoder and decoder error types must implement `Error + Send + Sync +
+/// 'static`, as required by [`ValueBytesCodecDescriptor::of`].
 ///
 /// # Examples
 ///

@@ -10,7 +10,9 @@
 use std::any::Any;
 use std::any::TypeId;
 use std::any::type_name;
+use std::convert::Infallible;
 use std::io::Error;
+use std::rc::Rc;
 
 use qubit_codec::ValueCodecExecutionError;
 use qubit_codec::ValueDecoder;
@@ -96,6 +98,29 @@ impl ValueDecoder<str> for MirrorTextStringCodec {
 static U32_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorU32StringCodec, u32>();
 static TEXT_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorTextStringCodec, String>();
 static FRESH_STRING: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<FreshStringCodec, String>();
+
+#[derive(Default)]
+struct LocalValueCodec {
+    _local: Rc<()>,
+}
+
+impl ValueEncoder<Rc<u32>> for LocalValueCodec {
+    type Output = String;
+    type Error = Infallible;
+
+    fn encode(&mut self, input: &Rc<u32>) -> Result<String, Infallible> {
+        Ok(input.to_string())
+    }
+}
+
+impl ValueDecoder<str> for LocalValueCodec {
+    type Output = Rc<u32>;
+    type Error = Infallible;
+
+    fn decode(&mut self, _input: &str) -> Result<Rc<u32>, Infallible> {
+        Ok(Rc::new(7))
+    }
+}
 
 #[test]
 fn test_metadata_matches_the_types_selected_at_construction() {
@@ -316,4 +341,13 @@ fn test_each_operation_uses_a_fresh_default_stateful_codec() {
     assert_eq!(copied_decoded.downcast_ref::<String>().unwrap(), "1:payload");
     let copied_decoded_again = copied.decode("payload").unwrap();
     assert_eq!(copied_decoded_again.downcast_ref::<String>().unwrap(), "1:payload");
+}
+
+#[test]
+fn test_thread_safe_errors_do_not_require_thread_safe_codec_or_value() {
+    let descriptor = ValueStringCodecDescriptor::of::<LocalValueCodec, Rc<u32>>();
+    let value = Rc::new(7_u32);
+    assert_eq!(descriptor.encode(&value).unwrap(), "7");
+    let decoded = descriptor.decode("7").unwrap().downcast::<Rc<u32>>().unwrap();
+    assert_eq!(**decoded, 7);
 }

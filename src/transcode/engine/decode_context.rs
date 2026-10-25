@@ -9,6 +9,15 @@
 
 /// Context for one codec decode attempt inside a buffered decoder engine.
 ///
+/// Input positions are source-unit indexes. Output positions use the driving
+/// engine's output domain: decoded values for [`TranscodeDecodeEngine`], and
+/// target encoding units for [`TranscodeConvertEngine`]. `output_written` is
+/// relative to the current call and does not count intermediate decoded
+/// values in a converter.
+///
+/// [`TranscodeDecodeEngine`]: crate::engine::TranscodeDecodeEngine
+/// [`TranscodeConvertEngine`]: crate::engine::TranscodeConvertEngine
+///
 /// # Examples
 ///
 /// ```
@@ -23,9 +32,11 @@ pub struct DecodeContext {
     input_start: usize,
     /// Absolute source index where the attempted value starts.
     input_index: usize,
-    /// Absolute output index where this `transcode` call starts.
+    /// Absolute output index where this call starts, in the driving engine's
+    /// output domain.
     output_start: usize,
-    /// Absolute output index where the next decoded value would be written.
+    /// Absolute output index where the next output would be written, in the
+    /// driving engine's output domain.
     output_index: usize,
     /// Units visible to the codec from `input_index`.
     available: usize,
@@ -39,10 +50,10 @@ impl DecodeContext {
     /// - `input_start`: Absolute source index where this `transcode` call
     ///   starts.
     /// - `input_index`: Absolute source index where the attempted value starts.
-    /// - `output_start`: Absolute output index where this `transcode` call
-    ///   starts.
-    /// - `output_index`: Absolute output index where the next value would be
-    ///   written.
+    /// - `output_start`: Absolute output index where this call starts, in the
+    ///   driving engine's output domain.
+    /// - `output_index`: Absolute output index where the next output would be
+    ///   written, in the driving engine's output domain.
     /// - `available`: Units visible to the codec from `input_index`.
     ///
     /// # Returns
@@ -101,7 +112,8 @@ impl DecodeContext {
         self.input_index
     }
 
-    /// Returns the absolute output index where this `transcode` call starts.
+    /// Returns the absolute output index where this call starts, in the
+    /// driving engine's output domain.
     ///
     /// # Returns
     ///
@@ -112,8 +124,8 @@ impl DecodeContext {
         self.output_start
     }
 
-    /// Returns the absolute output index where the next decoded value would be
-    /// written.
+    /// Returns the absolute output index where the next output would be
+    /// written, in the driving engine's output domain.
     ///
     /// # Returns
     ///
@@ -146,7 +158,9 @@ impl DecodeContext {
         self.input_index - self.input_start
     }
 
-    /// Returns output values written since this `transcode` call started.
+    /// Returns output written since this call started, in the driving
+    /// engine's output domain. For a converter, this counts target encoding
+    /// units rather than intermediate decoded values.
     ///
     /// # Returns
     ///

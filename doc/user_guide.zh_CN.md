@@ -83,12 +83,7 @@ impl Codec for U16BeCodec {
         Ok((value, NonZeroUsize::new(2).expect("two is non-zero")))
     }
 
-    unsafe fn encode(
-        &mut self,
-        value: &u16,
-        output: &mut [u8],
-        output_index: usize,
-    ) -> Result<usize, Infallible> {
+    unsafe fn encode(&mut self, value: &u16, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
         debug_assert!(output_index + 2 <= output.len());
         output[output_index..output_index + 2]
             .copy_from_slice(&value.to_be_bytes());
@@ -317,37 +312,76 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存。需要整批消费时继续使用该入口；需要逐步驱动大输入时，可使用 `transcode_step`：
 
+下面是可独立复制到文件并运行的完整程序。它用两字节编码器写入缓冲 bridge，并检查最终字节；同一份源码也维护在 [`examples/io_transcode_step.rs`](../examples/io_transcode_step.rs) 中。
+
+<!-- io-guide-start -->
 ```rust
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
 use std::io::Cursor;
 use std::io::Error;
+
+use qubit_codec::Codec;
 use qubit_codec::CodecTranscodeEncoder;
+use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeStatus;
 
-let values = [0x1234_u16, 0xabcd];
-let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
-let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
-let mut map_error = |_| Error::other("encode error");
+/// Encodes one fixed-width big-endian value.
+struct U16BeCodec;
 
-output.reset(&mut encoder, &mut map_error)?;
-let mut offset = 0;
-while offset < values.len() {
-    let progress = output.transcode_step(
-        &mut encoder,
-        &mut map_error,
-        &values,
-        offset,
-        values.len() - offset,
-    )?;
-    offset += progress.read();
-    if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
-        output.ensure_spare_capacity(required.get())?;
+impl Codec for U16BeCodec {
+    type Value = u16;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u16, NonZeroUsize), DecodeFailure<Infallible>> {
+        debug_assert!(input_index + 2 <= input.len());
+        Ok((
+            u16::from_be_bytes([input[input_index], input[input_index + 1]]),
+            NonZeroUsize::new(2).unwrap(),
+        ))
+    }
+
+    unsafe fn encode(&mut self, value: &u16, out: &mut [u8], index: usize) -> Result<usize, Infallible> {
+        debug_assert!(index + 2 <= out.len());
+        out[index..index + 2].copy_from_slice(&value.to_be_bytes());
+        Ok(2)
     }
 }
-output.finish(&mut encoder, &mut map_error)?;
-assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
-# Ok::<(), std::io::Error>(())
+
+/// Runs a complete stepwise encode lifecycle and checks the delivered bytes.
+fn main() -> Result<(), Error> {
+    let values = [0x1234_u16, 0xabcd];
+    let mut encoder = CodecTranscodeEncoder::new(U16BeCodec);
+    let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 2);
+    let mut map_error = |_| Error::other("encode error");
+    output.reset(&mut encoder, &mut map_error)?;
+    let mut offset = 0;
+    while offset < values.len() {
+        let progress = output.transcode_step(&mut encoder, &mut map_error, &values, offset, values.len() - offset)?;
+        offset += progress.read();
+        if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+            output.ensure_spare_capacity(required.get())?;
+        }
+    }
+    output.finish(&mut encoder, &mut map_error)?;
+    assert_eq!(output.inner().get_ref(), &[0x12, 0x34, 0xab, 0xcd]);
+    Ok(())
+}
 ```
+<!-- io-guide-end -->
+
+运行命令：`cargo run --example io_transcode_step --features io`。
 
 返回的 `written()` 已提交到 bridge，不能再次 advance；先按 `read()` 推进源游标，再申请下一步空间。`count` 为零时只验证范围，不调用 encoder，也不交付 pending 输出。单值上界只是预检估算：`NeedOutput` 可能请求更多空间，且历史缓冲容量不会自动缩小。现有下游缓冲 writer 不会自动改用此入口。操作可能先交付已缓冲输出再接受下一步；异步 poll 则先建立背压，encoder 尚未调用时就可能返回 `Pending`。显式 `flush` 仍是 sink 刷新边界。`finish_to_buffer` 只把 encoder 收尾输出追加到内存，不执行 I/O；`finish` 会交付 pending 并刷新 sink。
 
@@ -441,6 +475,8 @@ assert_eq!(42, *value);
 ```
 
 `ValueStringCodecRegistry::global()` 与 `ValueBytesCodecRegistry::global()`（需要错误值时用各自的 `try_global()`）在每个进程内分别收集一次已链接的注册项。宏与注册 ID 使用静态 ID 并在声明编译时校验；运行时查找使用接受 `&str` 的 `get`，并按原样 ID 字符串匹配，不做规范化。执行前会先核对擦除输入的实际类型。重复 ID 在同一注册表内属于注册错误，不会静默覆盖。该路径只擦除注册时 value 类型已固定的双向 whole-value codec，不能替代 `Codec` 流式 adapter。
+
+注册 codec 的关联错误必须实现 `Error + Send + Sync + 'static`，这样执行错误才能在线程间保留原始 source。成功解码值仍返回 `Box<dyn Any>`；这个约束不代表整个 decode 结果都能跨线程传递。注册调用的源码约束因此收紧：泛型错误 bound 也要同步调整；若现有错误不满足线程安全要求，可在应用自己的 adapter 边界转换为拥有数据且满足线程安全约束的诊断类型。直接调用 `ValueEncoder` 和 `ValueDecoder` 不受影响；公开的 registry descriptor 构造器现在要求错误类型满足线程安全约束。这是需要在兼容性版本中发布的 API 变化，本指南不表示需要升级版本或依赖。
 
 ## 错误、诊断与排障
 

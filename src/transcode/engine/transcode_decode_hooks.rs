@@ -247,11 +247,14 @@ where
     /// # Returns
     ///
     /// Returns the EOF policy action. `Skip` and `Emit` consume every source
-    /// unit available in `context`; `Emit` additionally requires one writable
-    /// output slot. At confirmed EOF, the engine checks for that slot before
-    /// invoking this method, even when the eventual action is `Skip` or
-    /// `Reject`. A capacity shortage does not invoke the hook or change its
-    /// state.
+    /// unit available in `context`. At confirmed EOF,
+    /// [`crate::engine::TranscodeDecodeEngine`] requires one writable value
+    /// slot before invoking this method, even when the eventual action is
+    /// `Skip` or `Reject`; a capacity shortage does not invoke the hook or
+    /// change its state. [`crate::engine::TranscodeConvertEngine`] may invoke
+    /// the hook without target capacity: `Skip` can consume the tail, while
+    /// `Emit` can retain a pending value for encoding. A retry drains that
+    /// pending value without invoking the hook again for the same tail.
     ///
     /// # Errors
     ///

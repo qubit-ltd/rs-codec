@@ -18,6 +18,8 @@ use thiserror::Error;
 /// Registry lookups erase the concrete encoder and decoder types, so the
 /// mismatch and failure they report are carried here as diagnostics instead of
 /// a generic type parameter.
+/// Source errors are retained as `Send + Sync` trait objects so this error can
+/// cross thread boundaries without losing the concrete source type.
 ///
 /// # Examples
 ///
@@ -53,7 +55,7 @@ pub enum ValueCodecExecutionError {
         codec_type: &'static str,
         /// Typed encoder source error.
         #[source]
-        source: Box<dyn Error>,
+        source: Box<dyn Error + Send + Sync + 'static>,
     },
     /// The typed decoder failed.
     #[error("value codec {codec_type} failed to decode: {source}")]
@@ -62,6 +64,6 @@ pub enum ValueCodecExecutionError {
         codec_type: &'static str,
         /// Typed decoder source error.
         #[source]
-        source: Box<dyn Error>,
+        source: Box<dyn Error + Send + Sync + 'static>,
     },
 }

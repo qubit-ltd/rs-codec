@@ -239,6 +239,8 @@ hooks 的 engine 见[用户手册](doc/user_guide.zh_CN.md)。
   `ValueBytesCodecDescriptor`、`ValueStringCodecRegistry`、`ValueBytesCodecRegistry`，
   以及 `register_value_string_codec!` / `register_value_bytes_codec!`；只擦除注册时已固定
   value 类型的双向 whole-value codec（字符串或 `Vec<u8>` wire），执行前核对实际输入类型。
+  注册 codec 的关联错误须实现 `Error + Send + Sync + 'static`，错误 source 可在线程间保留；
+  解码成功值仍是 `Box<dyn Any>`，因此不能据此跨线程传递整个 decode 结果。
 - 启用 `io` 时：基于 `qubit-io` 的同步与部分 I/O 异步 transcode 输入/输出 bridge。
 
 本库不实现具体领域格式或字符集表。`Codec::decode` 通过 `DecodeFailure` 区分可见输入

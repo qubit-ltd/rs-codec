@@ -201,7 +201,10 @@ for incremental `transcode`, EOF handling, and engines with hooks.
 - With `registry`: validated stable IDs, `ValueStringCodecDescriptor`,
   `ValueBytesCodecDescriptor`, `ValueStringCodecRegistry`, `ValueBytesCodecRegistry`,
   and `register_value_string_codec!` / `register_value_bytes_codec!` for type-checked
-  erased whole-value codecs (string or bytes wire) fixed at registration time.
+  erased whole-value codecs (string or bytes wire) fixed at registration time. Registered
+  codec errors must implement `Error + Send + Sync + 'static`; source errors are retained
+  across threads, while decoded values remain `Box<dyn Any>` and the whole decode result
+  is not thereby transferable across threads.
 - With `io`: sync and partial-I/O async transcode input/output bridges over
   `qubit-io`.
 
