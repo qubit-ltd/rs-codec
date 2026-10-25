@@ -542,8 +542,12 @@ fn test_partition_normal_values_and_backpressure() {
                 UnencodableMode::Reject,
                 markers,
             );
-            let (actual, steps) = drive(&payload, &ends, configured_engine)
-                .unwrap_or_else(|e| panic!("payload={payload:?}, markers={markers}, mask={mask}, ends={ends:?}: {e}"));
+            let (actual, steps) = drive(&payload, &ends, configured_engine).unwrap_or_else(|e| {
+                panic!(
+                    "payload={payload:?}, markers={markers}, mask={mask}, \
+                         ends={ends:?}: {e}"
+                )
+            });
             assert!(steps <= 64 * (payload.len() + 1) + 64);
             assert_eq!(actual, expected, "markers={markers}, mask={mask}, ends={ends:?}");
             assert_eq!(
@@ -567,16 +571,21 @@ fn test_partition_invalid_and_unencodable_policies() {
                         drive_large_buffer(&payload, invalid, IncompleteMode::Reject, unencodable, markers).unwrap();
                     assert_eq!(
                         large, model.output,
-                        "large-buffer oracle, markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}"
+                        "large-buffer oracle, markers={markers}, invalid={invalid:?}, \
+                         unencodable={unencodable:?}"
                     );
                     let result = drive_observed(&payload, &ends, invalid, IncompleteMode::Reject, unencodable, markers);
                     let (actual, _, decode_calls, encode_calls) = result.unwrap_or_else(|e| {
-                    panic!("markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}, mask={mask}, ends={ends:?}: {e}")
-                });
+                        panic!(
+                            "markers={markers}, invalid={invalid:?}, \
+                             unencodable={unencodable:?}, mask={mask}, ends={ends:?}: {e}"
+                        )
+                    });
                     let expected = model;
                     assert_eq!(
                         actual, expected.output,
-                        "markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}, mask={mask}, ends={ends:?}"
+                        "markers={markers}, invalid={invalid:?}, unencodable={unencodable:?}, \
+                         mask={mask}, ends={ends:?}"
                     );
                     assert_eq!(decode_calls, expected.decode_decisions, "decode decisions, mask={mask}");
                     assert_eq!(encode_calls, expected.encode_decisions, "encode decisions, mask={mask}");
@@ -668,7 +677,12 @@ fn test_partition_incomplete_eof_policies() {
                     UnencodableMode::Reject,
                     markers,
                 )
-                .unwrap_or_else(|e| panic!("markers={markers}, mode={mode:?}, mask={mask}, ends={ends:?}: {e}"));
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "markers={markers}, mode={mode:?}, mask={mask}, \
+                         ends={ends:?}: {e}"
+                    )
+                });
                 assert_eq!(
                     actual, expected.output,
                     "markers={markers}, mode={mode:?}, mask={mask}, ends={ends:?}"

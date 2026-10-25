@@ -74,6 +74,11 @@ use super::Transcoder;
 pub trait TranscodeEncoder:
     Transcoder<Error = TranscodeEncodeError<Self::EncodeError, <Self as Transcoder>::Input>>
 {
-    /// Domain error type produced by encode internals.
+    /// Error type produced by the encoding implementation for a logical
+    /// input value.
+    ///
+    /// The transcoder's [`Transcoder::Error`] carries this type inside
+    /// [`TranscodeEncodeError::Domain`]; framework failures and unencodable
+    /// values are represented by separate variants.
     type EncodeError;
 }

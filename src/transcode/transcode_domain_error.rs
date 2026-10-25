@@ -163,7 +163,6 @@ impl<E> TranscodeDomainError<E> {
     /// Returns `Some(index)` for main-phase errors and `None` for reset or
     /// finish errors.
     #[inline]
-    #[must_use]
     pub const fn input_index(&self) -> Option<usize> {
         match self {
             Self::Main { input_index, .. } => Some(*input_index),
@@ -178,7 +177,6 @@ impl<E> TranscodeDomainError<E> {
     /// Returns `Some(consumed)` when a main-phase decode error reports the
     /// invalid input width. Returns `None` otherwise.
     #[inline]
-    #[must_use]
     pub const fn input_consumed(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Main { input_consumed, .. } => *input_consumed,

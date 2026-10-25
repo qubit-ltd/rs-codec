@@ -124,7 +124,7 @@ impl Transcoder for CopyTranscoder {
 fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
     let mut transcoder = CopyTranscoder;
     let mut output = vec![0_u8; input.len()];
-    group.bench_function("direct", |bencher| {
+    group.bench_function("direct_transcode", |bencher| {
         bencher.iter(|| {
             let progress = transcoder
                 .transcode(black_box(input), 0, output.as_mut_slice(), 0)

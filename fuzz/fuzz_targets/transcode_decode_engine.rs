@@ -36,6 +36,7 @@ enum Policy {
 }
 
 impl Policy {
+    #[must_use]
     fn from_byte(byte: u8) -> Self {
         match byte % 3 {
             0 => Self::Reject,
@@ -136,6 +137,11 @@ enum Oracle {
     },
 }
 
+/// Models the expected output and rejection point for the fuzz protocol.
+///
+/// A rejection records the input position and output prefix; successful input
+/// records the complete output.
+#[must_use]
 fn reference(payload: &[u8], invalid: Policy, incomplete: Policy) -> Oracle {
     let mut output = Vec::with_capacity(payload.len());
     for (position, &byte) in payload.iter().enumerate() {

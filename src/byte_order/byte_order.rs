@@ -11,10 +11,9 @@
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::ByteOrder;
+/// use qubit_codec::{BigEndian, ByteOrder, ByteOrderSpec};
 ///
-/// let order = ByteOrder::BigEndian;
-/// assert_eq!(order, ByteOrder::BigEndian);
+/// assert_eq!(ByteOrder::BigEndian, BigEndian::ORDER);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ByteOrder {

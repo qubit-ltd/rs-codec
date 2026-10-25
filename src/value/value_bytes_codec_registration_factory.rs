@@ -13,11 +13,12 @@ use crate::ValueBytesCodecRegistration;
 
 /// Factory submitted by
 /// [`register_value_bytes_codec!`](crate::register_value_bytes_codec).
+/// The inventory collector supplies this factory to the registry; callers do
+/// not construct it directly.
 #[doc(hidden)]
 pub struct ValueBytesCodecRegistrationFactory(
     /// Builds an owned byte-codec registration when inventory entries are
-    /// collected into a registry. The callback takes no arguments and
-    /// supplies its own codec identifier, metadata, and construction logic.
+    /// collected into a registry.
     pub fn() -> ValueBytesCodecRegistration,
 );
 

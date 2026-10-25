@@ -469,6 +469,7 @@ where
     /// # Panics
     ///
     /// Panics when codec or hook progress violates declared decode bounds.
+    #[inline]
     pub fn transcode(
         &mut self,
         input: &[C::Unit],
@@ -510,6 +511,7 @@ where
     /// # Panics
     ///
     /// Panics when codec or hook progress violates declared decode bounds.
+    #[inline]
     pub fn transcode_eof(
         &mut self,
         input: &[C::Unit],
@@ -607,6 +609,7 @@ where
     ///
     /// Panics when codec or hook output violates reset, decode, or finish
     /// bounds.
+    #[inline]
     pub fn transcode_complete_into(
         &mut self,
         input: &[C::Unit],

@@ -6,7 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::any::Any;
 use std::io::Error;
+use std::panic::catch_unwind;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -151,7 +153,7 @@ fn duplicate_parts(error: &ValueCodecRegistryError) -> (&'static str, &[ValueCod
     (id, sources)
 }
 
-fn panic_text(payload: &Box<dyn std::any::Any + Send>) -> &str {
+fn panic_text(payload: &Box<dyn Any + Send>) -> &str {
     payload
         .downcast_ref::<String>()
         .map(String::as_str)
@@ -172,8 +174,8 @@ fn test_global_string_registry_caches_duplicate_error_and_panic() {
     assert_eq!(second.to_string(), first_display);
     assert_eq!(STRING_CALLS.load(Ordering::SeqCst), 3);
 
-    let panic = std::panic::catch_unwind(ValueStringCodecRegistry::global)
-        .expect_err("global string registry must panic on duplicate IDs");
+    let panic =
+        catch_unwind(ValueStringCodecRegistry::global).expect_err("global string registry must panic on duplicate IDs");
     assert_eq!(
         panic_text(&panic),
         format!("invalid global value string codec registry: {first_display}")
@@ -194,8 +196,8 @@ fn test_global_bytes_registry_caches_duplicate_error_and_panic() {
     assert_eq!(second.to_string(), first_display);
     assert_eq!(BYTES_CALLS.load(Ordering::SeqCst), 3);
 
-    let panic = std::panic::catch_unwind(ValueBytesCodecRegistry::global)
-        .expect_err("global bytes registry must panic on duplicate IDs");
+    let panic =
+        catch_unwind(ValueBytesCodecRegistry::global).expect_err("global bytes registry must panic on duplicate IDs");
     assert_eq!(
         panic_text(&panic),
         format!("invalid global value bytes codec registry: {first_display}")

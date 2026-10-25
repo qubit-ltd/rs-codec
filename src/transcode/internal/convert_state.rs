@@ -55,11 +55,6 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
 
     /// Returns the complete input slice.
     ///
-    /// # Type Parameters
-    ///
-    /// - `Input`: Source unit type visible to conversion.
-    /// - `Output`: Target unit type visible to conversion.
-    ///
     /// # Returns
     ///
     /// Returns the full input slice.

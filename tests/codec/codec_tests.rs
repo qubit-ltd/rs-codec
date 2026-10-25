@@ -7,6 +7,9 @@
 // =============================================================================
 //! Tests for the low-level codec trait.
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec as codec;
 use qubit_codec::Codec;
 
@@ -16,8 +19,8 @@ struct ByteIncrementCodec;
 impl Codec for ByteIncrementCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -29,12 +32,12 @@ impl Codec for ByteIncrementCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value.wrapping_sub(1), core::num::NonZeroUsize::MIN))
+        Ok((value.wrapping_sub(1), NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -62,8 +65,8 @@ struct StatefulLifecycleCodec {
 impl Codec for StatefulLifecycleCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -81,10 +84,10 @@ impl Codec for StatefulLifecycleCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         let decoded = input[input_index].wrapping_sub(self.decode_state as u8);
         self.decode_state += 1;
-        Ok((decoded, core::num::NonZeroUsize::MIN))
+        Ok((decoded, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -180,8 +183,8 @@ struct BufferedEncodeCodec {
 impl Codec for BufferedEncodeCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -197,8 +200,8 @@ impl Codec for BufferedEncodeCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(

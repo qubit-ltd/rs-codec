@@ -25,7 +25,7 @@ fn test_lifecycle_reset_reopens_finished_stream() {
 
     let mut output = [0_u8; 1];
     assert_eq!(
-        Err(TranscodeDecodeError::Failure(TranscodeFailure::TranscodeBeforeReset,)),
+        Err(TranscodeDecodeError::Failure(TranscodeFailure::TranscodeBeforeReset)),
         decoder.transcode(&[5], 0, &mut output, 0),
     );
 

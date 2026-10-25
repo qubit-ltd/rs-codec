@@ -5,10 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Progress reported by transcode operations.
+
 use core::num::NonZeroUsize;
 
-use super::TranscodeContractError;
-use super::TranscodeStatus;
+use super::super::TranscodeContractError;
+use super::super::TranscodeStatus;
 
 /// Counts how much work a [`crate::Transcoder`] completed before
 /// returning.
@@ -109,7 +111,6 @@ impl TranscodeProgress {
     ///
     /// Returns the stored [`TranscodeStatus`].
     #[inline]
-    #[must_use]
     pub const fn status(self) -> TranscodeStatus {
         self.status
     }

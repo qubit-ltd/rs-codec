@@ -8,7 +8,6 @@
 //! Buffered output driver that encodes values into units.
 
 use core::fmt;
-use core::result::Result as CoreResult;
 use std::collections::TryReserveError;
 use std::io::Error;
 use std::io::ErrorKind;
@@ -16,6 +15,7 @@ use std::io::Result;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
+use std::result::Result as CoreResult;
 
 use qubit_io::BufferedOutput;
 use qubit_io::BufferedOutputRecovery;
@@ -25,10 +25,11 @@ use qubit_io::SeekableByteOutput;
 use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
+use super::internal::capacity_error_to_invalid_data;
+use super::internal::map_encode_value_result;
 use super::transcode_progress_validation::validate_encode_progress;
 use crate::CapacityError;
 use crate::Codec;
-use crate::TranscodeEncodeError;
 use crate::TranscodeEncodeErrorOf;
 use crate::TranscodeEncoder;
 use crate::TranscodeProgress;
@@ -869,77 +870,5 @@ where
             .debug_struct("TranscodeEncodeOutput")
             .field("output", &self.output)
             .finish()
-    }
-}
-
-/// Wraps a streaming capacity failure as `InvalidData`, retaining its source.
-///
-/// # Parameters
-///
-/// * `error` - Capacity planning failure from a streaming transcoder.
-///
-/// # Returns
-///
-/// An owned I/O error carrying the original capacity error.
-fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
-}
-
-/// Preserves successful values and maps one-value failures into I/O errors.
-///
-/// # Type Parameters
-///
-/// * `T` - Successful result value.
-/// * `E` - Codec-domain error passed to the mapper.
-/// * `Value` - Source value type carried by an unencodable error.
-///
-/// # Parameters
-///
-/// * `result` - Codec lifecycle result to translate.
-/// * `map_error` - Called only for a codec-domain failure.
-///
-/// # Returns
-///
-/// The original successful value without transformation.
-///
-/// # Errors
-///
-/// Returns mapped domain errors or `InvalidInput` for bounds and domain
-/// rejection.
-fn map_encode_value_result<T, E, Value>(
-    result: CoreResult<T, TranscodeEncodeError<E, Value>>,
-    map_error: &mut dyn FnMut(E) -> Error,
-) -> Result<T> {
-    match result {
-        Ok(value) => Ok(value),
-        Err(error) => Err(map_encode_value_error(error, map_error)),
-    }
-}
-
-/// Maps domain failures through the caller and other failures to
-/// `InvalidInput`.
-///
-/// # Type Parameters
-///
-/// * `E` - Codec-domain error passed to the mapper.
-/// * `Value` - Rejected source value type, discarded during I/O translation.
-///
-/// # Parameters
-///
-/// * `error` - Encoding failure consumed by this translation.
-/// * `map_error` - Invoked only for the `Domain` variant.
-///
-/// # Returns
-///
-/// An I/O error retaining mapped domain detail or a bound/rejection message.
-#[inline(never)]
-fn map_encode_value_error<E, Value>(
-    error: TranscodeEncodeError<E, Value>,
-    map_error: &mut dyn FnMut(E) -> Error,
-) -> Error {
-    match error {
-        TranscodeEncodeError::Domain(error) => map_error(error.into_source()),
-        TranscodeEncodeError::Unencodable { .. } => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
-        TranscodeEncodeError::Failure(_) => Error::new(ErrorKind::InvalidInput, "codec output bound overflow"),
     }
 }

@@ -19,22 +19,28 @@ use crate::ValueCodecRegistrationSource;
 /// sorted by their fields; repeated identical sources are retained because
 /// each registration is reported.
 ///
+/// The registry returns this error when `ValueStringCodecRegistry::try_global`
+/// or `ValueBytesCodecRegistry::try_global` encounters conflicting linked
+/// registrations.
+///
 /// # Examples
 ///
 /// ```
-/// use qubit_codec::ValueCodecRegistrationSource;
+/// use qubit_codec::ValueBytesCodecRegistry;
 /// use qubit_codec::ValueCodecRegistryError;
 ///
-/// let error = ValueCodecRegistryError::DuplicateId {
-///     id: "example.u32",
-///     sources: vec![ValueCodecRegistrationSource::new(
-///         "qubit-codec",
-///         "my_crate::codecs",
-///         "src/codec.rs",
-///         42,
-///     )],
-/// };
-/// assert!(error.to_string().starts_with("duplicate value codec ID example.u32"));
+/// fn describe_registry_error(error: ValueCodecRegistryError) -> String {
+///     match error {
+///         ValueCodecRegistryError::DuplicateId { id, sources } => {
+///             format!("duplicate value codec ID {id} from {} source(s)", sources.len())
+///         }
+///     }
+/// }
+///
+/// if let Err(error) = ValueBytesCodecRegistry::try_global() {
+///     let description = describe_registry_error(error);
+///     assert!(description.starts_with("duplicate value codec ID "));
+/// }
 /// ```
 #[derive(Clone, Debug, Error)]
 #[must_use]

@@ -52,8 +52,8 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// Returns a read-only encode context.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn new(input_value: &'a Value, input_index: usize, output_index: usize, available_output: usize) -> Self {
         Self {
             input_value,
@@ -68,8 +68,8 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// The input value borrowed through this context without allocation.
+    #[must_use = "the borrowed input value should be inspected"]
     #[inline]
-    #[must_use]
     pub const fn input_value(&self) -> &Value {
         self.input_value
     }
@@ -79,8 +79,8 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// The absolute position of the value in the input sequence.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn input_index(&self) -> usize {
         self.input_index
     }
@@ -90,8 +90,8 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// The starting output cursor for this encode attempt.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn output_index(&self) -> usize {
         self.output_index
     }
@@ -101,8 +101,8 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Returns
     ///
     /// The number of output units available from the starting cursor.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn available_output(&self) -> usize {
         self.available_output
     }

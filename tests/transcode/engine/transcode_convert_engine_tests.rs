@@ -875,7 +875,7 @@ fn test_buffered_convert_engine_finish_drains_pending_value() {
         .finish(&mut empty_output, 0)
         .expect_err("finish should reject insufficient output before draining pending value");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0,)),
         error,
     );
     assert_eq!(Ok(1), engine.max_finish_output_len());
@@ -898,7 +898,7 @@ fn test_buffered_convert_engine_finish_encodes_decoder_finish_output() {
         .finish(&mut empty_output, 0)
         .expect_err("finish should reject insufficient output before decoder finish");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0,)),
         error,
     );
     assert_eq!(Ok(2), engine.max_finish_output_len());
@@ -942,7 +942,7 @@ fn test_buffered_convert_engine_finish_drains_pending_before_decoder_finish_outp
         .finish(&mut output, 0)
         .expect_err("finish should reject partial one-shot output");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 2, 1)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 2, 1,)),
         error,
     );
     assert_eq!([0], output);
@@ -966,7 +966,7 @@ fn test_buffered_convert_engine_finish_delegates_to_encoder_finish() {
         .finish(&mut empty_output, 0)
         .expect_err("target finish hook should require one-shot output capacity");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0,)),
         error,
     );
 
@@ -1410,7 +1410,7 @@ fn test_buffered_convert_engine_failed_reset_preserves_finished_state() {
         .reset(&mut [], 0)
         .expect_err("reset should reject insufficient output");
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(0, 1, 0,)),
         error
     );
     assert_eq!(

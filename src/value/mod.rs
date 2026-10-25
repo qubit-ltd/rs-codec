@@ -29,6 +29,8 @@ mod json_value_codec_registration;
 #[cfg(feature = "registry")]
 mod value_bytes_codec_descriptor;
 #[cfg(feature = "registry")]
+mod value_bytes_codec_registration;
+#[cfg(feature = "registry")]
 mod value_bytes_codec_registration_factory;
 #[cfg(feature = "registry")]
 mod value_codec_execution_error;
@@ -48,6 +50,8 @@ mod value_decoder;
 mod value_encoder;
 #[cfg(feature = "registry")]
 mod value_string_codec_descriptor;
+#[cfg(feature = "registry")]
+mod value_string_codec_registration;
 #[cfg(feature = "registry")]
 mod value_string_codec_registration_factory;
 
@@ -74,6 +78,8 @@ pub use json_value_codec_registration::JSON_STRING_VALUE_CODEC_ID;
 #[cfg(feature = "registry")]
 pub use value_bytes_codec_descriptor::ValueBytesCodecDescriptor;
 #[cfg(feature = "registry")]
+pub use value_bytes_codec_registration::ValueBytesCodecRegistration;
+#[cfg(feature = "registry")]
 #[doc(hidden)]
 pub use value_bytes_codec_registration_factory::ValueBytesCodecRegistrationFactory;
 #[cfg(feature = "registry")]
@@ -83,11 +89,7 @@ pub use value_codec_id::ValueCodecId;
 #[cfg(feature = "registry")]
 pub use value_codec_id_error::ValueCodecIdError;
 #[cfg(feature = "registry")]
-pub use value_codec_registration::ValueBytesCodecRegistration;
-#[cfg(feature = "registry")]
 pub use value_codec_registration::ValueCodecRegistration;
-#[cfg(feature = "registry")]
-pub use value_codec_registration::ValueStringCodecRegistration;
 #[cfg(feature = "registry")]
 pub use value_codec_registration_source::ValueCodecRegistrationSource;
 #[cfg(feature = "registry")]
@@ -102,6 +104,8 @@ pub use value_decoder::ValueDecoder;
 pub use value_encoder::ValueEncoder;
 #[cfg(feature = "registry")]
 pub use value_string_codec_descriptor::ValueStringCodecDescriptor;
+#[cfg(feature = "registry")]
+pub use value_string_codec_registration::ValueStringCodecRegistration;
 #[cfg(feature = "registry")]
 #[doc(hidden)]
 pub use value_string_codec_registration_factory::ValueStringCodecRegistrationFactory;

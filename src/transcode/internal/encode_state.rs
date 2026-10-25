@@ -40,8 +40,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// Returns initialized encode state with cursors at the requested start
     /// positions.
-    #[inline]
     #[must_use]
+    #[inline]
     pub(in crate::transcode) fn new(
         input: &'a [Value],
         input_index: usize,
@@ -58,8 +58,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns `true` when more input values remain.
-    #[inline]
     #[must_use]
+    #[inline]
     pub(in crate::transcode) fn has_input(&self) -> bool {
         self.state.has_input()
     }
@@ -74,8 +74,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Safety
     ///
     /// The caller must guarantee that `self.has_input()` returned `true`.
-    #[inline]
     #[must_use]
+    #[inline]
     pub(in crate::transcode) unsafe fn context_unchecked(&mut self) -> EncodeAttempt<'_, Value, Unit> {
         let input_index = self.state.input_cursor();
         let output_index = self.state.output_cursor();
@@ -170,8 +170,8 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     /// # Returns
     ///
     /// Returns writable output capacity from the current output cursor.
-    #[inline]
     #[must_use]
+    #[inline]
     fn available_output(&self) -> usize {
         self.state.available_output()
     }

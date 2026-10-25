@@ -176,6 +176,7 @@ impl ValueStringCodecDescriptor {
     /// # Errors
     ///
     /// Returns a type mismatch or the typed encoder source error.
+    #[inline]
     pub fn encode(&self, value: &dyn Any) -> Result<String, ValueCodecExecutionError> {
         (self.encode)(value)
     }
@@ -193,6 +194,7 @@ impl ValueStringCodecDescriptor {
     /// # Errors
     ///
     /// Returns the typed decoder source error.
+    #[inline]
     pub fn decode(&self, input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError> {
         (self.decode)(input)
     }
@@ -221,7 +223,25 @@ impl Debug for ValueStringCodecDescriptor {
     }
 }
 
-/// Downcasts and encodes one typed value.
+/// Downcasts an erased value and encodes it with a fresh default codec.
+///
+/// # Type Parameters
+///
+/// - `C`: Default codec with matching string encode/decode contracts.
+/// - `V`: Concrete owned value type required by the descriptor.
+///
+/// # Parameters
+///
+/// - `value`: Erased input borrowed until serialization completes.
+///
+/// # Returns
+///
+/// Returns the owned string produced by the codec.
+///
+/// # Errors
+///
+/// Returns `TypeMismatch` when the input has a different concrete type, or
+/// `EncodeFailed` with the codec source error when encoding fails.
 fn encode<C, V>(value: &dyn Any) -> Result<String, ValueCodecExecutionError>
 where
     C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
@@ -243,7 +263,24 @@ where
         })
 }
 
-/// Decodes one string and erases the typed output safely.
+/// Decodes one string with a fresh default codec and erases its typed output.
+///
+/// # Type Parameters
+///
+/// - `C`: Default codec with matching string encode/decode contracts.
+/// - `V`: Concrete owned value type produced by the descriptor.
+///
+/// # Parameters
+///
+/// - `input`: String slice borrowed until decoding completes.
+///
+/// # Returns
+///
+/// Returns the decoded value in a box that can be downcast to `V`.
+///
+/// # Errors
+///
+/// Returns `DecodeFailed` with the codec source error when decoding fails.
 fn decode<C, V>(input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError>
 where
     C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,

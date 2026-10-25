@@ -8,10 +8,8 @@
 
 //! Distributed value-codec registrations.
 
-use crate::ValueBytesCodecDescriptor;
 use crate::ValueCodecId;
 use crate::ValueCodecRegistrationSource;
-use crate::ValueStringCodecDescriptor;
 
 /// One statically linked value-codec implementation.
 ///
@@ -19,46 +17,12 @@ use crate::ValueStringCodecDescriptor;
 /// detection, a borrowed executable descriptor, and the link-time location the
 /// registration was declared at. It is produced by
 /// [`register_value_string_codec!`](crate::register_value_string_codec) or
-/// [`register_value_bytes_codec!`](crate::register_value_bytes_codec) rather
-/// than built by hand.
+/// [`register_value_bytes_codec!`](crate::register_value_bytes_codec)
+/// rather than built by hand.
 ///
 /// The registration macros validate codecs through the matching descriptor.
 /// Encoder and decoder error types must implement `Error + Send + Sync +
 /// 'static`; codec and value types do not need those bounds.
-///
-/// # Type Parameters
-///
-/// - `D`: Executable codec descriptor type; `'static` lets the registry keep a
-///   borrowed `&'static D` for the whole program run.
-///
-/// # Examples
-///
-/// ```
-/// # #[cfg(feature = "json")]
-/// # {
-/// use qubit_codec::JsonStringValueCodec;
-/// use qubit_codec::ValueCodecId;
-/// use qubit_codec::ValueCodecRegistration;
-/// use qubit_codec::ValueCodecRegistrationSource;
-/// use qubit_codec::ValueStringCodecDescriptor;
-/// use qubit_codec::ValueStringCodecRegistration;
-///
-/// static DESCRIPTOR: ValueStringCodecDescriptor =
-///     ValueStringCodecDescriptor::of::<JsonStringValueCodec<u32>, u32>();
-///
-/// let registration: ValueStringCodecRegistration = ValueCodecRegistration::new(
-///     ValueCodecId::new("example.u32"),
-///     &DESCRIPTOR,
-///     ValueCodecRegistrationSource::new(
-///         "qubit-codec",
-///         "doctest",
-///         "src/value/value_codec_registration.rs",
-///         1,
-///     ),
-/// );
-/// assert_eq!(registration.id().as_str(), "example.u32");
-/// # }
-/// ```
 #[derive(Clone, Copy, Debug)]
 pub struct ValueCodecRegistration<D: 'static> {
     /// Stable identifier shared with registry lookups and duplicate detection.
@@ -69,29 +33,8 @@ pub struct ValueCodecRegistration<D: 'static> {
     source: ValueCodecRegistrationSource,
 }
 
-/// A string-wire value-codec registration.
-pub type ValueStringCodecRegistration = ValueCodecRegistration<ValueStringCodecDescriptor>;
-
-/// A bytes-wire value-codec registration.
-pub type ValueBytesCodecRegistration = ValueCodecRegistration<ValueBytesCodecDescriptor>;
-
 impl<D: 'static> ValueCodecRegistration<D> {
     /// Creates a registration from validated static facts.
-    ///
-    /// # Parameters
-    ///
-    /// - `id`: Stable identifier for registry lookups.
-    /// - `descriptor`: Executable descriptor borrowed from static storage.
-    /// - `source`: Link-time location recorded for diagnostics.
-    ///
-    /// # Returns
-    ///
-    /// Returns a registration that borrows `descriptor` for the whole run.
-    ///
-    /// Prefer [`register_value_string_codec!
-    /// `](crate::register_value_string_codec)
-    /// or [`register_value_bytes_codec!`](crate::register_value_bytes_codec)
-    /// over calling this directly.
     #[doc(hidden)]
     #[inline]
     #[must_use]
@@ -100,10 +43,6 @@ impl<D: 'static> ValueCodecRegistration<D> {
     }
 
     /// Returns the stable value-codec ID.
-    ///
-    /// # Returns
-    ///
-    /// Returns the identifier this registration was filed under.
     #[inline]
     #[must_use]
     pub const fn id(&self) -> ValueCodecId {
@@ -111,10 +50,6 @@ impl<D: 'static> ValueCodecRegistration<D> {
     }
 
     /// Returns the executable descriptor.
-    ///
-    /// # Returns
-    ///
-    /// Returns the borrowed static descriptor, valid for the whole program run.
     #[inline]
     #[must_use]
     pub const fn descriptor(&self) -> &'static D {
@@ -122,10 +57,6 @@ impl<D: 'static> ValueCodecRegistration<D> {
     }
 
     /// Returns the linked source location.
-    ///
-    /// # Returns
-    ///
-    /// Returns the link-time crate, module, file, and line of the declaration.
     #[inline]
     #[must_use]
     pub const fn source(&self) -> ValueCodecRegistrationSource {
@@ -140,7 +71,7 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// The `id` must be a constant expression. Use a literal, constant, or
 /// `const fn` result; a runtime function call cannot define a static ID.
 /// The encoder and decoder error types must implement `Error + Send + Sync +
-/// 'static`, as required by [`ValueStringCodecDescriptor::of`].
+/// 'static`, as required by [`crate::ValueStringCodecDescriptor::of`].
 ///
 /// # Examples
 ///
@@ -201,7 +132,7 @@ macro_rules! register_value_string_codec {
 /// The `id` must be a constant expression. Use a literal, constant, or
 /// `const fn` result; a runtime function call cannot define a static ID.
 /// The encoder and decoder error types must implement `Error + Send + Sync +
-/// 'static`, as required by [`ValueBytesCodecDescriptor::of`].
+/// 'static`, as required by [`crate::ValueBytesCodecDescriptor::of`].
 ///
 /// # Examples
 ///

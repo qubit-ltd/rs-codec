@@ -47,6 +47,7 @@ pub struct JsonStringValueEncoder<T> {
 impl<T> Copy for JsonStringValueEncoder<T> {}
 
 impl<T> Clone for JsonStringValueEncoder<T> {
+    /// Copies the stateless encoder marker without requiring `T: Clone`.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -54,6 +55,7 @@ impl<T> Clone for JsonStringValueEncoder<T> {
 }
 
 impl<T> Default for JsonStringValueEncoder<T> {
+    /// Creates the stateless encoder through its const constructor.
     #[inline]
     fn default() -> Self {
         Self::new()
@@ -62,6 +64,10 @@ impl<T> Default for JsonStringValueEncoder<T> {
 
 impl<T> JsonStringValueEncoder<T> {
     /// Creates a JSON string encoder for values of type `T`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a stateless encoder without allocating an output string.
     #[inline]
     pub const fn new() -> Self {
         Self { _marker: PhantomData }

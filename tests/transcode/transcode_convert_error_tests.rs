@@ -11,6 +11,8 @@ use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeEncodeError;
 use qubit_codec::TranscodeFailure;
 
+use crate::nonzero;
+
 #[test]
 fn test_convert_error_from_decode_and_encode_errors() {
     type Convert = TranscodeConvertError<&'static str, &'static str, char>;
@@ -41,7 +43,7 @@ fn test_convert_error_accessors_mapping_and_validation() {
     let trailing: Convert = Convert::Failure(TranscodeFailure::trailing_input(1, 1));
     let decode_reset: Convert = Convert::decode_domain_reset("decode reset");
     let decode_main: Convert = Convert::decode_domain_main("decode", 3);
-    let decode_consumed: Convert = Convert::decode_domain_main_with_consumed("decode", 3, Some(crate::nonzero(1)));
+    let decode_consumed: Convert = Convert::decode_domain_main_with_consumed("decode", 3, Some(nonzero(1)));
     let decode_finish: Convert = Convert::decode_domain_finish("decode finish");
     let encode_reset: Convert = Convert::encode_domain_reset("encode reset");
     let encode_main: Convert = Convert::encode_domain_main("encode", 4);
@@ -157,7 +159,7 @@ fn test_convert_error_accessors_mapping_and_validation() {
     );
     assert_eq!(
         decode_consumed,
-        Convert::<char>::decode_domain_main_with_consumed("decode", 3, Some(crate::nonzero(1)))
+        Convert::<char>::decode_domain_main_with_consumed("decode", 3, Some(nonzero(1)))
     );
 
     assert_eq!(

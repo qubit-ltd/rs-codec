@@ -8,6 +8,7 @@
 
 mod decode_context;
 mod decode_incomplete_action;
+mod decode_incomplete_action_of;
 mod decode_invalid_action;
 mod encode_context;
 mod encode_unencodable_action;
@@ -20,7 +21,7 @@ mod transcode_encode_hooks;
 
 pub use decode_context::DecodeContext;
 pub use decode_incomplete_action::DecodeIncompleteAction;
-pub use decode_incomplete_action::DecodeIncompleteActionOf;
+pub use decode_incomplete_action_of::DecodeIncompleteActionOf;
 pub use decode_invalid_action::DecodeInvalidAction;
 pub use decode_invalid_action::DecodeInvalidActionOf;
 pub use encode_context::EncodeContext;

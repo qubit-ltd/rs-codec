@@ -18,6 +18,7 @@ use core::num::NonZeroUsize;
 /// let status = TranscodeStatus::need_output(NonZeroUsize::new(2).unwrap());
 /// assert!(matches!(status, TranscodeStatus::NeedOutput { required } if required.get() == 2));
 /// ```
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TranscodeStatus {
     /// All currently supplied input was consumed.
@@ -72,7 +73,6 @@ impl TranscodeStatus {
     ///
     /// Returns a [`TranscodeStatus::NeedInput`] value.
     #[inline]
-    #[must_use]
     pub const fn need_input(required: NonZeroUsize) -> Self {
         Self::NeedInput { required }
     }
@@ -88,7 +88,6 @@ impl TranscodeStatus {
     ///
     /// Returns a [`TranscodeStatus::NeedOutput`] value.
     #[inline]
-    #[must_use]
     pub const fn need_output(required: NonZeroUsize) -> Self {
         Self::NeedOutput { required }
     }

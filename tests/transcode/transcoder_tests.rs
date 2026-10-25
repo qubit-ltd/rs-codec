@@ -68,7 +68,7 @@ fn test_transcoder_default_method_returns_fixed_transcode_error() {
         .expect_err("overflow should be returned as transcode error");
 
     assert_eq!(
-        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0)),
+        codec::TranscodeDecodeError::Failure(codec::TranscodeFailure::insufficient_output(0, usize::MAX, 0,)),
         error
     );
 }

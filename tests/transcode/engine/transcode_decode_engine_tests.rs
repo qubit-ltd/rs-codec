@@ -26,6 +26,8 @@ use qubit_codec::engine::DecodeInvalidAction;
 use qubit_codec::engine::TranscodeDecodeEngine;
 use qubit_codec::engine::TranscodeDecodeHooks;
 
+use crate::nonzero;
+
 #[must_use]
 fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
     NonZeroUsize::new(consumed).expect("decode policy must consume at least one source unit")
@@ -97,12 +99,12 @@ impl Codec for PrefixCodec {
         match first {
             0xfe if input.len() - input_index < 2 => Err(codec::DecodeFailure::incomplete_with_source(
                 PrefixDecodeError::Invalid { consumed: 1 },
-                crate::nonzero(2),
+                nonzero(2),
             )),
             0xfe => {
                 // SAFETY: The branch above ensures the second byte is readable.
                 let value = unsafe { *input.as_ptr().add(input_index + 1) };
-                Ok((value, crate::nonzero(2)))
+                Ok((value, nonzero(2)))
             }
             0xff => Err(codec::DecodeFailure::invalid(
                 PrefixDecodeError::Invalid { consumed: 1 },
@@ -147,7 +149,7 @@ impl Codec for EofAwarePrefixCodec {
         input_index: usize,
     ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xfe && input.len() - input_index == 1 {
-            return Err(codec::DecodeFailure::incomplete(crate::nonzero(2)));
+            return Err(codec::DecodeFailure::incomplete(nonzero(2)));
         }
         Ok((input[input_index], NonZeroUsize::MIN))
     }
@@ -254,10 +256,7 @@ impl Codec for HintOnlyCodec {
         debug_assert!(input_index < input.len());
 
         match input[input_index] {
-            0xaa => Err(codec::DecodeFailure::invalid(
-                HintOnlyDecodeError::Invalid,
-                crate::nonzero(2),
-            )),
+            0xaa => Err(codec::DecodeFailure::invalid(HintOnlyDecodeError::Invalid, nonzero(2))),
             value => Ok((value, NonZeroUsize::MIN)),
         }
     }
@@ -333,7 +332,7 @@ impl Codec for OverlongIncompleteCodec {
         _input: &[u8],
         _input_index: usize,
     ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Err(codec::DecodeFailure::incomplete(crate::nonzero(2)))
+        Err(codec::DecodeFailure::incomplete(nonzero(2)))
     }
 
     unsafe fn encode(
@@ -461,7 +460,7 @@ impl TranscodeDecodeHooks<PrefixCodec> for EofReplacingHooks {
         context: DecodeContext,
     ) -> Result<DecodeIncompleteAction<u8>, codec::TranscodeDecodeErrorOf<PrefixCodec>> {
         assert_eq!(Some(&PrefixDecodeError::Invalid { consumed: 1 }), source,);
-        assert_eq!(crate::nonzero(2), required_total);
+        assert_eq!(nonzero(2), required_total);
         assert_eq!(1, context.available());
         Ok(DecodeIncompleteAction::Emit { value: 99 })
     }
@@ -890,7 +889,7 @@ impl TranscodeDecodeHooks<MinTwoCodec> for EofSkippingHooks {
         context: DecodeContext,
     ) -> Result<DecodeIncompleteAction<u8>, codec::TranscodeDecodeErrorOf<MinTwoCodec>> {
         assert_eq!(None, source);
-        assert_eq!(crate::nonzero(2), required_total);
+        assert_eq!(nonzero(2), required_total);
         assert_eq!(1, context.available());
         Ok(DecodeIncompleteAction::Skip)
     }
@@ -1133,12 +1132,7 @@ fn test_transcode_decode_engine_leaves_incomplete_input_to_caller() {
         .transcode(&[0xfe], 0, &mut output, 0)
         .expect("incomplete prefix should be reported");
 
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 
@@ -1335,12 +1329,7 @@ fn test_transcode_decode_engine_reports_short_minimum_input_without_consuming_ta
         .transcode(&[7], 0, &mut output, 0)
         .expect("short input should request another unit");
 
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 }
@@ -1357,12 +1346,7 @@ fn test_transcode_decode_engine_reports_incomplete_input_before_missing_output()
         .transcode(&[7], 0, &mut output, 0)
         .expect("short input should request another unit before output capacity");
 
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 }
@@ -1397,12 +1381,7 @@ fn test_transcode_decode_engine_reports_need_output_before_policy_emit() {
         .transcode(&[0xff], 0, &mut output, 0)
         .expect("replacement policy should stop before writing without output");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(1),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(1) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 }
@@ -1489,12 +1468,7 @@ fn test_transcode_decode_engine_reports_output_bounds_without_consuming_input() 
         .transcode(&[1], 0, &mut output, 0)
         .expect("empty output should request capacity");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(1),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(1) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 
@@ -2130,7 +2104,7 @@ fn test_transcode_decode_engine_rejects_invalid_input_via_hooks() {
         TranscodeDecodeError::domain_main_with_consumed(
             PrefixDecodeError::Invalid { consumed: 1 },
             0,
-            Some(crate::nonzero(1)),
+            Some(nonzero(1)),
         ),
         error,
     );

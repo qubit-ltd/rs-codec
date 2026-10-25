@@ -58,7 +58,6 @@ impl<Value> PendingValueSlot<Value> {
     /// # Errors
     ///
     /// Returns a capacity error when encoder planning overflows.
-    #[must_use = "capacity planning can fail on overflow"]
     #[inline]
     pub(in crate::transcode) fn current_output_len<E, H>(
         &self,

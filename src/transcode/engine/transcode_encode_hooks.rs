@@ -140,7 +140,6 @@ where
     /// Returns [`CapacityError::OutputLengthOverflow`] when the bound cannot
     /// be represented as `usize`.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     fn max_transcode_output_len(&self, _codec: &C, input_len: usize) -> Result<usize, CapacityError> {
         input_len
             .checked_mul(C::MAX_ENCODE_UNITS_PER_VALUE)
