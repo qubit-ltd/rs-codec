@@ -7,7 +7,6 @@
 // =============================================================================
 
 mod codec_transcode_converter_tests;
-mod codec_transcode_decode_hooks_tests;
 mod codec_transcode_decoder_tests;
-mod codec_transcode_encode_hooks_tests;
 mod codec_transcode_encoder_tests;
+mod internal;

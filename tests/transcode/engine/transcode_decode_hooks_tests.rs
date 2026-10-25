@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
 use core::num::NonZeroUsize;
 
 use qubit_codec as codec;
@@ -25,7 +26,7 @@ impl codec::Codec for UnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = UnitDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -74,7 +75,7 @@ impl codec::Codec for WideUnitCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = UnitDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;

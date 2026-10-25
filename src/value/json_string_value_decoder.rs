@@ -50,6 +50,7 @@ pub struct JsonStringValueDecoder<T> {
 impl<T> Copy for JsonStringValueDecoder<T> {}
 
 impl<T> Clone for JsonStringValueDecoder<T> {
+    /// Copies the stateless decoder marker without requiring `T: Clone`.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -57,6 +58,7 @@ impl<T> Clone for JsonStringValueDecoder<T> {
 }
 
 impl<T> Default for JsonStringValueDecoder<T> {
+    /// Creates the stateless decoder through its const constructor.
     #[inline]
     fn default() -> Self {
         Self::new()

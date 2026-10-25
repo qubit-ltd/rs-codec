@@ -6,6 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec as codec;
 use qubit_codec::Codec;
 use qubit_codec::CodecTranscodeDecoder;
@@ -23,7 +26,7 @@ impl Codec for FlushFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = FlushFailError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -37,8 +40,8 @@ impl Codec for FlushFailCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -67,7 +70,7 @@ impl Codec for InvalidByteCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = InvalidByteError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -79,14 +82,11 @@ impl Codec for InvalidByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         if input[input_index] == 0xff {
-            Err(codec::DecodeFailure::invalid(
-                InvalidByteError,
-                core::num::NonZeroUsize::MIN,
-            ))
+            Err(codec::DecodeFailure::invalid(InvalidByteError, NonZeroUsize::MIN))
         } else {
-            Ok((input[input_index], core::num::NonZeroUsize::MIN))
+            Ok((input[input_index], NonZeroUsize::MIN))
         }
     }
 

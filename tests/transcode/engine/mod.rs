@@ -9,10 +9,10 @@
 mod decode_context_tests;
 mod decode_incomplete_action_tests;
 mod decode_invalid_action_tests;
-mod decode_outcome_tests;
 mod encode_context_tests;
-mod encode_outcome_tests;
 mod encode_unencodable_action_tests;
+// Shared fixtures used by conversion-engine tests.
+mod internal;
 mod transcode_convert_engine_partition_tests;
 mod transcode_convert_engine_tests;
 mod transcode_decode_engine_tests;

@@ -11,7 +11,11 @@ use core::num::NonZeroUsize;
 
 use crate::Codec;
 
-/// Invalid-decode action for a codec-backed decode hook.
+/// Invalid-decode action type used by a codec-backed decode hook.
+///
+/// This alias binds the action's replacement value to the codec's decoded
+/// value type, so hook implementations can name their result in terms of the
+/// codec they serve.
 ///
 /// # Type Parameters
 ///

@@ -318,7 +318,6 @@ pub trait Codec {
     /// [`MAX_ENCODE_RESET_UNITS`](Self::MAX_ENCODE_RESET_UNITS) units starting
     /// at `output_index`.
     #[inline]
-    #[must_use = "reset output and reset errors must be handled"]
     unsafe fn encode_reset(
         &mut self,
         _output: &mut [Self::Unit],
@@ -372,7 +371,6 @@ pub trait Codec {
     /// larger than `MAX_ENCODE_UNITS_PER_VALUE`. Implementations must not write
     /// beyond the exact `encode_len` capacity on either the success or error
     /// path.
-    #[must_use = "encoded length and encode errors must be handled"]
     unsafe fn encode(
         &mut self,
         value: &Self::Value,
@@ -408,7 +406,6 @@ pub trait Codec {
     /// [`MAX_ENCODE_FINISH_UNITS`](Self::MAX_ENCODE_FINISH_UNITS) units
     /// starting at `output_index`.
     #[inline]
-    #[must_use = "finish output and finish errors must be handled"]
     unsafe fn encode_finish(
         &mut self,
         _output: &mut [Self::Unit],
@@ -445,7 +442,6 @@ pub trait Codec {
     /// [`MAX_DECODE_RESET_VALUES`](Self::MAX_DECODE_RESET_VALUES) values
     /// starting at `output_index`.
     #[inline]
-    #[must_use = "reset output and reset errors must be handled"]
     unsafe fn decode_reset(
         &mut self,
         _output: &mut [Self::Value],
@@ -497,7 +493,6 @@ pub trait Codec {
     /// The return type guarantees that successful decoding always consumes at
     /// least one unit. Implementations should use `debug_assert!` to state
     /// these unchecked entry-point assumptions.
-    #[must_use = "decoded value, consumed length, and decode errors must be handled"]
     unsafe fn decode(
         &mut self,
         input: &[Self::Unit],
@@ -532,7 +527,6 @@ pub trait Codec {
     /// preconditions as [`decode`](Self::decode). Implementations must not
     /// read beyond the currently available units.
     #[inline]
-    #[must_use = "decoded value, consumed length, and decode errors must be handled"]
     unsafe fn decode_eof(
         &mut self,
         input: &[Self::Unit],
@@ -571,7 +565,6 @@ pub trait Codec {
     /// [`MAX_DECODE_FINISH_VALUES`](Self::MAX_DECODE_FINISH_VALUES) values
     /// starting at `output_index`.
     #[inline]
-    #[must_use = "finish output length and finish errors must be handled"]
     unsafe fn decode_finish(
         &mut self,
         _output: &mut [Self::Value],

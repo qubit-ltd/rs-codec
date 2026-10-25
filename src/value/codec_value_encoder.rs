@@ -268,6 +268,7 @@ where
     ///
     /// An adapter owning `C::default()`, with the same compile-time unit-bound
     /// checks as [`Self::new`].
+    #[inline]
     fn default() -> Self {
         Self::new(C::default())
     }

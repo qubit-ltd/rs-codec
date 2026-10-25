@@ -221,60 +221,6 @@ where
     C: Codec,
     H: TranscodeDecodeHooks<C>,
 {
-    /// Applies the hook policy to an incomplete input tail.
-    ///
-    /// # Parameters
-    ///
-    /// - `source`: Optional codec error associated with the incomplete tail.
-    /// - `required_total`: Minimum total input width needed to decode a value.
-    /// - `context`: Decode cursors and the number of visible source units.
-    /// - `consume`: Callback used once when the policy emits a value.
-    ///
-    /// # Returns
-    ///
-    /// Returns the resulting decode outcome and an optional consumer result.
-    ///
-    /// # Errors
-    ///
-    /// Returns the hook error or the appropriate incomplete-input rejection,
-    /// preserving a codec error source when one was supplied.
-    fn apply_incomplete_decode<R, F>(
-        &mut self,
-        source: Option<C::DecodeError>,
-        required_total: NonZeroUsize,
-        context: DecodeContext,
-        consume: F,
-    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeErrorOf<C>>
-    where
-        F: FnOnce(C::Value, usize) -> R,
-    {
-        match self
-            .hooks
-            .handle_incomplete_decode(&mut self.codec, source.as_ref(), required_total, context)?
-        {
-            DecodeIncompleteAction::Reject => match source {
-                Some(source) => Err(TranscodeDecodeError::domain_main(source, context.input_index())),
-                None => Err(TranscodeFailure::incomplete_input(
-                    context.input_index(),
-                    required_total.get(),
-                    context.available(),
-                )
-                .into()),
-            },
-            DecodeIncompleteAction::Skip => {
-                let read =
-                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
-                Ok((DecodeOutcome::skipped(read), None))
-            }
-            DecodeIncompleteAction::Emit { value } => {
-                let read =
-                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
-                let result = consume(value, context.input_index());
-                Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(result)))
-            }
-        }
-    }
-
     /// Creates a buffered decoder engine.
     ///
     /// # Parameters
@@ -910,6 +856,60 @@ where
                 let read = DecodeInvalidAction::<C::Value>::bound_consumed(consumed, context.available());
                 let consumed_value = consume(value, context.input_index());
                 (DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(consumed_value))
+            }
+        }
+    }
+
+    /// Applies the hook policy to an incomplete input tail.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Optional codec error associated with the incomplete tail.
+    /// - `required_total`: Minimum total input width needed to decode a value.
+    /// - `context`: Decode cursors and the number of visible source units.
+    /// - `consume`: Callback used once when the policy emits a value.
+    ///
+    /// # Returns
+    ///
+    /// Returns the resulting decode outcome and an optional consumer result.
+    ///
+    /// # Errors
+    ///
+    /// Returns the hook error or the appropriate incomplete-input rejection,
+    /// preserving a codec error source when one was supplied.
+    fn apply_incomplete_decode<R, F>(
+        &mut self,
+        source: Option<C::DecodeError>,
+        required_total: NonZeroUsize,
+        context: DecodeContext,
+        consume: F,
+    ) -> Result<(DecodeOutcome, Option<R>), TranscodeDecodeErrorOf<C>>
+    where
+        F: FnOnce(C::Value, usize) -> R,
+    {
+        match self
+            .hooks
+            .handle_incomplete_decode(&mut self.codec, source.as_ref(), required_total, context)?
+        {
+            DecodeIncompleteAction::Reject => match source {
+                Some(source) => Err(TranscodeDecodeError::domain_main(source, context.input_index())),
+                None => Err(TranscodeFailure::incomplete_input(
+                    context.input_index(),
+                    required_total.get(),
+                    context.available(),
+                )
+                .into()),
+            },
+            DecodeIncompleteAction::Skip => {
+                let read =
+                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
+                Ok((DecodeOutcome::skipped(read), None))
+            }
+            DecodeIncompleteAction::Emit { value } => {
+                let read =
+                    NonZeroUsize::new(context.available()).expect("incomplete decode tail must contain source units");
+                let result = consume(value, context.input_index());
+                Ok((DecodeOutcome::emitted(read, NonZeroUsize::MIN), Some(result)))
             }
         }
     }

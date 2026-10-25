@@ -28,7 +28,10 @@ fn test_encodes_struct_to_json_string() {
     let mut encoder = JsonStringValueEncoder::<Sample>::new();
     let encoded = encoder.encode(&value).expect("encode should succeed");
 
-    assert_eq!(encoded, r#"{"name":"alpha","count":3}"#);
+    assert_eq!(
+        encoded, r#"{"name":"alpha","count":3}"#,
+        "struct fields are serialized into the JSON string"
+    );
 }
 
 #[test]
@@ -39,7 +42,10 @@ fn test_encodes_serde_json_value() {
         .encode(&value)
         .expect("encode should succeed");
 
-    assert_eq!(encoded, r#"{"nested":[1,null,false]}"#);
+    assert_eq!(
+        encoded, r#"{"nested":[1,null,false]}"#,
+        "serde_json values are serialized without changing their structure"
+    );
 }
 
 #[test]
@@ -52,7 +58,10 @@ fn test_dispatches_through_value_encoder_trait() {
     let encoded = ValueEncoder::<Sample>::encode(&mut JsonStringValueEncoder::<Sample>::new(), &value)
         .expect("trait dispatch should succeed");
 
-    assert_eq!(encoded, r#"{"name":"trait","count":9}"#);
+    assert_eq!(
+        encoded, r#"{"name":"trait","count":9}"#,
+        "ValueEncoder dispatch uses the JSON string encoder implementation"
+    );
 }
 
 #[test]
@@ -66,5 +75,5 @@ fn test_default_constructor_matches_new() {
         .encode(&value)
         .expect("default encoder should succeed");
 
-    assert_eq!(from_new, from_default);
+    assert_eq!(from_new, from_default, "new and Default construct equivalent encoders");
 }

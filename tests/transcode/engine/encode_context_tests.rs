@@ -13,8 +13,20 @@ fn test_encode_context_getters_and_parts() {
     let input = 0x8d_u8;
     let context = EncodeContext::new(&input, 11, 1, 2);
 
-    assert_eq!(0x8d_u8, *context.input_value());
-    assert_eq!(11, context.input_index());
-    assert_eq!(1, context.output_index());
-    assert_eq!(2, context.available_output());
+    assert_eq!(
+        0x8d_u8,
+        *context.input_value(),
+        "input_value returns the borrowed source value"
+    );
+    assert_eq!(11, context.input_index(), "input_index returns the source position");
+    assert_eq!(
+        1,
+        context.output_index(),
+        "output_index returns the destination position"
+    );
+    assert_eq!(
+        2,
+        context.available_output(),
+        "available_output returns remaining capacity"
+    );
 }

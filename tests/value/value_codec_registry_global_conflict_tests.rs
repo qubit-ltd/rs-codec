@@ -10,6 +10,7 @@ use std::io::Error;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use qubit_codec::__private::inventory::submit;
 use qubit_codec::ValueBytesCodecDescriptor;
 use qubit_codec::ValueBytesCodecRegistration;
 use qubit_codec::ValueBytesCodecRegistrationFactory;
@@ -102,9 +103,9 @@ fn string_m() -> ValueStringCodecRegistration {
     )
 }
 
-qubit_codec::__private::inventory::submit! { ValueStringCodecRegistrationFactory(string_z) }
-qubit_codec::__private::inventory::submit! { ValueStringCodecRegistrationFactory(string_a) }
-qubit_codec::__private::inventory::submit! { ValueStringCodecRegistrationFactory(string_m) }
+submit! { ValueStringCodecRegistrationFactory(string_z) }
+submit! { ValueStringCodecRegistrationFactory(string_a) }
+submit! { ValueStringCodecRegistrationFactory(string_m) }
 
 fn bytes_z() -> ValueBytesCodecRegistration {
     BYTES_CALLS.fetch_add(1, Ordering::SeqCst);
@@ -133,9 +134,9 @@ fn bytes_m() -> ValueBytesCodecRegistration {
     )
 }
 
-qubit_codec::__private::inventory::submit! { ValueBytesCodecRegistrationFactory(bytes_z) }
-qubit_codec::__private::inventory::submit! { ValueBytesCodecRegistrationFactory(bytes_a) }
-qubit_codec::__private::inventory::submit! { ValueBytesCodecRegistrationFactory(bytes_m) }
+submit! { ValueBytesCodecRegistrationFactory(bytes_z) }
+submit! { ValueBytesCodecRegistrationFactory(bytes_a) }
+submit! { ValueBytesCodecRegistrationFactory(bytes_m) }
 
 fn expected_sources() -> Vec<ValueCodecRegistrationSource> {
     vec![

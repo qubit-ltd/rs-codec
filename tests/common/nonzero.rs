@@ -8,6 +8,7 @@
 
 use core::num::NonZeroUsize;
 
+#[must_use]
 pub(crate) fn nonzero(value: usize) -> NonZeroUsize {
     NonZeroUsize::new(value).expect("test additional count must be non-zero")
 }

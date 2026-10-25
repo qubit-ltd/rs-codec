@@ -50,6 +50,11 @@ pub struct JsonStringValueCodec<T> {
 impl<T> Copy for JsonStringValueCodec<T> {}
 
 impl<T> Clone for JsonStringValueCodec<T> {
+    /// Copies the stateless marker without requiring `T: Clone`.
+    ///
+    /// # Returns
+    ///
+    /// Returns another marker bound to the same value type.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -57,6 +62,11 @@ impl<T> Clone for JsonStringValueCodec<T> {
 }
 
 impl<T> Default for JsonStringValueCodec<T> {
+    /// Creates the stateless marker without requiring `T: Default`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec bound to the value type `T`.
     #[inline]
     fn default() -> Self {
         Self::new()

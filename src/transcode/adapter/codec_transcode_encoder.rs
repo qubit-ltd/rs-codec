@@ -279,6 +279,7 @@ where
     /// # Returns
     ///
     /// Returns an encoder backed by `C::default()`.
+    #[inline]
     fn default() -> Self {
         Self::new(C::default())
     }

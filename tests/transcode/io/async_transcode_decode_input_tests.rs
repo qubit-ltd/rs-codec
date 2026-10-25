@@ -214,10 +214,17 @@ impl Transcoder for EofTailDecoder {
     }
 }
 
+/// Decoder fixture for exercising EOF after empty and non-empty input.
+///
+/// It emits a two-value marker once at EOF, using the retained byte when one
+/// was consumed or starting at `42` when the stream was empty.
 #[derive(Debug, Default)]
 struct EmptyEofDecoder {
+    /// Last source byte consumed before EOF, if any.
     retained: Option<u8>,
+    /// Number of EOF decode attempts observed by the fixture.
     eof_calls: usize,
+    /// Whether the two-value EOF marker has already been emitted.
     emitted: bool,
 }
 

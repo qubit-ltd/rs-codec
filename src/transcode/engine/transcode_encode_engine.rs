@@ -253,7 +253,6 @@ where
     ///
     /// Returns a capacity error when hook planning overflows.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         self.hooks.max_transcode_output_len(&self.codec, input_len)
     }
@@ -264,7 +263,6 @@ where
     ///
     /// Returns the codec's reset-output upper bound. This query never fails.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         Ok(C::MAX_ENCODE_RESET_UNITS)
     }
@@ -287,7 +285,6 @@ where
     ///
     /// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         C::MAX_ENCODE_FINISH_UNITS
             .checked_add(self.hooks.max_finish_output_len(&self.codec))
@@ -315,7 +312,6 @@ where
     ///
     /// Returns a capacity error if a component query or their sum overflows.
     #[inline]
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;

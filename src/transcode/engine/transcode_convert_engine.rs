@@ -124,25 +124,19 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// # Examples
 ///
 /// ```rust
-/// use core::{
-///     convert::Infallible,
-///     num::NonZeroUsize,
-/// };
-/// use qubit_codec::{
-///     Codec,
-///     TranscodeDecodeErrorOf,
-///     TranscodeEncodeErrorOf,
-///     DecodeFailure,
-///     TranscodeStatus,
-/// };
-/// use qubit_codec::engine::{
-///     DecodeContext,
-///     EncodeContext,
-///     EncodeUnencodableAction,
-///     TranscodeConvertEngine,
-///     TranscodeDecodeHooks,
-///     TranscodeEncodeHooks,
-/// };
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+/// use qubit_codec::Codec;
+/// use qubit_codec::TranscodeDecodeErrorOf;
+/// use qubit_codec::TranscodeEncodeErrorOf;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeStatus;
+/// use qubit_codec::engine::DecodeContext;
+/// use qubit_codec::engine::EncodeContext;
+/// use qubit_codec::engine::EncodeUnencodableAction;
+/// use qubit_codec::engine::TranscodeConvertEngine;
+/// use qubit_codec::engine::TranscodeDecodeHooks;
+/// use qubit_codec::engine::TranscodeEncodeHooks;
 ///
 /// #[derive(Clone, Copy)]
 /// struct SourceCodec;

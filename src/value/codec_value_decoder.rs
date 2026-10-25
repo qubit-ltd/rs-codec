@@ -278,6 +278,7 @@ where
     /// # Panics
     ///
     /// Panics if the codec reports consumption beyond its bounds or the input.
+    #[inline]
     fn decode(&mut self, input: &[C::Unit]) -> Result<Self::Output, Self::Error> {
         self.decode(input)
     }

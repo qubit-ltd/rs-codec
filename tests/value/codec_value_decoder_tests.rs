@@ -19,6 +19,10 @@ use qubit_codec::ValueDecoder;
 
 use super::internal::ResetSensitiveLifecycleCodec;
 
+/// Codec fixture that resolves a trailing `0xfe` only after EOF is known.
+///
+/// Ordinary decoding keeps the prefix incomplete; EOF decoding replaces it
+/// with `b'?'`.
 #[derive(Default)]
 struct EofAwarePrefixCodec;
 
@@ -614,6 +618,10 @@ impl Codec for FinishFailStatefulCodec {
     }
 }
 
+/// Stateful decoder fixture whose finish output exposes its decode count.
+///
+/// Each decoded value increments the count, and finishing emits that count
+/// before resetting the fixture for the next lifecycle.
 #[derive(Default)]
 struct StatefulLifecycleCodec {
     decode_state: usize,
@@ -660,9 +668,11 @@ impl Codec for StatefulLifecycleCodec {
     }
 }
 
+/// Output fixture whose default construction can be observed by tests.
 #[derive(Debug, Eq, PartialEq)]
 struct CountingFinishValue(u8);
 
+/// Counts default constructions to detect unexpected scratch initialization.
 static COUNTING_FINISH_DEFAULTS: AtomicUsize = AtomicUsize::new(0);
 
 impl Default for CountingFinishValue {

@@ -49,6 +49,11 @@ pub struct JsonBytesValueDecoder<T> {
 impl<T> Copy for JsonBytesValueDecoder<T> {}
 
 impl<T> Clone for JsonBytesValueDecoder<T> {
+    /// Returns an identical stateless decoder without requiring `T: Clone`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a decoder associated with the same target type.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -56,6 +61,11 @@ impl<T> Clone for JsonBytesValueDecoder<T> {
 }
 
 impl<T> Default for JsonBytesValueDecoder<T> {
+    /// Creates a decoder for `T` without constructing a value of that type.
+    ///
+    /// # Returns
+    ///
+    /// Returns an uninitialized stateless decoder associated with `T`.
     #[inline]
     fn default() -> Self {
         Self::new()

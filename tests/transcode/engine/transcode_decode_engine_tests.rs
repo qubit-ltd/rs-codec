@@ -8,6 +8,7 @@
 //! Tests for the reusable buffered decoder engine.
 
 use core::cell::Cell;
+use core::convert::Infallible;
 use core::num::NonZeroUsize;
 use std::rc::Rc;
 
@@ -25,10 +26,12 @@ use qubit_codec::engine::DecodeInvalidAction;
 use qubit_codec::engine::TranscodeDecodeEngine;
 use qubit_codec::engine::TranscodeDecodeHooks;
 
+#[must_use]
 fn non_zero_consumed(consumed: usize) -> NonZeroUsize {
     NonZeroUsize::new(consumed).expect("decode policy must consume at least one source unit")
 }
 
+/// Decodes `0xfe` prefixes with a second byte and rejects `0xff` as invalid.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PrefixCodec;
 
@@ -38,8 +41,8 @@ struct UnderfilledFinishCodec;
 impl Codec for UnderfilledFinishCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -74,7 +77,7 @@ impl Codec for PrefixCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -131,8 +134,8 @@ struct EofAwarePrefixCodec;
 impl Codec for EofAwarePrefixCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
@@ -179,7 +182,7 @@ impl TranscodeDecodeHooks<EofAwarePrefixCodec> for EofAwareHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut EofAwarePrefixCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<EofAwarePrefixCodec>> {
@@ -202,7 +205,7 @@ impl Codec for UnknownInvalidCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -235,7 +238,7 @@ impl Codec for HintOnlyCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = HintOnlyDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -278,8 +281,8 @@ struct OverconsumingCodec;
 impl Codec for OverconsumingCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -316,8 +319,8 @@ struct OverlongIncompleteCodec;
 impl Codec for OverlongIncompleteCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -370,8 +373,8 @@ struct DropTrackedCodec {
 impl Codec for DropTrackedCodec {
     type Value = DropTrackedValue;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -408,7 +411,7 @@ impl TranscodeDecodeHooks<DropTrackedCodec> for DropTrackedHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut DropTrackedCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<DropTrackedValue>, codec::TranscodeDecodeErrorOf<DropTrackedCodec>> {
@@ -471,7 +474,7 @@ impl TranscodeDecodeHooks<OverconsumingCodec> for OverconsumingHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverconsumingCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<OverconsumingCodec>> {
@@ -486,7 +489,7 @@ impl TranscodeDecodeHooks<OverlongIncompleteCodec> for OverlongIncompleteHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverlongIncompleteCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<OverlongIncompleteCodec>> {
@@ -656,7 +659,7 @@ impl TranscodeDecodeHooks<UnderfilledFinishCodec> for UnderfilledFinishHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut UnderfilledFinishCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<UnderfilledFinishCodec>> {
@@ -717,7 +720,7 @@ impl Codec for MinTwoCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
 
@@ -756,8 +759,8 @@ struct OverflowFlushCodec;
 impl Codec for OverflowFlushCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -797,7 +800,7 @@ impl TranscodeDecodeHooks<OverflowFlushCodec> for OverflowFinishHooks {
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut OverflowFlushCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<OverflowFlushCodec>> {
@@ -1603,7 +1606,7 @@ impl Codec for FlushFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = FlushFailError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -1687,7 +1690,7 @@ impl Codec for ResetFailCodec {
     type Value = u8;
     type Unit = u8;
     type DecodeError = PrefixDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -2158,8 +2161,8 @@ struct ResetEmittingDecodeCodec;
 impl Codec for ResetEmittingDecodeCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -2200,7 +2203,7 @@ impl TranscodeDecodeHooks<ResetEmittingDecodeCodec> for ResetEmittingDecodePasst
     fn handle_invalid_decode(
         &mut self,
         _codec: &mut ResetEmittingDecodeCodec,
-        error: &core::convert::Infallible,
+        error: &Infallible,
         _consumed: Option<NonZeroUsize>,
         _context: DecodeContext,
     ) -> Result<DecodeInvalidAction<u8>, codec::TranscodeDecodeErrorOf<ResetEmittingDecodeCodec>> {

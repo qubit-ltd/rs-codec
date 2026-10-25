@@ -70,7 +70,7 @@ impl ValueDecoder<str> for MirrorU32StringCodec {
 static BYTES_DESCRIPTOR: ValueBytesCodecDescriptor = ValueBytesCodecDescriptor::of::<MirrorU32BytesCodec, u32>();
 static STRING_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorU32StringCodec, u32>();
 
-fn build_first() -> ValueBytesCodecRegistration {
+fn build_first_bytes_registration() -> ValueBytesCodecRegistration {
     ValueCodecRegistration::new(
         ValueCodecId::new("mirror.bytes.factory.first"),
         &BYTES_DESCRIPTOR,
@@ -78,7 +78,7 @@ fn build_first() -> ValueBytesCodecRegistration {
     )
 }
 
-fn build_second() -> ValueBytesCodecRegistration {
+fn build_second_bytes_registration() -> ValueBytesCodecRegistration {
     ValueCodecRegistration::new(
         ValueCodecId::new("mirror.bytes.factory.second"),
         &BYTES_DESCRIPTOR,
@@ -94,7 +94,7 @@ register_value_bytes_codec!(
 
 #[test]
 fn test_invoking_the_factory_returns_the_registration_built_by_its_callback() {
-    let factory = ValueBytesCodecRegistrationFactory(build_first);
+    let factory = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
 
     let registration = (factory.0)();
 
@@ -111,7 +111,7 @@ fn test_invoking_the_factory_returns_the_registration_built_by_its_callback() {
 
 #[test]
 fn test_factory_callback_needs_no_arguments_and_no_registry_context() {
-    let factory = ValueBytesCodecRegistrationFactory(build_first);
+    let factory = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
     let callback: fn() -> ValueBytesCodecRegistration = factory.0;
 
     let registration = callback();
@@ -125,7 +125,7 @@ fn test_factory_callback_needs_no_arguments_and_no_registry_context() {
 
 #[test]
 fn test_two_invocations_produce_independent_registrations_over_one_descriptor() {
-    let factory = ValueBytesCodecRegistrationFactory(build_first);
+    let factory = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
 
     let first = (factory.0)();
     let second = (factory.0)();
@@ -143,8 +143,8 @@ fn test_two_invocations_produce_independent_registrations_over_one_descriptor() 
 
 #[test]
 fn test_two_factories_serve_different_stable_ids() {
-    let first = ValueBytesCodecRegistrationFactory(build_first);
-    let second = ValueBytesCodecRegistrationFactory(build_second);
+    let first = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
+    let second = ValueBytesCodecRegistrationFactory(build_second_bytes_registration);
 
     assert_ne!(
         (first.0)().id(),
@@ -175,7 +175,7 @@ fn test_factory_registration_enters_the_global_registry() {
 
 #[test]
 fn test_factory_built_registration_remains_executable() {
-    let factory = ValueBytesCodecRegistrationFactory(build_first);
+    let factory = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
 
     let registration = (factory.0)();
 
@@ -188,7 +188,7 @@ fn test_factory_built_registration_remains_executable() {
 
 #[test]
 fn test_bytes_factory_does_not_smuggle_in_the_string_descriptor() {
-    let factory = ValueBytesCodecRegistrationFactory(build_first);
+    let factory = ValueBytesCodecRegistrationFactory(build_first_bytes_registration);
 
     let registration = (factory.0)();
 

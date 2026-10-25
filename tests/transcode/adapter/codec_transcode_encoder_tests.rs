@@ -7,6 +7,9 @@
 // =============================================================================
 //! Tests for the codec-backed buffered encoder adapter.
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::Codec;
@@ -22,8 +25,8 @@ struct PairByteCodec;
 impl Codec for PairByteCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -35,12 +38,12 @@ impl Codec for PairByteCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -76,8 +79,8 @@ struct VariableWidthCodec;
 impl Codec for VariableWidthCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -97,12 +100,12 @@ impl Codec for VariableWidthCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -131,7 +134,7 @@ struct RejectOddCodec;
 impl Codec for RejectOddCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = &'static str;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -148,12 +151,12 @@ impl Codec for RejectOddCodec {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         // SAFETY: The caller guarantees that `input_index` is readable.
         let value = unsafe { *input.as_ptr().add(input_index) };
-        Ok((value, core::num::NonZeroUsize::MIN))
+        Ok((value, NonZeroUsize::MIN))
     }
 
     unsafe fn encode(

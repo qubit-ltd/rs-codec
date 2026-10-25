@@ -115,21 +115,7 @@ where
                         "Codec::decode incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
                     );
                     if end_of_input {
-                        let available = self.input.unread_len();
-                        if required_total.get() <= available {
-                            return Err(Error::new(
-                                ErrorKind::InvalidData,
-                                "codec reported incomplete input within available window",
-                            ));
-                        }
-                        // SAFETY: `available` is the current unread length.
-                        unsafe {
-                            self.input.consume(available);
-                        }
-                        return match source {
-                            Some(source) => Err(map_error(source)),
-                            None => Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value")),
-                        };
+                        return self.handle_eof_incomplete::<C, M>(source, required_total, map_error);
                     }
                     if !self.refill_after_incomplete(required_total, available)? {
                         let available = self.input.unread_len();
@@ -147,25 +133,7 @@ where
                                 return self.reject::<C, M>(source, consumed, available, map_error);
                             }
                             Err(DecodeFailure::Incomplete { source, required_total }) => {
-                                assert!(
-                                    required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
-                                    "Codec::decode_eof incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
-                                );
-                                if required_total.get() <= available {
-                                    return Err(Error::new(
-                                        ErrorKind::InvalidData,
-                                        "codec reported incomplete input within available window",
-                                    ));
-                                }
-                                unsafe {
-                                    self.input.consume(available);
-                                }
-                                return match source {
-                                    Some(source) => Err(map_error(source)),
-                                    None => {
-                                        Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value"))
-                                    }
-                                };
+                                return self.handle_eof_incomplete::<C, M>(source, required_total, map_error);
                             }
                         }
                     }
@@ -284,6 +252,54 @@ where
             .try_reserve_capacity(required_total)
             .map_err(allocation_error)?;
         self.input.fill_until(required_total)
+    }
+
+    /// Consumes the unread tail and reports an incomplete value at EOF.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Optional codec error associated with the incomplete value.
+    /// - `required_total`: Total unit count the codec needs to decode a value.
+    /// - `map_error`: Converts a present codec error into an I/O error.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::InvalidData` if the codec's required width is
+    /// already available, `ErrorKind::UnexpectedEof` when no codec error is
+    /// present, or the mapped codec error otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `required_total` exceeds the codec's declared maximum.
+    fn handle_eof_incomplete<C, M>(
+        &mut self,
+        source: Option<C::DecodeError>,
+        required_total: NonZeroUsize,
+        map_error: &mut M,
+    ) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        assert!(
+            required_total.get() <= C::MAX_DECODE_UNITS_PER_VALUE,
+            "Codec::decode_eof incomplete required_total exceeded Codec::MAX_DECODE_UNITS_PER_VALUE",
+        );
+        let available = self.input.unread_len();
+        if required_total.get() <= available {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "codec reported incomplete input within available window",
+            ));
+        }
+        // SAFETY: `available` is the current unread length.
+        unsafe {
+            self.input.consume(available);
+        }
+        match source {
+            Some(source) => Err(map_error(source)),
+            None => Err(Error::new(ErrorKind::UnexpectedEof, "failed to decode complete value")),
+        }
     }
 
     /// Rejects invalid codec input and applies its consumption hint.
