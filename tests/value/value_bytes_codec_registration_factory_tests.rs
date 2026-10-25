@@ -20,6 +20,7 @@ use qubit_codec::ValueCodecRegistrationSource;
 use qubit_codec::ValueDecoder;
 use qubit_codec::ValueEncoder;
 use qubit_codec::ValueStringCodecDescriptor;
+use qubit_codec::register_value_bytes_codec;
 
 #[derive(Default)]
 struct MirrorU32BytesCodec;
@@ -85,10 +86,10 @@ fn build_second() -> ValueBytesCodecRegistration {
     )
 }
 
-static FIRST: ValueBytesCodecRegistration = ValueCodecRegistration::new(
-    ValueCodecId::new("mirror.bytes.factory.static"),
-    &BYTES_DESCRIPTOR,
-    ValueCodecRegistrationSource::new("mirror-crate", "mirror::factory", "src/factory.rs", 23),
+register_value_bytes_codec!(
+    id = "mirror.bytes.factory.inventory",
+    codec = MirrorU32BytesCodec,
+    value = u32,
 );
 
 #[test]
@@ -153,17 +154,22 @@ fn test_two_factories_serve_different_stable_ids() {
 }
 
 #[test]
-fn test_a_factory_built_registration_freezes_into_a_local_registry() {
-    let registry = ValueBytesCodecRegistry::from_registrations([&FIRST])
-        .expect("a single unique factory-built registration must freeze");
-
+fn test_factory_registration_enters_the_global_registry() {
+    let registry = ValueBytesCodecRegistry::try_global().expect("inventory registrations must freeze");
     let found = registry
-        .get("mirror.bytes.factory.static")
-        .expect("the factory-built registration must be reachable by its stable ID");
+        .get("mirror.bytes.factory.inventory")
+        .expect("the inventory factory result must be reachable by its stable ID");
     assert_eq!(
         found.source().module_path(),
-        "mirror::factory",
-        "the frozen registry must retain the declaration site of the factory callback"
+        "tests::value::value_bytes_codec_registration_factory_tests",
+        "the registry must retain the declaration site of the submitted factory"
+    );
+    assert_eq!(
+        found
+            .descriptor()
+            .encode(&11_u32)
+            .expect("registered bytes codec should encode"),
+        vec![0, 0, 0, 11],
     );
 }
 

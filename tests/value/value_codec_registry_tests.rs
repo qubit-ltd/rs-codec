@@ -10,6 +10,8 @@ use std::any::TypeId;
 use std::any::type_name;
 use std::io::Error;
 use std::ptr;
+use std::sync::Arc;
+use std::sync::Barrier;
 use std::thread;
 
 use qubit_codec::ValueBytesCodecDescriptor;
@@ -321,14 +323,20 @@ fn test_same_id_may_exist_in_string_and_bytes_registries() {
 }
 
 #[test]
-fn test_global_value_string_codec_registry_initialization_is_unique_across_threads() {
-    let addresses = (0..8)
+fn test_global_value_string_codec_registry_access_is_unique_across_concurrent_threads() {
+    let barrier = Arc::new(Barrier::new(8));
+    let threads = (0..8)
         .map(|_| {
-            thread::spawn(|| {
+            let barrier = Arc::clone(&barrier);
+            thread::spawn(move || {
+                barrier.wait();
                 ValueStringCodecRegistry::try_global().expect("valid global registry")
                     as *const ValueStringCodecRegistry as usize
             })
         })
+        .collect::<Vec<_>>();
+    let addresses = threads
+        .into_iter()
         .map(|thread| thread.join().expect("registry thread must complete"))
         .collect::<Vec<_>>();
 
