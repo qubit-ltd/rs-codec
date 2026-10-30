@@ -37,3 +37,55 @@ equivalent focused commands are:
 cargo asm --bench transcode copy_safe
 cargo asm --bench transcode copy_unchecked
 ```
+
+## Streaming output windows
+
+Run the 32-byte and 1024-byte output window groups with:
+
+```bash
+cargo bench --locked --bench transcode -- output_window
+```
+
+The `transcoder_streaming` group keeps the `output_window_32` and
+`output_window_1024` `CopyTranscoder` baselines. It also measures the
+production `TranscodeDecodeEngine` paths as `decode_engine_output_window_32`
+and `decode_engine_output_window_1024`, and the public
+`CodecTranscodeDecoder` paths as `codec_adapter_output_window_32` and
+`codec_adapter_output_window_1024`. Each group processes the same 64 KiB
+fixture. Output buffers and decoder reset are prepared outside the timed
+iterations; each written window is observed before the buffer is reused.
+Correctness and progress-state checks run once outside timing and verify that
+the full output matches the input, with `NeedOutput` between windows and
+`Complete` at the end.
+
+On 2026-10-30, the RC-009 pre-change inspection used HEAD
+`4310cde13f9dbf62728d979f2e0983aa8dac154c`, rustc 1.94.0
+(`x86_64-unknown-linux-gnu`, LLVM 21.1.8), an Intel Core i5-9600K host, and
+the bench profile (`opt-level=3`, `lto=true`, `codegen-units=1`). The Cargo JSON
+artifact record and executable path are retained under `target/review-20261030/`;
+`objdump -Cd` output is retained there as well. The later `align-ci.sh` run
+cleaned the generated `target/release` directory, so the executable itself was
+not retained. LTO left the benchmark closures without distinct
+symbols, and the executable has no line-table debug information; the observed
+`memcpy` and vector instructions could not be attributed reliably to the
+`direct_transcode`, `decode_engine`, or `output_window` timed closures. RC-009
+is therefore unresolved for this toolchain: the old observation code was left
+unchanged, and these results do not establish whether its writes were
+eliminated. The new output-window measurements are a baseline for these
+production paths, not evidence of a performance improvement.
+
+The 2026-10-30 run on that host reported these Criterion time intervals:
+
+| Benchmark | Time |
+| --- | ---: |
+| `output_window_32` | 16.434–22.441 µs |
+| `output_window_1024` | 4.7510–7.5959 µs |
+| `decode_engine_output_window_32` | 32.452–44.766 µs |
+| `decode_engine_output_window_1024` | 15.173–20.706 µs |
+| `codec_adapter_output_window_32` | 21.806–30.635 µs |
+| `codec_adapter_output_window_1024` | 11.446–17.900 µs |
+
+These are observed confidence intervals from one run, not cross-platform
+thresholds. A separate checkout was compiling another Criterion benchmark on
+the shared host during this run, so host contention may have affected the
+intervals. The window correctness checks completed before timing each group.

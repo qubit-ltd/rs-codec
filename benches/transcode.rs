@@ -8,6 +8,7 @@
 //! Baseline benchmarks for the generic `Transcoder` lifecycle.
 
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::hint::black_box;
 use std::num::NonZeroUsize;
 use std::time::Duration;
@@ -218,6 +219,73 @@ fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
     }
 }
 
+/// Drives a complete visible input through reusable output windows.
+fn run_output_windows<T>(transcoder: &mut T, input: &[u8], output: &mut [u8]) -> usize
+where
+    T: Transcoder<Input = u8, Output = u8>,
+    T::Error: Debug,
+{
+    let mut input_index = 0;
+    let mut written_total = 0;
+    while input_index < input.len() {
+        let progress = transcoder
+            .transcode(black_box(input), input_index, output, 0)
+            .expect("copy conversion is infallible");
+        black_box(&output[..progress.written()]);
+        input_index += progress.read();
+        written_total += progress.written();
+    }
+    black_box((input_index, written_total));
+    written_total
+}
+
+/// Checks output and status transitions outside timed iterations.
+fn verify_output_windows<T>(transcoder: &mut T, input: &[u8], window: usize)
+where
+    T: Transcoder<Input = u8, Output = u8>,
+    T::Error: Debug,
+{
+    let mut output = vec![0_u8; window];
+    let mut decoded = Vec::with_capacity(input.len());
+    let mut input_index = 0;
+    while input_index < input.len() {
+        let progress = transcoder
+            .transcode(input, input_index, &mut output, 0)
+            .expect("copy conversion is infallible");
+        assert!(progress.read() > 0);
+        decoded.extend_from_slice(&output[..progress.written()]);
+        input_index += progress.read();
+        if input_index == input.len() {
+            assert!(progress.is_complete());
+        } else {
+            assert!(progress.is_need_output());
+        }
+    }
+    assert_eq!(input.len(), input_index);
+    assert_eq!(input, decoded.as_slice());
+}
+
+/// Benchmarks codec-backed production decoders with small output windows.
+fn bench_production_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
+    for window in [32_usize, 1024] {
+        let mut decoder = TranscodeDecodeEngine::new(CopyCodec, CopyHooks);
+        decoder.reset(&mut [], 0).expect("copy codec reset is infallible");
+        verify_output_windows(&mut decoder, input, window);
+        let mut output = vec![0_u8; window];
+        group.bench_function(format!("decode_engine_output_window_{window}"), |bencher| {
+            bencher.iter(|| run_output_windows(&mut decoder, input, &mut output));
+        });
+
+        let mut adapter = CodecTranscodeDecoder::new(CopyCodec);
+        adapter.reset(&mut [], 0).expect("copy codec reset is infallible");
+        verify_output_windows(&mut adapter, input, window);
+        let mut adapter_output = vec![0_u8; window];
+        group.bench_function(format!("codec_adapter_output_window_{window}"), |bencher| {
+            bencher.iter(|| run_output_windows(&mut adapter, input, &mut adapter_output));
+        });
+    }
+}
+
 #[inline(never)]
 fn copy_safe(input: &[u8], output: &mut [u8]) {
     for index in 0..input.len() {
@@ -277,6 +345,7 @@ fn bench_transcoder(criterion: &mut Criterion) {
     streaming.warm_up_time(Duration::from_secs(2));
     streaming.measurement_time(Duration::from_secs(5));
     bench_streaming_windows(&mut streaming, &input);
+    bench_production_streaming_windows(&mut streaming, &input);
     streaming.finish();
 
     let mut indexing = criterion.benchmark_group("safe_vs_unchecked");
