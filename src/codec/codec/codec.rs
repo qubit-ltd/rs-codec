@@ -150,12 +150,16 @@ pub trait Codec {
 
     /// The minimum possible non-zero readable unit count for one decoded value.
     ///
-    /// This is a lower bound used by checked callers for planning and fast
-    /// impossibility checks. If a streaming decoder has fewer than this many
-    /// readable units, no complete value can be present at the current
-    /// position. It is also the denominator used by default decode hooks when
-    /// estimating the maximum number of values that can be produced from an
-    /// input unit count.
+    /// This is the minimum readable width of any valid encoded value. Checked
+    /// callers use it for planning and fast impossibility checks. If a
+    /// streaming decoder has fewer than this many readable units, no complete
+    /// value can be present at the current position. Unsafe
+    /// [`decode`](Self::decode) callers must provide at least this many
+    /// readable units at `index`.
+    ///
+    /// Default decode hooks use the input unit count as their output bound:
+    /// an invalid-input policy may consume fewer units than a valid value and
+    /// still emit one replacement value.
     const MIN_UNITS_PER_VALUE: usize;
 
     /// The maximum unit count emitted when encoding one value.

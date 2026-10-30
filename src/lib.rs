@@ -38,6 +38,21 @@
 //! Concrete codecs live in sibling crates such as `qubit-codec-binary`,
 //! `qubit-codec-text`, and `qubit-codec-misc`.
 //!
+//! # Features
+//!
+//! The default feature set is empty. Features are independent.
+//!
+//! | Feature | Capability |
+//! | --- | --- |
+//! | `io` | Synchronous and asynchronous buffered bridges for `qubit-io`. |
+//! | `json` | Whole-value Serde JSON codecs for strings and bytes. Encoding requires `Serialize`; decoding requires `DeserializeOwned`. |
+//! | `registry` | Static string-wire and bytes-wire codec registration, macros, and runtime lookup. Registrations cannot be added at runtime. |
+//! | `json` + `registry` | Built-in registrations for `serde_json::Value` only. Custom DTOs require their own descriptor and unique registry ID. |
+//!
+//! See the [English user guide](https://github.com/qubit-ltd/rs-codec/blob/main/doc/user_guide.md)
+//! or the [Chinese user guide](https://github.com/qubit-ltd/rs-codec/blob/main/doc/user_guide.zh_CN.md)
+//! for setup, lifecycle handling, and registry examples.
+//!
 //! # Choosing an Abstraction
 //!
 //! Pick the smallest layer that matches the shape of the problem:
