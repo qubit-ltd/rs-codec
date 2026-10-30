@@ -24,12 +24,19 @@ use qubit_codec::Codec;
 use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeError;
+use qubit_codec::TranscodeEncodeErrorOf;
 use qubit_codec::TranscodeProgress;
+use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 use qubit_codec::engine::DecodeContext;
 use qubit_codec::engine::DecodeInvalidAction;
+use qubit_codec::engine::EncodeContext;
+use qubit_codec::engine::EncodeUnencodableAction;
+use qubit_codec::engine::TranscodeConvertEngine;
 use qubit_codec::engine::TranscodeDecodeEngine;
 use qubit_codec::engine::TranscodeDecodeHooks;
+use qubit_codec::engine::TranscodeEncodeEngine;
+use qubit_codec::engine::TranscodeEncodeHooks;
 use qubit_utils as utils_crate;
 
 const FIXTURE_LEN: usize = 64 * 1024;
@@ -41,6 +48,10 @@ struct CopyTranscoder;
 
 #[derive(Default)]
 struct CopyCodec;
+
+struct VariableWidthCodec;
+
+struct StrictEncodeHooks;
 
 impl Codec for CopyCodec {
     type Value = u8;
@@ -68,6 +79,51 @@ impl Codec for CopyCodec {
     ) -> Result<usize, Self::EncodeError> {
         output[output_index] = *value;
         Ok(1)
+    }
+}
+
+impl Codec for VariableWidthCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+
+    fn encode_len(&self, value: &u8) -> usize {
+        if *value < 128 { 1 } else { 2 }
+    }
+
+    unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        if input[index] != 0xff {
+            return Ok((input[index], NonZeroUsize::MIN));
+        }
+        if input.len() - index < 2 {
+            return Err(DecodeFailure::incomplete(utils_crate::nonzero(2)));
+        }
+        Ok((input[index + 1], utils_crate::nonzero(2)))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
+        if *value < 128 {
+            output[index] = *value;
+            Ok(1)
+        } else {
+            output[index..index + 2].copy_from_slice(&[0xff, *value]);
+            Ok(2)
+        }
+    }
+}
+
+impl TranscodeEncodeHooks<VariableWidthCodec> for StrictEncodeHooks {
+    fn handle_unencodable_encode(
+        &mut self,
+        _codec: &mut VariableWidthCodec,
+        _context: &EncodeContext<'_, u8>,
+    ) -> Result<EncodeUnencodableAction<u8>, TranscodeEncodeErrorOf<VariableWidthCodec>> {
+        Ok(EncodeUnencodableAction::Reject)
     }
 }
 
@@ -286,6 +342,156 @@ fn bench_production_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, 
     }
 }
 
+fn expected_variable_output(input: &[u8]) -> Vec<u8> {
+    let mut expected = Vec::with_capacity(input.len() * 2);
+    for &value in input {
+        if value >= 128 {
+            expected.push(0xff);
+        }
+        expected.push(value);
+    }
+    expected
+}
+
+fn run_engine_windows<T>(engine: &mut T, input: &[u8], output: &mut [u8]) -> usize
+where
+    T: Transcoder<Input = u8, Output = u8>,
+    T::Error: Debug,
+{
+    let mut cursor = 0;
+    let mut written = 0;
+    loop {
+        let progress = engine
+            .transcode(black_box(input), cursor, output, 0)
+            .expect("benchmark fixture conversion succeeds");
+        black_box(&output[..progress.written()]);
+        cursor += progress.read();
+        written += progress.written();
+        match progress.status() {
+            TranscodeStatus::Complete => break,
+            TranscodeStatus::NeedOutput { .. } => {}
+            TranscodeStatus::NeedInput { .. } => panic!("complete fixture needs no input"),
+        }
+    }
+    black_box((cursor, written));
+    written
+}
+
+fn verify_variable_windows<T>(engine: &mut T, input: &[u8], expected: &[u8], window: usize)
+where
+    T: Transcoder<Input = u8, Output = u8>,
+    T::Error: Debug,
+{
+    let mut output = vec![0_u8; window];
+    assert_eq!(0, engine.reset(&mut output, 0).expect("reset"));
+    let mut cursor = 0;
+    let mut actual = Vec::with_capacity(expected.len());
+    let mut saw_need_output = false;
+    loop {
+        let progress = engine.transcode(input, cursor, &mut output, 0).expect("main");
+        progress
+            .validate(cursor, input.len() - cursor, 0, output.len())
+            .expect("valid main progress");
+        actual.extend_from_slice(&output[..progress.written()]);
+        cursor += progress.read();
+        match progress.status() {
+            TranscodeStatus::Complete => break,
+            TranscodeStatus::NeedOutput { .. } => {
+                saw_need_output = true;
+                assert!(progress.read() > 0 || progress.written() > 0);
+            }
+            TranscodeStatus::NeedInput { .. } => panic!("complete input"),
+        }
+    }
+    assert_eq!(input.len(), cursor);
+    loop {
+        let progress = engine.transcode_eof(input, cursor, &mut output, 0).expect("EOF");
+        progress
+            .validate(cursor, input.len() - cursor, 0, output.len())
+            .expect("valid EOF progress");
+        actual.extend_from_slice(&output[..progress.written()]);
+        cursor += progress.read();
+        match progress.status() {
+            TranscodeStatus::Complete => break,
+            TranscodeStatus::NeedOutput { .. } => {
+                assert!(progress.read() > 0 || progress.written() > 0);
+            }
+            TranscodeStatus::NeedInput { .. } => panic!("EOF needs no input"),
+        }
+    }
+    assert_eq!(0, engine.finish(&mut output, 0).expect("finish"));
+    assert_eq!(expected, actual.as_slice());
+    if window < expected.len() {
+        assert!(saw_need_output);
+    }
+}
+
+fn bench_variable_engine<F, T>(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    name: &str,
+    input: &[u8],
+    expected: &[u8],
+    window: usize,
+    make_engine: F,
+) where
+    F: Fn() -> T,
+    T: Transcoder<Input = u8, Output = u8>,
+    T::Error: Debug,
+{
+    verify_variable_windows(&mut make_engine(), input, expected, window);
+    let mut engine = make_engine();
+    engine.reset(&mut [], 0).expect("timed engine reset");
+    let mut output = vec![0_u8; window];
+    group.bench_function(name, |bencher| {
+        bencher.iter(|| run_engine_windows(&mut engine, input, &mut output));
+    });
+}
+
+fn bench_variable_paths(criterion: &mut Criterion, input: &[u8]) {
+    let expected = expected_variable_output(input);
+    assert_eq!(98_304, expected.len());
+    let mut pending = TranscodeConvertEngine::new(CopyCodec, VariableWidthCodec, CopyHooks, StrictEncodeHooks);
+    pending.reset(&mut [], 0).expect("pending reset");
+    let progress = pending.transcode(&[128], 0, &mut [0_u8; 1], 0).expect("retain");
+    assert!(progress.is_need_output());
+    assert_eq!((1, 0), (progress.read(), progress.written()));
+    let mut drained = [0_u8; 2];
+    let progress = pending.transcode(&[128], 1, &mut drained, 0).expect("drain");
+    assert!(progress.is_complete());
+    assert_eq!((0, 2), (progress.read(), progress.written()));
+    assert_eq!([0xff, 128], drained);
+
+    let mut group = criterion.benchmark_group("engine_encode_convert");
+    group.throughput(Throughput::Bytes(input.len() as u64));
+    group.sample_size(SAMPLE_SIZE);
+    group.warm_up_time(Duration::from_secs(2));
+    group.measurement_time(Duration::from_secs(5));
+    for (suffix, window) in [
+        ("full", expected.len()),
+        ("window_2", 2),
+        ("window_32", 32),
+        ("window_1024", 1024),
+    ] {
+        bench_variable_engine(
+            &mut group,
+            &format!("encode_{suffix}"),
+            input,
+            &expected,
+            window,
+            || TranscodeEncodeEngine::new(VariableWidthCodec, StrictEncodeHooks),
+        );
+        bench_variable_engine(
+            &mut group,
+            &format!("convert_{suffix}"),
+            input,
+            &expected,
+            window,
+            || TranscodeConvertEngine::new(CopyCodec, VariableWidthCodec, CopyHooks, StrictEncodeHooks),
+        );
+    }
+    group.finish();
+}
+
 #[inline(never)]
 fn copy_safe(input: &[u8], output: &mut [u8]) {
     for index in 0..input.len() {
@@ -355,6 +561,8 @@ fn bench_transcoder(criterion: &mut Criterion) {
     indexing.measurement_time(Duration::from_secs(5));
     bench_safe_vs_unchecked(&mut indexing, &input);
     indexing.finish();
+
+    bench_variable_paths(criterion, &input);
 }
 
 criterion_group!(benches, bench_transcoder);

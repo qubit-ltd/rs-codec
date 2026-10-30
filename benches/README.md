@@ -58,6 +58,35 @@ Correctness and progress-state checks run once outside timing and verify that
 the full output matches the input, with `NeedOutput` between windows and
 `Complete` at the end.
 
+That output observation applies to the production decode-engine and adapter
+window paths. The older `CopyTranscoder` `output_window_32` and
+`output_window_1024` paths observe only final read and written counts; they do
+not observe each window before reuse.
+
+## Variable-width encode and convert engines
+
+Run the synthetic variable-width encoder and converter workloads with:
+
+```bash
+cargo bench --locked --bench transcode -- engine_encode_convert
+```
+
+The `engine_encode_convert` group registers `encode_full`, `convert_full`,
+`encode_window_2`, `encode_window_32`, `encode_window_1024`,
+`convert_window_2`, `convert_window_32`, and `convert_window_1024`. Its 64 KiB
+input cycles through all byte values; values below 128 encode as one byte and
+the rest as two bytes (`0xff` followed by the value), producing 98,304 output
+bytes. This synthetic fixture exercises production encode and convert engines
+with variable output widths and backpressure; its timings are not UTF or real
+charset performance claims.
+
+Criterion throughput is reported in input bytes. Codec and hook construction,
+oracle generation, output allocation, reset, correctness checks, and the
+pending-value witness are outside the timed iterations. Each timed output
+window is passed to `black_box` before reuse. The converter precheck also
+confirms that an input value consumed under one-byte output pressure is later
+drained exactly once from pending state.
+
 ### RC-009 follow-up inspection
 
 A follow-up inspection on 2026-10-30 used the unmodified baseline
@@ -322,6 +351,89 @@ RC-009 remains open. `benches/transcode.rs` was not changed, no benchmark was
 timed, and these results do not support performance tradeoffs or a claim that
 the six paths retain or eliminate their complete writes. This conclusion is
 limited to the recorded artifact, toolchain, and host.
+
+### RC-002: 2026-10-31 bounded default-artifact recheck
+
+This recheck used baseline HEAD `dcfa62e102079bd15bb8d0c1ea0f88399257ef41`
+with rustc/Cargo 1.94.0 (LLVM 21.1.8), `x86_64-unknown-linux-gnu`, Linux
+`7.0.0-38-generic`, Intel Core i5-9600K (6 CPUs), and the default bench
+profile (`opt-level=3`, `lto=true`, `codegen-units=1`, default features).
+The source/configuration fingerprints were `benches/transcode.rs`
+`07bc0383c3ab3bab8bfb636ce27a50065841005a7630d9c894a14be7e93b6b28`,
+`Cargo.toml` `cfeb931cded3c5a27f2000b0d5e7b5e7727afaa5a33996d52b4473edc7730de2`,
+and `Cargo.lock`
+`3dcf411b1d65da3461bf593f52a3e051c82889ec1b79733bb0f9d9a9eade3141`.
+The single default-profile build command,
+`cargo bench --locked --bench transcode --no-run --message-format=json`,
+exited 0. Its Cargo JSON selected
+`target/rc-002-evidence/default/target/release/deps/transcode-518bb86cbd866b72`,
+SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+`nm -S -C`, `objdump -Cd`, and `readelf -S` exited 0. The artifact contains
+`transcode::bench_transcoder` (`0x979f0`, size `0x7f24`) and
+`transcode::copy_safe_exact` (`0x979d0`, size `0x1f`), but no distinct symbols
+or debug line sections to assign the LTO-inlined timed closures. The artifact
+hash matches the prior default-profile audits, so no auxiliary build was
+repeated; it would not add attribution evidence.
+
+| Timed path | Source write and timed observation | Result |
+| --- | --- | --- |
+| `direct_transcode` | One 65,536-byte copy; only progress counts observed. | Unresolved: default instructions cannot be assigned to this closure. |
+| `complete_lifecycle` | One 65,536-byte lifecycle copy; only count and first output byte observed. | Unresolved: default instructions cannot be assigned to this closure. |
+| `decode_engine` | One 65,536-byte engine copy; only progress counts observed. | Unresolved: default instructions cannot be assigned to this closure. |
+| `codec_adapter` | One 65,536-byte adapter copy; only progress counts and first output byte observed. | Unresolved: default instructions cannot be assigned to this closure. |
+| `output_window_32` | Reuses a 32-byte window for 2,048 writes; only final totals observed. | Unresolved: per-window writes cannot be assigned to this closure. |
+| `output_window_1024` | Reuses a 1,024-byte window for 64 writes; only final totals observed. | Unresolved: per-window writes cannot be assigned to this closure. |
+
+No old benchmark implementation was changed: this audit confirms neither
+retention nor elimination of the six paths' complete writes. Their historical
+measurements remain unsuitable for performance decisions. This classification
+is limited to the recorded default artifact and environment; `black_box` in
+source does not by itself prove machine-code retention. The Cargo JSON,
+selected path, hash, full `nm`/`objdump` output, and section listing were
+captured under `target/rc-002-evidence/default/` during this implementation;
+they are local generated evidence, while the summary above is self-contained.
+
+### RC-003: 2026-10-31 engine baseline
+
+The eight `engine_encode_convert` workloads passed their output oracle and
+pending-drain prechecks, then were timed with
+`cargo bench --locked --bench transcode -- engine_encode_convert` on the same
+host and default bench profile described above. Criterion used 20 samples,
+2-second warmup, and 5-second measurement time per workload. The table records
+the reported time and input-byte throughput intervals from this run:
+
+| Workload | Time interval (median) | Input throughput interval (median) |
+| --- | ---: | ---: |
+| `encode_full` | 116.03–126.35 µs (121.94 µs) | 494.68–538.67 MiB/s (512.53 MiB/s) |
+| `convert_full` | 148.60–156.31 µs (151.77 µs) | 399.85–420.60 MiB/s (411.82 MiB/s) |
+| `encode_window_2` | 276.50–308.52 µs (291.84 µs) | 202.58–226.04 MiB/s (214.16 MiB/s) |
+| `convert_window_2` | 492.41–532.65 µs (512.45 µs) | 117.34–126.93 MiB/s (121.96 MiB/s) |
+| `encode_window_32` | 109.99–110.85 µs (110.44 µs) | 563.80–568.25 MiB/s (565.90 MiB/s) |
+| `convert_window_32` | 163.79–166.25 µs (164.87 µs) | 375.94–381.59 MiB/s (379.10 MiB/s) |
+| `encode_window_1024` | 103.94–108.30 µs (105.66 µs) | 577.12–601.29 MiB/s (591.51 MiB/s) |
+| `convert_window_1024` | 148.51–167.07 µs (157.93 µs) | 374.08–420.84 MiB/s (395.74 MiB/s) |
+
+Other Cargo builds were active on the shared host during this run, and Criterion
+reported outliers for several cases. Treat these as a local baseline rather
+than a cross-run threshold or a performance comparison. In the default LTO
+artifact, `nm -S -C` found `transcode::bench_transcoder` at `0x9d0e0` (size
+`0xac88`) but no separate symbols or debug line information for the eight
+closures; `objdump -Cd` therefore cannot attribute each full write to a timed
+closure. The source observes every written slice with `black_box` before
+reusing its buffer, but this is not a machine-code retention proof. The
+artifact SHA-256 is
+`9f6fc8482482d6eb2f79831a92dc268edcd000d5b6857b6bbf17278cd311b49c`; source
+fingerprints are `benches/transcode.rs`
+`5f99479a9c8be3c1a85a0e3b75b97a7ecbe9c9e7d2c3a2f3e9376e9698e20609`,
+`Cargo.toml` `cfeb931cded3c5a27f2000b0d5e7b5e7727afaa5a33996d52b4473edc7730de2`,
+and `Cargo.lock`
+`3dcf411b1d65da3461bf593f52a3e051c82889ec1b79733bb0f9d9a9eade3141`.
+The RC-002 Cargo JSON and inspection outputs were generated under
+`target/rc-002-evidence/default/`; the final RC-003 executable inspection is
+under `target/rc-003-evidence/default/`, and Criterion estimates are under
+`target/rc-002-evidence/default/target/criterion/engine_encode_convert/`.
+These local artifacts are not needed to interpret this committed summary.
 
 ### RC-009 follow-up: 2026-10-31 implementation worktree audit
 
