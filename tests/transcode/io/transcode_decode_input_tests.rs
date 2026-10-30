@@ -1531,6 +1531,44 @@ fn test_buffered_decode_input_lifecycle_maps_lifecycle_errors() {
 }
 
 #[test]
+fn test_read_decoded_finish_error_consumes_main_value() {
+    for scratch in [false, true] {
+        let source = ChunkedInput::new(vec![vec![0x1234, 0x5678]]);
+        let mut input = TranscodeDecodeInput::with_capacity(source, 2);
+        assert!(input.fill_until(2).expect("buffer both values"));
+        let mut codec = DecodeLifecycleCodec {
+            state: 0,
+            mode: DecodeLifecycleMode::FinishError,
+        };
+        let mut reset = [u32::MAX];
+        let mut finish = [u32::MAX];
+        let error = if scratch {
+            input
+                .read_decoded_lifecycle_with_scratch(&mut codec, &mut reset, &mut finish, map_codec_error)
+                .expect_err("finish should fail after main decode")
+        } else {
+            input
+                .read_decoded_lifecycle_with(&mut codec, map_codec_error)
+                .expect_err("finish should fail after main decode")
+        };
+        assert_eq!(ErrorKind::InvalidData, error.kind());
+        assert_eq!("bad input index", error.to_string());
+        assert_eq!(&[0x5678], input.unread());
+        assert_eq!(2, codec.state);
+        if scratch {
+            assert_eq!([0xaaaa], reset);
+            assert_eq!([u32::MAX], finish);
+        }
+        let mut fresh_codec = DecodeLifecycleCodec::default();
+        let next = input
+            .read_decoded_lifecycle_with(&mut fresh_codec, map_codec_error)
+            .expect("a fresh codec should decode the next source value");
+        assert_eq!(&0x5678, next.value());
+        assert!(input.unread().is_empty());
+    }
+}
+
+#[test]
 #[should_panic(expected = "Codec::decode_reset wrote beyond its reset bound")]
 fn test_buffered_decode_input_read_decoded_panics_on_reset_overreport() {
     let input = ChunkedInput::new(vec![vec![0x1234]]);
@@ -3160,6 +3198,8 @@ impl Codec for StuckIncompleteReadCodec {
 fn test_buffered_decode_input_read_decoded_reports_eof_before_minimum_width() {
     let input = ChunkedInput::new(vec![vec![0x0001]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 2);
+    assert!(input.fill_until(1).expect("buffer the incomplete unit"));
+    assert!(!input.unread().is_empty());
     let mut codec = FixedPairCodec;
 
     let error = input
@@ -3167,12 +3207,15 @@ fn test_buffered_decode_input_read_decoded_reports_eof_before_minimum_width() {
         .expect_err("single unit input should fail before a pair is available");
 
     assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert!(input.unread().is_empty());
 }
 
 #[test]
 fn test_buffered_decode_input_read_decoded_reports_eof_after_incomplete() {
     let input = ChunkedInput::new(vec![vec![0x0001, 0x0002]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
+    assert!(input.fill_until(2).expect("buffer the incomplete units"));
+    assert!(!input.unread().is_empty());
     let mut codec = AlwaysIncompleteReadCodec;
 
     let error = input
@@ -3180,6 +3223,7 @@ fn test_buffered_decode_input_read_decoded_reports_eof_after_incomplete() {
         .expect_err("incomplete decode should fail at EOF");
 
     assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert!(input.unread().is_empty());
 }
 
 #[test]

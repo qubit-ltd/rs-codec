@@ -504,6 +504,15 @@ where
     /// impossible incomplete state, or the error returned by `map_error` for
     /// codec reset, invalid input, or codec finish failures.
     ///
+    /// This operation is not transactional. A successful main decode consumes
+    /// its source units before codec finalization. If finalization fails, the
+    /// decoded value is not returned and the consumed input is not restored.
+    /// A later read must not be treated as a retry of that value. Truncated
+    /// input at EOF is consumed before reporting the error. Invalid-input
+    /// consumption follows the codec's validated consumption hint. Codec
+    /// state is not rolled back. The `Unsupported` preflight error above is
+    /// returned before invoking the codec or reading input.
+    ///
     /// # Panics
     ///
     /// Panics when the codec reports more reset or finish values than its
@@ -548,6 +557,14 @@ where
     /// occurs before a complete value is available, `InvalidData` when the
     /// codec reports an impossible incomplete state, or the error returned
     /// by `map_error` for codec reset, invalid input, or codec finish failures.
+    ///
+    /// This operation is not transactional. A successful main decode consumes
+    /// its source units before codec finalization. If finalization fails, the
+    /// decoded value is not returned and the consumed input is not restored.
+    /// A later read must not be treated as a retry of that value. Truncated
+    /// input at EOF is consumed before reporting the error. Invalid-input
+    /// consumption follows the codec's validated consumption hint. Codec
+    /// state is not rolled back.
     ///
     /// # Panics
     ///
@@ -605,6 +622,19 @@ where
     /// available, `InvalidData` when the codec reports an impossible
     /// incomplete state, or the error returned by `map_error` for codec reset,
     /// invalid input, or codec finish failures.
+    ///
+    /// This operation is not transactional. A successful main decode consumes
+    /// its source units before codec finalization. If finalization fails, the
+    /// decoded value is not returned and the consumed input is not restored.
+    /// A later read must not be treated as a retry of that value. Truncated
+    /// input at EOF is consumed before reporting the error. Invalid-input
+    /// consumption follows the codec's validated consumption hint. Codec
+    /// state is not rolled back. A short scratch buffer is rejected before
+    /// invoking the codec or reading input. Reset and finish output buffers
+    /// may already have changed when an error is returned; the error carries
+    /// no valid output lengths, so their full contents must not be treated as
+    /// this operation's successful output. Recovery of codec state after an
+    /// error is codec-specific, and consumed input is never restored.
     ///
     /// # Panics
     ///
