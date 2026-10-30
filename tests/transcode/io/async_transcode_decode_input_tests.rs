@@ -9,7 +9,9 @@
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::pin::pin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
@@ -98,14 +100,7 @@ fn complete<F>(future: F) -> F::Output
 where
     F: Future,
 {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = pin!(future);
-    for _ in 0..128 {
-        if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
-            return output;
-        }
-    }
-    panic!("test future did not complete");
+    super::internal::complete_when_woken(future)
 }
 
 /// Polls a future once without requiring an asynchronous runtime.
@@ -748,6 +743,97 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
     assert_eq!([0x1234], output);
     assert_eq!(0, input.unread_len());
     Ok(())
+}
+
+#[test]
+fn test_async_transcode_wake_driver_rejects_unnotified_pending() {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        super::internal::complete_when_woken(std::future::poll_fn::<(), _>(|_| Poll::Pending))
+    }));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_async_transcode_wake_driver_repolls_only_after_notification() {
+    let polls = std::cell::Cell::new(0);
+    let value = super::internal::complete_when_woken(std::future::poll_fn(|cx| {
+        let count = polls.get() + 1;
+        polls.set(count);
+        if count == 1 {
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(7)
+        }
+    }));
+    assert_eq!(7, value);
+    assert_eq!(2, polls.get());
+}
+
+#[test]
+fn test_async_transcode_wake_refill_completes_after_pending() {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![0x5a], 1), 1);
+    assert!(complete(input.fill_more_async()).expect("refill completes"));
+    assert_eq!([0x5a], input.unread());
+}
+
+#[derive(Debug, Default)]
+struct WakeGate {
+    ready: bool,
+    waker: Option<Waker>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct LatestWakerInput(Arc<Mutex<WakeGate>>);
+
+impl LatestWakerInput {
+    fn release(&self) {
+        let waker = {
+            let mut gate = self.0.lock().expect("wake gate lock");
+            gate.ready = true;
+            gate.waker.take()
+        };
+        waker.expect("pending poll registered a waker").wake();
+    }
+}
+
+impl AsyncInput for LatestWakerInput {
+    type Item = u8;
+
+    unsafe fn poll_read_unchecked(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> Poll<io::Result<usize>> {
+        let mut gate = self.0.lock().expect("wake gate lock");
+        if !gate.ready {
+            gate.waker = Some(cx.waker().clone());
+            return Poll::Pending;
+        }
+        output[index..index + count].copy_from_slice(&[0x5a][..count]);
+        Poll::Ready(Ok(count))
+    }
+}
+
+#[test]
+fn test_async_transcode_wake_latest_refill_waker() {
+    let source = LatestWakerInput::default();
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(source.clone(), 1);
+    let a = Arc::new(super::internal::WakeCount::default());
+    let b = Arc::new(super::internal::WakeCount::default());
+    let wa = std::task::Waker::from(a.clone());
+    let wb = std::task::Waker::from(b.clone());
+    let mut ca = Context::from_waker(&wa);
+    let mut cb = Context::from_waker(&wb);
+    let mut future = Box::pin(input.fill_more_async());
+    assert!(matches!(future.as_mut().poll(&mut ca), Poll::Pending));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Pending));
+    source.release();
+    assert_eq!(0, a.0.load(Ordering::SeqCst));
+    assert_eq!(1, b.0.load(Ordering::SeqCst));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Ready(Ok(true))));
 }
 
 /// Verifies EOF preserves an incomplete suffix for caller-defined policy.

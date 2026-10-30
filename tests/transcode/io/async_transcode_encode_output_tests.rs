@@ -9,6 +9,9 @@
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
@@ -97,14 +100,7 @@ fn complete<F>(future: F) -> F::Output
 where
     F: Future,
 {
-    let mut context = Context::from_waker(Waker::noop());
-    let mut future = std::pin::pin!(future);
-    for _ in 0..128 {
-        if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
-            return output;
-        }
-    }
-    panic!("test future did not complete");
+    super::internal::complete_when_woken(future)
 }
 
 /// Polls a future once without selecting an asynchronous runtime.
@@ -662,6 +658,130 @@ fn test_async_transcode_encode_output_preserves_lifecycle_output_across_pending(
     );
     assert!(inner.flushed);
     Ok(())
+}
+
+#[test]
+fn test_async_transcode_wake_drain_completes_after_pending() {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(8), 8);
+    let mut encoder = CopyEncoder;
+    let mut mapper = |_| io::Error::other("copy encoder cannot fail");
+    complete(output.reset_async(&mut encoder, &mut mapper)).expect("reset buffers output");
+    complete(output.drain_async()).expect("drain completes");
+    assert_eq!(b"^", output.inner().bytes.as_slice());
+}
+
+#[test]
+fn test_async_transcode_wake_flush_completes_after_pending() {
+    let mut output = AsyncTranscodeEncodeOutput::new(ChunkedAsyncOutput::new(8));
+    output.inner_mut().flush_pending = true;
+    complete(output.flush_async()).expect("flush completes");
+    assert!(output.inner().flushed);
+    assert_eq!(2, output.inner().flush_calls);
+}
+
+#[derive(Debug, Default)]
+struct OutputWakeGate {
+    ready: bool,
+    waker: Option<Waker>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct LatestWakerOutput {
+    gate: Arc<Mutex<OutputWakeGate>>,
+    bytes: Vec<u8>,
+}
+
+impl LatestWakerOutput {
+    fn release(&self) {
+        let waker = {
+            let mut gate = self.gate.lock().expect("wake gate lock");
+            gate.ready = true;
+            gate.waker.take()
+        };
+        waker.expect("pending poll registered a waker").wake();
+    }
+}
+
+impl AsyncOutput for LatestWakerOutput {
+    type Item = u8;
+
+    unsafe fn poll_write_unchecked(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        input: &[u8],
+        index: usize,
+        count: usize,
+    ) -> Poll<io::Result<usize>> {
+        let ready = {
+            let mut gate = self.gate.lock().expect("wake gate lock");
+            if !gate.ready {
+                gate.waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            true
+        };
+        if ready {
+            self.bytes.extend_from_slice(&input[index..index + count]);
+        }
+        Poll::Ready(Ok(count))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let mut gate = self.gate.lock().expect("wake gate lock");
+        if !gate.ready {
+            gate.waker = Some(cx.waker().clone());
+            return Poll::Pending;
+        }
+        Poll::Ready(Ok(()))
+    }
+}
+
+fn latest_contexts() -> (
+    Arc<super::internal::WakeCount>,
+    Arc<super::internal::WakeCount>,
+    Waker,
+    Waker,
+) {
+    let a = Arc::new(super::internal::WakeCount::default());
+    let b = Arc::new(super::internal::WakeCount::default());
+    let wa = Waker::from(a.clone());
+    let wb = Waker::from(b.clone());
+    (a, b, wa, wb)
+}
+
+#[test]
+fn test_async_transcode_wake_latest_drain_waker() {
+    let sink = LatestWakerOutput::default();
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(sink.clone(), 1);
+    let mut encoder = CopyEncoder;
+    let mut mapper = |_| io::Error::other("copy encoder cannot fail");
+    complete(output.reset_async(&mut encoder, &mut mapper)).expect("reset buffers output");
+    let (a, b, wa, wb) = latest_contexts();
+    let mut ca = Context::from_waker(&wa);
+    let mut cb = Context::from_waker(&wb);
+    let mut future = Box::pin(output.drain_async());
+    assert!(matches!(future.as_mut().poll(&mut ca), Poll::Pending));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Pending));
+    sink.release();
+    assert_eq!(0, a.0.load(Ordering::SeqCst));
+    assert_eq!(1, b.0.load(Ordering::SeqCst));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Ready(Ok(()))));
+}
+
+#[test]
+fn test_async_transcode_wake_latest_flush_waker() {
+    let sink = LatestWakerOutput::default();
+    let mut output = AsyncTranscodeEncodeOutput::new(sink.clone());
+    let (a, b, wa, wb) = latest_contexts();
+    let mut ca = Context::from_waker(&wa);
+    let mut cb = Context::from_waker(&wb);
+    let mut future = Box::pin(output.flush_async());
+    assert!(matches!(future.as_mut().poll(&mut ca), Poll::Pending));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Pending));
+    sink.release();
+    assert_eq!(0, a.0.load(Ordering::SeqCst));
+    assert_eq!(1, b.0.load(Ordering::SeqCst));
+    assert!(matches!(future.as_mut().poll(&mut cb), Poll::Ready(Ok(()))));
 }
 
 /// Verifies encoder progress is returned before later delivery can pend.
