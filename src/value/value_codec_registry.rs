@@ -195,7 +195,6 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     ///
     /// `Some` borrows the matching registration from this registry; `None`
     /// means the ID is absent. Lookup uses a logarithmic tree search.
-    #[must_use]
     #[inline]
     pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration<D>> {
         let index = *self.indices.get(id)?;
