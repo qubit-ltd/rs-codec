@@ -46,6 +46,43 @@ pub(super) fn validate_decode_progress(
     Ok(progress)
 }
 
+/// Validates EOF progress before committing source consumption.
+///
+/// # Parameters
+///
+/// - `progress`: Report returned by the transcoder for the EOF call.
+/// - `input_index`: Absolute input index at the start of that call.
+/// - `available_input`: Input units available from the starting index.
+/// - `output_index`: Absolute output index at the start of that call.
+/// - `available_output`: Writable units available from the starting index.
+///
+/// # Returns
+///
+/// Returns the unchanged report when its counts and status satisfy the EOF
+/// contract.
+///
+/// # Errors
+///
+/// Returns `InvalidData` for invalid counts, status invariants, or `NeedInput`.
+/// The adapter has not committed source consumption, but this check does not
+/// roll back decoder state or caller-owned output.
+pub(super) fn validate_eof_decode_progress(
+    progress: TranscodeProgress,
+    input_index: usize,
+    available_input: usize,
+    output_index: usize,
+    available_output: usize,
+) -> Result<TranscodeProgress> {
+    let progress = validate_decode_progress(progress, input_index, available_input, output_index, available_output)?;
+    if matches!(progress.status(), TranscodeStatus::NeedInput { .. }) {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "decoder violated the EOF contract by requesting more input",
+        ));
+    }
+    Ok(progress)
+}
+
 /// Validates an encoder progress report before the output adapter commits it.
 ///
 /// # Parameters

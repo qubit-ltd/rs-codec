@@ -25,6 +25,7 @@ use qubit_utils::allocation_error;
 
 use super::async_transcode_decode_step::AsyncTranscodeDecodeStep;
 use super::transcode_progress_validation::validate_decode_progress;
+use super::transcode_progress_validation::validate_eof_decode_progress;
 use crate::CapacityError;
 use crate::TranscodeProgress;
 use crate::Transcoder;
@@ -609,8 +610,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns invalid output-range errors, or decoder errors mapped by
-    /// `map_error`, and invalid-progress errors from contract validation.
+    /// Returns invalid output-range errors, decoder errors mapped by
+    /// `map_error`, or `InvalidData` if the decoder requests more input after
+    /// EOF. Invalid progress does not commit source consumption, but decoder
+    /// state and caller-owned output are not rolled back.
     pub fn transcode_eof_step<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -636,7 +639,7 @@ where
         let progress = decoder
             .transcode_eof(self.unread(), 0, &mut output[..output_end], output_index)
             .map_err(&mut *map_error)
-            .and_then(|progress| validate_decode_progress(progress, 0, available_input, output_index, count))?;
+            .and_then(|progress| validate_eof_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
         Ok(progress)
     }

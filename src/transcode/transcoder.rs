@@ -505,8 +505,9 @@ pub trait Transcoder {
     ///
     /// # Returns
     ///
-    /// Validated complete or output-limited progress. The default never returns
-    /// a successful `NeedInput` status at EOF.
+    /// Validated complete or output-limited progress. EOF results should be
+    /// `Complete`, `NeedOutput`, or an error; the default never returns a
+    /// successful `NeedInput` status at EOF.
     ///
     /// # Errors
     ///
