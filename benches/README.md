@@ -58,6 +58,34 @@ Correctness and progress-state checks run once outside timing and verify that
 the full output matches the input, with `NeedOutput` between windows and
 `Complete` at the end.
 
+### RC-009 follow-up inspection
+
+A follow-up inspection on 2026-10-30 used the unmodified baseline
+`2cad737661dc7d3d888372d38da77608e33d777c` with rustc 1.94.0, LLVM 21.1.8,
+and an Intel Core i5-9600K. The bench profile remained
+`opt-level=3`, `lto=true`, and `codegen-units=1`. The exact default-profile
+command was `cargo bench --locked --bench transcode --no-run
+--message-format=json`; Cargo's JSON artifact identified
+`target/release/deps/transcode-518bb86cbd866b72` (SHA-256
+`0732fc56759a44440e9abf92dc60f7f54a1e4b0a2087fcf42496f424969acb97`).
+`objdump -Cd` and `nm -C` confirmed that LTO inlined the benchmark closures
+into `transcode::bench_transcoder`, without separate closure symbols.
+
+To locate the timed closures, an auxiliary build used the same bench profile
+with `CARGO_PROFILE_BENCH_DEBUG=1` and a separate `CARGO_TARGET_DIR`; its
+executable was `transcode-7877a69bede2c061` (SHA-256
+`77f37d2367b2d3450f192b4f59a2f3b904ef8ca0fa41755100f2c21414ec4479`). Its
+line-table disassembly associated the direct, engine, and old window benchmark
+entrances with their Criterion loops, but did not provide enough attribution
+to establish the complete output writes in the default-profile executable.
+The auxiliary executable alone cannot establish default-profile behavior.
+RC-009 therefore remains unresolved: no benchmark code was changed, and
+neither elimination nor retention of every old path's full output writes is
+claimed. The default and auxiliary artifacts and their disassemblies were
+captured under `/tmp/rs-codec-rc009.IBnT95` during this inspection; those
+temporary files are removed after the implementation checks. This result is
+limited to the recorded toolchain and host and makes no cross-platform claim.
+
 On 2026-10-30, the RC-009 pre-change inspection used HEAD
 `4310cde13f9dbf62728d979f2e0983aa8dac154c`, rustc 1.94.0
 (`x86_64-unknown-linux-gnu`, LLVM 21.1.8), an Intel Core i5-9600K host, and
