@@ -20,6 +20,8 @@ use serde::ser::Error as _;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 
+use super::internal::OwnedJsonBytes;
+
 #[derive(Deserialize, Serialize)]
 struct RequiredDto {
     text: String,
@@ -137,6 +139,14 @@ fn test_decode_reports_a_missing_field_for_the_target_type() {
         error.to_string().contains("name"),
         "the missing-field diagnostic must name the absent field, got {error}"
     );
+}
+
+#[test]
+fn test_json_bytes_utf8_codec_target_controls_validation() {
+    let input = b"\"\xff\"";
+    let output = JsonBytesValueCodec::<OwnedJsonBytes>::new().decode(input).unwrap();
+    assert_eq!(vec![0xff], output.0);
+    assert!(JsonBytesValueCodec::<String>::new().decode(input).is_err());
 }
 
 #[test]

@@ -18,7 +18,7 @@ use super::JsonBytesValueEncoder;
 use super::ValueDecoder;
 use super::ValueEncoder;
 
-/// Encodes and decodes one serializable value through UTF-8 JSON bytes.
+/// Encodes and decodes one serializable value through JSON bytes.
 ///
 /// This type combines [`JsonBytesValueEncoder`] and [`JsonBytesValueDecoder`]
 /// for registry-backed or bidirectional call sites. It holds no state between
@@ -119,17 +119,18 @@ impl<T> ValueDecoder<[u8]> for JsonBytesValueCodec<T>
 where
     T: DeserializeOwned,
 {
-    /// JSON syntax, UTF-8, or target-value deserialization failure.
+    /// JSON syntax or target-value deserialization failure.
     type Error = JsonError;
     /// Owned value deserialized independently of the input byte slice.
     type Output = T;
 
-    /// Deserializes `input` from UTF-8 JSON bytes.
+    /// Deserializes `input` using [`serde_json::from_slice`].
     ///
     /// # Parameters
     ///
-    /// - `input`: One complete UTF-8 JSON value, optionally surrounded by
-    ///   whitespace.
+    /// - `input`: One complete JSON value, optionally surrounded by whitespace.
+    ///   String-content validation follows `T`'s Serde deserialization
+    ///   implementation.
     ///
     /// # Returns
     ///
@@ -138,8 +139,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a JSON error for invalid UTF-8, malformed or incomplete input,
-    /// trailing non-whitespace data, or a value incompatible with `T`.
+    /// Returns a JSON error for malformed or incomplete input, trailing
+    /// non-whitespace data, or a value incompatible with `T`. Validation
+    /// follows serde_json and `T`'s `Deserialize` implementation; byte-oriented
+    /// targets may accept non-UTF-8 string contents.
     #[inline]
     fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
         JsonBytesValueDecoder::<T>::new().decode(input)

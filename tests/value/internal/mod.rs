@@ -9,4 +9,9 @@
 
 mod reset_sensitive_lifecycle_codec;
 
+#[cfg(feature = "json")]
+mod owned_json_bytes;
+
+#[cfg(feature = "json")]
+pub(crate) use owned_json_bytes::OwnedJsonBytes;
 pub(crate) use reset_sensitive_lifecycle_codec::ResetSensitiveLifecycleCodec;

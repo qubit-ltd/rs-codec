@@ -15,7 +15,7 @@ use serde_json::from_slice;
 
 use super::ValueDecoder;
 
-/// Decodes UTF-8 JSON bytes into one owned value via `serde_json`.
+/// Decodes JSON bytes into one owned value via [`serde_json`].
 /// Its stateless marker implements `Clone`, `Copy`, and `Default` without
 /// requiring those traits on `T`.
 ///
@@ -88,17 +88,18 @@ impl<T> ValueDecoder<[u8]> for JsonBytesValueDecoder<T>
 where
     T: DeserializeOwned,
 {
-    /// JSON syntax, UTF-8, or target-value deserialization failure.
+    /// JSON syntax or target-value deserialization failure.
     type Error = JsonError;
     /// Owned value deserialized independently of the input byte slice.
     type Output = T;
 
-    /// Deserializes `input` from UTF-8 JSON bytes.
+    /// Deserializes `input` using [`serde_json::from_slice`].
     ///
     /// # Parameters
     ///
-    /// - `input`: One complete UTF-8 JSON value, optionally surrounded by
-    ///   whitespace.
+    /// - `input`: One complete JSON value, optionally surrounded by whitespace.
+    ///   String-content validation follows `T`'s Serde deserialization
+    ///   implementation.
     ///
     /// # Returns
     ///
@@ -107,8 +108,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a JSON error for invalid UTF-8, malformed or incomplete input,
-    /// trailing non-whitespace data, or a value incompatible with `T`.
+    /// Returns a JSON error for malformed or incomplete input, trailing
+    /// non-whitespace data, or a value incompatible with `T`. Validation
+    /// follows serde_json and `T`'s `Deserialize` implementation; byte-oriented
+    /// targets may accept non-UTF-8 string contents.
     #[inline]
     fn decode(&mut self, input: &[u8]) -> Result<Self::Output, Self::Error> {
         from_slice(input)

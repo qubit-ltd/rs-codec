@@ -16,6 +16,8 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_json::json;
 
+use super::internal::OwnedJsonBytes;
+
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 struct Sample {
     name: String,
@@ -78,4 +80,12 @@ fn test_rejects_malformed_json_bytes() {
     JsonBytesValueDecoder::<Sample>::new()
         .decode(b"{not-json")
         .expect_err("malformed JSON should fail");
+}
+
+#[test]
+fn test_json_bytes_utf8_decoder_target_controls_validation() {
+    let input = b"\"\xff\"";
+    let output = JsonBytesValueDecoder::<OwnedJsonBytes>::new().decode(input).unwrap();
+    assert_eq!(vec![0xff], output.0);
+    assert!(JsonBytesValueDecoder::<String>::new().decode(input).is_err());
 }
