@@ -142,15 +142,19 @@ where
     ///
     /// This bound covers only the streaming decode phase. It must not include
     /// codec reset values, codec finish values, or hook finish output.
-    /// It may depend on immutable hook and codec configuration, but it must
-    /// cover every reachable transient hook and codec state, including the
-    /// maximum hook-owned pending output that may be drained during transcode.
+    /// Streaming actions can emit at most one value for the current input
+    /// event or skip it; an emitted replacement consumes a non-zero number of
+    /// source units. The hook API has no separate operation for draining
+    /// hook-owned output without processing input. Use a custom
+    /// [`crate::Transcoder`] for streaming behavior beyond this action model,
+    /// such as one-to-many output or draining output without new input. The
+    /// bound may depend on immutable hook and codec configuration, but must
+    /// cover every reachable transient hook and codec state.
     ///
     /// The default implementation returns `input_len`, which remains
     /// conservative when a replacement policy consumes fewer units than a
-    /// valid codec value. Override it when hook policy can emit more than one
-    /// value per source unit or when hook-owned pending output can be drained
-    /// during `transcode`.
+    /// valid codec value. Override it when codec or hook policy can produce a
+    /// larger streaming output bound than this default.
     ///
     /// # Parameters
     ///

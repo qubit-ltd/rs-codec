@@ -625,9 +625,12 @@ where
     ///
     /// # Errors
     ///
-    /// Returns hook errors when indices are invalid or concrete conversion
-    /// fails. Invalid output indices are reported through the encode-side
-    /// error path. Returns [`TranscodeFailure::TranscodeBeforeReset`] when the
+    /// Returns [`TranscodeConvertError::Failure`] with
+    /// [`TranscodeFailure::InvalidInputIndex`] for an invalid input index or
+    /// [`TranscodeFailure::InvalidOutputIndex`] for an invalid output index.
+    /// Concrete codec or hook conversion errors retain their decode-side or
+    /// encode-side classification. Returns
+    /// [`TranscodeFailure::TranscodeBeforeReset`] when the
     /// engine has not completed its first reset. Returns
     /// [`TranscodeFailure::TranscodeAfterFinish`] when the logical stream was
     /// already finished and has not been reset, or

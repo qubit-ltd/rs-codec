@@ -24,6 +24,7 @@ This guide covers `qubit-codec` 0.17 on Rust 1.94 or later. It is for authors of
 - [Choose byte-order helpers](#choose-byte-order-helpers)
 - [Connect buffered I/O](#connect-buffered-io)
 - [Register codecs for runtime lookup](#register-codecs-for-runtime-lookup)
+  - [Build a local registry without global registration](#build-a-local-registry-without-global-registration)
   - [Migrate registry users from 0.16 to 0.17](#migrate-registry-users-from-016-to-017)
 - [Errors, diagnostics, and troubleshooting](#errors-diagnostics-and-troubleshooting)
 - [Boundaries and a practice checklist](#boundaries-and-a-practice-checklist)
@@ -403,9 +404,13 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 `TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. At confirmed EOF, `decode_eof` is tried when the retained tail reaches the codec minimum; the incomplete hook runs only if it still reports incomplete. A shorter tail may reach the hook with no codec source. The synchronous `transcode` method dispatches `transcode_eof` when driven through EOF with output capacity remaining; if no unread tail remains, it passes empty input so a decoder can act on retained state. `transcode_eof_step` also dispatches an empty input when called explicitly with output capacity. `rs-codec-misc`'s percent codec uses this boundary to interpret a trailing `%` or `%A` as a malformed escape; the adapter decides when input is final, while the format codec owns that interpretation.
 
+An EOF step accepts `Complete` or `NeedOutput`. If a custom decoder successfully returns `NeedInput` after EOF, the bridge returns `InvalidData` without committing that progress's source consumption. This validation does not roll back decoder state or output already written by the decoder.
+
 The batch decode `transcode` return count is not a completion signal: a short return, including zero, can mean the decoder needs a larger contiguous output range. Add the reported output to the destination and retry with enough capacity, or use `transcode_step` and `transcode_eof_step` to observe the stop reason and required capacity. See [`TranscodeDecodeInput` Rustdoc](../src/transcode/io/transcode_decode_input.rs) for the step methods.
 
 For async input, reset the decoder and collect its actual output first. Each `AsyncTranscodeDecodeInput::poll_transcode` progress result commits `read()` inside the bridge, so the caller advances its output cursor by `written()` and must not consume the source again. On `NeedInput { required }`, await `fill_until_async(required.get())`: `true` resumes ordinary polling; `false` confirms EOF while preserving any short unread tail. Pass that tail to `transcode_eof_step`, collect each step's `written()` values, and retry `NeedOutput` with enough output capacity. When `poll_transcode` returns `AsyncTranscodeDecodeStep::EndOfInput`, call `transcode_eof_step` even though the unread buffer is empty; it dispatches the EOF event and can emit output from retained decoder state. When the EOF step is `Complete`, call `finish` and collect its output. The bridge may conservatively request output capacity for a whole policy action, so even `Skip` or `Reject` can first report `NeedOutput`. See [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs).
+
+Async EOF steps follow the same progress rule: if a custom decoder returns `NeedInput` successfully after EOF, the bridge returns `InvalidData` and does not commit that step's source consumption. Decoder state and output already written are not rolled back.
 
 Before a synchronous `transcode` batch, the bridge reserves the encoder's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch. Keep this API when whole-range consumption is useful; use `transcode_step` when the caller needs to drive a large input incrementally:
 
@@ -496,6 +501,63 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 Implement paired `ValueEncoder` and `ValueDecoder` for a fixed value type, then register. String and bytes wires use different codec types, macros, and process-wide registries; the same `ValueCodecId` may appear in both.
 
 Registration IDs and registry contents are static: macro IDs must be compile-time constant expressions, and `ValueCodecId::try_new` accepts an `&'static str`. `ValueCodecRegistry::from_registrations` also takes static registration entries. Each process-wide `global()` registry is built once from linked registrations and is immutable afterward; there is no API for adding registrations at runtime. Runtime selection among already registered codecs is supported: keep the selected ID as a string and look it up with `registry.get(configured_id.as_str())`, which accepts `&str`. If one ID has more than two sources, diagnostics list every source in stable order.
+
+### Build a local registry without global registration
+
+`ValueCodecRegistry::from_registrations` builds an independent registry from static entries. `ValueCodecId::new` creates a validated ID; each registration and its descriptor must have static storage because the constructor takes `&'static ValueCodecRegistration`. This call does not invoke the registration macros, consult the inventory, or change either process-wide `global()` registry. Duplicate IDs return `ValueCodecRegistryError`.
+
+Descriptor construction has the same error bounds as the codec descriptor API: encoder and decoder error types must implement `Error + Send + Sync + 'static`. The descriptor erases the concrete error types, and execution errors expose them through the error source. Codec and value types do not need those bounds. Decode results cross the erased API as `Box<dyn Any>` and can be recovered with `downcast` when the concrete output type is known.
+
+```rust
+use std::convert::Infallible;
+use qubit_codec::ValueCodecId;
+use qubit_codec::ValueCodecRegistration;
+use qubit_codec::ValueCodecRegistrationSource;
+use qubit_codec::ValueDecoder;
+use qubit_codec::ValueEncoder;
+use qubit_codec::ValueStringCodecDescriptor;
+use qubit_codec::ValueStringCodecRegistration;
+use qubit_codec::ValueStringCodecRegistry;
+
+#[derive(Default)]
+struct LocalText;
+
+impl ValueEncoder<String> for LocalText {
+    type Output = String;
+    type Error = Infallible;
+
+    fn encode(&mut self, input: &String) -> Result<String, Infallible> {
+        Ok(input.clone())
+    }
+}
+
+impl ValueDecoder<str> for LocalText {
+    type Output = String;
+    type Error = Infallible;
+
+    fn decode(&mut self, input: &str) -> Result<String, Infallible> {
+        Ok(input.to_owned())
+    }
+}
+
+static DESCRIPTOR: ValueStringCodecDescriptor =
+    ValueStringCodecDescriptor::of::<LocalText, String>();
+static REGISTRATION: ValueStringCodecRegistration = ValueCodecRegistration::new(
+    ValueCodecId::new("example.local.text"),
+    &DESCRIPTOR,
+    ValueCodecRegistrationSource::new("local-example", "example", file!(), line!()),
+);
+
+let registry = ValueStringCodecRegistry::from_registrations([&REGISTRATION])
+    .expect("unique local registration");
+let descriptor = registry.get("example.local.text")
+    .expect("registered locally").descriptor();
+let encoded = descriptor.encode(&String::from("hello")).expect("encode");
+assert_eq!("hello", encoded);
+let decoded = descriptor.decode(&encoded).expect("decode");
+assert_eq!("hello", *decoded.downcast::<String>().expect("String output"));
+assert!(registry.get("example.missing").is_none());
+```
 
 String wire example:
 

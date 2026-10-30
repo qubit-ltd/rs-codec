@@ -53,7 +53,8 @@ pub struct ValueCodecRegistry<D: 'static> {
 }
 
 impl<D: Copy + 'static> ValueCodecRegistry<D> {
-    /// Builds a local registry from static registrations.
+    /// Builds a local registry from static registrations without consulting
+    /// or modifying the process-wide registry.
     ///
     /// # Parameters
     ///
@@ -67,6 +68,62 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     /// # Errors
     ///
     /// Returns a duplicate-ID error when multiple entries claim one ID.
+    ///
+    /// # Example
+    ///
+    /// This example uses a local static registration; it does not submit an
+    /// entry to the process-wide inventory.
+    ///
+    /// ```
+    /// use std::convert::Infallible;
+    /// use qubit_codec::ValueCodecId;
+    /// use qubit_codec::ValueCodecRegistration;
+    /// use qubit_codec::ValueCodecRegistrationSource;
+    /// use qubit_codec::ValueDecoder;
+    /// use qubit_codec::ValueEncoder;
+    /// use qubit_codec::ValueStringCodecDescriptor;
+    /// use qubit_codec::ValueStringCodecRegistration;
+    /// use qubit_codec::ValueStringCodecRegistry;
+    ///
+    /// #[derive(Default)]
+    /// struct LocalText;
+    ///
+    /// impl ValueEncoder<String> for LocalText {
+    ///     type Output = String;
+    ///     type Error = Infallible;
+    ///
+    ///     fn encode(&mut self, input: &String) -> Result<String, Infallible> {
+    ///         Ok(input.clone())
+    ///     }
+    /// }
+    ///
+    /// impl ValueDecoder<str> for LocalText {
+    ///     type Output = String;
+    ///     type Error = Infallible;
+    ///
+    ///     fn decode(&mut self, input: &str) -> Result<String, Infallible> {
+    ///         Ok(input.to_owned())
+    ///     }
+    /// }
+    ///
+    /// static DESCRIPTOR: ValueStringCodecDescriptor =
+    ///     ValueStringCodecDescriptor::of::<LocalText, String>();
+    /// static REGISTRATION: ValueStringCodecRegistration = ValueCodecRegistration::new(
+    ///     ValueCodecId::new("example.local.text"),
+    ///     &DESCRIPTOR,
+    ///     ValueCodecRegistrationSource::new("local-example", "example", file!(), line!()),
+    /// );
+    ///
+    /// let registry = ValueStringCodecRegistry::from_registrations([&REGISTRATION])
+    ///     .expect("unique local registration");
+    /// let descriptor = registry.get("example.local.text")
+    ///     .expect("registered locally").descriptor();
+    /// let encoded = descriptor.encode(&String::from("hello")).expect("encode");
+    /// assert_eq!("hello", encoded);
+    /// let decoded = descriptor.decode(&encoded).expect("decode");
+    /// assert_eq!("hello", *decoded.downcast::<String>().expect("String output"));
+    /// assert!(registry.get("example.missing").is_none());
+    /// ```
     pub fn from_registrations(
         registrations: impl IntoIterator<Item = &'static ValueCodecRegistration<D>>,
     ) -> Result<Self, ValueCodecRegistryError> {

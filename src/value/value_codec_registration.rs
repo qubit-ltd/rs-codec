@@ -18,7 +18,14 @@ use crate::ValueCodecRegistrationSource;
 /// registration was declared at. It is produced by
 /// [`register_value_string_codec!`](crate::register_value_string_codec) or
 /// [`register_value_bytes_codec!`](crate::register_value_bytes_codec)
-/// rather than built by hand.
+/// rather than built by hand for a process-wide inventory. Applications may
+/// also construct a registration manually from static data and pass it to a
+/// local [`ValueCodecRegistry`](crate::ValueCodecRegistry).
+///
+/// The ID has already been validated by [`ValueCodecId`]. The descriptor must
+/// live in static storage because registrations borrow it with a `'static`
+/// lifetime. The source records where the registration came from for duplicate
+/// ID diagnostics; it does not affect those static requirements.
 ///
 /// The registration macros validate codecs through the matching descriptor.
 /// Encoder and decoder error types must implement `Error + Send + Sync +
@@ -34,8 +41,14 @@ pub struct ValueCodecRegistration<D: 'static> {
 }
 
 impl<D: 'static> ValueCodecRegistration<D> {
-    /// Creates a registration from validated static facts.
-    #[doc(hidden)]
+    /// Creates a registration from a validated ID and static descriptor.
+    ///
+    /// Use the registration macros to submit a codec to the process-wide
+    /// inventory. For a registry local to the caller, construct this value
+    /// from static data and pass a reference to
+    /// [`ValueCodecRegistry::from_registrations`](crate::ValueCodecRegistry::from_registrations).
+    /// The ID is already validated, the descriptor must have static storage,
+    /// and `source` provides location details for duplicate-ID diagnostics.
     #[inline]
     #[must_use]
     pub const fn new(id: ValueCodecId, descriptor: &'static D, source: ValueCodecRegistrationSource) -> Self {

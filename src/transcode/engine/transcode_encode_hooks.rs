@@ -117,14 +117,18 @@ where
     /// [`crate::engine::TranscodeEncodeEngine::transcode`]. It must not include
     /// codec reset output, codec finish output, or hook finish output.
     /// It may depend on immutable hook and codec configuration, but it must
-    /// cover every reachable transient hook and codec state, including the
-    /// maximum hook-owned pending output that may be drained during transcode.
+    /// cover every reachable transient hook and codec state. Each streaming
+    /// action handles one current input value by skipping it or encoding at
+    /// most one replacement; the hook API has no separate operation for
+    /// draining hook-owned output without input. Use a custom
+    /// [`crate::Transcoder`] for streaming behavior beyond this action model,
+    /// such as one-to-many output or draining output without new input.
     ///
     /// The default implementation multiplies `input_len` by
     /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`]. This bound is valid for direct
     /// encoding, skipped unencodable values, and single-value replacements.
-    /// Override it only when hook-owned pending output can be drained
-    /// during `transcode`.
+    /// Override it when the codec's streaming output bound requires a larger
+    /// value.
     ///
     /// # Parameters
     ///

@@ -24,6 +24,7 @@
 - [选择字节序辅助类型](#选择字节序辅助类型)
 - [接入缓冲 I/O](#接入缓冲-io)
 - [在链接期注册 codec 供运行时查找](#在链接期注册-codec-供运行时查找)
+  - [构造不依赖全局注册的局部注册表](#构造不依赖全局注册的局部注册表)
   - [从 0.16 升级 registry 消费者到 0.17](#从-016-升级-registry-消费者到-017)
 - [错误、诊断与排障](#错误诊断与排障)
 - [边界与实践清单](#边界与实践清单)
@@ -402,9 +403,13 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 `TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。同步 `transcode` 在仍有目标容量且继续驱动到 EOF 时会调用 `transcode_eof`；如果 unread buffer 已空，就传入空输入，让 decoder 处理内部保留状态。显式逐步驱动时，`transcode_eof_step` 只要目标容量非零，也会把空输入交给 decoder。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。
 
+EOF step 只接受 `Complete` 或 `NeedOutput`。如果自定义 decoder 在 EOF 后仍成功返回 `NeedInput`，bridge 返回 `InvalidData`，且不提交该进度的源消费。此校验不回滚 decoder 状态或 decoder 已写入的输出。
+
 批量 decode `transcode` 的返回数量不能作为完成信号：短返回（包括零）可能表示 decoder 需要更大的连续输出范围。扩展输出容量后重试，或使用 `transcode_step` 与 `transcode_eof_step` 观察停止原因和所需容量。step 方法详见 [`TranscodeDecodeInput` Rustdoc](../src/transcode/io/transcode_decode_input.rs)。
 
 异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。如果 `poll_transcode` 返回 `AsyncTranscodeDecodeStep::EndOfInput`，即使 unread buffer 为空也要调用 `transcode_eof_step`；decoder 可能需要依据内部保留状态处理 EOF 并产出结果。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
+
+异步 EOF step 遵守相同规则：若自定义 decoder 在 EOF 后成功返回 `NeedInput`，bridge 返回 `InvalidData`，且不提交该步的源消费；decoder 状态和已写入的输出不会回滚。
 
 同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存。需要整批消费时继续使用该入口；需要逐步驱动大输入时，可使用 `transcode_step`：
 
@@ -495,6 +500,63 @@ qubit-codec = { version = "0.17", features = ["registry"] }
 为固定 value 类型成对实现 `ValueEncoder` 与 `ValueDecoder` 后注册。字符串 wire 与字节 wire 使用不同的 codec 类型与注册宏，各自进入独立的进程级注册表；同一 `ValueCodecId` 可以同时出现在两张表中。
 
 注册 ID 与注册表内容都是静态的：宏 ID 必须是编译期常量表达式，`ValueCodecId::try_new` 接受 `&'static str`，`ValueCodecRegistry::from_registrations` 也要求静态注册项。每个进程级 `global()` 注册表会从已链接注册项构建一次，此后保持不可变；没有运行时追加注册项的 API。运行时仍可在已有注册 codec 中选择：将配置 ID 保留为字符串，并用接受 `&str` 的 `registry.get(configured_id.as_str())` 查找。一个 ID 若有两个以上来源，诊断会按稳定顺序列出全部来源。
+
+### 构造不依赖全局注册的局部注册表
+
+`ValueCodecRegistry::from_registrations` 从静态注册项构造独立注册表。`ValueCodecId::new` 创建已验证的 ID；注册项及其 descriptor 必须位于静态存储中，因为构造函数接收 `&'static ValueCodecRegistration`。此调用不使用注册宏、不读取 inventory，也不会改变进程级 `global()` 注册表。若 ID 重复，会返回 `ValueCodecRegistryError`。
+
+构造 descriptor 时遵循相同的错误类型约束：encoder 和 decoder 的错误类型必须实现 `Error + Send + Sync + 'static`。descriptor 会擦除具体错误类型，执行错误可通过 error source 暴露它们；codec 与 value 类型本身无需这些上界。decode 结果经擦除 API 以 `Box<dyn Any>` 返回，已知具体输出类型时可用 `downcast` 取回。
+
+```rust
+use std::convert::Infallible;
+use qubit_codec::ValueCodecId;
+use qubit_codec::ValueCodecRegistration;
+use qubit_codec::ValueCodecRegistrationSource;
+use qubit_codec::ValueDecoder;
+use qubit_codec::ValueEncoder;
+use qubit_codec::ValueStringCodecDescriptor;
+use qubit_codec::ValueStringCodecRegistration;
+use qubit_codec::ValueStringCodecRegistry;
+
+#[derive(Default)]
+struct LocalText;
+
+impl ValueEncoder<String> for LocalText {
+    type Output = String;
+    type Error = Infallible;
+
+    fn encode(&mut self, input: &String) -> Result<String, Infallible> {
+        Ok(input.clone())
+    }
+}
+
+impl ValueDecoder<str> for LocalText {
+    type Output = String;
+    type Error = Infallible;
+
+    fn decode(&mut self, input: &str) -> Result<String, Infallible> {
+        Ok(input.to_owned())
+    }
+}
+
+static DESCRIPTOR: ValueStringCodecDescriptor =
+    ValueStringCodecDescriptor::of::<LocalText, String>();
+static REGISTRATION: ValueStringCodecRegistration = ValueCodecRegistration::new(
+    ValueCodecId::new("example.local.text"),
+    &DESCRIPTOR,
+    ValueCodecRegistrationSource::new("local-example", "example", file!(), line!()),
+);
+
+let registry = ValueStringCodecRegistry::from_registrations([&REGISTRATION])
+    .expect("unique local registration");
+let descriptor = registry.get("example.local.text")
+    .expect("registered locally").descriptor();
+let encoded = descriptor.encode(&String::from("hello")).expect("encode");
+assert_eq!("hello", encoded);
+let decoded = descriptor.decode(&encoded).expect("decode");
+assert_eq!("hello", *decoded.downcast::<String>().expect("String output"));
+assert!(registry.get("example.missing").is_none());
+```
 
 字符串 wire 示例：
 
