@@ -39,6 +39,12 @@ use crate::Transcoder;
 /// after exactly one encoder invocation, so its progress is the explicit
 /// source-consumption commit boundary.
 ///
+/// Cancellation and pending-output recovery assume that wrapped I/O calls
+/// obey their normal return contracts. This adapter does not track poisoning
+/// or indeterminate delivery after an inner I/O panic. If such a panic is
+/// caught, reconcile external side effects before retrying or replaying
+/// pending units.
+///
 /// # Type Parameters
 ///
 /// * `O` - Wrapped asynchronous unit output.
@@ -270,9 +276,16 @@ where
     /// This method performs no asynchronous I/O. The returned buffer holds
     /// units that must be delivered before the logical stream can continue.
     ///
+    /// Recovery assumes that wrapped I/O calls obey their normal return
+    /// contracts. If an inner I/O panic is caught, the pending units may
+    /// overlap a prefix already delivered. The buffer does not track this
+    /// indeterminate delivery; reconcile external side effects before
+    /// retrying or replaying those units.
+    ///
     /// # Returns
     ///
-    /// Returns the wrapped output and its pending unit buffer.
+    /// Returns the wrapped output and its pending unit buffer, assuming
+    /// wrapped I/O calls obey their normal return contracts.
     #[must_use = "the returned output and pending buffer must be handled"]
     #[inline]
     pub fn into_parts(self) -> (O, Buffer<O::Item>) {

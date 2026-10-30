@@ -152,11 +152,14 @@ where
     /// before inspecting `input` or running codec hooks when reset or finish
     /// may emit values. Returns
     /// [`crate::TranscodeFailure::IncompleteInput`] when fewer than
-    /// [`Codec::MIN_UNITS_PER_VALUE`] units are available or when
-    /// [`crate::DecodeFailure::Incomplete`] is reported by the codec. In this
-    /// one-shot API, incomplete input is a terminal error rather than a
-    /// resumable streaming status. Returns a domain error when the wrapped
-    /// codec rejects or cannot finish the input. Returns
+    /// [`Codec::MIN_UNITS_PER_VALUE`] units are available or when the codec
+    /// reports [`crate::DecodeFailure::Incomplete`] without a source.
+    /// An incomplete failure carrying a codec source is preserved as
+    /// [`crate::TranscodeDecodeError::Domain`] with
+    /// [`crate::TranscodeDomainError::Main`] phase information.
+    /// In this one-shot API, either form of incomplete input is a terminal
+    /// error rather than a resumable streaming status. Returns a domain error
+    /// when the wrapped codec rejects or cannot finish the input. Returns
     /// [`crate::TranscodeFailure::TrailingInput`] when a value is decoded but
     /// extra input remains.
     ///
@@ -186,8 +189,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a framework error when input is incomplete or has trailing
-    /// units. Returns a phase-aware domain error when reset, decode, or finish
+    /// Returns a framework error for input shorter than the codec minimum,
+    /// incomplete input without a codec source, or trailing units. Incomplete
+    /// input carrying a codec source is preserved as a main-phase domain
+    /// error. Returns a phase-aware domain error when reset, decode, or finish
     /// fails. Returns an allocation failure when either lifecycle buffer cannot
     /// reserve its declared capacity.
     ///
@@ -233,7 +238,11 @@ where
     ///
     /// Returns a framework error before running any lifecycle hook when either
     /// output buffer is shorter than its corresponding codec bound. Also
-    /// returns incomplete-input, trailing-input, or phase-aware domain errors.
+    /// returns a framework error for input shorter than the codec minimum,
+    /// incomplete input without a codec source, or trailing units. Incomplete
+    /// input carrying a codec source is preserved as a main-phase domain
+    /// error. Returns phase-aware domain errors when reset, decode, or finish
+    /// fails.
     ///
     /// # Panics
     ///
