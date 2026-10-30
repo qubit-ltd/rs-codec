@@ -82,9 +82,10 @@ The auxiliary executable alone cannot establish default-profile behavior.
 RC-009 therefore remains unresolved: no benchmark code was changed, and
 neither elimination nor retention of every old path's full output writes is
 claimed. The default and auxiliary artifacts and their disassemblies were
-captured under `/tmp/rs-codec-rc009.IBnT95` during this inspection; those
-temporary files are removed after the implementation checks. This result is
-limited to the recorded toolchain and host and makes no cross-platform claim.
+captured under `/tmp/rs-codec-rc009.IBnT95` during this inspection. This
+temporary evidence directory is scheduled for cleanup after validation,
+integration, and branch synchronization complete. This result is limited to
+the recorded toolchain and host and makes no cross-platform claim.
 
 On 2026-10-30, the RC-009 pre-change inspection used HEAD
 `4310cde13f9dbf62728d979f2e0983aa8dac154c`, rustc 1.94.0
