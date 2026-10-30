@@ -82,10 +82,11 @@ The auxiliary executable alone cannot establish default-profile behavior.
 RC-009 therefore remains unresolved: no benchmark code was changed, and
 neither elimination nor retention of every old path's full output writes is
 claimed. The default and auxiliary artifacts and their disassemblies were
-captured under `/tmp/rs-codec-rc009.IBnT95` during this inspection. This
-temporary evidence directory is scheduled for cleanup after validation,
-integration, and branch synchronization complete. This result is limited to
-the recorded toolchain and host and makes no cross-platform claim.
+captured under `/tmp/rs-codec-rc009.IBnT95` during this inspection. That
+historical inspection marked its temporary evidence directory for cleanup
+after its validation, integration, and branch synchronization; this is
+separate from the current audit evidence retained below. This result is
+limited to the recorded toolchain and host and makes no cross-platform claim.
 
 On 2026-10-30, the RC-009 pre-change inspection used HEAD
 `4310cde13f9dbf62728d979f2e0983aa8dac154c`, rustc 1.94.0
@@ -278,6 +279,44 @@ would not provide new attribution evidence, so no auxiliary build was run.
 | `codec_adapter` | Unresolved | Source passes the full fixture; no attributable default instructions establish complete output writes. |
 | `output_window_32` | Unresolved | Source reuses a 32-byte window; the default artifact does not establish whether each window's writes survive. |
 | `output_window_1024` | Unresolved | Source reuses a 1,024-byte window; the default artifact does not establish whether each window's writes survive. |
+
+### RC-009 follow-up: 2026-10-30 implementation worktree recheck
+
+This recheck used baseline `31a5dc944a3858656593f13ac4498a2e9a5df127` in
+worktree `/data/working/qubit/rust-common/.worktrees/rs-codec/rc-r2-7a98bc17`.
+Before the build, `benches/transcode.rs` and this README had no worktree diff.
+The environment was rustc 1.94.0 (`x86_64-unknown-linux-gnu`, LLVM 21.1.8)
+on an Intel Core i5-9600K host (6 CPUs). The default bench profile was
+`opt-level=3`, `lto=true`, and `codegen-units=1`; Cargo enabled the crate's
+default feature set. The one default-profile build command was
+`cargo bench --locked --bench transcode --no-run --message-format=json`
+(exit 0). Cargo identified
+`target/release/deps/transcode-518bb86cbd866b72`, SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+The artifact hash matches the earlier default-profile audit above. `nm -S -C`
+found `transcode::bench_transcoder` at `0x979f0` (size `0x7f24`) and
+`transcode::copy_safe_exact` at `0x979d0` (size `0x1f`), but no distinct
+symbols for the timed closures. `objdump -Cd` could not assign complete output
+writes to individual closures, and the artifact has no debug line or info
+sections. Full Cargo JSON, stderr, `nm`, `objdump`, and section output were
+retained under `target/review-7a98bc17/default/` as evidence for this audit.
+No auxiliary build or timing run was performed because the recheck yielded no
+new attribution method.
+
+| Timed path | Source range and observation | Classification |
+| --- | --- | --- |
+| `direct_transcode` | One call receives the 65,536-byte fixture and same-size output (`benches/transcode.rs:128–134`); only read/written counts are observed. | **Unresolved** — the default LTO artifact does not attribute the complete write range to this closure. |
+| `complete_lifecycle` | One call receives the full fixture and same-size output (`:137–143`); only the written count and first output byte are observed. | **Unresolved** — the artifact does not attribute the lifecycle write range to this closure. |
+| `decode_engine` | One call receives the full fixture and same-size output (`:155–161`); only read/written counts are observed. | **Unresolved** — the artifact does not attribute the complete write range to this closure. |
+| `codec_adapter` | One call receives the full fixture and same-size adapter output (`:181–187`); only progress counts and the first output byte are observed. | **Unresolved** — the artifact does not attribute the complete write range to this closure. |
+| `output_window_32` | Reuses a 32-byte output window for 2,048 iterations (`:198–217`); observes final counters, not each range before overwrite. | **Unresolved** — the artifact does not attribute each iteration's output writes to this closure. |
+| `output_window_1024` | Reuses a 1,024-byte output window for 64 iterations (`:198–217`); observes final counters, not each range before overwrite. | **Unresolved** — the artifact does not attribute each iteration's output writes to this closure. |
+
+No benchmark source was changed: the available evidence does not confirm
+eliminated writes. These results do not establish either retention or
+elimination of the six paths' complete writes and do not support a performance
+conclusion. The artifact and full inspection output were generated locally;
+they were not uploaded as CI artifacts.
 
 RC-009 remains open. `benches/transcode.rs` was not changed, no benchmark was
 timed, and these results do not support performance tradeoffs or a claim that
