@@ -259,11 +259,13 @@ preserve input tail <- transcode/transcode_eof -> drain or extend output
 
 | Status | Meaning | Caller action |
 | --- | --- | --- |
-| `Complete` | All visible input from `input_index` was consumed. | Supply another segment, or move to finish at EOF. |
+| `Complete` | All visible input from `input_index` was consumed. | Supply another segment; after the source confirms EOF, complete `transcode_eof` (with an empty slice if needed) before `finish`. |
 | `NeedInput` | The incomplete tail was not consumed. | Preserve the tail and refill; at EOF use the format's explicit EOF policy (`transcode_eof` or hooks). |
 | `NeedOutput` | Conversion stopped before exceeding output capacity. | Drain or extend output and continue from the reported progress. |
 
 Call `transcode_eof` only after the caller knows no more source units will arrive. The default converts a remaining `NeedInput` into `TranscodeFailure::IncompleteInput`. `finish` receives no source tail and cannot reinterpret it.
+
+When the source confirms EOF, preserve any unread tail and keep advancing the `read()` and `written()` cursors from each `transcode_eof` result. If it returns `NeedOutput`, drain or extend the output and retry the EOF operation; do not return to ordinary `transcode`. Once the EOF operation returns `Complete`, allocate up to `max_finish_output_len` and call `finish`. If a call already completed the EOF operation, do not dispatch that same EOF event again. These operations do not provide general rollback: after an EOF error, do not replay the original input unless the transcoder defines a recovery protocol.
 
 An I/O bridge may dispatch this EOF call with an empty input slice after all visible units have been consumed. The default implementation still reports `IncompleteInput` if the transcoder returns `NeedInput`, including when no unread units remain. A custom transcoder that uses EOF to drain buffered state or to finish an empty stream must override `transcode_eof` and return the appropriate progress for that case.
 
@@ -401,6 +403,8 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 `TranscodeDecodeInput` and `TranscodeEncodeOutput` integrate buffered `qubit-io` traits. At confirmed EOF, `decode_eof` is tried when the retained tail reaches the codec minimum; the incomplete hook runs only if it still reports incomplete. A shorter tail may reach the hook with no codec source. The synchronous `transcode` method dispatches `transcode_eof` when driven through EOF with output capacity remaining; if no unread tail remains, it passes empty input so a decoder can act on retained state. `transcode_eof_step` also dispatches an empty input when called explicitly with output capacity. `rs-codec-misc`'s percent codec uses this boundary to interpret a trailing `%` or `%A` as a malformed escape; the adapter decides when input is final, while the format codec owns that interpretation.
 
+The batch decode `transcode` return count is not a completion signal: a short return, including zero, can mean the decoder needs a larger contiguous output range. Add the reported output to the destination and retry with enough capacity, or use `transcode_step` and `transcode_eof_step` to observe the stop reason and required capacity. See [`TranscodeDecodeInput` Rustdoc](../src/transcode/io/transcode_decode_input.rs) for the step methods.
+
 For async input, reset the decoder and collect its actual output first. Each `AsyncTranscodeDecodeInput::poll_transcode` progress result commits `read()` inside the bridge, so the caller advances its output cursor by `written()` and must not consume the source again. On `NeedInput { required }`, await `fill_until_async(required.get())`: `true` resumes ordinary polling; `false` confirms EOF while preserving any short unread tail. Pass that tail to `transcode_eof_step`, collect each step's `written()` values, and retry `NeedOutput` with enough output capacity. When `poll_transcode` returns `AsyncTranscodeDecodeStep::EndOfInput`, call `transcode_eof_step` even though the unread buffer is empty; it dispatches the EOF event and can emit output from retained decoder state. When the EOF step is `Complete`, call `finish` and collect its output. The bridge may conservatively request output capacity for a whole policy action, so even `Skip` or `Reject` can first report `NeedOutput`. See [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs).
 
 Before a synchronous `transcode` batch, the bridge reserves the encoder's full output upper bound. This preserves whole-batch consumption and can require substantial memory for a large batch. Keep this API when whole-range consumption is useful; use `transcode_step` when the caller needs to drive a large input incrementally:
@@ -521,6 +525,56 @@ impl ValueDecoder<str> for U32StringCodec {
 
 register_value_string_codec!(id = "example.u32", codec = U32StringCodec, value = u32,);
 ```
+
+An owned `String` can also be encoded through its borrowed `str` view. `value` remains the erased and decoded type; `input` selects only the encoder's borrowed input:
+
+```rust
+use std::io::Error;
+use qubit_codec::{ValueDecoder, ValueEncoder, ValueStringCodecRegistry, register_value_string_codec};
+
+#[derive(Default)]
+struct BorrowedTextCodec;
+
+impl ValueEncoder<str> for BorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+impl ValueDecoder<str> for BorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+register_value_string_codec!(
+    id = "example.borrowed.text",
+    codec = BorrowedTextCodec,
+    value = String,
+    input = str,
+);
+
+fn main() {
+    let configured_id = String::from("example.borrowed.text");
+    let registry = ValueStringCodecRegistry::try_global().expect("valid registrations");
+    let descriptor = registry
+        .get(configured_id.as_str())
+        .expect("known codec ID")
+        .descriptor();
+    let encoded = descriptor.encode(&String::from("hello")).expect("encoding succeeds");
+    assert_eq!(encoded, "hello");
+    let decoded = descriptor.decode(&encoded).expect("decoding succeeds");
+    assert_eq!(*decoded.downcast::<String>().expect("value type is String"), "hello");
+}
+```
+
+For a byte view, use `value = Vec<u8>, input = [u8]`; the descriptor continues to validate and return `Vec<u8>`.
 
 Bytes whole-value wire example (`Vec<u8>` encode output, `&[u8]` decode input):
 

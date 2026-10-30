@@ -258,11 +258,13 @@ assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
 
 | 状态 | 含义 | 调用方动作 |
 | --- | --- | --- |
-| `Complete` | 从 `input_index` 起的全部可见输入均已消费。 | 提供下一段，或在 EOF 时进入 finish。 |
+| `Complete` | 从 `input_index` 起的全部可见输入均已消费。 | 提供下一段；源确认 EOF 后，先完成 `transcode_eof`（必要时传空切片），再调用 `finish`。 |
 | `NeedInput` | 不完整尾部未被消费。 | 保留尾部并补充输入；EOF 时采用格式明确规定的策略（`transcode_eof` 或 hooks）。 |
 | `NeedOutput` | 转换在超过输出容量之前停止。 | 排空或扩展输出，并按报告的进度继续。 |
 
 只有调用方确认不会再收到源 unit 后才调用 `transcode_eof`。默认实现会把仍存在的 `NeedInput` 转为 `TranscodeFailure::IncompleteInput`。`finish` 不接收源输入尾部，因此无法重新解释它。
+
+源确认 EOF 后，保留任何未读尾部，并根据每次 `transcode_eof` 返回的 `read()` 与 `written()` 推进游标。如果返回 `NeedOutput`，就排空或扩展输出并重试 EOF 操作；不要回到普通 `transcode`。EOF 操作返回 `Complete` 后，根据 `max_finish_output_len` 分配输出并调用 `finish`。如果某次调用已经完成 EOF 操作，就不要重复派发同一个 EOF 事件。这些操作不提供通用回滚；EOF 出错后，除非 transcoder 定义了恢复协议，否则不要重放原输入。
 
 I/O bridge 可能在所有可见输入都已消费后，仍用空输入切片派发这次 EOF 调用。即使 unread 输入为空，只要 transcoder 返回 `NeedInput`，默认实现仍会报告 `IncompleteInput`。如果格式需要在 EOF 时排空内部缓存，或把空流视为正常结束，自定义 transcoder 必须覆盖 `transcode_eof`，并为这种情况返回相应进度。
 
@@ -400,6 +402,8 @@ qubit-codec = { version = "0.17", features = ["io"] }
 
 `TranscodeDecodeInput` 与 `TranscodeEncodeOutput` 对接缓冲式 `qubit-io` trait。refill 确认 EOF 后，达到 codec 最低长度的尾部先交给 `decode_eof`；只有仍不完整才进入 hook。同步 `transcode` 在仍有目标容量且继续驱动到 EOF 时会调用 `transcode_eof`；如果 unread buffer 已空，就传入空输入，让 decoder 处理内部保留状态。显式逐步驱动时，`transcode_eof_step` 只要目标容量非零，也会把空输入交给 decoder。`rs-codec-misc` 的 percent codec 会在此时把末尾 `%` 或 `%A` 解释为畸形转义：bridge 决定何时输入结束，格式 codec 决定尾部含义。
 
+批量 decode `transcode` 的返回数量不能作为完成信号：短返回（包括零）可能表示 decoder 需要更大的连续输出范围。扩展输出容量后重试，或使用 `transcode_step` 与 `transcode_eof_step` 观察停止原因和所需容量。step 方法详见 [`TranscodeDecodeInput` Rustdoc](../src/transcode/io/transcode_decode_input.rs)。
+
 异步输入先 reset decoder 并收集实际输出。每次 `AsyncTranscodeDecodeInput::poll_transcode` 返回 progress 后，bridge 已应用 `read()`；调用方只需按 `written()` 推进输出游标，不能再次消费源输入。遇到 `NeedInput { required }` 时，等待 `fill_until_async(required.get())`：返回 `true` 就继续普通 poll；返回 `false` 表示 EOF 已确认，同时保留不足长度的 unread 尾部。把尾部交给 `transcode_eof_step`，逐步收集 `written()`，遇到 `NeedOutput` 时提供足够空间重试。如果 `poll_transcode` 返回 `AsyncTranscodeDecodeStep::EndOfInput`，即使 unread buffer 为空也要调用 `transcode_eof_step`；decoder 可能需要依据内部保留状态处理 EOF 并产出结果。EOF 步骤返回 `Complete` 后调用 `finish` 并收集其输出。策略分支可能预检完整动作的保守输出容量，因此即使 `Skip` 或 `Reject` 也可能先返回 `NeedOutput`。详见 [`AsyncTranscodeDecodeInput` Rustdoc](../src/transcode/io/async_transcode_decode_input.rs)。
 
 同步 `transcode` 会在编码前预留本批次完整输出上界，保证整批输入消费；大批次可能需要较多内存。需要整批消费时继续使用该入口；需要逐步驱动大输入时，可使用 `transcode_step`：
@@ -520,6 +524,56 @@ impl ValueDecoder<str> for U32StringCodec {
 
 register_value_string_codec!(id = "example.u32", codec = U32StringCodec, value = u32,);
 ```
+
+也可以通过借用的 `str` 视图编码自有 `String`。`value` 仍是擦除和解码得到的类型；`input` 只选择 encoder 接收的借用输入：
+
+```rust
+use std::io::Error;
+use qubit_codec::{ValueDecoder, ValueEncoder, ValueStringCodecRegistry, register_value_string_codec};
+
+#[derive(Default)]
+struct BorrowedTextCodec;
+
+impl ValueEncoder<str> for BorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+impl ValueDecoder<str> for BorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+register_value_string_codec!(
+    id = "example.borrowed.text",
+    codec = BorrowedTextCodec,
+    value = String,
+    input = str,
+);
+
+fn main() {
+    let configured_id = String::from("example.borrowed.text");
+    let registry = ValueStringCodecRegistry::try_global().expect("valid registrations");
+    let descriptor = registry
+        .get(configured_id.as_str())
+        .expect("known codec ID")
+        .descriptor();
+    let encoded = descriptor.encode(&String::from("hello")).expect("encoding succeeds");
+    assert_eq!(encoded, "hello");
+    let decoded = descriptor.decode(&encoded).expect("decoding succeeds");
+    assert_eq!(*decoded.downcast::<String>().expect("value type is String"), "hello");
+}
+```
+
+字节视图可使用 `value = Vec<u8>, input = [u8]`；descriptor 仍核对并返回 `Vec<u8>`。
 
 字节 whole-value wire 示例（encode 产出 `Vec<u8>`，decode 输入 `&[u8]`）：
 
