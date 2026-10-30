@@ -98,9 +98,10 @@ TranscodeDecodeInput::read_decoded_lifecycle_with(
 )
 ```
 
-这两个便利方法分别按 reset 和 finish 的声明上界准备独立存储，成功时把实际写入
-部分截断后放入 `DecodeLifecycleOutput`。主体输入仍必须恰好编码一个值；尾随输入继续
-报告 `TrailingInput`。
+`CodecValueDecoder::decode_lifecycle` 按 reset 和 finish 的声明上界准备独立存储，成功时
+把实际写入部分截断后放入 `DecodeLifecycleOutput`。它的主体输入仍必须恰好编码一个值；
+尾随输入继续报告 `TrailingInput`。`TranscodeDecodeInput::read_decoded_lifecycle_with`
+则只消费一个主体值，后续输入保留在 I/O 输入缓冲区，供下一次读取使用。
 
 ### Scratch lifecycle API
 

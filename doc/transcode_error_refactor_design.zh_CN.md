@@ -34,9 +34,12 @@ transcode 层只负责缓冲区游标、容量、进度和流生命周期。code
 
 `TranscodeProgress::validate` 返回独立的 `TranscodeContractError`，用于报告进度违反
 调用契约：`OverRead`、`OverWritten`、`ProgressIndexOverflow`、`SatisfiedNeed` 和
-`CompleteWithRemainingInput`。调用方直接使用 `validate` 时可以直接处理该错误；缓冲
-driver 校验不可信进度后，会将其包装为
-`TranscodeFailure::InvalidProgress { source }`，再由方向错误的 `Failure` 分支承载。
+`CompleteWithRemainingInput`。直接调用 `validate` 时，调用方收到
+`TranscodeContractError`。完整转码的默认驱动校验不可信进度后，会把它包装为
+`TranscodeFailure::InvalidProgress { source }`，再作为方向错误的 `Failure` 返回；I/O
+进度校验则返回 `io::Error`，错误种类为 `InvalidData`，并保留契约错误作为 source。
+EOF 后若 decoder 仍返回 `NeedInput`，I/O 层会以 `InvalidData` 拒绝该状态，但该错误
+不保证以契约错误为 source。拒绝进度不会回滚 codec 状态或已经写入的输出。
 
 三类方向错误的实际形状如下：
 
@@ -67,8 +70,10 @@ enum TranscodeConvertError<DE, EE, V> {
 | --- | --- | --- |
 | `CapacityError::OutputLengthOverflow` | `From<CapacityError> for TranscodeFailure` 映射为 `TranscodeFailure::OutputLengthOverflow` | 解码、编码或转换错误的 `Failure` 分支 |
 | 实际输出分配失败 | engine/value 边界映射为 `TranscodeFailure::AllocationFailed`；buffered I/O adapter 通过 `allocation_error` 转成 I/O 分配错误 | 对应方向错误的 `Failure` 分支，或 adapter 返回的 I/O 错误 |
-| `TranscodeContractError` | `TranscodeFailure::from` 包装为 `InvalidProgress { source }` | driver 的解码、编码或转换错误的 `Failure` 分支 |
-| 直接调用 `TranscodeProgress::validate` | 不自动转换 | 调用方接收 `Result<(), TranscodeContractError>` 并自行处理 |
+| 直接调用 `TranscodeProgress::validate` | 不自动转换 | 调用方接收 `TranscodeContractError` 并自行处理 |
+| 完整转码默认驱动发现无效进度 | 包装为 `TranscodeFailure::InvalidProgress { source }` | 方向错误的 `Failure` 分支 |
+| I/O 进度校验发现无效进度 | 包装为 `io::Error`，种类为 `InvalidData`，契约错误作为 source | I/O adapter 返回的错误 |
+| EOF 后 I/O decoder 返回 `NeedInput` | 以 `io::Error(InvalidData)` 拒绝；source 不保证是契约错误 | I/O adapter 返回的错误 |
 
 结构错误的 `invalid_*` 与 `ensure_*` 构造和校验方法仍定义在 `TranscodeFailure` 上。
 方向错误可通过 `From` 实现或 `?` 包装框架失败。`map_domain` 与 `map_value` 分别映射

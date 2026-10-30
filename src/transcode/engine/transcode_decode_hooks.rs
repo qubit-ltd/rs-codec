@@ -245,10 +245,13 @@ where
 
     /// Handles a codec value left incomplete after end of input.
     ///
-    /// The engine calls this method only from `transcode_eof`. `source` is the
-    /// codec-domain context attached to [`crate::DecodeFailure::Incomplete`],
-    /// or `None` when the engine stopped before calling the codec because the
-    /// available tail is shorter than [`Codec::MIN_UNITS_PER_VALUE`].
+    /// The engine calls this method only from `transcode_eof`. `source` is
+    /// `Some` only when the codec returned an incomplete failure carrying a
+    /// source, such as through
+    /// [`crate::DecodeFailure::incomplete_with_source`]. It is `None` when
+    /// the available tail is shorter than [`Codec::MIN_UNITS_PER_VALUE`]
+    /// and the codec was not called, or when the codec was called but
+    /// returned [`crate::DecodeFailure::incomplete`] without a source.
     ///
     /// # Parameters
     ///
