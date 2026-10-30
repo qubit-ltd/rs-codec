@@ -244,6 +244,16 @@ With both `json` and `registry`, the built-in registry descriptors cover `serde_
 
 ## Drive an incremental stream
 
+For `TranscodeDecodeInput::transcode_step` and
+`AsyncTranscodeDecodeInput::poll_transcode`, validated successful progress
+commits its input consumption. If decoding or progress validation fails, the
+call leaves that call's unread range unconsumed, but decoder state and the
+destination may already have changed and are not rolled back; no complete
+progress report is available. A refill before failure does not rewind the
+wrapped source. Do not replay the original input unless the decoder defines a
+recovery protocol. Async cancellation safety applies only while polling is
+pending; it does not promise rollback after an error.
+
 Explicit transcoder lifecycle:
 
 ```text

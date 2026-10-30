@@ -121,6 +121,117 @@ where
 #[derive(Debug, Default)]
 struct PairDecoder;
 
+#[derive(Debug, Default)]
+struct FailedDecodeProgress {
+    calls: usize,
+    invalid_progress: bool,
+}
+
+impl Transcoder for FailedDecodeProgress {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
+        self.calls = 0;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.calls += 1;
+        output[output_index] = 42;
+        if self.invalid_progress {
+            Ok(TranscodeProgress::complete(2, 1))
+        } else {
+            Err(TranscodeDecodeError::domain_main(TestDecodeError, 0))
+        }
+    }
+
+    fn finish(&mut self, _output: &mut [u16], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_poll_decode_error_preserves_unread_without_rolling_back_decoder_or_output() {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![7], 1), 1);
+    assert!(complete(input.fill_until_async(1)).expect("prefill input before polling"));
+    let mut decoder = FailedDecodeProgress::default();
+    let mut reset_output = [];
+    decoder.reset(&mut reset_output, 0).expect("reset decoder");
+    let mut mapped_errors = 0;
+    let mut mapper = |error| {
+        mapped_errors += 1;
+        io::Error::new(io::ErrorKind::InvalidData, error)
+    };
+    let mut output = [u16::MAX];
+    let mut context = Context::from_waker(Waker::noop());
+
+    let result = AsyncTranscodeDecodeInput::<ChunkedAsyncInput>::poll_transcode(
+        Pin::new(&mut input),
+        &mut context,
+        &mut decoder,
+        &mut mapper,
+        &mut output,
+        0,
+        1,
+    );
+
+    let error = match result {
+        Poll::Ready(Err(error)) => error,
+        other => panic!("expected a ready decoder error, got {other:?}"),
+    };
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(1, mapped_errors);
+    assert_eq!(1, decoder.calls);
+    assert_eq!([42], output);
+    assert_eq!([7], input.unread());
+}
+
+#[test]
+fn test_poll_decode_invalid_progress_preserves_unread_after_output_write() {
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(ChunkedAsyncInput::new(vec![7], 1), 1);
+    assert!(complete(input.fill_until_async(1)).expect("prefill input before polling"));
+    let mut decoder = FailedDecodeProgress {
+        invalid_progress: true,
+        ..FailedDecodeProgress::default()
+    };
+    let mut reset_output = [];
+    decoder.reset(&mut reset_output, 0).expect("reset decoder");
+    let mut mapper = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let mut output = [u16::MAX];
+    let mut context = Context::from_waker(Waker::noop());
+
+    let result = AsyncTranscodeDecodeInput::<ChunkedAsyncInput>::poll_transcode(
+        Pin::new(&mut input),
+        &mut context,
+        &mut decoder,
+        &mut mapper,
+        &mut output,
+        0,
+        1,
+    );
+
+    let error = match result {
+        Poll::Ready(Err(error)) => error,
+        other => panic!("expected a ready invalid-progress error, got {other:?}"),
+    };
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(1, decoder.calls);
+    assert_eq!([42], output);
+    assert_eq!([7], input.unread());
+}
+
 impl Transcoder for PairDecoder {
     type Input = u8;
     type Output = u16;

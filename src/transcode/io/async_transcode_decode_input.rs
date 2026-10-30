@@ -536,6 +536,14 @@ where
     ///
     /// Returns input, allocation, output-range, invalid-progress, or mapped
     /// decoder errors.
+    /// Successful validated progress commits its `read()` count. If decoding
+    /// or progress validation fails, this call does not consume the unread
+    /// range. The decoder and destination may already have changed; neither is
+    /// rolled back, and no complete progress report is available. A refill
+    /// performed before the failure is not rolled back at the wrapped input.
+    /// Cancellation safety applies only to cancellation while this method is
+    /// pending; it does not imply rollback after an error. Do not replay the
+    /// original input unless the decoder defines an explicit recovery protocol.
     pub fn poll_transcode<D, M, Value>(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

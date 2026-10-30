@@ -243,6 +243,13 @@ assert_eq!(bytes.decode(&encoded).unwrap(), "hello");
 
 ## 驱动增量流
 
+对于 `TranscodeDecodeInput::transcode_step` 和
+`AsyncTranscodeDecodeInput::poll_transcode`，只有校验成功的进度才会提交输入消费。
+若解码或进度校验失败，本次调用不会消费本次 unread 范围，但 decoder 状态和目标输出
+可能已经改变，且不会回滚；此时也没有完整进度报告。失败前发生的 refill 不会回滚底层
+source。除非 decoder 定义了恢复协议，否则不要重放原输入。异步取消安全仅适用于 poll
+仍处于 Pending 时的取消，不表示错误后会回滚。
+
 显式 transcoder 生命周期如下：
 
 ```text

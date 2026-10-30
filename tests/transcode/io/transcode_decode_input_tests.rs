@@ -59,6 +59,95 @@ fn domain(error: PairDecodeError) -> TranscodeDecodeError<PairDecodeError> {
 }
 
 #[derive(Debug, Default)]
+struct FailedDecodeProgress {
+    calls: usize,
+    invalid_progress: bool,
+}
+
+impl Transcoder for FailedDecodeProgress {
+    type Input = u8;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
+        self.calls = 0;
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        _input: &[u8],
+        _input_index: usize,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.calls += 1;
+        output[output_index] = 42;
+        if self.invalid_progress {
+            Ok(TranscodeProgress::complete(2, 1))
+        } else {
+            Err(domain(PairDecodeError::BadInputIndex))
+        }
+    }
+
+    fn finish(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_decode_step_error_preserves_unread_without_rolling_back_decoder_or_output() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    assert!(input.fill_until(1).expect("buffer the input before decoding"));
+    let mut decoder = FailedDecodeProgress::default();
+    let mut reset_output = [];
+    decoder.reset(&mut reset_output, 0).expect("reset decoder");
+    let mut mapped_errors = 0;
+    let mut mapper = |error| {
+        mapped_errors += 1;
+        Error::new(ErrorKind::InvalidData, error)
+    };
+    let mut output = [u32::MAX];
+
+    let error = input
+        .transcode_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+        .expect_err("domain error should be returned");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(1, mapped_errors);
+    assert_eq!(1, decoder.calls);
+    assert_eq!([42], output);
+    assert_eq!([7], input.unread());
+}
+
+#[test]
+fn test_decode_step_invalid_progress_preserves_unread_after_output_write() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    assert!(input.fill_until(1).expect("buffer the input before decoding"));
+    let mut decoder = FailedDecodeProgress {
+        invalid_progress: true,
+        ..FailedDecodeProgress::default()
+    };
+    let mut reset_output = [];
+    decoder.reset(&mut reset_output, 0).expect("reset decoder");
+    let mut mapper = map_error;
+    let mut output = [u32::MAX];
+
+    let error = input
+        .transcode_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+        .expect_err("over-read progress should be rejected");
+
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(1, decoder.calls);
+    assert_eq!([42], output);
+    assert_eq!([7], input.unread());
+}
+
+#[derive(Debug, Default)]
 struct FixedPairCodec;
 
 impl Codec for FixedPairCodec {
