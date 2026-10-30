@@ -19,6 +19,7 @@ use std::io::SeekFrom;
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::Codec;
+use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeDecodeInput;
@@ -138,6 +139,58 @@ impl Transcoder for EofTailDecoder {
     }
 
     fn finish(&mut self, _output: &mut [u32], _output_index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[derive(Debug, Default)]
+struct EofNeedInputDecoder {
+    eof_read: usize,
+}
+
+impl Transcoder for EofNeedInputDecoder {
+    type Input = u16;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(&self, len: usize) -> Result<usize, CapacityError> {
+        Ok(len)
+    }
+
+    fn reset(&mut self, _out: &mut [u32], _index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u16],
+        index: usize,
+        _out: &mut [u32],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(
+            crate::nonzero(input.len() - index + 1),
+            0,
+            0,
+        ))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u16],
+        index: usize,
+        _out: &mut [u32],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let remaining = input.len() - index - self.eof_read;
+        Ok(TranscodeProgress::need_input(
+            crate::nonzero(remaining + 1),
+            self.eof_read,
+            0,
+        ))
+    }
+
+    fn finish(&mut self, _out: &mut [u32], _index: usize) -> Result<usize, Self::Error> {
         Ok(0)
     }
 }
@@ -1493,6 +1546,42 @@ fn test_buffered_decode_input_stops_when_output_is_full() {
 }
 
 #[test]
+fn test_full_output_pair_decoder_preserves_tail_without_refilling() -> IoResult<()> {
+    let source = ChunkedInput::failing_after(vec![vec![1, 2, 3]], 1);
+    let mut input = TranscodeDecodeInput::with_capacity(source, 3);
+    let mut decoder = PairDecoder;
+    let mut output = [0_u32; 3];
+    let written = decode_with(&mut input, &mut decoder, &mut output, 1, 1)?;
+
+    assert_eq!(1, written, "the requested value is complete");
+    assert_eq!([0, 0x0001_0002, 0], output);
+    assert_eq!(&[3], input.unread(), "the next prefix remains buffered");
+    let (source, unread) = input.into_parts();
+    assert_eq!(1, source.reads, "no second read is needed");
+    assert_eq!(&[3], unread.readable());
+    Ok(())
+}
+
+#[test]
+fn test_full_output_codec_decoder_preserves_tail_without_refilling() -> IoResult<()> {
+    let source = ChunkedInput::failing_after(vec![vec![1, 2, 3]], 1);
+    let mut input = TranscodeDecodeInput::with_capacity(source, 3);
+    let mut decoder = CodecTranscodeDecoder::new(FixedPairCodec);
+    decoder.reset(&mut [], 0).expect("initialize decoder");
+    let mut output = [0_u32; 3];
+    let mut mapper = map_error;
+    let written = input.transcode(&mut decoder, &mut mapper, &mut output, 1, 1)?;
+
+    assert_eq!(1, written, "the requested value is complete");
+    assert_eq!([0, 0x0001_0002, 0], output);
+    assert_eq!(&[3], input.unread(), "the next prefix remains buffered");
+    let (source, unread) = input.into_parts();
+    assert_eq!(1, source.reads, "no second read is needed");
+    assert_eq!(&[3], unread.readable());
+    Ok(())
+}
+
+#[test]
 fn test_buffered_decode_input_reports_initial_refill_errors() {
     let input = FailingInput;
     let mut decoder = PairDecoder;
@@ -1956,6 +2045,48 @@ fn test_buffered_decode_input_transcode_uses_eof_for_a_short_tail() {
             .expect("streaming transcode should resolve the EOF tail"),
     );
     assert_eq!([0x1234], output);
+}
+
+#[test]
+fn test_sync_eof_need_input_is_rejected_before_consumption() -> IoResult<()> {
+    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1, 2]]), 2);
+    assert!(input.fill_until(2)?);
+    let mut decoder = EofNeedInputDecoder { eof_read: 1 };
+    let mut output = [0_u32; 1];
+    let mut mapper = map_error;
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+        .expect_err("NeedInput is invalid at EOF");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(&[1, 2], input.unread(), "invalid progress is not committed");
+    Ok(())
+}
+
+#[test]
+fn test_sync_eof_need_input_without_consumption_is_rejected() -> IoResult<()> {
+    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1]]), 1);
+    assert!(input.fill_until(1)?);
+    let mut decoder = EofNeedInputDecoder::default();
+    let mut mapper = map_error;
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut [0_u32; 1], 0, 1)
+        .expect_err("NeedInput is invalid at EOF");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(&[1], input.unread());
+    Ok(())
+}
+
+#[test]
+fn test_batch_eof_need_input_is_not_successful_zero() -> IoResult<()> {
+    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![1]]), 1);
+    let mut decoder = EofNeedInputDecoder::default();
+    let mut mapper = map_error;
+    let error = input
+        .transcode(&mut decoder, &mut mapper, &mut [0_u32; 1], 0, 1)
+        .expect_err("invalid EOF progress must not become Ok(0)");
+    assert_eq!(ErrorKind::InvalidData, error.kind());
+    assert_eq!(&[1], input.unread());
+    Ok(())
 }
 
 /// Verifies that a decoder reset rejects an undersized output range.
