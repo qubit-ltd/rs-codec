@@ -147,7 +147,6 @@ impl<E> DecodeFailure<E> {
     /// is a lower bound that a later retry may raise, or `None` for
     /// invalid-input failures.
     #[inline]
-    #[must_use]
     pub const fn required_total(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Incomplete { required_total, .. } => Some(*required_total),
@@ -162,7 +161,6 @@ impl<E> DecodeFailure<E> {
     /// Returns `Some(source)` when the codec supplied incomplete-input context,
     /// or `None` when the failure only carries the retry bound or is invalid.
     #[inline]
-    #[must_use]
     pub const fn incomplete_source(&self) -> Option<&E> {
         match self {
             Self::Incomplete { source, .. } => source.as_ref(),
@@ -177,7 +175,6 @@ impl<E> DecodeFailure<E> {
     /// Returns `Some(source)` for invalid-input failures, or `None` for
     /// incomplete failures.
     #[inline]
-    #[must_use]
     pub const fn invalid_source(&self) -> Option<&E> {
         match self {
             Self::Invalid { source, .. } => Some(source),
@@ -192,7 +189,6 @@ impl<E> DecodeFailure<E> {
     /// Returns `Some(consumed)` for [`Invalid`](Self::Invalid), or `None` when
     /// the failure is incomplete or invalid with unknown consumption.
     #[inline]
-    #[must_use]
     pub const fn consumed_units(&self) -> Option<NonZeroUsize> {
         match self {
             Self::Invalid { consumed, .. } => *consumed,
