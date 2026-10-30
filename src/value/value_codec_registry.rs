@@ -14,6 +14,16 @@ use crate::ValueCodecId;
 use crate::ValueCodecRegistration;
 use crate::ValueCodecRegistryError;
 
+// Implements process-wide lookup for the bytes-wire specialization.
+#[path = "value_codec_registry/value_bytes_codec_registry.rs"]
+mod value_bytes_codec_registry;
+// Implements process-wide lookup for the string-wire specialization.
+#[path = "value_codec_registry/value_string_codec_registry.rs"]
+mod value_string_codec_registry;
+
+pub use value_bytes_codec_registry::ValueBytesCodecRegistry;
+pub use value_string_codec_registry::ValueStringCodecRegistry;
+
 /// An immutable value-codec registry sorted by stable ID.
 ///
 /// # Type Parameters

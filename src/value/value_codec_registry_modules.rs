@@ -10,11 +10,7 @@
 
 #[path = "value_codec_registry.rs"]
 mod local_value_codec_registry;
-#[path = "value_codec_registry/value_bytes_codec_registry.rs"]
-mod value_bytes_codec_registry;
-#[path = "value_codec_registry/value_string_codec_registry.rs"]
-mod value_string_codec_registry;
 
+pub use local_value_codec_registry::ValueBytesCodecRegistry;
 pub use local_value_codec_registry::ValueCodecRegistry;
-pub use value_bytes_codec_registry::ValueBytesCodecRegistry;
-pub use value_string_codec_registry::ValueStringCodecRegistry;
+pub use local_value_codec_registry::ValueStringCodecRegistry;
