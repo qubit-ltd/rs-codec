@@ -15,5 +15,5 @@ pub(in crate::transcode::io) use codec_decode_driver::CodecDecodeDriver;
 pub(in crate::transcode::io) use encode_output_error::capacity_error_to_invalid_data;
 pub(in crate::transcode::io) use encode_output_error::map_encode_value_result;
 pub(super) use transcode_progress_validation::validate_decode_progress;
-pub(super) use transcode_progress_validation::validate_eof_decode_progress;
 pub(super) use transcode_progress_validation::validate_encode_progress;
+pub(super) use transcode_progress_validation::validate_eof_decode_progress;
