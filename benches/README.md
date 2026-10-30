@@ -247,3 +247,39 @@ artifact cannot establish whether those writes are retained or eliminated for
 any of the six closures. The debug auxiliary result cannot close that mapping
 gap. No benchmark source was changed, no timing was run, and the historical
 measurements remain unsuitable for performance tradeoffs on this evidence.
+
+### RC-009 follow-up: 2026-10-30 implementation audit
+
+This audit used baseline `6881abead88b21476c4d3a4fbba8cfea04e5625f`; there
+was no diff in `benches/transcode.rs`. The environment was rustc 1.94.0,
+LLVM 21.1.8, `x86_64-unknown-linux-gnu`, on an Intel Core i5-9600K with six
+CPUs. The bench profile was `opt-level=3`, `lto=true`, and `codegen-units=1`.
+The default build command was
+`CARGO_TARGET_DIR=target/rc009-ec2be1ab/default/target cargo bench --locked
+--bench transcode --no-run --message-format=json` (exit 0). Its Cargo JSON
+identified
+`target/rc009-ec2be1ab/default/target/release/deps/transcode-518bb86cbd866b72`,
+SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+The JSON, stderr, artifact path, hash, complete `nm -S -C`, and complete
+`objdump -Cd` outputs were captured under
+`target/rc009-ec2be1ab/default/` during this run. `nm` identified
+`transcode::bench_transcoder` at `0x979f0` (size `0x7f24`) and
+`transcode::copy_safe_exact` at `0x979d0` (size `0x1f`); no distinct symbols
+identify the six timed closures. The artifact hash matches the earlier default
+audit above, and it has no debug line or info sections. One additional build
+would not provide new attribution evidence, so no auxiliary build was run.
+
+| Timed path | Classification | Evidence and limitation |
+| --- | --- | --- |
+| `direct_transcode` | Unresolved | Source passes the full fixture; LTO output does not map the closure's complete write range. |
+| `complete_lifecycle` | Unresolved | Source expects a full-fixture write; the inlined closure cannot be isolated in the default artifact. |
+| `decode_engine` | Unresolved | Source passes the full fixture; no attributable default instructions establish complete output writes. |
+| `codec_adapter` | Unresolved | Source passes the full fixture; no attributable default instructions establish complete output writes. |
+| `output_window_32` | Unresolved | Source reuses a 32-byte window; the default artifact does not establish whether each window's writes survive. |
+| `output_window_1024` | Unresolved | Source reuses a 1,024-byte window; the default artifact does not establish whether each window's writes survive. |
+
+RC-009 remains open. `benches/transcode.rs` was not changed, no benchmark was
+timed, and these results do not support performance tradeoffs or a claim that
+the six paths retain or eliminate their complete writes. This conclusion is
+limited to the recorded artifact, toolchain, and host.
