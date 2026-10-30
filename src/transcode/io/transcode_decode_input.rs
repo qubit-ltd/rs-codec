@@ -653,6 +653,10 @@ where
     /// with output capacity remaining, it passes the retained tail—or an empty
     /// input when no tail remains—to [`Transcoder::transcode_eof`] before
     /// returning.
+    /// A short return, including zero, may mean the decoder requires a larger
+    /// contiguous output range. It does not prove conversion is complete. Use
+    /// [`Self::transcode_step`] and [`Self::transcode_eof_step`] when the stop
+    /// reason and required capacity must remain observable.
     ///
     /// # Errors
     ///

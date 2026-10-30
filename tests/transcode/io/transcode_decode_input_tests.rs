@@ -1905,6 +1905,47 @@ fn test_buffered_decode_input_transcode_dispatches_empty_eof_event() {
 }
 
 #[test]
+fn test_review_batch_zero_can_mean_eof_output_backpressure() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(Vec::<u8>::new()));
+    let mut decoder = EmptyEofDecoder::default();
+    decoder.reset(&mut [], 0).expect("reset");
+    let mut mapper = map_error;
+    let mut output = [0_u32; 2];
+
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 0, 1).unwrap(),
+        0
+    );
+    assert!(!decoder.emitted, "zero output must leave EOF output pending");
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 0, 2).unwrap(),
+        2
+    );
+    assert_eq!(output, [42, 43]);
+    assert!(decoder.emitted);
+}
+
+#[test]
+fn test_review_eof_step_preserves_output_requirement() {
+    let mut input = TranscodeDecodeInput::new(Cursor::new(Vec::<u8>::new()));
+    let mut decoder = EmptyEofDecoder::default();
+    decoder.reset(&mut [], 0).expect("reset");
+    let mut mapper = map_error;
+    let mut output = [0_u32; 2];
+
+    // The empty source is already known to be at EOF; this method does not read it.
+    let progress = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 1)
+        .unwrap();
+    assert_eq!(progress, TranscodeProgress::need_output(crate::nonzero(2), 0, 0));
+    let progress = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 0, 2)
+        .unwrap();
+    assert_eq!(progress, TranscodeProgress::complete(0, 2));
+    assert_eq!(output, [42, 43]);
+}
+
+#[test]
 fn test_buffered_decode_input_transcode_uses_eof_for_a_short_tail() {
     let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![0x1234]]), 1);
     let mut decoder = EofTailDecoder;
