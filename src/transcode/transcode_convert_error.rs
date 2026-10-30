@@ -36,8 +36,11 @@ pub type TranscodeConvertErrorOf<D, E> =
 /// For values emitted by the source codec's decode reset or finish phase, the
 /// converter uses placeholder input index 0 in encode contexts and errors.
 /// Such values have no source-unit position, and index 0 cannot distinguish
-/// them from a value decoded at source index 0. Ordinary decoded values use
-/// indices relative to the current input slice. Error phases describe the
+/// them from a value decoded at source index 0. Ordinary decoded values retain
+/// their index in the input slice supplied to the decode call that produced
+/// them. A pending value keeps that index across calls; it is not rebased to a
+/// later input slice and is not a whole-stream offset. The retained index may
+/// be outside the bounds of a later input slice. Error phases describe the
 /// underlying codec operation, so encoding a lifecycle-generated value uses
 /// the main encode path even during converter reset or finish.
 ///
@@ -83,8 +86,9 @@ pub enum TranscodeConvertError<DE, EE, V> {
     Unencodable {
         /// Source input index of the value being encoded. Lifecycle-generated
         /// converter values use placeholder 0 because they have no source-unit
-        /// position; ordinary decoded values are indexed relative to the
-        /// current input slice.
+        /// position; ordinary decoded values retain their index in the input
+        /// slice supplied to the decode call that produced them, including
+        /// when kept pending across calls.
         input_index: usize,
         /// `Some` retains the decoded intermediate value; `None` means value
         /// context was unavailable or intentionally omitted.
@@ -130,8 +134,9 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// - `source`: Owned source error raised during conversion.
     /// - `input_index`: Source index for the failed operation. For a
     ///   lifecycle-generated converter value, use placeholder 0 because it has
-    ///   no source-unit position; ordinary decoded values use an index relative
-    ///   to the current input slice.
+    ///   no source-unit position; an ordinary decoded value retains its index
+    ///   in the slice supplied to the decode call that produced it, even when
+    ///   kept pending across calls.
     /// - `input_consumed`: `Some` records invalid units consumed; `None` means
     ///   unknown.
     ///
@@ -186,8 +191,9 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// - `source`: Owned target error raised during conversion.
     /// - `input_index`: Source index for the failed operation. For a
     ///   lifecycle-generated converter value, use placeholder 0 because it has
-    ///   no source-unit position; ordinary decoded values use an index relative
-    ///   to the current input slice.
+    ///   no source-unit position; an ordinary decoded value retains its index
+    ///   in the slice supplied to the decode call that produced it, even when
+    ///   kept pending across calls.
     ///
     /// # Returns
     ///
@@ -219,8 +225,9 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     ///
     /// - `input_index`: Source index of the rejected value. Lifecycle-generated
     ///   converter values use placeholder 0 because they have no source-unit
-    ///   position; ordinary decoded values use an index relative to the current
-    ///   input slice.
+    ///   position; an ordinary decoded value retains its index in the slice
+    ///   supplied to the decode call that produced it, even when kept pending
+    ///   across calls.
     /// - `value`: Intermediate value moved into the error for recovery.
     ///
     /// # Returns
@@ -240,8 +247,9 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     ///
     /// - `input_index`: Source index of the rejected value. Lifecycle-generated
     ///   converter values use placeholder 0 because they have no source-unit
-    ///   position; ordinary decoded values use an index relative to the current
-    ///   input slice.
+    ///   position; an ordinary decoded value retains its index in the slice
+    ///   supplied to the decode call that produced it, even when kept pending
+    ///   across calls.
     ///
     /// # Returns
     ///

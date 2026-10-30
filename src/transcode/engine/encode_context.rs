@@ -16,7 +16,11 @@
 ///
 /// In a codec-backed converter, values emitted by source decode reset or
 /// finish have no source-unit position and use placeholder index 0. Ordinary
-/// decoded values use their source index relative to the current input slice.
+/// decoded values retain their index in the input slice supplied to the
+/// decode call that produced them. A pending value keeps that index across
+/// calls; it is not rebased to a later input slice and is not a whole-stream
+/// offset. The retained index may be outside the bounds of a later input
+/// slice.
 ///
 /// # Type Parameters
 ///
@@ -85,7 +89,11 @@ impl<'a, Value> EncodeContext<'a, Value> {
     ///
     /// In a codec-backed converter, lifecycle-generated values use placeholder
     /// index 0 because they have no source-unit position. Ordinary decoded
-    /// values use an index relative to the current input slice.
+    /// values retain their index in the input slice supplied to the decode
+    /// call that produced them. A pending value keeps that index across calls;
+    /// it is not rebased to a later input slice and is not a whole-stream
+    /// offset. The retained index may be outside the bounds of a later input
+    /// slice.
     ///
     /// # Returns
     ///

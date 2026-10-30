@@ -128,8 +128,9 @@ hook 不再取得可写输出切片，也不能伪造写入计数。引擎内部
   streaming 阶段在内部 pending slot 中保留尚未写出的值，finish 时先排空 pending，
   再处理 decoder finish 值，最后完成 encoder finish。
 
-错误中的输入下标坐标由具体适配器定义。converter 的普通解码值使用相对于当前输入
-切片的真实来源下标；库不会自动累计跨分片的全流偏移。源 codec 的 decode reset 或
+错误中的输入下标坐标由具体适配器定义。converter 的普通解码值保留产生该值的 decode
+调用所用输入切片中的下标。pending 值跨调用保留该下标，不会重定位到后续输入切片，也
+不是累计的全流偏移；该下标可能超出后续输入切片的有效范围。源 codec 的 decode reset 或
 finish 生成值没有对应源 unit，编码上下文及错误使用占位下标 0；该占位值无法与源下标
 0 的普通解码值区分。错误阶段描述底层 codec 操作，因此这类值即使在 converter 的
 reset 或 finish 中编码，目标编码错误仍属于 main 阶段。`TranscodeProgress` 计数则是

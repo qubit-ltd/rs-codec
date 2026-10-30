@@ -119,8 +119,11 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// lifecycle-generated values from a value decoded at source index 0. Error
 /// phases describe the underlying codec operation: encoding such a value uses
 /// the main encode path, even during converter reset or finish. Ordinary
-/// decoded values retain their source index relative to the current input
-/// slice; the converter does not accumulate a whole-stream offset.
+/// decoded values retain their index in the input slice supplied to the
+/// decode call that produced them. A pending value keeps that index across
+/// calls; it is not rebased to a later input slice and is not a whole-stream
+/// offset. The retained index may be outside the bounds of a later input
+/// slice.
 ///
 /// For strict codec-backed conversion with default decode and encode policies,
 /// use [`crate::CodecTranscodeConverter`]. Use `TranscodeConvertEngine`

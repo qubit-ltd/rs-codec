@@ -715,6 +715,24 @@ Update every crate that exchanges `ValueCodecId`, registration, descriptor, or r
 | `TranscodeContractError` | A custom transcoder returned inconsistent progress. | Fix the transcoder; not recoverable input. |
 | `ValueCodecExecutionError` | Registry dispatch: type mismatch or encode/decode failure. | Match value type and ID; inspect domain error source. |
 
+For codec-backed converters, an ordinary decoded value keeps its index in the
+input slice supplied to the decode call that produced it. If output capacity is
+insufficient, the pending value keeps that index across calls. It is not rebased
+to the next slice and is not a whole-stream offset; it may be outside the bounds
+of a later slice.
+
+| Call | Input and starting index | Result |
+| --- | --- | --- |
+| First | `[0, 0, 12]`, start 2, no output capacity | Consumes one source value and retains it pending with source index 2. |
+| Second | `[0, 1]`, start 1 | Encoding the pending value fails and still reports source index 2; that index must not be used to access the second slice. |
+
+An application that needs whole-stream positions must retain source-slice
+provenance and each slice's base in its driver. With arbitrary slice replacement,
+the error number alone cannot identify which call supplied the source, and adding
+the most recent call's base is not generally correct. Alternatively, keep one
+stable input slice and advance `input_index` within it. The library does not
+retain full provenance for the application.
+
 | Symptom | What to check |
 | --- | --- |
 | `NeedInput` at end of file, including with no unread units | Preserve any tail and call `transcode_eof`; if empty input is a valid EOF for the format, override the default EOF behavior to complete or drain retained state before `finish`. |

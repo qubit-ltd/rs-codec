@@ -16,10 +16,14 @@ use thiserror::Error;
 /// Reset and finish failures are lifecycle failures and therefore cannot carry
 /// an input index. Main-phase failures carry an input index whose coordinate
 /// meaning is defined by the concrete adapter. For codec-backed converters,
-/// ordinary values use an index relative to the current input slice, while
-/// lifecycle-generated values encoded during reset or finish use placeholder
-/// index 0 because they have no source-unit position. Their encode error still
-/// has the main phase because it describes the underlying encode operation.
+/// ordinary decoded values retain their index in the input slice supplied to
+/// the decode call that produced them. A pending value keeps that index across
+/// calls; it is not rebased to a later input slice and is not a whole-stream
+/// offset. The retained index may be outside the bounds of a later input
+/// slice. Lifecycle-generated values encoded during reset or finish use
+/// placeholder index 0 because they have no source-unit position. Their encode
+/// error still has the main phase because it describes the underlying encode
+/// operation.
 ///
 /// # Type Parameters
 ///
