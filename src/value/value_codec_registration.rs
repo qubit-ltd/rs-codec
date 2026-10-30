@@ -78,32 +78,72 @@ impl<D: 'static> ValueCodecRegistration<D> {
 ///
 /// # Examples
 ///
-/// ```compile_fail
-/// use qubit_codec::JsonStringValueCodec;
+/// ```
+/// use core::convert::Infallible;
+/// use qubit_codec::ValueDecoder;
+/// use qubit_codec::ValueEncoder;
 /// use qubit_codec::register_value_string_codec;
 ///
-/// fn invalid_id() -> &'static str { "example.u32" }
-/// register_value_string_codec!(id = invalid_id(), codec = JsonStringValueCodec<u32>, value = u32);
+/// #[derive(Default)]
+/// struct TextCodec;
+/// impl ValueEncoder<String> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn encode(&mut self, value: &String) -> Result<String, Infallible> {
+///         Ok(value.clone())
+///     }
+/// }
+/// impl ValueDecoder<str> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn decode(&mut self, input: &str) -> Result<String, Infallible> {
+///         Ok(input.to_owned())
+///     }
+/// }
+/// register_value_string_codec!(id = "example.text", codec = TextCodec, value = String);
 /// ```
 ///
 /// ```compile_fail
-/// use qubit_codec::JsonStringValueCodec;
-/// use qubit_codec::register_value_string_codec;
-/// register_value_string_codec!(id = "invalid-id", codec = JsonStringValueCodec<u32>, value = u32);
-/// ```
-///
-/// ```
-/// # #[cfg(feature = "json")]
-/// # {
-/// use qubit_codec::JsonStringValueCodec;
+/// use core::convert::Infallible;
+/// use qubit_codec::ValueDecoder;
+/// use qubit_codec::ValueEncoder;
 /// use qubit_codec::register_value_string_codec;
 ///
-/// register_value_string_codec!(
-///     id = "example.u32",
-///     codec = JsonStringValueCodec<u32>,
-///     value = u32,
-/// );
-/// # }
+/// #[derive(Default)]
+/// struct TextCodec;
+/// impl ValueEncoder<String> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn encode(&mut self, value: &String) -> Result<String, Infallible> { Ok(value.clone()) }
+/// }
+/// impl ValueDecoder<str> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn decode(&mut self, input: &str) -> Result<String, Infallible> { Ok(input.to_owned()) }
+/// }
+/// register_value_string_codec!(id = "invalid-id", codec = TextCodec, value = String);
+/// ```
+///
+/// ```compile_fail
+/// use core::convert::Infallible;
+/// use qubit_codec::ValueDecoder;
+/// use qubit_codec::ValueEncoder;
+/// use qubit_codec::register_value_string_codec;
+///
+/// #[derive(Default)]
+/// struct TextCodec;
+/// impl ValueEncoder<String> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn encode(&mut self, value: &String) -> Result<String, Infallible> { Ok(value.clone()) }
+/// }
+/// impl ValueDecoder<str> for TextCodec {
+///     type Output = String;
+///     type Error = Infallible;
+///     fn decode(&mut self, input: &str) -> Result<String, Infallible> { Ok(input.to_owned()) }
+/// }
+/// fn invalid_id() -> &'static str { "example.text" }
+/// register_value_string_codec!(id = invalid_id(), codec = TextCodec, value = String);
 /// ```
 #[macro_export]
 macro_rules! register_value_string_codec {
@@ -156,24 +196,46 @@ macro_rules! register_value_string_codec {
 ///
 /// # Examples
 ///
+/// ```
+/// use core::convert::Infallible;
+/// use qubit_codec::ValueDecoder;
+/// use qubit_codec::ValueEncoder;
+/// use qubit_codec::register_value_bytes_codec;
+///
+/// #[derive(Default)]
+/// struct BytesCodec;
+/// impl ValueEncoder<Vec<u8>> for BytesCodec {
+///     type Output = Vec<u8>;
+///     type Error = Infallible;
+///     fn encode(&mut self, value: &Vec<u8>) -> Result<Vec<u8>, Infallible> { Ok(value.clone()) }
+/// }
+/// impl ValueDecoder<[u8]> for BytesCodec {
+///     type Output = Vec<u8>;
+///     type Error = Infallible;
+///     fn decode(&mut self, input: &[u8]) -> Result<Vec<u8>, Infallible> { Ok(input.to_vec()) }
+/// }
+/// register_value_bytes_codec!(id = "example.bytes", codec = BytesCodec, value = Vec<u8>);
+/// ```
+///
 /// ```compile_fail
-/// use qubit_codec::JsonBytesValueCodec;
-/// use qubit_codec::register_value_bytes_codec;
-/// register_value_bytes_codec!(id = "invalid-id", codec = JsonBytesValueCodec<u32>, value = u32);
-/// ```
-///
-/// ```
-/// # #[cfg(feature = "json")]
-/// # {
-/// use qubit_codec::JsonBytesValueCodec;
+/// use core::convert::Infallible;
+/// use qubit_codec::ValueDecoder;
+/// use qubit_codec::ValueEncoder;
 /// use qubit_codec::register_value_bytes_codec;
 ///
-/// register_value_bytes_codec!(
-///     id = "example.u32",
-///     codec = JsonBytesValueCodec<u32>,
-///     value = u32,
-/// );
-/// # }
+/// #[derive(Default)]
+/// struct BytesCodec;
+/// impl ValueEncoder<Vec<u8>> for BytesCodec {
+///     type Output = Vec<u8>;
+///     type Error = Infallible;
+///     fn encode(&mut self, value: &Vec<u8>) -> Result<Vec<u8>, Infallible> { Ok(value.clone()) }
+/// }
+/// impl ValueDecoder<[u8]> for BytesCodec {
+///     type Output = Vec<u8>;
+///     type Error = Infallible;
+///     fn decode(&mut self, input: &[u8]) -> Result<Vec<u8>, Infallible> { Ok(input.to_vec()) }
+/// }
+/// register_value_bytes_codec!(id = "invalid-id", codec = BytesCodec, value = Vec<u8>);
 /// ```
 #[macro_export]
 macro_rules! register_value_bytes_codec {

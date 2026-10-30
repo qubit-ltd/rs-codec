@@ -7,6 +7,12 @@
       "commands": ["test", "doc", "clippy"]
     },
     {
+      "name": "registry-only",
+      "defaultFeatures": false,
+      "features": ["registry"],
+      "commands": ["test", "doc", "clippy"]
+    },
+    {
       "name": "io",
       "defaultFeatures": false,
       "features": ["io"],

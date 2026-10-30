@@ -121,10 +121,11 @@ fn test_const_constructor_is_usable_in_const_context() {
 
 #[test]
 fn test_as_str_borrows_the_original_static_string_without_copying() {
-    let id = ValueCodecId::new("mirror.borrowed.static");
+    let input: &'static str = "mirror.borrowed.static";
+    let id = ValueCodecId::new(input);
 
     assert!(
-        std::ptr::eq(id.as_str().as_ptr(), "mirror.borrowed.static".as_ptr()),
+        std::ptr::eq(id.as_str().as_ptr(), input.as_ptr()),
         "the ID must borrow the caller's static string instead of allocating a copy"
     );
 }

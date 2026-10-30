@@ -7,6 +7,10 @@
 // =============================================================================
 //! Tests for the codec-backed value decoder adapter.
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -18,6 +22,51 @@ use qubit_codec::TranscodeFailure;
 use qubit_codec::ValueDecoder;
 
 use super::internal::ResetSensitiveLifecycleCodec;
+
+struct PreflightProbeCodec {
+    reset_calls: Rc<Cell<usize>>,
+    decode_calls: Rc<Cell<usize>>,
+    finish_calls: Rc<Cell<usize>>,
+}
+
+impl Codec for PreflightProbeCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+    const MAX_DECODE_FINISH_VALUES: usize = 1;
+
+    unsafe fn decode_reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
+        self.reset_calls.set(self.reset_calls.get() + 1);
+        output[output_index] = 0xfe;
+        Ok(1)
+    }
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Infallible>> {
+        self.decode_calls.set(self.decode_calls.get() + 1);
+        Ok((input[input_index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
+        output[output_index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn decode_finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
+        self.finish_calls.set(self.finish_calls.get() + 1);
+        output[output_index] = 0xff;
+        Ok(1)
+    }
+}
 
 /// Codec fixture that resolves a trailing `0xfe` only after EOF is known.
 ///
@@ -783,10 +832,19 @@ fn test_codec_value_decoder_runs_reset_before_input_validation() {
 
 #[test]
 fn test_codec_value_decoder_rejects_short_finish_output_before_decode() {
-    let mut decoder = CodecValueDecoder::<FinishFailStatefulCodec>::new(FinishFailStatefulCodec { fail_finish: true });
+    let reset_calls = Rc::new(Cell::new(0));
+    let decode_calls = Rc::new(Cell::new(0));
+    let finish_calls = Rc::new(Cell::new(0));
+    let codec = PreflightProbeCodec {
+        reset_calls: Rc::clone(&reset_calls),
+        decode_calls: Rc::clone(&decode_calls),
+        finish_calls: Rc::clone(&finish_calls),
+    };
+    let mut decoder = CodecValueDecoder::new(codec);
+    let mut reset_output = [0xa5];
 
     let error = decoder
-        .decode_lifecycle_with_scratch(&[7], &mut [], &mut [])
+        .decode_lifecycle_with_scratch(&[7], &mut reset_output, &mut [])
         .expect_err("short finish output must be rejected first");
 
     assert_eq!(
@@ -797,6 +855,36 @@ fn test_codec_value_decoder_rejects_short_finish_output_before_decode() {
         }),
         error.failure_ref(),
     );
+    assert_eq!(0, reset_calls.get());
+    assert_eq!(0, decode_calls.get());
+    assert_eq!(0, finish_calls.get());
+    assert_eq!([0xa5], reset_output);
+}
+
+#[test]
+fn test_codec_value_decoder_preflight_probe_runs_with_sufficient_scratch() {
+    let reset_calls = Rc::new(Cell::new(0));
+    let decode_calls = Rc::new(Cell::new(0));
+    let finish_calls = Rc::new(Cell::new(0));
+    let codec = PreflightProbeCodec {
+        reset_calls: Rc::clone(&reset_calls),
+        decode_calls: Rc::clone(&decode_calls),
+        finish_calls: Rc::clone(&finish_calls),
+    };
+    let mut decoder = CodecValueDecoder::new(codec);
+    let mut reset_output = [0xa5];
+    let mut finish_output = [0_u8];
+
+    let result = decoder
+        .decode_lifecycle_with_scratch(&[7], &mut reset_output, &mut finish_output)
+        .expect("sufficient scratch should run the complete lifecycle");
+
+    assert_eq!(&7, result.value());
+    assert_eq!([0xfe], reset_output);
+    assert_eq!([0xff], finish_output);
+    assert_eq!(1, reset_calls.get());
+    assert_eq!(1, decode_calls.get());
+    assert_eq!(1, finish_calls.get());
 }
 
 #[test]
