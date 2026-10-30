@@ -163,7 +163,10 @@ impl<E> TranscodeDomainError<E> {
         }
     }
 
-    /// Returns the absolute input index associated with the error.
+    /// Returns the input index associated with the error, in the coordinate
+    /// system defined by the concrete adapter. The value may be a placeholder
+    /// when the adapter reports an error for a value without a source-unit
+    /// position.
     ///
     /// # Returns
     ///
