@@ -360,6 +360,58 @@ impl Transcoder for PairAndTailDecoder {
     }
 }
 
+#[derive(Debug, Default)]
+struct EofNeedInputDecoder {
+    eof_read: usize,
+}
+
+impl Transcoder for EofNeedInputDecoder {
+    type Input = u8;
+    type Output = u16;
+    type Error = TranscodeDecodeError<TestDecodeError>;
+
+    fn max_transcode_output_len(&self, len: usize) -> Result<usize, CapacityError> {
+        Ok(len)
+    }
+
+    fn reset(&mut self, _out: &mut [u16], _index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        _out: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        Ok(TranscodeProgress::need_input(
+            utils_crate::nonzero(input.len() - index + 1),
+            0,
+            0,
+        ))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        _out: &mut [u16],
+        _output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        let remaining = input.len() - index - self.eof_read;
+        Ok(TranscodeProgress::need_input(
+            utils_crate::nonzero(remaining + 1),
+            self.eof_read,
+            0,
+        ))
+    }
+
+    fn finish(&mut self, _out: &mut [u16], _index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
 /// Decoder with observable lifecycle output.
 #[derive(Debug, Default)]
 struct LifecycleDecoder;
@@ -907,6 +959,36 @@ fn test_async_transcode_decode_input_transcode_eof_step_consumes_buffered_tail()
         .transcode_eof_step(&mut decoder, &mut map_error, &mut output, 1, 1)
         .expect_err("invalid EOF output range must fail");
     assert_eq!(io::ErrorKind::InvalidInput, error.kind());
+    Ok(())
+}
+
+#[test]
+fn test_async_eof_need_input_is_rejected_before_consumption() -> io::Result<()> {
+    let source = ChunkedAsyncInput::new(vec![1, 2], 2);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(source, 2);
+    assert!(complete(input.fill_until_async(2))?);
+    let mut decoder = EofNeedInputDecoder { eof_read: 1 };
+    let mut mapper = |_| io::Error::other("unexpected decoder error");
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut [0_u16; 1], 0, 1)
+        .expect_err("NeedInput is invalid at EOF");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(&[1, 2], input.unread());
+    Ok(())
+}
+
+#[test]
+fn test_async_eof_need_input_without_consumption_is_rejected() -> io::Result<()> {
+    let source = ChunkedAsyncInput::new(vec![1], 1);
+    let mut input = AsyncTranscodeDecodeInput::with_capacity(source, 1);
+    assert!(complete(input.fill_until_async(1))?);
+    let mut decoder = EofNeedInputDecoder::default();
+    let mut mapper = |_| io::Error::other("unexpected decoder error");
+    let error = input
+        .transcode_eof_step(&mut decoder, &mut mapper, &mut [0_u16; 1], 0, 1)
+        .expect_err("NeedInput is invalid at EOF");
+    assert_eq!(io::ErrorKind::InvalidData, error.kind());
+    assert_eq!(&[1], input.unread());
     Ok(())
 }
 

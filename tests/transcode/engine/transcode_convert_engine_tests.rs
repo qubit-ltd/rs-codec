@@ -420,26 +420,26 @@ fn test_buffered_convert_engine_reports_pending_need_output_before_new_input() {
 #[test]
 fn test_buffered_convert_engine_maps_pending_encode_error_before_new_input() {
     let mut engine = new_copy_engine();
-    let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode(&[12], 0, &mut empty_output, 0)
-        .expect("conversion should retain decoded value before encoding");
-    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+        .transcode(&[0, 0, 12], 2, &mut [], 0)
+        .expect("retain the value from original source index 2");
+    assert!(progress.is_need_output());
+    assert_eq!((1, 0), (progress.read(), progress.written()));
 
-    let mut output = [0_u8; 1];
+    let mut output = [0xa5_u8; 1];
     let error = engine
-        .transcode(&[1], 0, &mut output, 0)
-        .expect_err("pending encode error should be mapped before new input is consumed");
+        .transcode(&[0, 1], 1, &mut output, 0)
+        .expect_err("pending failure precedes the new input");
 
     assert!(matches!(
         error,
         TranscodeConvertError::EncodeDomain(codec::TranscodeDomainError::Main {
             source: EngineError::Encode,
-            input_index: _,
+            input_index: 2,
             input_consumed: None
         }),
     ));
-    assert_eq!([0], output);
+    assert_eq!([0xa5], output, "failed pending encoding writes no output");
 }
 
 #[test]
@@ -792,13 +792,13 @@ fn test_buffered_convert_engine_finish_maps_encode_error() {
 #[test]
 fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
     let mut engine = new_copy_engine();
-    let mut empty_output = [0_u8; 0];
     let progress = engine
-        .transcode(&[12], 0, &mut empty_output, 0)
-        .expect("conversion should retain decoded value before encoding");
-    assert!(matches!(progress.status(), TranscodeStatus::NeedOutput { .. }));
+        .transcode(&[0, 0, 12], 2, &mut [], 0)
+        .expect("retain the value from original source index 2");
+    assert!(progress.is_need_output());
+    assert_eq!((1, 0), (progress.read(), progress.written()));
 
-    let mut output = [0_u8; 1];
+    let mut output = [0xa5_u8; 1];
     let error = engine
         .finish(&mut output, 0)
         .expect_err("finish should map pending encode error");
@@ -807,11 +807,11 @@ fn test_buffered_convert_engine_finish_maps_pending_encode_error() {
         error,
         TranscodeConvertError::EncodeDomain(codec::TranscodeDomainError::Main {
             source: EngineError::Encode,
-            input_index: _,
+            input_index: 2,
             input_consumed: None,
         }),
     ));
-    assert_eq!([0], output);
+    assert_eq!([0xa5], output, "failed pending encoding writes no output");
 }
 
 #[test]

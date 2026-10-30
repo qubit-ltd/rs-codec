@@ -35,6 +35,7 @@ fuzz_target!(|data: &[u8]| {
     let mut lifecycle = Vec::new();
     let mut expected_lifecycle = Vec::new();
     let mut decoded = Vec::new();
+    let expected_reads = data.iter().filter(|action| **action % 3 == 1).count();
 
     for action in data.iter().copied().chain(once(2)) {
         match action % 3 {
@@ -58,11 +59,13 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    assert!(decoded.len() <= data.len());
-    assert_eq!(&data[..decoded.len()], decoded.as_slice());
+    assert_eq!(&data[..expected_reads], decoded.as_slice());
     assert_eq!(expected_lifecycle, lifecycle);
-    let (_inner, unread) = input.into_parts();
-    assert!(unread.available() <= 1);
+    let (inner, unread) = input.into_parts();
+    let cursor_position = inner.position() as usize;
+    let mut remaining = unread.readable().to_vec();
+    remaining.extend_from_slice(&inner.get_ref()[cursor_position..]);
+    assert_eq!(&data[expected_reads..], remaining.as_slice());
 });
 
 struct MarkerDecoder;

@@ -30,6 +30,9 @@ struct ChunkedAsyncOutput {
     pending: bool,
     flushed: bool,
     failed: bool,
+    flush_pending: bool,
+    flush_fail_once: bool,
+    flush_calls: usize,
 }
 
 impl ChunkedAsyncOutput {
@@ -41,6 +44,9 @@ impl ChunkedAsyncOutput {
             pending: true,
             flushed: false,
             failed: false,
+            flush_pending: false,
+            flush_fail_once: false,
+            flush_calls: 0,
         }
     }
 }
@@ -69,7 +75,17 @@ impl AsyncOutput for ChunkedAsyncOutput {
         Poll::Ready(Ok(written))
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.flush_calls += 1;
+        if self.flush_pending {
+            self.flush_pending = false;
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+        if self.flush_fail_once {
+            self.flush_fail_once = false;
+            return Poll::Ready(Err(io::Error::other("flush fixture failure")));
+        }
         self.flushed = true;
         Poll::Ready(Ok(()))
     }
@@ -161,6 +177,9 @@ impl TranscodeEncoder for CopyEncoder {
 #[derive(Debug, Default)]
 struct CountingCopyEncoder {
     transcode_calls: usize,
+    reset_calls: usize,
+    finish_calls: usize,
+    lifecycle_bound: usize,
 }
 
 impl Transcoder for CountingCopyEncoder {
@@ -173,10 +192,11 @@ impl Transcoder for CountingCopyEncoder {
     }
 
     fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(1)
+        Ok(self.lifecycle_bound.max(1))
     }
 
     fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        self.reset_calls += 1;
         CopyEncoder.reset(output, output_index)
     }
 
@@ -192,10 +212,11 @@ impl Transcoder for CountingCopyEncoder {
     }
 
     fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
-        Ok(1)
+        Ok(self.lifecycle_bound.max(1))
     }
 
     fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        self.finish_calls += 1;
         CopyEncoder.finish(output, output_index)
     }
 }
@@ -778,5 +799,88 @@ fn test_async_transcode_encode_output_propagates_delivery_errors() -> io::Result
         error.kind(),
         "asynchronous delivery failures map to Other"
     );
+    assert_eq!(1, output.pending_len());
+    assert!(output.inner().bytes.is_empty());
+    output.inner_mut().failed = false;
+    complete(output.drain_async())?;
+    assert_eq!(0, output.pending_len());
+    assert_eq!(b"a", output.inner().bytes.as_slice());
+    Ok(())
+}
+
+#[test]
+fn test_cancelled_lifecycle_preserves_pending_and_runs_once() -> io::Result<()> {
+    for finishing in [false, true] {
+        let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 2);
+        let mut encoder = CountingCopyEncoder {
+            lifecycle_bound: 2,
+            ..Default::default()
+        };
+        let mut mapper = |_| io::Error::other("copy encoder cannot fail");
+        complete(output.reset_async(&mut encoder, &mut mapper))?;
+        assert_eq!(
+            TranscodeProgress::complete(1, 1),
+            complete(output.transcode_async(&mut encoder, &mut mapper, &['a'], 0, 1))?,
+        );
+        assert_eq!(2, output.pending_len());
+        output.inner_mut().pending = false;
+        let mut future = Box::pin(async {
+            if finishing {
+                output.finish_async(&mut encoder, &mut mapper).await
+            } else {
+                output.reset_async(&mut encoder, &mut mapper).await
+            }
+        });
+        assert!(matches!(poll_once(future.as_mut()), Poll::Pending));
+        drop(future);
+        assert_eq!(1, encoder.reset_calls);
+        assert_eq!(0, encoder.finish_calls);
+        assert_eq!(b"^", output.inner().bytes.as_slice());
+        assert_eq!(1, output.pending_len());
+        if finishing {
+            complete(output.finish_async(&mut encoder, &mut mapper))?;
+        } else {
+            complete(output.reset_async(&mut encoder, &mut mapper))?;
+        }
+        assert_eq!(if finishing { 1 } else { 2 }, encoder.reset_calls);
+        assert_eq!(usize::from(finishing), encoder.finish_calls);
+        complete(output.flush_async())?;
+        let (sink, pending) = output.into_parts();
+        assert!(pending.is_empty());
+        assert_eq!(if finishing { b"^a!" } else { b"^a^" }, sink.bytes.as_slice());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_flush_recovery_does_not_repeat_finish() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(1), 2);
+    let mut encoder = CountingCopyEncoder::default();
+    let mut mapper = |_| io::Error::other("copy encoder cannot fail");
+    complete(output.reset_async(&mut encoder, &mut mapper))?;
+    let progress = complete(output.transcode_async(&mut encoder, &mut mapper, &['a'], 0, 1))?;
+    assert_eq!(TranscodeProgress::complete(1, 1), progress);
+    complete(output.finish_async(&mut encoder, &mut mapper))?;
+    complete(output.drain_async())?;
+    assert_eq!(b"^a!", output.inner().bytes.as_slice());
+    assert_eq!(1, encoder.finish_calls);
+
+    output.inner_mut().flush_pending = true;
+    let mut future = Box::pin(output.flush_async());
+    assert!(matches!(poll_once(future.as_mut()), Poll::Pending));
+    drop(future);
+    assert_eq!(1, encoder.finish_calls);
+    assert_eq!(0, output.pending_len());
+
+    output.inner_mut().flush_fail_once = true;
+    let error = complete(output.flush_async()).expect_err("one flush failure");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    assert_eq!(1, encoder.finish_calls);
+    assert_eq!(b"^a!", output.inner().bytes.as_slice());
+    complete(output.flush_async())?;
+    assert!(output.inner().flushed);
+    assert_eq!(3, output.inner().flush_calls);
+    assert_eq!(1, encoder.finish_calls);
+    assert_eq!(b"^a!", output.inner().bytes.as_slice());
     Ok(())
 }
