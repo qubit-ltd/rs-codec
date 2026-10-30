@@ -14,8 +14,12 @@ use thiserror::Error;
 /// Domain-specific codec, charset, or policy error with transcode context.
 ///
 /// Reset and finish failures are lifecycle failures and therefore cannot carry
-/// an input index. Main-phase failures always carry the absolute input index
-/// where the domain error occurred.
+/// an input index. Main-phase failures carry an input index whose coordinate
+/// meaning is defined by the concrete adapter. For codec-backed converters,
+/// ordinary values use an index relative to the current input slice, while
+/// lifecycle-generated values encoded during reset or finish use placeholder
+/// index 0 because they have no source-unit position. Their encode error still
+/// has the main phase because it describes the underlying encode operation.
 ///
 /// # Type Parameters
 ///
@@ -47,7 +51,8 @@ pub enum TranscodeDomainError<E> {
         /// Domain error returned by the codec or policy facade.
         #[source]
         source: E,
-        /// Absolute input index where the error occurred.
+        /// Input index where the error occurred, in the coordinate system
+        /// defined by the concrete adapter.
         input_index: usize,
         /// Invalid input units consumed by the codec-domain error, when known.
         input_consumed: Option<NonZeroUsize>,
@@ -82,7 +87,8 @@ impl<E> TranscodeDomainError<E> {
     /// # Parameters
     ///
     /// - `source`: Domain error returned by value processing.
-    /// - `input_index`: Absolute input index where the error occurred.
+    /// - `input_index`: Input index where the error occurred, in the coordinate
+    ///   system defined by the concrete adapter.
     ///
     /// # Returns
     ///
@@ -101,7 +107,8 @@ impl<E> TranscodeDomainError<E> {
     /// # Parameters
     ///
     /// - `source`: Domain error returned by value processing.
-    /// - `input_index`: Absolute input index where the error occurred.
+    /// - `input_index`: Input index where the error occurred, in the coordinate
+    ///   system defined by the concrete adapter.
     /// - `input_consumed`: Invalid input units consumed, when known.
     ///
     /// # Returns

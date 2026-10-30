@@ -14,6 +14,10 @@
 /// [`crate::engine::EncodeUnencodableAction`] without being able to mutate
 /// output behind the engine's progress accounting.
 ///
+/// In a codec-backed converter, values emitted by source decode reset or
+/// finish have no source-unit position and use placeholder index 0. Ordinary
+/// decoded values use their source index relative to the current input slice.
+///
 /// # Type Parameters
 ///
 /// - `Value`: Logical input value type.
@@ -31,7 +35,8 @@
 pub struct EncodeContext<'a, Value> {
     /// Value borrowed for the lifetime of this policy context.
     input_value: &'a Value,
-    /// Absolute input position of the borrowed value.
+    /// Input position of the borrowed value, or placeholder 0 for a converter
+    /// lifecycle-generated value.
     input_index: usize,
     /// Absolute output cursor at the start of the encode attempt.
     output_index: usize,
@@ -45,7 +50,9 @@ impl<'a, Value> EncodeContext<'a, Value> {
     /// # Parameters
     ///
     /// - `input_value`: Borrowed input value being encoded.
-    /// - `input_index`: Absolute input index of `input_value`.
+    /// - `input_index`: Input index of `input_value`; converter lifecycle-
+    ///   generated values use placeholder 0 because they have no source-unit
+    ///   position.
     /// - `output_index`: Absolute output index where writing begins.
     /// - `available_output`: Output units writable from `output_index`.
     ///
@@ -74,11 +81,16 @@ impl<'a, Value> EncodeContext<'a, Value> {
         self.input_value
     }
 
-    /// Returns the absolute input index of the current value.
+    /// Returns the input index of the current value.
+    ///
+    /// In a codec-backed converter, lifecycle-generated values use placeholder
+    /// index 0 because they have no source-unit position. Ordinary decoded
+    /// values use an index relative to the current input slice.
     ///
     /// # Returns
     ///
-    /// The absolute position of the value in the input sequence.
+    /// The value's input index, including placeholder 0 for converter
+    /// lifecycle-generated values.
     #[must_use]
     #[inline]
     pub const fn input_index(&self) -> usize {

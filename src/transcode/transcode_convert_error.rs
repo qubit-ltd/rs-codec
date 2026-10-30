@@ -33,6 +33,14 @@ pub type TranscodeConvertErrorOf<D, E> =
 /// - `EE`: Target encoder domain error.
 /// - `V`: Owned intermediate value retained when encoding is rejected.
 ///
+/// For values emitted by the source codec's decode reset or finish phase, the
+/// converter uses placeholder input index 0 in encode contexts and errors.
+/// Such values have no source-unit position, and index 0 cannot distinguish
+/// them from a value decoded at source index 0. Ordinary decoded values use
+/// indices relative to the current input slice. Error phases describe the
+/// underlying codec operation, so encoding a lifecycle-generated value uses
+/// the main encode path even during converter reset or finish.
+///
 /// # Examples
 ///
 /// ```
@@ -73,7 +81,10 @@ pub enum TranscodeConvertError<DE, EE, V> {
     /// policy.
     #[error("unencodable value at input index {input_index}")]
     Unencodable {
-        /// Absolute source input index of the value being encoded.
+        /// Source input index of the value being encoded. Lifecycle-generated
+        /// converter values use placeholder 0 because they have no source-unit
+        /// position; ordinary decoded values are indexed relative to the
+        /// current input slice.
         input_index: usize,
         /// `Some` retains the decoded intermediate value; `None` means value
         /// context was unavailable or intentionally omitted.
@@ -117,7 +128,10 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// # Parameters
     ///
     /// - `source`: Owned source error raised during conversion.
-    /// - `input_index`: Absolute source position of the failed operation.
+    /// - `input_index`: Source index for the failed operation. For a
+    ///   lifecycle-generated converter value, use placeholder 0 because it has
+    ///   no source-unit position; ordinary decoded values use an index relative
+    ///   to the current input slice.
     /// - `input_consumed`: `Some` records invalid units consumed; `None` means
     ///   unknown.
     ///
@@ -170,11 +184,16 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// # Parameters
     ///
     /// - `source`: Owned target error raised during conversion.
-    /// - `input_index`: Absolute source position of the failed operation.
+    /// - `input_index`: Source index for the failed operation. For a
+    ///   lifecycle-generated converter value, use placeholder 0 because it has
+    ///   no source-unit position; ordinary decoded values use an index relative
+    ///   to the current input slice.
     ///
     /// # Returns
     ///
     /// Returns a target-domain main-phase error at the supplied input index.
+    /// The main phase identifies the underlying encode operation, including
+    /// when a converter invokes it during reset or finish.
     #[inline]
     pub const fn encode_domain_main(source: EE, input_index: usize) -> Self {
         Self::EncodeDomain(TranscodeDomainError::main(source, input_index))
@@ -198,7 +217,10 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     ///
     /// # Parameters
     ///
-    /// - `input_index`: Absolute source index of the rejected value.
+    /// - `input_index`: Source index of the rejected value. Lifecycle-generated
+    ///   converter values use placeholder 0 because they have no source-unit
+    ///   position; ordinary decoded values use an index relative to the current
+    ///   input slice.
     /// - `value`: Intermediate value moved into the error for recovery.
     ///
     /// # Returns
@@ -216,7 +238,10 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     ///
     /// # Parameters
     ///
-    /// - `input_index`: Absolute source index of the rejected value.
+    /// - `input_index`: Source index of the rejected value. Lifecycle-generated
+    ///   converter values use placeholder 0 because they have no source-unit
+    ///   position; ordinary decoded values use an index relative to the current
+    ///   input slice.
     ///
     /// # Returns
     ///

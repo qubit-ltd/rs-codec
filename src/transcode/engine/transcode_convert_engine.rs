@@ -113,6 +113,15 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// [`crate::engine::TranscodeEncodeEngine`]. It does not call one-value public
 /// transcoders in the hot path.
 ///
+/// Values emitted by the source codec's decode reset or finish phase have no
+/// source-unit position. The converter reports the placeholder index 0 for
+/// their encode contexts and errors. This index cannot distinguish
+/// lifecycle-generated values from a value decoded at source index 0. Error
+/// phases describe the underlying codec operation: encoding such a value uses
+/// the main encode path, even during converter reset or finish. Ordinary
+/// decoded values retain their source index relative to the current input
+/// slice; the converter does not accumulate a whole-stream offset.
+///
 /// For strict codec-backed conversion with default decode and encode policies,
 /// use [`crate::CodecTranscodeConverter`]. Use `TranscodeConvertEngine`
 /// directly when either side needs custom malformed-input repair, encode

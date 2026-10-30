@@ -827,7 +827,7 @@ fn test_buffered_convert_engine_finish_maps_decoder_output_encode_error() {
         error,
         TranscodeConvertError::EncodeDomain(codec::TranscodeDomainError::Main {
             source: EngineError::Encode,
-            input_index: _,
+            input_index: 0,
             input_consumed: None
         }),
     ));
@@ -1298,7 +1298,7 @@ fn test_buffered_convert_engine_reset_maps_decode_reset_value_encode_error() {
         error,
         TranscodeConvertError::EncodeDomain(codec::TranscodeDomainError::Main {
             source: EngineError::Encode,
-            input_index: _,
+            input_index: 0,
             input_consumed: None,
         }),
     ));
