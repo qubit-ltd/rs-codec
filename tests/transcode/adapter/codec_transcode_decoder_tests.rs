@@ -82,6 +82,43 @@ fn test_codec_transcode_decoder_exposes_codec_accessors() {
     assert_eq!(VariableByteCodec, decoder.into_codec());
 }
 
+#[test]
+fn test_codec_transcode_decoder_default_matches_new_and_checks_lifecycle() {
+    let mut default_decoder = CodecTranscodeDecoder::<VariableByteCodec>::default();
+    let mut explicit_decoder = CodecTranscodeDecoder::new(VariableByteCodec);
+    let mut default_output = [0_u8; 2];
+    let mut explicit_output = [0_u8; 2];
+
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(TranscodeFailure::TranscodeBeforeReset)),
+        default_decoder.transcode(&[4, 7], 0, &mut default_output, 0),
+        "default construction must retain the fresh lifecycle guard",
+    );
+
+    default_decoder.reset(&mut [], 0).expect("reset default decoder");
+    explicit_decoder.reset(&mut [], 0).expect("reset explicit decoder");
+    let default_progress = default_decoder
+        .transcode(&[4, 7], 0, &mut default_output, 0)
+        .expect("default decoder should transcode after reset");
+    let explicit_progress = explicit_decoder
+        .transcode(&[4, 7], 0, &mut explicit_output, 0)
+        .expect("new decoder should transcode after reset");
+    let default_finish = default_decoder
+        .finish(&mut default_output, default_progress.written())
+        .expect("default decoder should finish after transcode");
+    let explicit_finish = explicit_decoder
+        .finish(&mut explicit_output, explicit_progress.written())
+        .expect("new decoder should finish after transcode");
+
+    assert_eq!(explicit_progress, default_progress);
+    assert_eq!(explicit_finish, default_finish);
+    assert_eq!(
+        &explicit_output[..explicit_progress.written()],
+        &default_output[..default_progress.written()]
+    );
+    assert_eq!([4, 7], default_output);
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TestDecodeError {
     Invalid,

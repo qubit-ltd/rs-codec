@@ -65,10 +65,75 @@ use crate::Transcoder;
 /// decoder.transcode(&[4, 7], 0, &mut output, 0).unwrap();
 /// assert_eq!(output, [4, 7]);
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CodecTranscodeDecoder<C> {
     /// Common buffered decoding engine.
     engine: TranscodeDecodeEngine<C, CodecTranscodeDecodeHooks>,
+}
+
+impl<C> Default for CodecTranscodeDecoder<C>
+where
+    C: Codec + Default,
+{
+    /// Creates an adapter with the same codec-bound checks as [`Self::new`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a fresh adapter containing a default codec.
+    ///
+    /// # Compile-Time Checks
+    ///
+    /// Fails to compile when the codec declares a zero decode unit bound or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], matching [`Self::new`].
+    ///
+    /// A legal codec can use the default constructor:
+    ///
+    /// ```rust
+    /// use core::convert::Infallible;
+    /// use core::num::NonZeroUsize;
+    /// use qubit_codec::{Codec, CodecTranscodeDecoder, DecodeFailure};
+    ///
+    /// #[derive(Default)]
+    /// struct ByteCodec;
+    /// impl Codec for ByteCodec {
+    ///     type Value = u8;
+    ///     type Unit = u8;
+    ///     type DecodeError = Infallible;
+    ///     type EncodeError = Infallible;
+    ///     const MIN_UNITS_PER_VALUE: usize = 1;
+    ///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    ///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    ///     unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+    ///         Ok((input[index], NonZeroUsize::MIN))
+    ///     }
+    ///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
+    ///         output[index] = *value;
+    ///         Ok(1)
+    ///     }
+    /// }
+    /// let _decoder = CodecTranscodeDecoder::<ByteCodec>::default();
+    /// ```
+    ///
+    /// A zero maximum decode width is rejected even when the minimum is valid:
+    ///
+    /// ```compile_fail
+    /// use core::convert::Infallible;
+    /// use core::num::NonZeroUsize;
+    /// use qubit_codec::{Codec, CodecTranscodeDecoder, DecodeFailure};
+    /// #[derive(Default)] struct BadCodec;
+    /// impl Codec for BadCodec {
+    ///     type Value = u8; type Unit = u8; type DecodeError = Infallible; type EncodeError = Infallible;
+    ///     const MIN_UNITS_PER_VALUE: usize = 1; const MAX_ENCODE_UNITS_PER_VALUE: usize = 1; const MAX_DECODE_UNITS_PER_VALUE: usize = 0;
+    ///     unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> { Ok((input[index], NonZeroUsize::MIN)) }
+    ///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> { output[index] = *value; Ok(1) }
+    /// }
+    /// let _ = CodecTranscodeDecoder::<BadCodec>::default();
+    /// ```
+    #[inline]
+    fn default() -> Self {
+        Self::new(C::default())
+    }
 }
 
 impl<C> CodecTranscodeDecoder<C>

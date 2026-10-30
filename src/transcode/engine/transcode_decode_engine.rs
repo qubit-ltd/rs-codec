@@ -163,7 +163,7 @@ use crate::codec::assert_unit_bounds;
 ///
 /// - `C`: Low-level codec used by the engine.
 /// - `H`: Policy hook object used by the engine.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TranscodeDecodeEngine<C, H> {
     /// Low-level codec used for one-value decoding.
     pub(super) codec: C,
@@ -172,6 +172,106 @@ pub struct TranscodeDecodeEngine<C, H> {
     /// Guard for the `reset → transcode* → finish` lifecycle in every build
     /// profile.
     lifecycle: LifecycleGuard,
+}
+
+impl<C, H> Default for TranscodeDecodeEngine<C, H>
+where
+    C: Codec + Default,
+    H: TranscodeDecodeHooks<C> + Default,
+{
+    /// Creates an engine with the same codec-bound checks as [`Self::new`].
+    ///
+    /// # Returns
+    ///
+    /// Returns a fresh engine containing default codec and hook values.
+    ///
+    /// # Compile-Time Checks
+    ///
+    /// Fails to compile when the codec declares a zero decode unit bound or
+    /// when [`Codec::MIN_UNITS_PER_VALUE`] exceeds
+    /// [`Codec::MAX_DECODE_UNITS_PER_VALUE`], matching [`Self::new`].
+    ///
+    /// A legal codec and hook can use the default constructor:
+    ///
+    /// ```rust
+    /// use core::convert::Infallible;
+    /// use core::num::NonZeroUsize;
+    /// use qubit_codec::{Codec, DecodeFailure};
+    /// use qubit_codec::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks};
+    ///
+    /// #[derive(Default)]
+    /// struct ByteCodec;
+    /// impl Codec for ByteCodec {
+    ///     type Value = u8;
+    ///     type Unit = u8;
+    ///     type DecodeError = Infallible;
+    ///     type EncodeError = Infallible;
+    ///     const MIN_UNITS_PER_VALUE: usize = 1;
+    ///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    ///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    ///     unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+    ///         Ok((input[index], NonZeroUsize::MIN))
+    ///     }
+    ///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
+    ///         output[index] = *value;
+    ///         Ok(1)
+    ///     }
+    /// }
+    /// #[derive(Default)]
+    /// struct Hooks;
+    /// impl TranscodeDecodeHooks<ByteCodec> for Hooks {
+    ///     fn handle_invalid_decode(&mut self, _codec: &mut ByteCodec, error: &Infallible, _consumed: Option<NonZeroUsize>, _context: DecodeContext) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<Infallible>> {
+    ///         match *error {}
+    ///     }
+    /// }
+    /// let _engine = TranscodeDecodeEngine::<ByteCodec, Hooks>::default();
+    /// ```
+    ///
+    /// A zero minimum decode bound is rejected:
+    ///
+    /// ```compile_fail
+    /// use core::convert::Infallible;
+    /// use core::num::NonZeroUsize;
+    /// use qubit_codec::{Codec, DecodeFailure};
+    /// use qubit_codec::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks};
+    /// #[derive(Default)] struct BadCodec;
+    /// impl Codec for BadCodec {
+    ///     type Value = u8; type Unit = u8; type DecodeError = Infallible; type EncodeError = Infallible;
+    ///     const MIN_UNITS_PER_VALUE: usize = 0; const MAX_ENCODE_UNITS_PER_VALUE: usize = 1; const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    ///     unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> { Ok((input[index], NonZeroUsize::MIN)) }
+    ///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> { output[index] = *value; Ok(1) }
+    /// }
+    /// #[derive(Default)] struct Hooks;
+    /// impl TranscodeDecodeHooks<BadCodec> for Hooks {
+    ///     fn handle_invalid_decode(&mut self, _codec: &mut BadCodec, error: &Infallible, _consumed: Option<NonZeroUsize>, _context: DecodeContext) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<Infallible>> { match *error {} }
+    /// }
+    /// let _ = TranscodeDecodeEngine::<BadCodec, Hooks>::default();
+    /// ```
+    ///
+    /// A minimum larger than the maximum decode width is also rejected:
+    ///
+    /// ```compile_fail
+    /// use core::convert::Infallible;
+    /// use core::num::NonZeroUsize;
+    /// use qubit_codec::{Codec, DecodeFailure};
+    /// use qubit_codec::engine::{DecodeContext, DecodeInvalidAction, TranscodeDecodeEngine, TranscodeDecodeHooks};
+    /// #[derive(Default)] struct BadCodec;
+    /// impl Codec for BadCodec {
+    ///     type Value = u8; type Unit = u8; type DecodeError = Infallible; type EncodeError = Infallible;
+    ///     const MIN_UNITS_PER_VALUE: usize = 2; const MAX_ENCODE_UNITS_PER_VALUE: usize = 1; const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    ///     unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> { Ok((input[index], NonZeroUsize::MIN)) }
+    ///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> { output[index] = *value; Ok(1) }
+    /// }
+    /// #[derive(Default)] struct Hooks;
+    /// impl TranscodeDecodeHooks<BadCodec> for Hooks {
+    ///     fn handle_invalid_decode(&mut self, _codec: &mut BadCodec, error: &Infallible, _consumed: Option<NonZeroUsize>, _context: DecodeContext) -> Result<DecodeInvalidAction<u8>, qubit_codec::TranscodeDecodeError<Infallible>> { match *error {} }
+    /// }
+    /// let _ = TranscodeDecodeEngine::<BadCodec, Hooks>::default();
+    /// ```
+    #[inline]
+    fn default() -> Self {
+        Self::new(C::default(), H::default())
+    }
 }
 
 /// Adds two independent decoded-value capacity bounds.

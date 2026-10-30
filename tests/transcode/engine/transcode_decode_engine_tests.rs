@@ -1819,6 +1819,44 @@ fn new_stateless_finish_engine() -> TranscodeDecodeEngine<PrefixCodec, FinishHoo
 }
 
 #[test]
+fn test_transcode_decode_engine_default_matches_new_and_checks_lifecycle() {
+    let mut default_engine = TranscodeDecodeEngine::<EofAwarePrefixCodec, EofAwareHooks>::default();
+    let mut explicit_engine =
+        TranscodeDecodeEngine::<EofAwarePrefixCodec, EofAwareHooks>::new(EofAwarePrefixCodec, EofAwareHooks);
+
+    let mut default_output = [0_u8; 2];
+    let mut explicit_output = [0_u8; 2];
+    assert_eq!(
+        Err(TranscodeDecodeError::Failure(TranscodeFailure::TranscodeBeforeReset)),
+        default_engine.transcode(&[4, 7], 0, &mut default_output, 0),
+        "default construction must retain the fresh lifecycle guard",
+    );
+
+    default_engine.reset(&mut [], 0).expect("reset default engine");
+    explicit_engine.reset(&mut [], 0).expect("reset explicit engine");
+    let default_progress = default_engine
+        .transcode(&[4, 7], 0, &mut default_output, 0)
+        .expect("default engine should transcode after reset");
+    let explicit_progress = explicit_engine
+        .transcode(&[4, 7], 0, &mut explicit_output, 0)
+        .expect("new engine should transcode after reset");
+    let default_finish = default_engine
+        .finish(&mut default_output, default_progress.written())
+        .expect("default engine should finish after transcode");
+    let explicit_finish = explicit_engine
+        .finish(&mut explicit_output, explicit_progress.written())
+        .expect("new engine should finish after transcode");
+
+    assert_eq!(explicit_progress, default_progress);
+    assert_eq!(explicit_finish, default_finish);
+    assert_eq!(
+        &explicit_output[..explicit_progress.written()],
+        &default_output[..default_progress.written()]
+    );
+    assert_eq!([4, 7], default_output);
+}
+
+#[test]
 fn test_transcode_decode_engine_lifecycle_rejects_double_finish() {
     let mut engine = new_stateless_finish_engine();
     let mut reset_output = [];
