@@ -5,9 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Inventory factory for byte-codec registrations.
-
-use inventory::collect;
+//! Defines the factory type stored in the byte-codec registration inventory.
 
 use crate::ValueBytesCodecRegistration;
 
@@ -21,5 +19,3 @@ pub struct ValueBytesCodecRegistrationFactory(
     /// collected into a registry.
     pub fn() -> ValueBytesCodecRegistration,
 );
-
-collect!(ValueBytesCodecRegistrationFactory);

@@ -20,7 +20,7 @@ use crate::ValueStringCodecRegistration;
 /// # Examples
 ///
 /// ```
-/// # #[cfg(feature = "json")]
+/// # #[cfg(all(feature = "json", feature = "registry"))]
 /// # {
 /// use qubit_codec::JsonStringValueCodec;
 /// use qubit_codec::ValueStringCodecRegistry;

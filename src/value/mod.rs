@@ -33,6 +33,8 @@ mod value_bytes_codec_registration;
 #[cfg(feature = "registry")]
 mod value_bytes_codec_registration_factory;
 #[cfg(feature = "registry")]
+mod value_bytes_codec_registration_factory_inventory;
+#[cfg(feature = "registry")]
 mod value_codec_execution_error;
 #[cfg(feature = "registry")]
 mod value_codec_id;
@@ -41,11 +43,13 @@ mod value_codec_id_error;
 #[cfg(feature = "registry")]
 mod value_codec_registration;
 #[cfg(feature = "registry")]
+mod value_codec_registration_macros;
+#[cfg(feature = "registry")]
 mod value_codec_registration_source;
 #[cfg(feature = "registry")]
-mod value_codec_registry;
-#[cfg(feature = "registry")]
 mod value_codec_registry_error;
+#[cfg(feature = "registry")]
+mod value_codec_registry_modules;
 mod value_decoder;
 mod value_encoder;
 #[cfg(feature = "registry")]
@@ -93,13 +97,13 @@ pub use value_codec_registration::ValueCodecRegistration;
 #[cfg(feature = "registry")]
 pub use value_codec_registration_source::ValueCodecRegistrationSource;
 #[cfg(feature = "registry")]
-pub use value_codec_registry::ValueBytesCodecRegistry;
-#[cfg(feature = "registry")]
-pub use value_codec_registry::ValueCodecRegistry;
-#[cfg(feature = "registry")]
-pub use value_codec_registry::ValueStringCodecRegistry;
-#[cfg(feature = "registry")]
 pub use value_codec_registry_error::ValueCodecRegistryError;
+#[cfg(feature = "registry")]
+pub use value_codec_registry_modules::ValueBytesCodecRegistry;
+#[cfg(feature = "registry")]
+pub use value_codec_registry_modules::ValueCodecRegistry;
+#[cfg(feature = "registry")]
+pub use value_codec_registry_modules::ValueStringCodecRegistry;
 pub use value_decoder::ValueDecoder;
 pub use value_encoder::ValueEncoder;
 #[cfg(feature = "registry")]

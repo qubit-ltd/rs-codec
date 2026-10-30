@@ -356,7 +356,7 @@ fn test_encode_decode_round_trip_preserves_the_value() {
 }
 
 #[test]
-fn test_review_borrowed_descriptor_roundtrip() {
+fn test_borrowed_descriptor_round_trip_preserves_owned_values() {
     let value = b"hello".to_vec();
     assert_eq!(REVIEW_BORROWED.value_type_id(), TypeId::of::<Vec<u8>>());
     let text = REVIEW_BORROWED.encode(&value).unwrap();
@@ -374,16 +374,20 @@ fn test_review_borrowed_descriptor_roundtrip() {
 }
 
 #[test]
-fn test_review_borrowed_descriptor_retains_type_and_sources() {
+fn test_borrowed_descriptor_preserves_type_mismatch_and_source_errors() {
     assert!(matches!(REVIEW_BORROWED.encode(&String::from("wrong")),
         Err(ValueCodecExecutionError::TypeMismatch { actual_type, .. })
         if actual_type == TypeId::of::<String>()));
     match REVIEW_BORROWED.encode(&vec![0xff_u8]).unwrap_err() {
-        ValueCodecExecutionError::EncodeFailed { source, .. } => assert!(source.downcast_ref::<Error>().is_some()),
+        ValueCodecExecutionError::EncodeFailed { source, .. } => {
+            assert!(source.downcast_ref::<Error>().is_some())
+        }
         other => panic!("unexpected error: {other:?}"),
     }
     match REVIEW_BORROWED.decode("reject").unwrap_err() {
-        ValueCodecExecutionError::DecodeFailed { source, .. } => assert!(source.downcast_ref::<Error>().is_some()),
+        ValueCodecExecutionError::DecodeFailed { source, .. } => {
+            assert!(source.downcast_ref::<Error>().is_some())
+        }
         other => panic!("unexpected error: {other:?}"),
     }
 }

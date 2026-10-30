@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-//! Distributed value-codec registrations.
+//! Registration type definitions are colocated with their public module.
 
 use crate::ValueCodecId;
 use crate::ValueCodecRegistrationSource;
@@ -18,9 +18,9 @@ use crate::ValueCodecRegistrationSource;
 /// registration was declared at. It is produced by
 /// [`register_value_string_codec!`](crate::register_value_string_codec) or
 /// [`register_value_bytes_codec!`](crate::register_value_bytes_codec)
-/// rather than built by hand for a process-wide inventory. Applications may
-/// also construct a registration manually from static data and pass it to a
-/// local [`ValueCodecRegistry`](crate::ValueCodecRegistry).
+/// rather than built by hand. Applications may also construct a registration
+/// manually from static data and pass it to a local
+/// [`ValueCodecRegistry`](crate::ValueCodecRegistry).
 ///
 /// The ID has already been validated by [`ValueCodecId`]. The descriptor must
 /// live in static storage because registrations borrow it with a `'static`
@@ -30,53 +30,9 @@ use crate::ValueCodecRegistrationSource;
 /// The registration macros validate codecs through the matching descriptor.
 /// Encoder and decoder error types must implement `Error + Send + Sync +
 /// 'static`; codec and value types do not need those bounds.
-#[derive(Clone, Copy, Debug)]
-pub struct ValueCodecRegistration<D: 'static> {
-    /// Stable identifier shared with registry lookups and duplicate detection.
-    id: ValueCodecId,
-    /// Executable descriptor borrowed from static storage.
-    descriptor: &'static D,
-    /// Link-time location the registration was declared at.
-    source: ValueCodecRegistrationSource,
-}
-
-impl<D: 'static> ValueCodecRegistration<D> {
-    /// Creates a registration from a validated ID and static descriptor.
-    ///
-    /// Use the registration macros to submit a codec to the process-wide
-    /// inventory. For a registry local to the caller, construct this value
-    /// from static data and pass a reference to
-    /// [`ValueCodecRegistry::from_registrations`](crate::ValueCodecRegistry::from_registrations).
-    /// The ID is already validated, the descriptor must have static storage,
-    /// and `source` provides location details for duplicate-ID diagnostics.
-    #[inline]
-    #[must_use]
-    pub const fn new(id: ValueCodecId, descriptor: &'static D, source: ValueCodecRegistrationSource) -> Self {
-        Self { id, descriptor, source }
-    }
-
-    /// Returns the stable value-codec ID.
-    #[inline]
-    #[must_use]
-    pub const fn id(&self) -> ValueCodecId {
-        self.id
-    }
-
-    /// Returns the executable descriptor.
-    #[inline]
-    #[must_use]
-    pub const fn descriptor(&self) -> &'static D {
-        self.descriptor
-    }
-
-    /// Returns the linked source location.
-    #[inline]
-    #[must_use]
-    pub const fn source(&self) -> ValueCodecRegistrationSource {
-        self.source
-    }
-}
-
+///
+/// # Registration Macro Examples
+///
 /// Registers a default-constructible bidirectional string codec.
 ///
 /// The macro must be invoked at module scope; it defines the descriptor, a
@@ -158,46 +114,6 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// fn invalid_id() -> &'static str { "example.text" }
 /// register_value_string_codec!(id = invalid_id(), codec = TextCodec, value = String);
 /// ```
-#[macro_export]
-macro_rules! register_value_string_codec {
-    (id = $id:expr, codec = $codec:ty, value = $value:ty, input = $input:ty $(,)?) => {
-        const _: () = {
-            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
-            static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
-                $crate::ValueStringCodecDescriptor::of_borrowed::<$codec, $value, $input>();
-            fn registration() -> $crate::ValueStringCodecRegistration {
-                $crate::ValueCodecRegistration::new(
-                    ID,
-                    &DESCRIPTOR,
-                    $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
-                )
-            }
-            $crate::__private::inventory::submit! {
-                $crate::ValueStringCodecRegistrationFactory(registration)
-            }
-        };
-    };
-    (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
-        const _: () = {
-            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
-            static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
-                $crate::ValueStringCodecDescriptor::of::<$codec, $value>();
-
-            fn registration() -> $crate::ValueStringCodecRegistration {
-                $crate::ValueCodecRegistration::new(
-                    ID,
-                    &DESCRIPTOR,
-                    $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
-                )
-            }
-
-            $crate::__private::inventory::submit! {
-                $crate::ValueStringCodecRegistrationFactory(registration)
-            }
-        };
-    };
-}
-
 /// Registers a default-constructible bidirectional bytes codec.
 ///
 /// The macro must be invoked at module scope; it defines the descriptor, a
@@ -250,25 +166,96 @@ macro_rules! register_value_string_codec {
 /// }
 /// register_value_bytes_codec!(id = "invalid-id", codec = BytesCodec, value = Vec<u8>);
 /// ```
-#[macro_export]
-macro_rules! register_value_bytes_codec {
-    (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
-        const _: () = {
-            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
-            static DESCRIPTOR: $crate::ValueBytesCodecDescriptor =
-                $crate::ValueBytesCodecDescriptor::of::<$codec, $value>();
+/// # Type Parameters
+///
+/// - `D`: Static descriptor type that executes the registered codec.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_codec::ValueCodecId;
+/// use qubit_codec::ValueCodecRegistration;
+/// use qubit_codec::ValueCodecRegistrationSource;
+///
+/// static DESCRIPTOR: u8 = 1;
+/// let registration = ValueCodecRegistration::new(
+///     ValueCodecId::new("example.u8"),
+///     &DESCRIPTOR,
+///     ValueCodecRegistrationSource::new("qubit-codec", "example", "src/example.rs", 1),
+/// );
+/// assert_eq!(registration.id().as_str(), "example.u8");
+/// assert_eq!(*registration.descriptor(), 1);
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub struct ValueCodecRegistration<D: 'static> {
+    /// Stable identifier used by registry lookups and duplicate detection.
+    id: ValueCodecId,
+    /// Executable descriptor borrowed from static storage for the registration
+    /// lifetime.
+    descriptor: &'static D,
+    /// Link-time location identifying where the registration macro was invoked.
+    source: ValueCodecRegistrationSource,
+}
+impl<D: 'static> ValueCodecRegistration<D> {
+    /// Creates a registration from the validated facts captured by a
+    /// registration macro.
+    ///
+    /// Use the registration macros to submit a codec to the process-wide
+    /// inventory. For a local registry, construct this value from static data
+    /// and pass a reference to
+    /// [`ValueCodecRegistry::from_registrations`](crate::ValueCodecRegistry::from_registrations).
+    /// The ID must already be validated, and the descriptor must have static
+    /// storage. The source provides location details for duplicate-ID
+    /// diagnostics.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: Stable identifier used for registry lookup and duplicate
+    ///   detection.
+    /// - `descriptor`: Descriptor in static storage that performs codec
+    ///   operations.
+    /// - `source`: Declaration location captured by the registration macro.
+    ///
+    /// # Returns
+    ///
+    /// A copyable registration borrowing the static descriptor.
+    #[inline]
+    #[must_use]
+    pub const fn new(id: ValueCodecId, descriptor: &'static D, source: ValueCodecRegistrationSource) -> Self {
+        Self { id, descriptor, source }
+    }
 
-            fn registration() -> $crate::ValueBytesCodecRegistration {
-                $crate::ValueCodecRegistration::new(
-                    ID,
-                    &DESCRIPTOR,
-                    $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
-                )
-            }
+    /// Returns the stable value-codec ID used by registry lookups.
+    ///
+    /// # Returns
+    ///
+    /// The registration's validated, copyable identifier.
+    #[inline]
+    #[must_use]
+    pub const fn id(&self) -> ValueCodecId {
+        self.id
+    }
 
-            $crate::__private::inventory::submit! {
-                $crate::ValueBytesCodecRegistrationFactory(registration)
-            }
-        };
-    };
+    /// Returns the descriptor used to execute this codec.
+    ///
+    /// # Returns
+    ///
+    /// A static borrow of the descriptor associated with this registration.
+    #[inline]
+    #[must_use = "the codec descriptor is needed to perform codec operations"]
+    pub const fn descriptor(&self) -> &'static D {
+        self.descriptor
+    }
+
+    /// Returns the source location captured at the registration declaration.
+    ///
+    /// # Returns
+    ///
+    /// The copyable package, module, file, and line information for this
+    /// registration.
+    #[inline]
+    #[must_use]
+    pub const fn source(&self) -> ValueCodecRegistrationSource {
+        self.source
+    }
 }

@@ -51,6 +51,11 @@ pub struct JsonBytesValueCodec<T> {
 impl<T> Copy for JsonBytesValueCodec<T> {}
 
 impl<T> Clone for JsonBytesValueCodec<T> {
+    /// Returns an identical stateless codec without requiring `T: Clone`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a codec associated with the same value type.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -58,6 +63,11 @@ impl<T> Clone for JsonBytesValueCodec<T> {
 }
 
 impl<T> Default for JsonBytesValueCodec<T> {
+    /// Creates a codec for `T` without constructing a value of that type.
+    ///
+    /// # Returns
+    ///
+    /// Returns a stateless codec associated with `T`.
     #[inline]
     fn default() -> Self {
         Self::new()

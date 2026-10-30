@@ -60,6 +60,8 @@ impl ValueEncoder<Vec<u8>> for MirrorVecU8BytesCodec {
     }
 }
 
+/// Stateful bytes codec used to verify that each descriptor operation starts
+/// with a fresh default instance.
 #[derive(Default)]
 struct FreshBytesCodec {
     calls: usize,

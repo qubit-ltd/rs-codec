@@ -75,8 +75,8 @@ impl ValueCodecRegistrationSource {
     /// # Returns
     ///
     /// Returns the `CARGO_PKG_NAME` of the crate that declared the codec.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn crate_name(&self) -> &'static str {
         self.crate_name
     }
@@ -86,8 +86,8 @@ impl ValueCodecRegistrationSource {
     /// # Returns
     ///
     /// Returns the `module_path!` value of the declaring module.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn module_path(&self) -> &'static str {
         self.module_path
     }
@@ -97,8 +97,8 @@ impl ValueCodecRegistrationSource {
     /// # Returns
     ///
     /// Returns the `file!` value of the declaring file.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn file(&self) -> &'static str {
         self.file
     }
@@ -108,8 +108,8 @@ impl ValueCodecRegistrationSource {
     /// # Returns
     ///
     /// Returns the `line!` value of the declaring macro invocation.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn line(&self) -> u32 {
         self.line
     }

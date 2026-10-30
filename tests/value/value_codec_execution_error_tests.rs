@@ -172,8 +172,14 @@ fn test_execution_errors_keep_their_source_across_threads() {
         },
     ];
     for (error, expected) in errors.into_iter().zip(["encode source", "decode source"]) {
-        let returned = std::thread::spawn(move || error).join().unwrap();
-        let source = returned.source().unwrap().downcast_ref::<IoError>().unwrap();
+        let returned = std::thread::spawn(move || error)
+            .join()
+            .expect("the execution error should cross the thread boundary");
+        let source = returned
+            .source()
+            .expect("an encode or decode failure must expose its source")
+            .downcast_ref::<IoError>()
+            .expect("the source should retain its original I/O error type");
         assert_eq!(source.to_string(), expected);
         assert_eq!(source.kind(), std::io::ErrorKind::Other);
     }
