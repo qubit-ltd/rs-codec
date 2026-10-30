@@ -62,10 +62,11 @@ On 2026-10-30, the RC-009 pre-change inspection used HEAD
 `4310cde13f9dbf62728d979f2e0983aa8dac154c`, rustc 1.94.0
 (`x86_64-unknown-linux-gnu`, LLVM 21.1.8), an Intel Core i5-9600K host, and
 the bench profile (`opt-level=3`, `lto=true`, `codegen-units=1`). The Cargo JSON
-artifact record and executable path are retained under `target/review-20261030/`;
-`objdump -Cd` output is retained there as well. The later `align-ci.sh` run
-cleaned the generated `target/release` directory, so the executable itself was
-not retained. LTO left the benchmark closures without distinct
+artifact record, executable path, and `objdump -Cd` output were captured under
+`target/review-20261030/` for this inspection. The temporary evidence was
+removed after review; the later `align-ci.sh` run had already cleaned the
+generated `target/release` directory, so the executable itself was not
+retained. LTO left the benchmark closures without distinct
 symbols, and the executable has no line-table debug information; the observed
 `memcpy` and vector instructions could not be attributed reliably to the
 `direct_transcode`, `decode_engine`, or `output_window` timed closures. RC-009
