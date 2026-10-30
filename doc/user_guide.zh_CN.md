@@ -110,6 +110,8 @@ impl Codec for U16BeCodec {
 
 checked adapter 会在调用 unsafe `Codec` 方法前建立下标与容量前置条件。实现仍须只在前置条件允许范围内读写；成功 decode 时返回非零消费量且不超过 decode 上界；出错时保持状态一致；并稳定区分 `DecodeFailure::Incomplete` 与 `DecodeFailure::Invalid`。应像上面一样在入口处用 `debug_assert!` 标明假定的范围。
 
+`decode` 或 `decode_eof` 返回 `DecodeFailure::Incomplete` 时，`required_total` 必须满足 `input.len() - input_index < required_total.get() <= MAX_DECODE_UNITS_PER_VALUE`。它表示从当前 value 起点开始所需的最小 unit 总数，而不是还要追加的数量：已有两个 unit 且至少还需要一个时，应报告三。EOF 时同样适用此上界。这约束的是 codec 报告的值；调用方无须预先提供 `MAX_DECODE_UNITS_PER_VALUE` 个 unit。
+
 ### 提供自有单值操作
 
 `CodecValueEncoder` 与 `CodecValueDecoder` 执行完整 codec 生命周期并返回自有输出：

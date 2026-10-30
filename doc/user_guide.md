@@ -110,6 +110,8 @@ Default `encode_len` returns `MAX_ENCODE_UNITS_PER_VALUE`, which is exact for th
 
 Checked adapters establish index and capacity preconditions before calling unsafe `Codec` methods. Implementations must read and write only within those ranges, return a non-zero decode count no larger than the decode bound, keep state consistent on errors, and use `DecodeFailure::Incomplete` versus `DecodeFailure::Invalid` consistently. Use `debug_assert!` at the entry point to document the assumed ranges, as above.
 
+When `decode` or `decode_eof` returns `DecodeFailure::Incomplete`, its `required_total` must satisfy `input.len() - input_index < required_total.get() <= MAX_DECODE_UNITS_PER_VALUE`. This is the minimum total number of units from the current value start, not the number of additional units to append: if two units are available and at least one more is needed, report three. The same bound applies at EOF. It constrains the value reported by the codec; callers do not need to provide `MAX_DECODE_UNITS_PER_VALUE` units in advance.
+
 ### Expose owned one-value operations
 
 `CodecValueEncoder` and `CodecValueDecoder` run a full codec lifecycle and return owned output:

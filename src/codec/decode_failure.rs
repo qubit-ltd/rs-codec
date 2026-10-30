@@ -51,6 +51,13 @@ pub enum DecodeFailure<E> {
         ///
         /// A later retry may raise this lower bound after the codec sees a
         /// longer prefix.
+        ///
+        /// When returned by `Codec::decode` or `Codec::decode_eof`, this must
+        /// be greater than the number of units currently available from the
+        /// value start and no greater than
+        /// `Codec::MAX_DECODE_UNITS_PER_VALUE`. It is a minimum total length
+        /// from that start, not an additional-unit count; for example, with
+        /// two units available and at least one more needed, report three.
         required_total: NonZeroUsize,
     },
 
@@ -72,7 +79,13 @@ impl<E> DecodeFailure<E> {
     ///
     /// - `required_total`: Current non-zero minimum total units required before
     ///   retrying from the value start. A later retry may raise this lower
-    ///   bound.
+    ///   bound. When returned by `Codec::decode` or `Codec::decode_eof`, it
+    ///   must be greater than the units currently available from that start and
+    ///   no greater than `Codec::MAX_DECODE_UNITS_PER_VALUE`. It counts total
+    ///   units from the value start, not additional units to append. This
+    ///   constructor has no input or Codec context and cannot validate those
+    ///   conditions; the Codec implementation is responsible for them when
+    ///   returning the failure.
     ///
     /// # Returns
     ///
@@ -92,7 +105,13 @@ impl<E> DecodeFailure<E> {
     /// - `source`: Codec-specific error describing the visible incomplete
     ///   prefix.
     /// - `required_total`: Current non-zero minimum units required before
-    ///   retrying from the value start.
+    ///   retrying from the value start. When returned by `Codec::decode` or
+    ///   `Codec::decode_eof`, it must be greater than the units currently
+    ///   available from that start and no greater than
+    ///   `Codec::MAX_DECODE_UNITS_PER_VALUE`. It counts total units from the
+    ///   value start, not additional units to append. This constructor has no
+    ///   input or Codec context and cannot validate those conditions; the Codec
+    ///   implementation is responsible for them when returning the failure.
     ///
     /// # Returns
     ///

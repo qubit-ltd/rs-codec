@@ -493,6 +493,12 @@ pub trait Codec {
     /// than either the available input or
     /// [`MAX_DECODE_UNITS_PER_VALUE`](Self::MAX_DECODE_UNITS_PER_VALUE). An
     /// incomplete result's `required_total` must also not exceed that maximum.
+    /// When returning [`DecodeFailure::Incomplete`], implementations must
+    /// satisfy `input.len() - input_index < required_total.get()` and
+    /// `required_total.get() <= Self::MAX_DECODE_UNITS_PER_VALUE`. The bound
+    /// is the minimum total number of units from the value start, not the
+    /// number of additional units to append. With two units available and at
+    /// least one more needed, report three, not one or two.
     /// The return type guarantees that successful decoding always consumes at
     /// least one unit. Implementations should use `debug_assert!` to state
     /// these unchecked entry-point assumptions.
@@ -523,6 +529,13 @@ pub trait Codec {
     /// Returns [`DecodeFailure::Incomplete`] for an unresolved final prefix,
     /// or [`DecodeFailure::Invalid`] for malformed input, as in
     /// [`decode`](Self::decode). An override may resolve a prefix at EOF.
+    /// When returning [`DecodeFailure::Incomplete`], implementations must
+    /// satisfy `input.len() - input_index < required_total.get()` and
+    /// `required_total.get() <= Self::MAX_DECODE_UNITS_PER_VALUE`, as for
+    /// [`decode`](Self::decode). `required_total` is the minimum total number
+    /// of units from the value start, not the number of additional units to
+    /// append: with two units available and at least one more needed, report
+    /// three, not one or two. This condition also applies at EOF.
     ///
     /// # Safety
     ///
