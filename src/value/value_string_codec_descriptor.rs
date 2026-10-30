@@ -92,6 +92,8 @@ impl ValueStringCodecDescriptor {
     /// can retain their source across thread boundaries. The codec and value
     /// types themselves need not implement these traits; `V` only needs to be
     /// `'static` because decoded values are returned through `Any`.
+    /// Use [`Self::of_borrowed`] when the encoder accepts a borrowed view of
+    /// `V` instead of `V` itself.
     ///
     /// # Type Parameters
     ///
