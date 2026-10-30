@@ -17,6 +17,7 @@ use qubit_codec::AsyncTranscodeEncodeOutput;
 use qubit_codec::CapacityError;
 use qubit_codec::TranscodeEncodeError;
 use qubit_codec::TranscodeEncoder;
+use qubit_codec::TranscodeFailure;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
 use qubit_io::AsyncOutput;
@@ -113,6 +114,127 @@ where
 {
     let mut context = Context::from_waker(Waker::noop());
     future.poll(&mut context)
+}
+
+#[derive(Default)]
+struct AtomicTailEncoder {
+    fail_reset: bool,
+}
+
+impl Transcoder for AtomicTailEncoder {
+    type Input = u8;
+    type Output = u8;
+    type Error = TranscodeEncodeError<(), u8>;
+
+    fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
+        Ok(input_len)
+    }
+
+    fn reset(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        if self.fail_reset {
+            return Err(TranscodeEncodeError::domain_reset(()));
+        }
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+        output: &mut [u8],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        TranscodeFailure::ensure_transcode_indices(input.len(), input_index, output.len(), output_index)?;
+        let source = &input[input_index..];
+        let target = &mut output[output_index..];
+        if source.is_empty() {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        if target.is_empty() {
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
+        }
+        target[0] = source[0];
+        let remaining = source.len() - 1;
+        if target.len() - 1 < remaining {
+            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(remaining), 1, 1));
+        }
+        target[1..source.len()].copy_from_slice(&source[1..]);
+        Ok(TranscodeProgress::complete(source.len(), source.len()))
+    }
+
+    fn finish(&mut self, output: &mut [u8], output_index: usize) -> Result<usize, Self::Error> {
+        TranscodeFailure::ensure_output_index(output.len(), output_index)?;
+        Ok(0)
+    }
+}
+
+impl TranscodeEncoder for AtomicTailEncoder {
+    type EncodeError = ();
+}
+
+#[test]
+fn test_successful_reset_clears_previous_output_requirement() -> io::Result<()> {
+    for fail_reset_first in [false, true] {
+        let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(8), 8);
+        let mut encoder = AtomicTailEncoder::default();
+        let mut mapper = |_| io::Error::other("fixture encoder error");
+        complete(output.reset_async(&mut encoder, &mut mapper))?;
+        let input = [7_u8; 17];
+        let progress = complete(output.transcode_async(&mut encoder, &mut mapper, &input, 0, 17))?;
+        assert_eq!(TranscodeProgress::need_output(utils_crate::nonzero(16), 1, 1), progress);
+        assert_eq!(8, output.capacity());
+        assert_eq!(1, output.pending_len());
+        output.inner_mut().failed = true;
+        encoder.fail_reset = fail_reset_first;
+        if fail_reset_first {
+            assert!(complete(output.reset_async(&mut encoder, &mut mapper)).is_err());
+            assert_eq!(8, output.capacity());
+            assert_eq!(1, output.pending_len());
+            encoder.fail_reset = false;
+        }
+        complete(output.reset_async(&mut encoder, &mut mapper))?;
+        let progress = complete(output.transcode_async(&mut encoder, &mut mapper, &[9], 0, 1))?;
+        assert_eq!(TranscodeProgress::complete(1, 1), progress);
+        assert_eq!(
+            8,
+            output.capacity(),
+            "successful reset must discard the old capacity hint"
+        );
+        assert_eq!(2, output.pending_len());
+        assert!(
+            output.inner().bytes.is_empty(),
+            "new input must not force pending delivery"
+        );
+        output.inner_mut().failed = false;
+        complete(output.flush_async())?;
+        assert_eq!([7, 9], output.inner().bytes.as_slice());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_failed_reset_keeps_previous_output_requirement() -> io::Result<()> {
+    let mut output = AsyncTranscodeEncodeOutput::with_capacity(ChunkedAsyncOutput::new(8), 8);
+    let mut encoder = AtomicTailEncoder::default();
+    let mut mapper = |_| io::Error::other("fixture encoder error");
+    complete(output.reset_async(&mut encoder, &mut mapper))?;
+    let input = [7_u8; 17];
+    let first = complete(output.transcode_async(&mut encoder, &mut mapper, &input, 0, 17))?;
+    assert_eq!(TranscodeProgress::need_output(utils_crate::nonzero(16), 1, 1), first);
+    encoder.fail_reset = true;
+    assert!(complete(output.reset_async(&mut encoder, &mut mapper)).is_err());
+    output.inner_mut().failed = true;
+    let error = complete(output.transcode_async(&mut encoder, &mut mapper, &input, 1, 16))
+        .expect_err("failed reset must retain the old retry requirement");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    assert_eq!(1, output.pending_len());
+    output.inner_mut().failed = false;
+    let resumed = complete(output.transcode_async(&mut encoder, &mut mapper, &input, 1, 16))?;
+    assert_eq!(TranscodeProgress::complete(16, 16), resumed);
+    complete(output.flush_async())?;
+    assert_eq!(input.as_slice(), output.inner().bytes.as_slice());
+    Ok(())
 }
 
 #[derive(Debug, Default)]

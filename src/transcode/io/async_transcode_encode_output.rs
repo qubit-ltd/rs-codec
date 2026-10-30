@@ -344,6 +344,8 @@ where
     /// # Returns
     ///
     /// Returns `Ok(())` with the reset prefix retained in the buffer.
+    /// A successful reset discards the previous stream's spare-capacity hint.
+    /// Previously committed pending units remain buffered in delivery order.
     ///
     /// # Errors
     ///
@@ -368,6 +370,7 @@ where
         unsafe {
             self.output.advance(written);
         }
+        self.required_spare = 1;
         Ok(())
     }
 
