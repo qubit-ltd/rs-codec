@@ -615,6 +615,41 @@ impl Codec for StatefulLifecycleCodec {
     }
 }
 
+#[derive(Default)]
+struct FinishWriteThenFailCodec;
+
+impl Codec for FinishWriteThenFailCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = Infallible;
+    type EncodeError = &'static str;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
+
+    unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn encode_reset(&mut self, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        output[index] = 0xfe;
+        Ok(1)
+    }
+
+    unsafe fn encode_finish(&mut self, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        output[index] = 0xff;
+        Err("finish failed after writing")
+    }
+}
+
 #[test]
 fn test_codec_value_encoder_runs_complete_encode_lifecycle() {
     let mut encoder = CodecValueEncoder::<StatefulLifecycleCodec>::new(StatefulLifecycleCodec::default());
@@ -622,6 +657,37 @@ fn test_codec_value_encoder_runs_complete_encode_lifecycle() {
     let output = ValueEncoder::<u8>::encode(&mut encoder, &41).expect("encoding should be infallible");
 
     assert_eq!(vec![0xfe, 42, 2], output);
+}
+
+/// Verifies that lifecycle output is appended after an existing prefix.
+#[test]
+fn test_codec_value_encoder_encode_into_appends_complete_lifecycle() {
+    let mut encoder = CodecValueEncoder::new(StatefulLifecycleCodec::default());
+    let mut output = vec![0xaa, 0xbb];
+
+    let written = encoder
+        .encode_into(&41, &mut output)
+        .expect("complete lifecycle should append");
+
+    assert_eq!(3, written);
+    assert_eq!(vec![0xaa, 0xbb, 0xfe, 42, 2], output);
+}
+
+/// Verifies that a finish error removes the complete appended lifecycle.
+#[test]
+fn test_codec_value_encoder_encode_into_rolls_back_after_finish_write_error() {
+    let mut encoder = CodecValueEncoder::new(FinishWriteThenFailCodec);
+    let mut output = vec![0xaa, 0xbb];
+
+    let error = encoder
+        .encode_into(&7, &mut output)
+        .expect_err("finish should fail after writing");
+
+    assert_eq!(
+        TranscodeEncodeError::domain_finish("finish failed after writing"),
+        error
+    );
+    assert_eq!(vec![0xaa, 0xbb], output);
 }
 
 #[test]
