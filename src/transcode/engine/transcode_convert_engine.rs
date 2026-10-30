@@ -13,6 +13,8 @@
 
 use core::num::NonZeroUsize;
 
+use qubit_utils::try_reserve_vec;
+
 use super::super::internal::convert_state::ConvertState;
 use super::super::internal::encode_attempt::EncodeAttempt;
 use super::super::internal::lifecycle_guard::LifecycleGuard;
@@ -570,9 +572,10 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a converter error if reset validation or target reset output
-    /// emission fails. Capacity and index failures occur before converter state
-    /// is changed. Once reset execution starts, an error poisons the converter
+    /// Returns a converter error if reset validation, target reset output
+    /// emission, or reservation of the internal lifecycle value buffer fails.
+    /// Capacity and index failures occur before converter state is changed.
+    /// Once lifecycle execution starts, failure leaves the converter poisoned
     /// until a later reset succeeds.
     ///
     /// # Panics
@@ -695,8 +698,9 @@ where
     ///
     /// # Errors
     ///
-    /// Returns a converter error when output capacity checks fail or when
-    /// hook finalization fails. Returns
+    /// Returns a converter error when output capacity checks fail, the
+    /// internal lifecycle value buffer cannot be reserved, or hook
+    /// finalization fails. Returns
     /// [`TranscodeFailure::FinishBeforeReset`] when the engine has not
     /// completed its first reset. Returns
     /// [`TranscodeFailure::FinishAfterFinish`] when the logical stream was
@@ -704,7 +708,8 @@ where
     /// [`TranscodeFailure::LifecyclePoisoned`] when an earlier reset or finish
     /// failed after execution started. Capacity and index failures occur before
     /// finish execution and remain retryable; later failures poison the
-    /// converter until reset succeeds.
+    /// converter until reset succeeds. Once lifecycle execution starts,
+    /// failure leaves the converter poisoned until a later reset succeeds.
     ///
     /// # Panics
     ///
@@ -911,7 +916,9 @@ where
         }
         // `D::Value: Default` is only consulted when the decoder declares
         // reset output. Stateless codecs never reach this branch.
-        let mut reset_values: Vec<D::Value> = (0..value_count).map(|_| D::Value::default()).collect();
+        let mut reset_values = Vec::new();
+        try_reserve_vec(&mut reset_values, value_count).map_err(|_| TranscodeFailure::allocation_failed())?;
+        reset_values.resize_with(value_count, D::Value::default);
         let written = self.decode_engine.reset(&mut reset_values, 0)?;
         for value in reset_values.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
@@ -1034,7 +1041,9 @@ where
         // D::Value: Default is required only when value_count > 0. The bound
         // remains on the method signature for the general case; stateless
         // codecs never reach this branch.
-        let mut decoded: Vec<D::Value> = (0..value_count).map(|_| D::Value::default()).collect();
+        let mut decoded = Vec::new();
+        try_reserve_vec(&mut decoded, value_count).map_err(|_| TranscodeFailure::allocation_failed())?;
+        decoded.resize_with(value_count, D::Value::default);
         let written = self.decode_engine.finish(&mut decoded, 0)?;
         for value in decoded.into_iter().take(written) {
             let pending = PendingValue::new(value, 0);
