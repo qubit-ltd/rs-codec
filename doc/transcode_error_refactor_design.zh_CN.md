@@ -6,11 +6,14 @@
 ## 设计边界
 
 transcode 层只负责缓冲区游标、容量、进度和流生命周期。codec 或 hook 负责格式域
-语义。错误因此分成三层：
+语义。运行阶段的方向错误通过方向错误类型承载框架失败和领域错误；容量规划及进度
+契约校验另有独立类型和入口：
 
-1. `TranscodeFailure`：框架能独立判断的结构性失败。
-2. `TranscodeDomainError<E>`：带 `reset`、`main`、`finish` 阶段的 codec/hook 域错误。
-3. 方向错误：解码、编码、转换分别承载各自可能出现的错误方向。
+1. `CapacityError`：容量规划无法表示所需输出上界时报告。
+2. `TranscodeContractError`：校验 transcoder 返回的进度是否符合调用边界。
+3. `TranscodeFailure`：运行阶段框架可独立判断的失败。
+4. `TranscodeDomainError<E>`：带 `reset`、`main`、`finish` 阶段的 codec/hook 域错误。
+5. 方向错误：解码、编码、转换分别承载各自可能出现的错误方向。
 
 ## 公共错误类型
 
@@ -23,6 +26,17 @@ transcode 层只负责缓冲区游标、容量、进度和流生命周期。code
 - `TranscodeBeforeReset`、`FinishBeforeReset`；
 - `TranscodeAfterFinish`、`FinishAfterFinish`；
 - reset 或 finish 部分执行失败后的 `LifecyclePoisoned`。
+
+`AllocationFailed` 表示实际输出存储分配失败；它不属于容量上界计算错误。
+容量规划 API（如 `max_*_output_len`）返回 `CapacityError`，当前只有
+`OutputLengthOverflow`。该错误转换为方向错误的 `Failure(TranscodeFailure::OutputLengthOverflow)`，
+不会表示分配器实际分配失败。
+
+`TranscodeProgress::validate` 返回独立的 `TranscodeContractError`，用于报告进度违反
+调用契约：`OverRead`、`OverWritten`、`ProgressIndexOverflow`、`SatisfiedNeed` 和
+`CompleteWithRemainingInput`。调用方直接使用 `validate` 时可以直接处理该错误；缓冲
+driver 校验不可信进度后，会将其包装为
+`TranscodeFailure::InvalidProgress { source }`，再由方向错误的 `Failure` 分支承载。
 
 三类方向错误的实际形状如下：
 
@@ -46,10 +60,19 @@ enum TranscodeConvertError<DE, EE, V> {
 }
 ```
 
-`TranscodeFailure` 是结构性错误的唯一实现来源；结构错误的 `invalid_*` 与
-`ensure_*` 构造和校验方法都定义在该类型上。方向错误可通过 `From` 实现或 `?`
-包装结构错误。`map_domain` 与 `map_value` 分别映射方向错误各自分支中的领域错误或
-value 类型，不会把错误统一转换为 `Failure`。
+运行阶段方向错误中的 `Failure(TranscodeFailure)` 承载框架失败；容量规划由
+`CapacityError` 表达，进度校验由 `TranscodeContractError` 表达。转换关系如下：
+
+| 来源 | 转换或包装 | 最终承载位置 |
+| --- | --- | --- |
+| `CapacityError::OutputLengthOverflow` | `From<CapacityError> for TranscodeFailure` 映射为 `TranscodeFailure::OutputLengthOverflow` | 解码、编码或转换错误的 `Failure` 分支 |
+| 实际输出分配失败 | engine/value 边界映射为 `TranscodeFailure::AllocationFailed`；buffered I/O adapter 通过 `allocation_error` 转成 I/O 分配错误 | 对应方向错误的 `Failure` 分支，或 adapter 返回的 I/O 错误 |
+| `TranscodeContractError` | `TranscodeFailure::from` 包装为 `InvalidProgress { source }` | driver 的解码、编码或转换错误的 `Failure` 分支 |
+| 直接调用 `TranscodeProgress::validate` | 不自动转换 | 调用方接收 `Result<(), TranscodeContractError>` 并自行处理 |
+
+结构错误的 `invalid_*` 与 `ensure_*` 构造和校验方法仍定义在 `TranscodeFailure` 上。
+方向错误可通过 `From` 实现或 `?` 包装框架失败。`map_domain` 与 `map_value` 分别映射
+方向错误各自分支中的领域错误或 value 类型，不会把错误统一转换为 `Failure`。
 
 ## 强制生命周期
 
