@@ -100,6 +100,54 @@ static TEXT_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor:
 static FRESH_STRING: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<FreshStringCodec, String>();
 
 #[derive(Default)]
+struct ReviewBorrowedCodec;
+
+impl ValueEncoder<[u8]> for ReviewBorrowedCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &[u8]) -> Result<String, Error> {
+        String::from_utf8(input.to_vec()).map_err(Error::other)
+    }
+}
+
+impl ValueDecoder<str> for ReviewBorrowedCodec {
+    type Output = Vec<u8>;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<Vec<u8>, Error> {
+        if input == "reject" {
+            return Err(Error::other("review decode rejected"));
+        }
+        Ok(input.as_bytes().to_vec())
+    }
+}
+
+#[derive(Default)]
+struct ReviewBorrowedTextCodec;
+
+impl ValueEncoder<str> for ReviewBorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+impl ValueDecoder<str> for ReviewBorrowedTextCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<String, Error> {
+        Ok(input.to_owned())
+    }
+}
+
+static REVIEW_BORROWED: ValueStringCodecDescriptor =
+    ValueStringCodecDescriptor::of_borrowed::<ReviewBorrowedCodec, Vec<u8>, [u8]>();
+
+#[derive(Default)]
 struct LocalValueCodec {
     _local: Rc<()>,
 }
@@ -305,6 +353,39 @@ fn test_encode_decode_round_trip_preserves_the_value() {
         .to_owned();
 
     assert_eq!(decoded, value, "a round trip must preserve the value");
+}
+
+#[test]
+fn test_review_borrowed_descriptor_roundtrip() {
+    let value = b"hello".to_vec();
+    assert_eq!(REVIEW_BORROWED.value_type_id(), TypeId::of::<Vec<u8>>());
+    let text = REVIEW_BORROWED.encode(&value).unwrap();
+    assert_eq!(text, "hello");
+    assert_eq!(
+        *REVIEW_BORROWED.decode(&text).unwrap().downcast::<Vec<u8>>().unwrap(),
+        value
+    );
+    let descriptor = ValueStringCodecDescriptor::of_borrowed::<ReviewBorrowedTextCodec, String, str>();
+    assert_eq!(descriptor.encode(&String::from("text")).unwrap(), "text");
+    assert_eq!(
+        *descriptor.decode("text").unwrap().downcast::<String>().unwrap(),
+        "text"
+    );
+}
+
+#[test]
+fn test_review_borrowed_descriptor_retains_type_and_sources() {
+    assert!(matches!(REVIEW_BORROWED.encode(&String::from("wrong")),
+        Err(ValueCodecExecutionError::TypeMismatch { actual_type, .. })
+        if actual_type == TypeId::of::<String>()));
+    match REVIEW_BORROWED.encode(&vec![0xff_u8]).unwrap_err() {
+        ValueCodecExecutionError::EncodeFailed { source, .. } => assert!(source.downcast_ref::<Error>().is_some()),
+        other => panic!("unexpected error: {other:?}"),
+    }
+    match REVIEW_BORROWED.decode("reject").unwrap_err() {
+        ValueCodecExecutionError::DecodeFailed { source, .. } => assert!(source.downcast_ref::<Error>().is_some()),
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

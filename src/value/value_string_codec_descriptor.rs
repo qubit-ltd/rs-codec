@@ -14,6 +14,7 @@ use core::fmt::Formatter;
 use core::fmt::Result as FmtResult;
 use std::any::Any;
 use std::any::TypeId;
+use std::borrow::Borrow;
 use std::error::Error;
 
 use crate::ValueCodecExecutionError;
@@ -87,7 +88,7 @@ pub struct ValueStringCodecDescriptor {
 impl ValueStringCodecDescriptor {
     /// Creates a descriptor for codec `C` and value type `V`.
     ///
-    /// Both codec error types must implement `Send + Sync` so execution errors
+    /// The codec error types must implement `Send + Sync` so execution errors
     /// can retain their source across thread boundaries. The codec and value
     /// types themselves need not implement these traits; `V` only needs to be
     /// `'static` because decoded values are returned through `Any`.
@@ -109,12 +110,121 @@ impl ValueStringCodecDescriptor {
         <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
         V: 'static,
     {
+        Self::of_borrowed::<C, V, V>()
+    }
+
+    /// Creates a descriptor that encodes an owned value through a borrowed
+    /// view.
+    ///
+    /// The descriptor continues to accept and return the owned type `V`.
+    /// During each encode call it checks the erased value is exactly `V`, then
+    /// borrows an `I` view with [`Borrow`] for that call only. The view is
+    /// never stored. Each operation constructs a fresh `C::default()`
+    /// codec. Encoder and decoder errors must implement `Error + Send +
+    /// Sync + 'static`; `C` and `V` themselves need not be `Send` or
+    /// `Sync`.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Default-constructible codec encoding `I` and decoding into `V`.
+    /// - `V`: Owned value type erased by this descriptor and produced by
+    ///   decode.
+    /// - `I`: Borrowed input view accepted by the encoder; it may be unsized.
+    ///
+    /// # Returns
+    ///
+    /// Returns immutable function metadata without constructing a codec.
+    ///
+    /// # Errors
+    ///
+    /// Encoding returns a type mismatch if the erased value is not `V`, or
+    /// retains the codec's source error. Decoding retains the decoder's source
+    /// error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::io::Error;
+    /// use qubit_codec::{ValueDecoder, ValueEncoder, ValueStringCodecDescriptor};
+    ///
+    /// #[derive(Default)]
+    /// struct Utf8;
+    /// impl ValueEncoder<[u8]> for Utf8 {
+    ///     type Output = String;
+    ///     type Error = Error;
+    ///     fn encode(&mut self, input: &[u8]) -> Result<String, Error> {
+    ///         String::from_utf8(input.to_vec()).map_err(Error::other)
+    ///     }
+    /// }
+    /// impl ValueDecoder<str> for Utf8 {
+    ///     type Output = Vec<u8>;
+    ///     type Error = Error;
+    ///     fn decode(&mut self, input: &str) -> Result<Vec<u8>, Error> {
+    ///         Ok(input.as_bytes().to_vec())
+    ///     }
+    /// }
+    ///
+    /// let descriptor = ValueStringCodecDescriptor::of_borrowed::<Utf8, Vec<u8>, [u8]>();
+    /// let value = b"hello".to_vec();
+    /// assert_eq!(descriptor.encode(&value).unwrap(), "hello");
+    /// let decoded = descriptor.decode("hello").unwrap().downcast::<Vec<u8>>().unwrap();
+    /// assert_eq!(*decoded, value);
+    /// ```
+    ///
+    /// The owned type must implement [`Borrow`] for the selected input view,
+    /// and the decoder output must be exactly `V`:
+    ///
+    /// ```compile_fail
+    /// use std::io::Error;
+    /// use qubit_codec::{ValueDecoder, ValueEncoder, ValueStringCodecDescriptor};
+    ///
+    /// #[derive(Default)] struct Codec;
+    /// impl ValueEncoder<[u8]> for Codec {
+    ///     type Output = String; type Error = Error;
+    ///     fn encode(&mut self, input: &[u8]) -> Result<String, Error> {
+    ///         String::from_utf8(input.to_vec()).map_err(Error::other)
+    ///     }
+    /// }
+    /// impl ValueDecoder<str> for Codec {
+    ///     type Output = String; type Error = Error;
+    ///     fn decode(&mut self, input: &str) -> Result<String, Error> { Ok(input.to_owned()) }
+    /// }
+    /// let _ = ValueStringCodecDescriptor::of_borrowed::<Codec, String, [u8]>();
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use std::io::Error;
+    /// use qubit_codec::{ValueDecoder, ValueEncoder, ValueStringCodecDescriptor};
+    ///
+    /// #[derive(Default)] struct Codec;
+    /// impl ValueEncoder<[u8]> for Codec {
+    ///     type Output = String; type Error = Error;
+    ///     fn encode(&mut self, input: &[u8]) -> Result<String, Error> {
+    ///         String::from_utf8(input.to_vec()).map_err(Error::other)
+    ///     }
+    /// }
+    /// impl ValueDecoder<str> for Codec {
+    ///     type Output = String; type Error = Error;
+    ///     fn decode(&mut self, input: &str) -> Result<String, Error> { Ok(input.to_owned()) }
+    /// }
+    /// let _ = ValueStringCodecDescriptor::of_borrowed::<Codec, Vec<u8>, [u8]>();
+    /// ```
+    #[must_use]
+    #[inline]
+    pub const fn of_borrowed<C, V, I>() -> Self
+    where
+        C: Default + ValueEncoder<I, Output = String> + ValueDecoder<str, Output = V> + 'static,
+        <C as ValueEncoder<I>>::Error: Error + Send + Sync + 'static,
+        <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
+        V: Borrow<I> + 'static,
+        I: ?Sized,
+    {
         Self {
             codec_type_id: TypeId::of::<C>,
             codec_type_name: type_name::<C>,
             value_type_id: TypeId::of::<V>,
             value_type_name: type_name::<V>,
-            encode: encode::<C, V>,
+            encode: encode::<C, V, I>,
             decode: decode::<C, V>,
         }
     }
@@ -227,8 +337,9 @@ impl Debug for ValueStringCodecDescriptor {
 ///
 /// # Type Parameters
 ///
-/// - `C`: Default codec with matching string encode/decode contracts.
+/// - `C`: Default codec encoding the selected borrowed view.
 /// - `V`: Concrete owned value type required by the descriptor.
+/// - `I`: Borrowed input view accepted by the encoder.
 ///
 /// # Parameters
 ///
@@ -242,12 +353,12 @@ impl Debug for ValueStringCodecDescriptor {
 ///
 /// Returns `TypeMismatch` when the input has a different concrete type, or
 /// `EncodeFailed` with the codec source error when encoding fails.
-fn encode<C, V>(value: &dyn Any) -> Result<String, ValueCodecExecutionError>
+fn encode<C, V, I>(value: &dyn Any) -> Result<String, ValueCodecExecutionError>
 where
-    C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
-    <C as ValueEncoder<V>>::Error: Error + Send + Sync + 'static,
-    <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
-    V: 'static,
+    C: Default + ValueEncoder<I, Output = String>,
+    <C as ValueEncoder<I>>::Error: Error + Send + Sync + 'static,
+    V: Borrow<I> + 'static,
+    I: ?Sized,
 {
     let value = value
         .downcast_ref::<V>()
@@ -255,12 +366,12 @@ where
             expected_type: type_name::<V>(),
             actual_type: value.type_id(),
         })?;
-    C::default()
-        .encode(value)
-        .map_err(|source| ValueCodecExecutionError::EncodeFailed {
+    <C as ValueEncoder<I>>::encode(&mut C::default(), <V as Borrow<I>>::borrow(value)).map_err(|source| {
+        ValueCodecExecutionError::EncodeFailed {
             codec_type: type_name::<C>(),
             source: Box::new(source),
-        })
+        }
+    })
 }
 
 /// Decodes one string with a fresh default codec and erases its typed output.
@@ -283,8 +394,7 @@ where
 /// Returns `DecodeFailed` with the codec source error when decoding fails.
 fn decode<C, V>(input: &str) -> Result<Box<dyn Any>, ValueCodecExecutionError>
 where
-    C: Default + ValueEncoder<V, Output = String> + ValueDecoder<str, Output = V> + 'static,
-    <C as ValueEncoder<V>>::Error: Error + Send + Sync + 'static,
+    C: Default + ValueDecoder<str, Output = V>,
     <C as ValueDecoder<str>>::Error: Error + Send + Sync + 'static,
     V: 'static,
 {

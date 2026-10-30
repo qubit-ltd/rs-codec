@@ -72,6 +72,9 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// `const fn` result; a runtime function call cannot define a static ID.
 /// The encoder and decoder error types must implement `Error + Send + Sync +
 /// 'static`, as required by [`crate::ValueStringCodecDescriptor::of`].
+/// Without `input`, the encoder input type is `value`. The optional `input`
+/// form selects a borrowed view of the owned `value` type for encoding; the
+/// descriptor still accepts and decodes the owned value type.
 ///
 /// # Examples
 ///
@@ -104,6 +107,23 @@ impl<D: 'static> ValueCodecRegistration<D> {
 /// ```
 #[macro_export]
 macro_rules! register_value_string_codec {
+    (id = $id:expr, codec = $codec:ty, value = $value:ty, input = $input:ty $(,)?) => {
+        const _: () = {
+            const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);
+            static DESCRIPTOR: $crate::ValueStringCodecDescriptor =
+                $crate::ValueStringCodecDescriptor::of_borrowed::<$codec, $value, $input>();
+            fn registration() -> $crate::ValueStringCodecRegistration {
+                $crate::ValueCodecRegistration::new(
+                    ID,
+                    &DESCRIPTOR,
+                    $crate::ValueCodecRegistrationSource::new(env!("CARGO_PKG_NAME"), module_path!(), file!(), line!()),
+                )
+            }
+            $crate::__private::inventory::submit! {
+                $crate::ValueStringCodecRegistrationFactory(registration)
+            }
+        };
+    };
     (id = $id:expr, codec = $codec:ty, value = $value:ty $(,)?) => {
         const _: () = {
             const ID: $crate::ValueCodecId = $crate::ValueCodecId::new($id);

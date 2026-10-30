@@ -45,6 +45,27 @@ impl ValueDecoder<str> for MirrorU32StringCodec {
 }
 
 #[derive(Default)]
+struct ReviewBorrowedCodec;
+
+impl ValueEncoder<[u8]> for ReviewBorrowedCodec {
+    type Output = String;
+    type Error = Error;
+
+    fn encode(&mut self, input: &[u8]) -> Result<String, Error> {
+        String::from_utf8(input.to_vec()).map_err(Error::other)
+    }
+}
+
+impl ValueDecoder<str> for ReviewBorrowedCodec {
+    type Output = Vec<u8>;
+    type Error = Error;
+
+    fn decode(&mut self, input: &str) -> Result<Vec<u8>, Error> {
+        Ok(input.as_bytes().to_vec())
+    }
+}
+
+#[derive(Default)]
 struct MirrorU32BytesCodec;
 
 impl ValueEncoder<u32> for MirrorU32BytesCodec {
@@ -91,6 +112,11 @@ register_value_string_codec!(
     id = "mirror.factory.string.inventory",
     codec = MirrorU32StringCodec,
     value = u32,
+);
+
+register_value_string_codec!(
+    id = "review.borrowed.bytes", codec = ReviewBorrowedCodec,
+    value = Vec<u8>, input = [u8],
 );
 
 #[test]
@@ -207,5 +233,17 @@ fn test_factory_built_registration_remains_executable() {
         registration.descriptor().encode(&11_u32).expect("encode"),
         "11",
         "a factory-built registration must stay executable through its descriptor"
+    );
+}
+
+#[test]
+fn test_review_borrowed_registration_executes_through_inventory() {
+    let registry = ValueStringCodecRegistry::try_global().unwrap();
+    let descriptor = registry.get("review.borrowed.bytes").unwrap().descriptor();
+    assert_eq!(descriptor.value_type_id(), TypeId::of::<Vec<u8>>());
+    assert_eq!(descriptor.encode(&b"hello".to_vec()).unwrap(), "hello");
+    assert_eq!(
+        *descriptor.decode("hello").unwrap().downcast::<Vec<u8>>().unwrap(),
+        b"hello".to_vec()
     );
 }
