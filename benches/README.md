@@ -190,3 +190,60 @@ tradeoffs. The auxiliary build was used only for attribution and does not
 replace the default-profile result. Both temporary build directories were
 created for this inspection and are scheduled for cleanup after validation and
 branch synchronization.
+
+### RC-009 follow-up: 2026-10-30 T3 worktree artifact audit
+
+This audit used baseline commit `51665da020bc415ba1c34bfc770f690b64cf88cb`.
+There was no worktree diff in `benches/transcode.rs` or `benches/README.md`
+before the audit. `rustc -Vv` reported rustc 1.94.0, host
+`x86_64-unknown-linux-gnu`, LLVM 21.1.8. The host was an Intel Core i5-9600K
+with 6 CPUs. The bench profile was `opt-level=3`, `lto=true`,
+`codegen-units=1`.
+
+The one default-profile build command was
+`CARGO_TARGET_DIR=/tmp/rs-codec-rc009-t3-20261030/default/target cargo bench
+--locked --bench transcode --no-run --message-format=json`; its full Cargo
+JSON output was saved as
+`/tmp/rs-codec-rc009-t3-20261030/default/cargo.json`. The JSON
+`compiler-artifact` record for `target.name == "transcode"` identified
+`/tmp/rs-codec-rc009-t3-20261030/default/target/release/deps/transcode-518bb86cbd866b72`
+(SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`).
+`nm -S -C` and `objdump -Cd` both exited successfully; their full outputs were
+saved as `default/nm.txt` and `default/objdump.txt` beside the JSON. `nm`
+identified `transcode::bench_transcoder` at `0x979f0` (size `0x7f24`) and
+`transcode::copy_safe_exact` at `0x979d0` (size `0x1f`), with no distinct
+symbols for the six timed closures. The default executable has no debug line
+or info sections. The `memcpy` references and vector instructions in the
+executable could not be assigned to a particular timed closure.
+
+One optional attribution build used
+`CARGO_TARGET_DIR=/tmp/rs-codec-rc009-t3-20261030/debug/target
+CARGO_PROFILE_BENCH_DEBUG=1 cargo bench --locked --bench transcode --no-run
+--message-format=json`; its full Cargo JSON was saved as
+`debug/cargo.json`. It identified
+`/tmp/rs-codec-rc009-t3-20261030/debug/target/release/deps/transcode-7877a69bede2c061`
+(SHA-256
+`1ce30e41c3d6360174fc33ea60a887e4a5d24489eb4d21f3364e7ecba55e7fd6`).
+`nm -S -C` and `objdump -CdSl` succeeded; the outputs were saved as
+`debug/nm.txt` and `debug/objdump.txt`. The auxiliary line table associates
+closures with source lines, but enabling debug information changes the build
+and does not reliably map those instructions back to the default LTO artifact.
+No benchmark was timed.
+
+The six source paths and their output observations are:
+
+| Timed path | Input read, output range, and loop in source | Observation in timed closure | Classification and evidence limit |
+| --- | --- | --- | --- |
+| `direct_transcode` | Lines 129–134 pass all 65,536 input bytes to one `transcode` call with a same-size output buffer. `CopyTranscoder::transcode` (lines 101–115) copies `min(input.len(), output.len())`, which is the full 65,536-byte range for this fixture. | Only `progress.read()` and `progress.written()` are black-boxed. | **Unresolved** — default disassembly does not associate any copy/store range with this closure. |
+| `complete_lifecycle` | Lines 138–143 pass the full input and same-size output to one `transcode_complete_into` call; source-level expected output is 65,536 bytes. | `written` and `output[0]` are black-boxed. | **Unresolved** — default disassembly does not associate the lifecycle copy range with this closure. |
+| `decode_engine` | Lines 156–161 pass all input bytes to one engine `transcode` call with same-size output; the codec copies the full fixture in source semantics. | Only the progress read and written counts are black-boxed. | **Unresolved** — default disassembly does not establish the engine closure's complete output writes. |
+| `codec_adapter` | Lines 182–187 pass all input bytes to one adapter `transcode` call with same-size output; the codec copies the full fixture in source semantics. | Progress counts and `adapter_output[0]` are black-boxed. | **Unresolved** — default disassembly does not establish the adapter closure's complete output writes. |
+| `output_window_32` | Lines 201–218 repeatedly read the remaining input and write up to 32 bytes into the same 32-byte output window, advancing by `progress.read()` until all input is consumed (2,048 windows for this fixture). | Only final input and accumulated written counts are black-boxed; each window is overwritten on the next iteration. | **Unresolved** — no default instructions could be assigned to this closure to determine whether each window's full written range survives. |
+| `output_window_1024` | Lines 201–218 repeatedly read the remaining input and write up to 1,024 bytes into the same 1,024-byte output window, advancing by `progress.read()` until all input is consumed (64 windows for this fixture). | Only final input and accumulated written counts are black-boxed; each window is overwritten on the next iteration. | **Unresolved** — no default instructions could be assigned to this closure to determine whether each window's full written range survives. |
+
+The source confirms the requested input and output ranges, while the default
+artifact cannot establish whether those writes are retained or eliminated for
+any of the six closures. The debug auxiliary result cannot close that mapping
+gap. No benchmark source was changed, no timing was run, and the historical
+measurements remain unsuitable for performance tradeoffs on this evidence.
