@@ -146,3 +146,47 @@ workloads retained their complete writes. The artifact and inspection are
 reproducible with the command above followed by `sha256sum`, `nm -C`, and
 `objdump -Cd` on the reported executable; no temporary evidence path is
 required.
+
+### RC-009 follow-up: 2026-10-30 default artifact recheck
+
+The recheck used baseline commit `c39667017b9a99160c859a53fff3741d321c31c9`
+with no diff in `benches/transcode.rs`, rustc 1.94.0
+(`x86_64-unknown-linux-gnu`, LLVM 21.1.8), and an Intel Core i5-9600K host
+(6 CPUs). The exact command was
+`CARGO_TARGET_DIR=/tmp/rs-codec-rc009-20261030/default/target cargo bench
+--locked --bench transcode --no-run --message-format=json`; Cargo reported
+`/tmp/rs-codec-rc009-20261030/default/target/release/deps/transcode-518bb86cbd866b72`
+with SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+The profile was `opt-level=3`, `lto=true`, and `codegen-units=1`.
+
+`nm -S -C` identified `transcode::bench_transcoder` at `0x979f0` with size
+`0x7f24`, and `transcode::copy_safe_exact` at `0x979d0` with size `0x1f`.
+`objdump -Cd` showed the benchmark registration and inlined workload setup in
+`bench_transcoder`, but the default artifact has no line table and no distinct
+symbols for the individual timed closures. The default and one auxiliary
+`CARGO_PROFILE_BENCH_DEBUG=1` build had byte-identical disassembly for the
+`bench_transcoder` and `copy_safe_exact` symbol ranges. The auxiliary artifact
+(`transcode-7877a69bede2c061`, SHA-256
+`c77eac7cb01ef47602499917ba01ac192ccc1a5ff387e2bad14da8a578519954`) provided
+source line mappings for Criterion iteration bodies, but its separate closure
+code could not be unambiguously mapped to the default artifact. A memcpy or
+vector instruction elsewhere in the default binary is therefore insufficient
+to classify those individual workloads.
+
+| Timed path | Classification | Evidence |
+| --- | --- | --- |
+| `direct_transcode` | Unresolved | The default artifact does not isolate its timed closure from the LTO-inlined benchmark body. |
+| `complete_lifecycle` | Unresolved | The default artifact does not isolate its timed closure from the LTO-inlined benchmark body. |
+| `decode_engine` | Unresolved | The default artifact does not isolate its timed closure from the LTO-inlined benchmark body. |
+| `codec_adapter` | Unresolved | The default artifact does not isolate its timed closure from the LTO-inlined benchmark body. |
+| `safe_copy_loop` | Confirmed complete writes | `criterion::bencher::Bencher<M>::iter` at `0x7f890` (size `0x176`) calls the unique `transcode::copy_safe_exact` helper at `0x7f918`; that helper at `0x979d0` tail-calls `memcpy` with `min(input.len(), output.len())`, both 65,536 for this fixture. |
+| `output_window_32` | Unresolved | The default artifact does not isolate this closure from the other streaming workloads. |
+| `output_window_1024` | Unresolved | The default artifact does not isolate this closure from the other streaming workloads. |
+
+No benchmark source change or timing run was made. The six unresolved paths
+remain evidence-limited; their recorded values must not support performance
+tradeoffs. The auxiliary build was used only for attribution and does not
+replace the default-profile result. Both temporary build directories were
+created for this inspection and are scheduled for cleanup after validation and
+branch synchronization.
