@@ -529,8 +529,11 @@ where
     /// # Returns
     ///
     /// `Pending` only while awaiting source input before decoding; otherwise
-    /// ready progress or end-of-input. Successful progress has already
-    /// consumed source units.
+    /// ready progress or end-of-input. The bridge has already applied the
+    /// returned `read()` count, which may be zero; do not consume it again.
+    /// Both progress counts may be zero. Follow the stop status before
+    /// retrying. A zero `count` returns zero progress without calling the
+    /// decoder and does not establish EOF.
     ///
     /// # Errors
     ///

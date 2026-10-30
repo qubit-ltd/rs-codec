@@ -26,7 +26,9 @@ pub enum AsyncTranscodeDecodeStep {
     /// [`crate::AsyncTranscodeDecodeInput::transcode_eof_step`] to dispatch
     /// that EOF event to the decoder.
     EndOfInput,
-    /// The decoder consumed input or initialized output without another await.
+    /// The result of one decode step, returned without another await.
+    /// Both `read()` and `written()` may be zero. Inspect the stop status to
+    /// decide whether to refill input, provide output capacity, or handle EOF.
     Progress(
         /// Consumed and written counts and the decoder stop status.
         TranscodeProgress,
