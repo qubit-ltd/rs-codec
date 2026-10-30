@@ -300,6 +300,39 @@ fn test_codec_transcode_decoder_reports_bounds_and_resets_state() {
 }
 
 #[test]
+fn test_codec_transcode_decoder_strict_fixed_width_bounds() {
+    let decoder = CodecTranscodeDecoder::new(FixedPairCodec);
+    for (input_len, expected) in [(0, 0), (1, 1), (2, 1), (3, 2), (4, 2), (5, 3)] {
+        assert_eq!(decoder.max_transcode_output_len(input_len), Ok(expected));
+    }
+    assert_eq!(decoder.max_transcode_output_len(usize::MAX), Ok(usize::MAX / 2 + 1),);
+}
+
+#[test]
+fn test_codec_transcode_decoder_complete_uses_fixed_width_capacity() {
+    let mut decoder = CodecTranscodeDecoder::new(FixedPairCodec);
+    let mut output = [0_u8; 2];
+    assert_eq!(decoder.transcode_complete_into(&[1, 2, 3, 4], &mut output), Ok(2));
+    assert_eq!(output, [3, 7]);
+}
+
+#[test]
+fn test_codec_transcode_decoder_strict_bound_preserves_eof_short_tail_error() {
+    let mut decoder = CodecTranscodeDecoder::new(FixedPairCodec);
+    let mut output = [0_u8; 2];
+    let result = decoder.transcode_complete_into(&[1, 2, 3], &mut output);
+    assert!(matches!(
+        result,
+        Err(TranscodeDecodeError::Failure(TranscodeFailure::IncompleteInput {
+            input_index: 2,
+            required: 2,
+            available: 1,
+        }))
+    ));
+    assert_eq!(output[0], 3);
+}
+
+#[test]
 fn test_codec_transcode_decoder_reports_variable_width_incomplete_input() {
     let mut decoder = CodecTranscodeDecoder::new(VariableByteCodec);
     let mut reset_output = [];

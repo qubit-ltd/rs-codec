@@ -17,6 +17,35 @@ use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
 use crate::common::EofAwareCodec;
+use crate::common::IdentityCodec;
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FixedPairDecoder;
+
+impl Codec for FixedPairDecoder {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = core::convert::Infallible;
+    type EncodeError = core::convert::Infallible;
+
+    const MIN_UNITS_PER_VALUE: usize = 2;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        debug_assert!(input.len().saturating_sub(index) >= 2);
+        Ok((input[index].wrapping_add(input[index + 1]), crate::nonzero(2)))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 struct VariableByteDecoder;
@@ -587,6 +616,17 @@ fn test_codec_transcode_converter_reports_bounds_and_finishes_noop() {
         .finish(&mut output, 0)
         .expect("codec converter has no finish output");
     assert_eq!(0, written);
+}
+
+#[test]
+fn test_codec_transcode_converter_strict_fixed_width_source_bound() {
+    let mut converter = CodecTranscodeConverter::new(FixedPairDecoder, IdentityCodec);
+    assert_eq!(converter.max_transcode_output_len(0), Ok(1));
+    assert_eq!(converter.max_transcode_output_len(4), Ok(3));
+    assert_eq!(converter.max_total_output_len(4), Ok(4));
+    let mut output = [0_u8; 4];
+    assert_eq!(converter.transcode_complete_into(&[1, 2, 3, 4], &mut output), Ok(2),);
+    assert_eq!(&output[..2], &[3, 7]);
 }
 
 #[test]
