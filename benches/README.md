@@ -322,3 +322,52 @@ RC-009 remains open. `benches/transcode.rs` was not changed, no benchmark was
 timed, and these results do not support performance tradeoffs or a claim that
 the six paths retain or eliminate their complete writes. This conclusion is
 limited to the recorded artifact, toolchain, and host.
+
+### RC-009 follow-up: 2026-10-31 implementation worktree audit
+
+The audit baseline was HEAD `117a4350f8bc997ee8623ae014632e979205557b`;
+`benches/transcode.rs` had no diff. The source/configuration hashes are recorded
+in `target/review-fa071605/source-diff.sha256` and
+`target/review-fa071605/source-config.sha256`. The environment was rustc and
+Cargo 1.94.0, LLVM 21.1.8, `x86_64-unknown-linux-gnu`, Linux
+`7.0.0-38-generic`, Intel Core i5-9600K (6 CPUs). The default bench profile is
+`opt-level=3`, `lto=true`, `codegen-units=1`; the command used Cargo's default
+feature set. One default-profile build ran:
+
+```text
+CARGO_TARGET_DIR=target/review-fa071605/baseline cargo bench --locked --bench transcode --no-run --message-format=json
+```
+
+It exited 0. Cargo's `compiler-artifact` record selected
+`target/review-fa071605/baseline/release/deps/transcode-518bb86cbd866b72`,
+SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+The complete Cargo JSON and stderr, selected executable path and hash, `nm -S
+-C`, and `objdump -Cd` outputs were captured under
+`target/review-fa071605/baseline/` for this audit. The committed summary below
+records the relevant evidence; these generated files are temporary build
+artifacts. `nm` identifies
+`transcode::bench_transcoder` at `0x979f0` (size `0x7f24`) and
+`transcode::copy_safe_exact` at `0x979d0` (size `0x1f`), but no separate
+symbols for the six timed closures. Disassembly contains memcpy references,
+but they cannot be assigned to the six individual paths. The executable has
+`.text` and `.symtab` sections and no debug line or info sections. The
+artifact's SHA-256 matches prior default-profile audits; their auxiliary
+debug build likewise did not establish attribution to this default LTO
+artifact. No auxiliary build or timing run was repeated because it would not
+add attribution evidence.
+
+| Timed path | Source input/output range and write operation | Timed observation point | Classification and evidence limit |
+| --- | --- | --- | --- |
+| `direct_transcode` | `benches/transcode.rs:128–134` passes the full 65,536-byte fixture to one call with a same-size output. `CopyTranscoder::transcode` slices at index zero and calls `copy_from_slice` for all 65,536 bytes (`:101–115`). | After the call, only `progress.read()` and `progress.written()` are black-boxed (`:133`). | **Unresolved** — default artifact has no attributable closure address range proving the complete output write is retained or omitted. |
+| `complete_lifecycle` | `:137–144` passes the full fixture and same-size output to `transcode_complete_into`; source semantics expect 65,536 output bytes. | After the call, only `written` and `output[0]` are black-boxed (`:142`). | **Unresolved** — inlined lifecycle instructions cannot be assigned to this closure in the default artifact. |
+| `decode_engine` | `:155–162` passes the full fixture and same-size output to one engine transcode call; source codec writes one byte per input byte (`CopyCodec::decode`, `:84–94`). | After the call, only the progress counts are black-boxed (`:160`). | **Unresolved** — no attributable default instruction range establishes complete engine output writes. |
+| `codec_adapter` | `:181–188` passes the full fixture and same-size adapter output to one call; source codec semantics expect 65,536 decoded bytes. | After the call, progress counts and only `adapter_output[0]` are black-boxed (`:186`). | **Unresolved** — no attributable default instruction range establishes complete adapter output writes. |
+| `output_window_32` | `:201–218` reuses one 32-byte output buffer. Each transcode call copies up to 32 bytes (`:101–115`); input advances by `progress.read()` until the 65,536-byte fixture is consumed (2,048 windows). | Only final input and accumulated written counts are observed (`:216`); no window's written slice is observed before the next iteration overwrites it. | **Unresolved** — default artifact does not attribute the loop's per-window stores to this closure. |
+| `output_window_1024` | `:201–218` reuses one 1,024-byte output buffer; the loop consumes the 65,536-byte fixture in 64 windows. | Only final input and accumulated written counts are observed (`:216`); no window's written slice is observed before overwrite. | **Unresolved** — default artifact does not attribute the loop's per-window stores to this closure. |
+
+For all six paths, source code specifies the intended ranges, but the default
+LTO machine code cannot resolve whether each complete write survives. No
+benchmark source was changed: the evidence does not confirm omitted writes.
+This audit does not establish retention or elimination and cannot support
+performance tradeoffs.
