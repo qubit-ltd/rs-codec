@@ -56,13 +56,55 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// # Examples
 ///
 /// ```
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
 /// use std::io::Cursor;
+/// use qubit_codec::{Codec, CodecTranscodeEncoder, DecodeFailure, TranscodeEncodeOutput};
+/// use qubit_codec::{TranscodeEncoder, TranscodeStatus};
 ///
-/// use qubit_codec::TranscodeEncodeOutput;
+/// struct ByteCodec;
+/// impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
 ///
-/// let output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::<u8>::new()), 8);
-/// assert!(output.spare_capacity() >= 8);
+/// let mut encoder = CodecTranscodeEncoder::new(ByteCodec);
+/// let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 8);
+/// let mut map_error = |_| std::io::Error::other("encode error");
+/// output.reset(&mut encoder, &mut map_error)?;
+/// let values = [1_u8, 2, 3];
+/// let mut offset = 0;
+/// while offset < values.len() {
+///     let progress = output.transcode_step(
+///         &mut encoder, &mut map_error, &values, offset, values.len() - offset,
+///     )?;
+///     offset += progress.read();
+///     if let TranscodeStatus::NeedOutput { required, .. } = progress.status() {
+///         output.ensure_spare_capacity(required.get())?;
+///     }
+/// }
+/// output.finish(&mut encoder, &mut map_error)?;
+/// assert_eq!(output.inner().get_ref(), &[1, 2, 3]);
+/// # Ok::<(), std::io::Error>(())
 /// ```
+///
+/// `finish` commits final units, drains the buffered output, and flushes the
+/// wrapped sink. Use `finish_to_buffer` followed by `flush` when those steps
+/// need to be controlled separately.
 pub struct TranscodeEncodeOutput<O>
 where
     O: Output,

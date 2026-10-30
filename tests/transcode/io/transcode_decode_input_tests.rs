@@ -886,11 +886,9 @@ impl Transcoder for OverwritingProgressDecoder {
     noop_finish!(u32);
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct OverflowingNeedInputDecoder;
 
-#[cfg(debug_assertions)]
 impl Transcoder for OverflowingNeedInputDecoder {
     type Input = u16;
     type Output = u32;
@@ -1547,7 +1545,6 @@ fn test_buffered_decode_input_rejects_overreported_write_progress() {
     assert!(error.to_string().contains("output slots"));
 }
 
-#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_decode_input_rejects_overflowing_need_input() {
     let input = ChunkedInput::new(vec![vec![0x0001]]);

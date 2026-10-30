@@ -54,12 +54,40 @@ use crate::codec::assert_unit_bounds;
 /// # Examples
 ///
 /// ```
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
 /// use std::io::Cursor;
-/// use qubit_codec::TranscodeDecodeInput;
+/// use qubit_codec::{Codec, DecodeFailure, TranscodeDecodeInput};
 ///
-/// let input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![1_u8]), 8);
-/// assert!(input.unread_len() <= 8);
+/// struct Identity;
+/// impl Codec for Identity {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> Result<usize, Infallible> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
+///
+/// let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![42_u8]), 8);
+/// let value = input.read_decoded_with(&mut Identity, |error| match error {})?;
+/// assert_eq!(value, 42);
+/// # Ok::<(), std::io::Error>(())
 /// ```
+///
+/// `read_decoded_with` reads one complete value and owns its strict
+/// single-value lifecycle; use the step methods when the caller needs to
+/// coordinate streaming input and output itself.
 pub struct TranscodeDecodeInput<I>
 where
     I: Input,

@@ -1242,11 +1242,9 @@ impl TranscodeEncoder for HugeBoundEncoder {
     type EncodeError = PairEncodeError;
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct NeedOutputAfterReadEncoder;
 
-#[cfg(debug_assertions)]
 impl Transcoder for NeedOutputAfterReadEncoder {
     type Input = u32;
     type Output = u16;
@@ -1447,11 +1445,9 @@ impl Transcoder for OverwritingProgressEncoder {
     noop_finish!(u16);
 }
 
-#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct OverflowingNeedOutputEncoder;
 
-#[cfg(debug_assertions)]
 impl Transcoder for OverflowingNeedOutputEncoder {
     type Input = u32;
     type Output = u16;
@@ -1505,7 +1501,6 @@ impl_pair_transcode_encoder!(
     OverwritingProgressEncoder,
 );
 
-#[cfg(debug_assertions)]
 impl_pair_transcode_encoder!(NeedOutputAfterReadEncoder, OverflowingNeedOutputEncoder,);
 
 #[derive(Debug)]
@@ -1813,7 +1808,6 @@ fn test_buffered_encode_output_reserves_and_consumes_a_batch_larger_than_capacit
     assert_eq!([1, 2, 3, 4, 5, 6], output.inner().units.as_slice());
 }
 
-#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_rejects_satisfied_need_output_after_consuming_input() {
     let output = UnitOutput::default();
@@ -1876,7 +1870,6 @@ fn test_buffered_encode_output_rejects_overreported_write_progress() {
     assert!(error.to_string().contains("output slots"));
 }
 
-#[cfg(debug_assertions)]
 #[test]
 fn test_buffered_encode_output_rejects_satisfied_overflowing_need_output() {
     let output = UnitOutput::default();

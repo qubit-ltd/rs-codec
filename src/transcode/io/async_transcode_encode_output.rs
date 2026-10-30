@@ -46,32 +46,87 @@ use crate::Transcoder;
 /// # Examples
 ///
 /// ```
+/// use core::convert::Infallible;
+/// use core::num::NonZeroUsize;
+/// use std::future::Future;
 /// use std::io::Result;
-/// use std::pin::Pin;
-/// use std::task::Context;
-/// use std::task::Poll;
+/// use std::pin::{pin, Pin};
+/// use std::task::{Context, Poll, Waker};
 ///
-/// use qubit_codec::AsyncTranscodeEncodeOutput;
+/// use qubit_codec::{AsyncTranscodeEncodeOutput, Codec, CodecTranscodeEncoder};
+/// use qubit_codec::{DecodeFailure, TranscodeEncoder};
 /// use qubit_io::AsyncOutput;
 ///
-/// struct Sink;
+/// struct ByteCodec;
+/// impl Codec for ByteCodec {
+///     type Value = u8;
+///     type Unit = u8;
+///     type DecodeError = Infallible;
+///     type EncodeError = Infallible;
+///     const MIN_UNITS_PER_VALUE: usize = 1;
+///     const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+///     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+///     unsafe fn decode(&mut self, input: &[u8], index: usize)
+///         -> std::result::Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+///         Ok((input[index], NonZeroUsize::MIN))
+///     }
+///     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize)
+///         -> std::result::Result<usize, Infallible> {
+///         output[index] = *value;
+///         Ok(1)
+///     }
+/// }
+///
+/// #[derive(Default)]
+/// struct Sink { bytes: Vec<u8>, flushes: usize }
 /// impl AsyncOutput for Sink {
 ///     type Item = u8;
 ///     unsafe fn poll_write_unchecked(
-///         self: Pin<&mut Self>, _: &mut Context<'_>, _: &[u8], _: usize, count: usize,
+///         self: Pin<&mut Self>, _: &mut Context<'_>, units: &[u8], index: usize, count: usize,
 ///     ) -> Poll<Result<usize>> {
+///         self.get_mut().bytes.extend_from_slice(&units[index..index + count]);
 ///         Poll::Ready(Ok(count))
 ///     }
 ///     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Result<()>> {
+///         self.get_mut().flushes += 1;
 ///         Poll::Ready(Ok(()))
 ///     }
 /// }
-/// let output = AsyncTranscodeEncodeOutput::with_capacity(Sink, 8);
-/// assert!(output.capacity() >= 8);
-/// assert_eq!(output.pending_len(), 0);
-/// let (_sink, pending) = output.into_parts();
-/// assert!(pending.is_empty());
+///
+/// async fn run_example() -> Result<()> {
+///     let mut encoder = CodecTranscodeEncoder::new(ByteCodec);
+///     let mut output = AsyncTranscodeEncodeOutput::with_capacity(Sink::default(), 8);
+///     let mut map_error = |_| std::io::Error::other("encode error");
+///     output.reset_async(&mut encoder, &mut map_error).await?;
+///     let values = [1_u8, 2, 3];
+///     let mut offset = 0;
+///     while offset < values.len() {
+///         let progress = output.transcode_async(
+///             &mut encoder, &mut map_error, &values, offset, values.len() - offset,
+///         ).await?;
+///         assert!(progress.read() > 0);
+///         offset += progress.read();
+///     }
+///     output.finish_async(&mut encoder, &mut map_error).await?;
+///     assert_eq!(output.pending_len(), values.len());
+///     output.flush_async().await?;
+///     let (sink, pending) = output.into_parts();
+///     assert!(pending.is_empty());
+///     assert_eq!(sink.bytes, vec![1, 2, 3]);
+///     assert_eq!(sink.flushes, 1);
+///     Ok(())
+/// }
+///
+/// let mut future = pin!(run_example());
+/// let mut context = Context::from_waker(Waker::noop());
+/// match future.as_mut().poll(&mut context) {
+///     Poll::Ready(result) => result.unwrap(),
+///     Poll::Pending => panic!("the example sink always completes immediately"),
+/// }
 /// ```
+///
+/// `finish_async` commits final units to the adapter buffer. `flush_async`
+/// delivers those units and flushes the wrapped sink.
 pub struct AsyncTranscodeEncodeOutput<O>
 where
     O: AsyncOutput,
