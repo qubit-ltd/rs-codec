@@ -119,3 +119,30 @@ These are observed confidence intervals from one run, not cross-platform
 thresholds. A separate checkout was compiling another Criterion benchmark on
 the shared host during this run, so host contention may have affected the
 intervals. The window correctness checks completed before timing each group.
+
+### RC-009 follow-up: default-profile attribution
+
+A further default-profile inspection on 2026-10-30 used the implementation
+worktree at base commit `808b1c5f27decc27083c7fa0dd95e67042441e2b`, rustc
+1.94.0 (`x86_64-unknown-linux-gnu`, LLVM 21.1.8), and an Intel Core i5-9600K
+host. The bench profile was `opt-level=3`, `lto=true`, and
+`codegen-units=1`. The exact build command was
+`cargo bench --locked --bench transcode --no-run --message-format=json`; Cargo
+reported the default-profile executable
+`target/release/deps/transcode-518bb86cbd866b72` with SHA-256
+`2056f892a1a9d7f95cfb4f63a012ab4f1de0066d929e2cd12c480e62f5d31677`.
+
+`nm -C` exposed `transcode::bench_transcoder` and
+`transcode::copy_safe_exact`, but no separate symbols for the timed closure
+bodies. `objdump -Cd` showed the benchmark closures inlined into
+`transcode::bench_transcoder`; the default executable has no source line table
+to map the inlined regions back to each timed workload. This does not reliably
+establish whether `direct_transcode`, `complete_lifecycle`, `decode_engine`,
+`codec_adapter`, `safe_copy_loop`, or the old `output_window` workloads retain
+all output writes. RC-009 therefore remains unresolved for this recorded
+toolchain and host. No benchmark code was changed, no timing was run in this
+inspection, and the newer output-window observations do not prove the old
+workloads retained their complete writes. The artifact and inspection are
+reproducible with the command above followed by `sha256sum`, `nm -C`, and
+`objdump -Cd` on the reported executable; no temporary evidence path is
+required.
