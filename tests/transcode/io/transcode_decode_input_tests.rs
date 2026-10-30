@@ -1179,6 +1179,59 @@ fn map_codec_error(error: PairDecodeError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
 
+struct HugeLifecycleCodec<const RESET: usize, const FINISH: usize>;
+
+impl<const RESET: usize, const FINISH: usize> Codec for HugeLifecycleCodec<RESET, FINISH> {
+    type Value = u32;
+    type Unit = u16;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = RESET;
+    const MAX_DECODE_FINISH_VALUES: usize = FINISH;
+
+    unsafe fn decode_reset(&mut self, _: &mut [u32], _: usize) -> Result<usize, PairDecodeError> {
+        panic!("reset must not run before allocation succeeds");
+    }
+
+    unsafe fn decode(&mut self, _: &[u16], _: usize) -> Result<(u32, NonZeroUsize), DecodeFailure<PairDecodeError>> {
+        panic!("decode must not run before allocation succeeds");
+    }
+
+    unsafe fn decode_finish(&mut self, _: &mut [u32], _: usize) -> Result<usize, PairDecodeError> {
+        panic!("finish must not run before allocation succeeds");
+    }
+
+    unsafe fn encode(&mut self, _: &u32, _: &mut [u16], _: usize) -> Result<usize, PairDecodeError> {
+        panic!("encode is outside this test");
+    }
+}
+
+fn assert_lifecycle_allocation_error<const RESET: usize, const FINISH: usize>() {
+    let source = ChunkedInput::new(vec![vec![0x1234]]);
+    let mut input = TranscodeDecodeInput::with_capacity(source, 1);
+    let mut codec = HugeLifecycleCodec::<RESET, FINISH>;
+    let error = input
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
+        .expect_err("oversized lifecycle storage must return an error");
+    assert_eq!(ErrorKind::OutOfMemory, error.kind());
+    assert_eq!(0, input.inner().reads);
+    assert!(input.unread().is_empty());
+}
+
+#[test]
+fn test_lifecycle_allocation_reset_overflow() {
+    assert_lifecycle_allocation_error::<{ usize::MAX }, 0>();
+}
+
+#[test]
+fn test_lifecycle_allocation_finish_overflow() {
+    assert_lifecycle_allocation_error::<0, { usize::MAX }>();
+}
+
 #[derive(Debug, Default)]
 struct HugeMinimumCodec;
 

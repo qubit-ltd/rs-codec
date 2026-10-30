@@ -27,6 +27,7 @@ use qubit_io::SeekableByteInput;
 use qubit_utils::SliceRange;
 use qubit_utils::UncheckedSlice;
 use qubit_utils::allocation_error;
+use qubit_utils::try_reserve_vec;
 
 use super::internal::CodecDecodeDriver;
 use super::internal::validate_decode_progress;
@@ -557,6 +558,7 @@ where
     /// occurs before a complete value is available, `InvalidData` when the
     /// codec reports an impossible incomplete state, or the error returned
     /// by `map_error` for codec reset, invalid input, or codec finish failures.
+    /// Returns `OutOfMemory` when lifecycle output storage cannot be reserved.
     ///
     /// This operation is not transactional. A successful main decode consumes
     /// its source units before codec finalization. If finalization fails, the
@@ -582,8 +584,10 @@ where
     {
         assert_unit_bounds::<C>();
         let mut reset_output = Vec::new();
+        try_reserve_vec(&mut reset_output, C::MAX_DECODE_RESET_VALUES).map_err(allocation_error)?;
         reset_output.resize_with(C::MAX_DECODE_RESET_VALUES, C::Value::default);
         let mut finish_output = Vec::new();
+        try_reserve_vec(&mut finish_output, C::MAX_DECODE_FINISH_VALUES).map_err(allocation_error)?;
         finish_output.resize_with(C::MAX_DECODE_FINISH_VALUES, C::Value::default);
         let progress =
             self.read_decoded_lifecycle_with_scratch_impl(codec, &mut reset_output, &mut finish_output, map_error)?;
