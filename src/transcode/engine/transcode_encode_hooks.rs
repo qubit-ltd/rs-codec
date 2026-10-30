@@ -95,7 +95,11 @@ use crate::TranscodeEncodeErrorOf;
 ///     }
 /// }
 ///
-/// let mut engine = TranscodeEncodeEngine::new(ByteCodec, StrictHooks);
+/// let codec = ByteCodec;
+/// let hooks = StrictHooks;
+/// let bound = hooks.max_transcode_output_len(&codec, 1).unwrap();
+/// assert!(bound >= ByteCodec::MAX_ENCODE_UNITS_PER_VALUE);
+/// let mut engine = TranscodeEncodeEngine::new(codec, hooks);
 /// engine.reset(&mut [], 0).unwrap();
 /// let mut output = [0_u8; 1];
 /// let progress = engine.transcode(&[42], 0, &mut output, 0).unwrap();
@@ -113,8 +117,10 @@ where
 {
     /// Returns the maximum output units needed for `input_len` values.
     ///
-    /// This bound covers only the streaming encode phase driven by
-    /// [`crate::engine::TranscodeEncodeEngine::transcode`]. It must not include
+    /// This bound covers the streaming encode phase, including conservative
+    /// capacity preflight in streaming and EOF operations, as required by
+    /// [`crate::Transcoder::max_transcode_output_len`]. It describes required
+    /// writable capacity, not only units actually emitted. It must not include
     /// codec reset output, codec finish output, or hook finish output.
     /// It may depend on immutable hook and codec configuration, but it must
     /// cover every reachable transient hook and codec state. Each streaming
@@ -123,6 +129,14 @@ where
     /// draining hook-owned output without input. Use a custom
     /// [`crate::Transcoder`] for streaming behavior beyond this action model,
     /// such as one-to-many output or draining output without new input.
+    ///
+    /// Before [`handle_unencodable_encode`](Self::handle_unencodable_encode),
+    /// the engine may preflight [`Codec::MAX_ENCODE_UNITS_PER_VALUE`], even
+    /// when the selected action is `Skip` or `Reject` and emits no units.
+    /// Thus the bound must leave room for that preflight; zero actual output
+    /// does not imply zero required writable capacity. See the
+    /// [trait example](#examples) for a capacity check before constructing the
+    /// engine.
     ///
     /// The default implementation multiplies `input_len` by
     /// [`Codec::MAX_ENCODE_UNITS_PER_VALUE`]. This bound is valid for direct

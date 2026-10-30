@@ -140,7 +140,10 @@ where
     /// Returns an upper bound for decoded values produced from `input_len`
     /// units.
     ///
-    /// This bound covers only the streaming decode phase. It must not include
+    /// This bound covers the streaming decode phase, including conservative
+    /// capacity preflight in streaming and EOF operations, as required by
+    /// [`crate::Transcoder::max_transcode_output_len`]. It describes required
+    /// writable capacity, not only values actually emitted. It must not include
     /// codec reset values, codec finish values, or hook finish output.
     /// Streaming actions can emit at most one value for the current input
     /// event or skip it; an emitted replacement consumes a non-zero number of
@@ -150,6 +153,13 @@ where
     /// such as one-to-many output or draining output without new input. The
     /// bound may depend on immutable hook and codec configuration, but must
     /// cover every reachable transient hook and codec state.
+    ///
+    /// The bound must cover the preflight required by
+    /// [`handle_invalid_decode`](Self::handle_invalid_decode) and
+    /// [`handle_incomplete_decode`](Self::handle_incomplete_decode), even when
+    /// the chosen action skips input and emits no value. Zero actual output
+    /// does not imply zero required writable capacity. See the
+    /// [trait example](#examples) for the hook action model.
     ///
     /// The default implementation returns `input_len`, which remains
     /// conservative when a replacement policy consumes fewer units than a
