@@ -510,6 +510,10 @@ impl TranscodeFailure {
     ///
     /// Returns [`Self::UnsupportedDecodeLifecycleOutput`] when reset or finish
     /// may emit values.
+    ///
+    /// # Panics
+    ///
+    /// Panics at compile time when `C` violates the required codec unit bounds.
     #[inline]
     pub(crate) fn ensure_no_decode_lifecycle_output<C>() -> Result<(), Self>
     where

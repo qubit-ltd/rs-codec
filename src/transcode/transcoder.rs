@@ -77,6 +77,7 @@ fn complete_progress_written(
 /// # Errors
 ///
 /// Returns [`CapacityError::OutputLengthOverflow`] when the sum overflows.
+#[inline]
 fn add_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError> {
     first.checked_add(second).ok_or(CapacityError::OutputLengthOverflow)
 }
@@ -97,6 +98,7 @@ fn add_output_bounds(first: usize, second: usize) -> Result<usize, CapacityError
 ///
 /// Returns [`CapacityError::OutputLengthOverflow`] when either addition
 /// overflows.
+#[inline]
 fn sum_output_bounds(reset: usize, transcode: usize, finish: usize) -> Result<usize, CapacityError> {
     let before_finish = add_output_bounds(reset, transcode)?;
     add_output_bounds(before_finish, finish)

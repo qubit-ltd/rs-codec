@@ -211,6 +211,7 @@ where
     ///
     /// Returns an error for an invalid index, insufficient reset capacity,
     /// a violated codec contract, or a codec reset failure.
+    #[inline]
     fn reset(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.reset(output, output_index)
     }
@@ -233,6 +234,7 @@ where
     ///
     /// Returns an encode error when indices are invalid or when encoding cannot
     /// continue under current policy.
+    #[inline]
     fn transcode(
         &mut self,
         input: &[C::Value],
@@ -257,6 +259,7 @@ where
     /// # Errors
     ///
     /// Returns a finish error if retained output cannot be fully emitted.
+    #[inline]
     fn finish(&mut self, output: &mut [C::Unit], output_index: usize) -> Result<usize, TranscodeEncodeErrorOf<C>> {
         self.engine.finish(output, output_index)
     }

@@ -195,8 +195,8 @@ where
     ///
     /// Returns the finite, transient-state-independent final-output upper
     /// bound.
-    #[inline]
     #[must_use]
+    #[inline]
     fn max_finish_output_len(&self, _codec: &C) -> usize {
         0
     }

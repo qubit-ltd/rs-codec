@@ -14,6 +14,7 @@ use core::num::NonZeroUsize;
 /// This is deliberately smaller than [`crate::TranscodeProgress`]. It only
 /// describes what happened to the current input value; the encode engine owns
 /// input/output cursor updates and progress construction.
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum EncodeOutcome {
     /// The current input value was consumed.
@@ -41,7 +42,6 @@ impl EncodeOutcome {
     ///
     /// A consumed outcome retaining the emitted unit count.
     #[inline]
-    #[must_use]
     pub(crate) const fn consumed(written: usize) -> Self {
         Self::Consumed { written }
     }
@@ -56,7 +56,6 @@ impl EncodeOutcome {
     ///
     /// A retryable outcome that leaves the current input value unconsumed.
     #[inline]
-    #[must_use]
     pub(crate) const fn need_output(required: NonZeroUsize) -> Self {
         Self::NeedOutput { required }
     }

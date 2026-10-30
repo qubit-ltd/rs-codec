@@ -1075,14 +1075,17 @@ impl Input for ErrorAfterFirstReadInput {
     }
 }
 
+#[must_use]
 fn map_error(error: TranscodeDecodeError<PairDecodeError>) -> Error {
     Error::new(ErrorKind::InvalidData, format!("{error:?}"))
 }
 
+#[must_use]
 fn transcode_error_to_io(error: TranscodeDecodeError<PairDecodeError>) -> Error {
     map_error(error)
 }
 
+#[must_use]
 fn map_codec_error(error: PairDecodeError) -> Error {
     Error::new(ErrorKind::InvalidData, error)
 }
@@ -2535,6 +2538,7 @@ impl Codec for ScratchGrowingReadCodec {
 ///
 /// The returned result preserves I/O or mapped codec errors, while the adapter
 /// lets each scenario verify exactly which source units remain unread.
+#[must_use = "check the decode result and inspect the remaining input state"]
 fn read_with_scratch_mode(
     input: ChunkedInput,
     capacity: usize,

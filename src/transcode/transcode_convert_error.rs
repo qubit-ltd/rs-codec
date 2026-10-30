@@ -10,7 +10,7 @@
 use thiserror::Error;
 
 use super::capacity_error::CapacityError;
-use super::transcode_decode_error::TranscodeDecodeError;
+use super::transcode_decode_errors::TranscodeDecodeError;
 use super::transcode_domain_error::TranscodeDomainError;
 use super::transcode_encode_error::TranscodeEncodeError;
 use super::transcode_failure::TranscodeFailure;
@@ -263,7 +263,6 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// Returns `Some` for a framework failure, or `None` for domain and
     /// unencodable errors.
     #[inline]
-    #[must_use]
     pub const fn failure_ref(&self) -> Option<&TranscodeFailure> {
         match self {
             Self::Failure(failure) => Some(failure),
@@ -279,7 +278,6 @@ impl<DE, EE, V> TranscodeConvertError<DE, EE, V> {
     /// otherwise. The inner `Some` borrows retained value context; inner
     /// `None` means it is absent.
     #[inline]
-    #[must_use]
     pub const fn unencodable_ref(&self) -> Option<(usize, Option<&V>)> {
         match self {
             Self::Unencodable { input_index, value } => Some((*input_index, value.as_ref())),

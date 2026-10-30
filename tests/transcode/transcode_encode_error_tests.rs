@@ -87,20 +87,20 @@ fn test_encode_error_accessors_mapping_and_validation() {
     ));
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
-        TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1,).map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1).map_err(TranscodeEncodeError::<&str, char>::from),
     );
     assert!(matches!(
-        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1,).map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1).map_err(TranscodeEncodeError::<&str, char>::from),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InvalidInputIndex { .. }
         ))
     ));
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
-        TranscodeFailure::ensure_output_capacity(3, 1, 2,).map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_output_capacity(3, 1, 2).map_err(TranscodeEncodeError::<&str, char>::from),
     );
     assert!(matches!(
-        TranscodeFailure::ensure_output_capacity(3, 1, 3,).map_err(TranscodeEncodeError::<&str, char>::from),
+        TranscodeFailure::ensure_output_capacity(3, 1, 3).map_err(TranscodeEncodeError::<&str, char>::from),
         Err(TranscodeEncodeError::Failure(
             TranscodeFailure::InsufficientOutput { .. }
         ))

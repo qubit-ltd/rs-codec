@@ -11,9 +11,9 @@ use core::num::NonZeroUsize;
 
 use thiserror::Error;
 
-use super::capacity_error::CapacityError;
-use super::transcode_domain_error::TranscodeDomainError;
-use super::transcode_failure::TranscodeFailure;
+use super::super::capacity_error::CapacityError;
+use super::super::transcode_domain_error::TranscodeDomainError;
+use super::super::transcode_failure::TranscodeFailure;
 use crate::Codec;
 use crate::DecodeFailure;
 

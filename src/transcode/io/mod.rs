@@ -12,7 +12,6 @@ mod async_transcode_encode_output;
 mod internal;
 mod transcode_decode_input;
 mod transcode_encode_output;
-mod transcode_progress_validation;
 
 pub use async_transcode_decode_input::AsyncTranscodeDecodeInput;
 pub use async_transcode_decode_step::AsyncTranscodeDecodeStep;

@@ -15,6 +15,7 @@ use core::num::NonZeroUsize;
 ///
 /// - `Value`: Owned replacement value transferred to the decode consumer when
 ///   the policy emits a value instead of skipping invalid source units.
+#[must_use]
 pub(in crate::transcode) enum AppliedDecodeInvalidAction<Value> {
     /// Skips invalid source units without emitting a value.
     Skip {

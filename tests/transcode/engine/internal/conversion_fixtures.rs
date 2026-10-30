@@ -42,6 +42,8 @@ pub(in crate::transcode::engine) struct ErrorSourceCodec;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::transcode::engine) struct FinishValueSourceCodec<const FINISH_BOUND: usize>;
 
+#[must_use]
+#[inline]
 pub(in crate::transcode::engine) fn one_consumed() -> NonZeroUsize {
     NonZeroUsize::MIN
 }

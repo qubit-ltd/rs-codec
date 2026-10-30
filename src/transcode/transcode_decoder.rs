@@ -62,6 +62,8 @@ use super::Transcoder;
 /// assert_eq!(values, [7]);
 /// ```
 pub trait TranscodeDecoder: Transcoder<Error = TranscodeDecodeError<Self::DecodeError>> {
-    /// Domain error type produced by decode internals.
+    /// Error type produced by the underlying codec or decode policy.
+    ///
+    /// `TranscodeDecodeError` wraps this error with transcode context.
     type DecodeError;
 }

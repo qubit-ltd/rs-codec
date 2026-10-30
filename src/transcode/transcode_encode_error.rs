@@ -162,7 +162,6 @@ impl<E, V> TranscodeEncodeError<E, V> {
     ///
     /// Returns `Some` borrowed framework failure for Failure, otherwise `None`.
     #[inline]
-    #[must_use]
     pub const fn failure_ref(&self) -> Option<&TranscodeFailure> {
         match self {
             Self::Failure(failure) => Some(failure),
@@ -177,7 +176,6 @@ impl<E, V> TranscodeEncodeError<E, V> {
     /// Returns `Some` borrowed domain error and phase context for Domain,
     /// or `None` for framework and unencodable errors.
     #[inline]
-    #[must_use]
     pub const fn domain_error_ref(&self) -> Option<&TranscodeDomainError<E>> {
         match self {
             Self::Domain(error) => Some(error),
@@ -191,7 +189,6 @@ impl<E, V> TranscodeEncodeError<E, V> {
     ///
     /// Returns `Some` borrowed domain source for Domain, otherwise `None`.
     #[inline]
-    #[must_use]
     pub const fn domain_ref(&self) -> Option<&E> {
         match self {
             Self::Domain(error) => Some(error.source()),
@@ -207,7 +204,6 @@ impl<E, V> TranscodeEncodeError<E, V> {
     /// The nested option is `Some` when a retained value can be borrowed,
     /// and `None` when the error has only an input index.
     #[inline]
-    #[must_use]
     pub const fn unencodable_ref(&self) -> Option<(usize, Option<&V>)> {
         match self {
             Self::Unencodable { input_index, value } => Some((*input_index, value.as_ref())),

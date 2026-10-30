@@ -30,8 +30,8 @@ impl<Value> PendingValueSlot<Value> {
     /// # Returns
     ///
     /// Returns a slot with no retained value.
-    #[inline]
     #[must_use]
+    #[inline]
     pub(in crate::transcode) const fn empty() -> Self {
         Self { value: None }
     }

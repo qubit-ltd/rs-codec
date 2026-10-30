@@ -5,4 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Definitions are colocated with the public transcode module.
+//! Errors reported by transcode decoders.
+
+#[path = "transcode_decode_error.rs"]
+mod transcode_decode_error_impl;
+
+pub use transcode_decode_error_impl::TranscodeDecodeError;
+pub use transcode_decode_error_impl::TranscodeDecodeErrorOf;

@@ -29,8 +29,8 @@ use qubit_utils::UncheckedSlice;
 use qubit_utils::allocation_error;
 
 use super::internal::CodecDecodeDriver;
-use super::transcode_progress_validation::validate_decode_progress;
-use super::transcode_progress_validation::validate_eof_decode_progress;
+use super::internal::validate_decode_progress;
+use super::internal::validate_eof_decode_progress;
 use crate::CapacityError;
 use crate::Codec;
 use crate::DecodeLifecycleOutput;
@@ -81,6 +81,8 @@ use crate::codec::assert_unit_bounds;
 /// }
 ///
 /// let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![42_u8]), 8);
+/// assert!(input.fill_until(1).expect("refilling the cursor input should succeed"));
+/// assert_eq!(input.unread(), &[42]);
 /// let value = input.read_decoded_with(&mut Identity, |error| match error {})?;
 /// assert_eq!(value, 42);
 /// # Ok::<(), std::io::Error>(())
@@ -112,7 +114,13 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `I::Item::default()` panics or the default buffer capacity
+    /// exceeds the supported allocation size.
     #[must_use]
+    #[inline]
     pub fn new(inner: I) -> Self {
         Self {
             input: BufferedInput::new(inner),
@@ -129,7 +137,13 @@ where
     /// # Returns
     ///
     /// A new buffered decoder input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `I::Item::default()` panics or the requested capacity exceeds
+    /// the supported allocation size.
     #[must_use]
+    #[inline]
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
@@ -152,6 +166,10 @@ where
     ///
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `I::Item::default()` panics while initializing the buffer.
     pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {
             input: BufferedInput::try_with_capacity(inner, capacity)?,
@@ -991,6 +1009,7 @@ where
     /// # Errors
     ///
     /// Propagates wrapped input or buffer errors.
+    #[inline]
     fn read(&mut self, output: &mut [u8]) -> Result<usize> {
         // SAFETY: The full output slice is a valid destination range.
         unsafe { self.read_unchecked(output, 0, output.len()) }
@@ -1015,6 +1034,7 @@ where
     ///
     /// Propagates wrapped seek errors, preserving the buffer when seeking
     /// fails.
+    #[inline]
     fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.seek(position)
     }

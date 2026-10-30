@@ -7,3 +7,29 @@
 // =============================================================================
 
 mod codec_decode_driver_tests;
+mod encode_output_support;
+
+pub(super) use encode_output_support::UnitOutput;
+pub(super) use encode_output_support::encode_with;
+pub(super) use encode_output_support::finish_with;
+pub(super) use encode_output_support::map_codec_error;
+pub(super) use encode_output_support::map_error;
+pub(super) use encode_output_support::panic_codec_error;
+
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub(super) enum PairEncodeError {
+    #[error("bad input index")]
+    BadInputIndex,
+    #[error("bad output index")]
+    BadOutputIndex,
+    #[error("invalid output index {index} for output length {len}")]
+    InvalidOutputIndex { index: usize, len: usize },
+    #[error("insufficient output at index {output_index}: required {required}, available {available}")]
+    InsufficientOutput {
+        output_index: usize,
+        required: usize,
+        available: usize,
+    },
+    #[error("capacity overflow")]
+    CapacityOverflow,
+}

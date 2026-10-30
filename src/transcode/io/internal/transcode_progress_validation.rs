@@ -33,7 +33,7 @@ use crate::TranscodeStatus;
 ///
 /// Returns [`ErrorKind::InvalidData`] if the report violates progress bounds
 /// or status invariants. No adapter state is changed by this validation.
-pub(super) fn validate_decode_progress(
+pub(in crate::transcode::io) fn validate_decode_progress(
     progress: TranscodeProgress,
     input_index: usize,
     available_input: usize,
@@ -46,7 +46,7 @@ pub(super) fn validate_decode_progress(
     Ok(progress)
 }
 
-/// Validates EOF progress before committing source consumption.
+/// Validates EOF progress before the input adapter commits source consumption.
 ///
 /// # Parameters
 ///
@@ -66,7 +66,7 @@ pub(super) fn validate_decode_progress(
 /// Returns `InvalidData` for invalid counts, status invariants, or `NeedInput`.
 /// The adapter has not committed source consumption, but this check does not
 /// roll back decoder state or caller-owned output.
-pub(super) fn validate_eof_decode_progress(
+pub(in crate::transcode::io) fn validate_eof_decode_progress(
     progress: TranscodeProgress,
     input_index: usize,
     available_input: usize,
@@ -102,7 +102,7 @@ pub(super) fn validate_eof_decode_progress(
 ///
 /// Returns [`ErrorKind::InvalidData`] if the report violates progress bounds
 /// or status invariants, or requests more input. This changes no adapter state.
-pub(super) fn validate_encode_progress(
+pub(in crate::transcode::io) fn validate_encode_progress(
     progress: TranscodeProgress,
     input_index: usize,
     available_input: usize,

@@ -15,6 +15,8 @@ use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::Transcoder;
 
+use crate::nonzero;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct FlushFailCodec;
 
@@ -114,7 +116,7 @@ fn test_codec_transcode_decode_hooks_wraps_decode_errors() {
         .expect_err("strict decode hooks should wrap codec errors");
 
     assert_eq!(
-        TranscodeDecodeError::domain_main_with_consumed(InvalidByteError, 0, Some(crate::nonzero(1)),),
+        TranscodeDecodeError::domain_main_with_consumed(InvalidByteError, 0, Some(nonzero(1)),),
         error,
     );
 }

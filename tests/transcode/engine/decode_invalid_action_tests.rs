@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Tests public invalid-decode policy actions.
 
 use qubit_codec::engine::DecodeInvalidAction;
 
@@ -15,6 +16,7 @@ fn test_decode_invalid_action_variants_are_public() {
     assert_eq!(
         DecodeInvalidAction::<u8>::Skip { consumed: nonzero(1) },
         DecodeInvalidAction::Skip { consumed: nonzero(1) },
+        "Skip actions with equal consumed lengths should compare equal"
     );
     assert_eq!(
         DecodeInvalidAction::Emit {
@@ -25,5 +27,6 @@ fn test_decode_invalid_action_variants_are_public() {
             value: 7,
             consumed: nonzero(1),
         },
+        "Emit actions with equal values and consumed lengths should compare equal"
     );
 }

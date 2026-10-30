@@ -63,7 +63,7 @@ impl<'a, Value, Unit> EncodeAttempt<'a, Value, Unit> {
     /// # Returns
     ///
     /// The original input borrowed through this attempt, without cloning it.
-    #[must_use]
+    #[must_use = "the borrowed input value should be inspected"]
     #[inline]
     pub(in crate::transcode) fn value(&self) -> &Value {
         self.value
@@ -112,7 +112,7 @@ impl<'a, Value, Unit> EncodeAttempt<'a, Value, Unit> {
     /// The original input reference, input index, exclusive output slice and
     /// output index, in that order. Consumes this holder and transfers its
     /// original `'a` borrows without encoding or allocating.
-    #[must_use]
+    #[must_use = "the encode attempt parts must be used"]
     #[inline]
     pub(in crate::transcode) fn into_parts(self) -> (&'a Value, usize, &'a mut [Unit], usize) {
         (self.value, self.input_index, self.output, self.output_index)

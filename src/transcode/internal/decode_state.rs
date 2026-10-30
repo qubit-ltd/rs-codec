@@ -21,6 +21,7 @@ use super::transcode_state::TranscodeState;
 ///
 /// # Type Parameters
 ///
+/// - `'a`: Lifetime of the input and exclusive output borrows.
 /// - `Unit`: Encoded input element.
 /// - `Value`: Decoded output element.
 pub(in crate::transcode) struct DecodeState<'a, Unit, Value> {

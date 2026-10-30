@@ -16,15 +16,21 @@ fn test_decode_invalid_actions_preserve_consumption_and_replacement() {
     let skip = DecodeInvalidAction::<u8>::Skip { consumed };
     let replacement = DecodeInvalidAction::Emit { value: b'?', consumed };
 
-    assert!(matches!(
-        skip,
-        DecodeInvalidAction::Skip { consumed: width } if width == consumed
-    ));
-    assert!(matches!(
-        replacement,
-        DecodeInvalidAction::Emit {
-            value: b'?',
-            consumed: width,
-        } if width == consumed
-    ));
+    assert!(
+        matches!(
+            skip,
+            DecodeInvalidAction::Skip { consumed: width } if width == consumed
+        ),
+        "skip action should preserve the consumed input width"
+    );
+    assert!(
+        matches!(
+            replacement,
+            DecodeInvalidAction::Emit {
+                value: b'?',
+                consumed: width,
+            } if width == consumed
+        ),
+        "replacement action should preserve its value and consumed input width"
+    );
 }

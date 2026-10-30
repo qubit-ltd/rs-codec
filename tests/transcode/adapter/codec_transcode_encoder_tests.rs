@@ -19,6 +19,8 @@ use qubit_codec::TranscodeEncoder;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 
+use crate::nonzero;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct PairByteCodec;
 
@@ -194,12 +196,7 @@ fn test_codec_transcode_encoder_encodes_until_output_needs_more_capacity() {
         .transcode(&[3, 5, 7], 0, &mut output, 0)
         .expect("encoding should be infallible");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(2) }, progress.status(),);
     assert_eq!(2, progress.read());
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
@@ -242,12 +239,7 @@ fn test_codec_transcode_encoder_reports_partial_output_capacity() {
         .transcode(&[3], 0, &mut output, 0)
         .expect("encoding should stop before unsafe call");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
@@ -284,7 +276,7 @@ fn test_codec_transcode_encoder_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range output index should fail");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
+        TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -302,7 +294,7 @@ fn test_codec_transcode_encoder_finish_reports_output_index_beyond_buffer() {
         .expect_err("out-of-range finish output index should be rejected");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
+        TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_output_index(1, 0)),
         error
     );
 }
@@ -320,7 +312,7 @@ fn test_codec_transcode_encoder_reports_invalid_input_index() {
         .expect_err("invalid input index should fail");
 
     assert_eq!(
-        codec::TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
+        TranscodeEncodeError::Failure(codec::TranscodeFailure::invalid_input_index(2, 1)),
         error
     );
 }

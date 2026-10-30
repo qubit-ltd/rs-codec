@@ -126,10 +126,11 @@ fn assert_reserved_output_drained(progress: Option<TranscodeProgress>, message: 
 /// ```rust
 /// use core::convert::Infallible;
 /// use core::num::NonZeroUsize;
+///
 /// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
 /// use qubit_codec::TranscodeDecodeErrorOf;
 /// use qubit_codec::TranscodeEncodeErrorOf;
-/// use qubit_codec::DecodeFailure;
 /// use qubit_codec::TranscodeStatus;
 /// use qubit_codec::engine::DecodeContext;
 /// use qubit_codec::engine::EncodeContext;
@@ -461,7 +462,6 @@ where
     ///
     /// Returns [`CapacityError`] when a component bound or their sum overflows
     /// `usize`.
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_transcode_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let pending_units = self.encode_engine.max_transcode_output_len(1)?;
         let decoded_values = self.decode_engine.max_transcode_output_len(input_len)?;
@@ -486,7 +486,6 @@ where
     ///
     /// Returns [`CapacityError`] when a component bound or their sum overflows
     /// `usize`.
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_reset_output_len(&self) -> Result<usize, CapacityError> {
         let decode_reset_units = self
             .encode_engine
@@ -511,7 +510,6 @@ where
     ///
     /// Returns [`CapacityError`] when a component bound or their sum overflows
     /// `usize`.
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_finish_output_len(&self) -> Result<usize, CapacityError> {
         let pending_units = self.encode_engine.max_transcode_output_len(1)?;
         let decoder_finish_values = self.decode_engine.max_finish_output_len()?;
@@ -543,7 +541,6 @@ where
     ///
     /// Returns [`CapacityError`] when a component bound or their sum overflows
     /// `usize`.
-    #[must_use = "capacity planning can fail on overflow"]
     pub fn max_total_output_len(&self, input_len: usize) -> Result<usize, CapacityError> {
         let reset = self.max_reset_output_len()?;
         let transcode = self.max_transcode_output_len(input_len)?;

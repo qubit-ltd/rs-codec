@@ -77,6 +77,7 @@ use crate::Transcoder;
 /// converter.transcode(&[7, 9], 0, &mut output, 0).unwrap();
 /// assert_eq!(output, [7, 9]);
 /// ```
+#[must_use]
 pub struct CodecTranscodeConverter<D, E>
 where
     D: Codec,
@@ -102,7 +103,6 @@ where
     ///
     /// Returns a buffered converter adapter for the supplied codecs.
     #[inline]
-    #[must_use]
     pub fn new(decoder: D, encoder: E) -> Self {
         Self {
             engine: TranscodeConvertEngine::new(decoder, encoder, CodecTranscodeDecodeHooks, CodecTranscodeEncodeHooks),

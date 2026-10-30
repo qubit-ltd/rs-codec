@@ -104,6 +104,7 @@ fn test_decode_failure_reports_invalid_unknown_consumption() {
 fn test_codec_trait_is_safe_and_accepts_non_copy_non_default_values() {
     let mut codec = PlainCodec;
 
+    // SAFETY: The input contains one unit, satisfying PlainCodec's decode bound.
     let (decoded_value, _) = unsafe { codec.decode(&[0x41], 0) }.expect("plain codec should decode a value");
     assert_eq!(NonDefaultValue(vec![0x41]), decoded_value);
 

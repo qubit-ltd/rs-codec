@@ -14,6 +14,7 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 use std::pin::Pin;
+use std::result::Result as StdResult;
 use std::task::Context;
 use std::task::Poll;
 
@@ -24,8 +25,8 @@ use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
 use super::async_transcode_decode_step::AsyncTranscodeDecodeStep;
-use super::transcode_progress_validation::validate_decode_progress;
-use super::transcode_progress_validation::validate_eof_decode_progress;
+use super::internal::validate_decode_progress;
+use super::internal::validate_eof_decode_progress;
 use crate::CapacityError;
 use crate::TranscodeProgress;
 use crate::Transcoder;
@@ -186,6 +187,7 @@ where
     /// # Returns
     ///
     /// Returns a new buffered asynchronous decoder input.
+    #[inline]
     pub fn new(inner: I) -> Self {
         Self {
             input: AsyncBufferedInput::new(inner),
@@ -202,6 +204,7 @@ where
     /// # Returns
     ///
     /// Returns a new buffered asynchronous decoder input.
+    #[inline]
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: AsyncBufferedInput::with_capacity(inner, capacity),
@@ -224,7 +227,7 @@ where
     ///
     /// Returns the allocation error when the internal buffer cannot be
     /// allocated.
-    pub fn try_with_capacity(inner: I, capacity: usize) -> std::result::Result<Self, TryReserveError> {
+    pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {
             input: AsyncBufferedInput::try_with_capacity(inner, capacity)?,
         })
@@ -472,6 +475,7 @@ where
     /// # Errors
     ///
     /// Returns input or buffer-management errors while refilling.
+    #[inline]
     pub async fn fill_more_async(&mut self) -> Result<bool> {
         self.input.fill_more_async().await
     }
@@ -674,6 +678,7 @@ where
     ///
     /// Returns input, allocation, output-range, invalid-progress, or mapped
     /// decoder errors from `poll_transcode`.
+    #[inline]
     pub async fn transcode_async<D, M, Value>(
         &mut self,
         decoder: &mut D,

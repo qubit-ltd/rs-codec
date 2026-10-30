@@ -7,14 +7,18 @@
 // =============================================================================
 
 use core::cell::Cell;
+use core::convert::Infallible;
 use std::collections::VecDeque;
 use std::io::Cursor;
 use std::io::Error;
 use std::io::ErrorKind;
+use std::io::Result as IoResult;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
 use std::num::NonZeroUsize;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
@@ -29,6 +33,14 @@ use qubit_codec::Transcoder;
 use qubit_io::BufferedOutputRecovery;
 use qubit_io::Output;
 use thiserror::Error as ThisError;
+
+use super::internal::PairEncodeError;
+use super::internal::UnitOutput;
+use super::internal::encode_with;
+use super::internal::finish_with;
+use super::internal::map_codec_error;
+use super::internal::map_error;
+use super::internal::panic_codec_error;
 
 #[test]
 fn test_try_with_capacity_allocates_encode_buffer() {
@@ -122,7 +134,7 @@ struct CountingSink {
 impl Output for CountingSink {
     type Item = u16;
 
-    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> IoResult<usize> {
         for value in &input[index..index + count] {
             self.sum += u64::from(*value);
         }
@@ -130,7 +142,7 @@ impl Output for CountingSink {
         Ok(count)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         Ok(())
     }
 }
@@ -525,8 +537,8 @@ struct HugeEncodeBoundCodec;
 impl Codec for HugeEncodeBoundCodec {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
     const MAX_ENCODE_UNITS_PER_VALUE: usize = usize::MAX;
@@ -548,24 +560,6 @@ impl Codec for HugeEncodeBoundCodec {
     ) -> Result<usize, Self::EncodeError> {
         unreachable!("allocation failure prevents encoding")
     }
-}
-
-#[derive(Debug, Eq, PartialEq, ThisError)]
-enum PairEncodeError {
-    #[error("bad input index")]
-    BadInputIndex,
-    #[error("bad output index")]
-    BadOutputIndex,
-    #[error("invalid output index {index} for output length {len}")]
-    InvalidOutputIndex { index: usize, len: usize },
-    #[error("insufficient output at index {output_index}: required {required}, available {available}")]
-    InsufficientOutput {
-        output_index: usize,
-        required: usize,
-        available: usize,
-    },
-    #[error("capacity overflow")]
-    CapacityOverflow,
 }
 
 fn domain<Value>(error: PairEncodeError) -> TranscodeEncodeError<PairEncodeError, Value> {
@@ -1022,34 +1016,6 @@ impl Transcoder for ZeroWidthFailingFinishEncoder {
         _output_index: usize,
     ) -> Result<usize, TranscodeEncodeError<PairEncodeError, u32>> {
         Err(domain(PairEncodeError::BadInputIndex))
-    }
-}
-
-#[derive(Debug, Default)]
-struct UnitOutput {
-    units: Vec<u16>,
-    flushed: bool,
-    fail_write: bool,
-    fail_flush: bool,
-}
-
-impl Output for UnitOutput {
-    type Item = u16;
-
-    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
-        if self.fail_write {
-            return Err(Error::new(ErrorKind::BrokenPipe, "output write failure"));
-        }
-        self.units.extend_from_slice(&input[index..index + count]);
-        Ok(count)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        if self.fail_flush {
-            return Err(Error::new(ErrorKind::BrokenPipe, "output flush failure"));
-        }
-        self.flushed = true;
-        Ok(())
     }
 }
 
@@ -1523,7 +1489,7 @@ impl FixedCapacityOutput {
 impl Output for FixedCapacityOutput {
     type Item = u16;
 
-    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u16], index: usize, count: usize) -> IoResult<usize> {
         if self.units.len() + count > self.capacity {
             return Err(Error::new(ErrorKind::InvalidInput, "fixed output capacity exceeded"));
         }
@@ -1531,49 +1497,10 @@ impl Output for FixedCapacityOutput {
         Ok(count)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         self.flushed = true;
         Ok(())
     }
-}
-
-fn map_error(error: TranscodeEncodeError<PairEncodeError, u32>) -> Error {
-    Error::new(ErrorKind::InvalidData, format!("{error:?}"))
-}
-
-fn map_codec_error(error: PairEncodeError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
-}
-
-fn panic_codec_error(_error: PairEncodeError) -> Error {
-    panic!("framework failures must not call the domain mapper")
-}
-
-fn encode_with<E>(
-    output: &mut TranscodeEncodeOutput<UnitOutput>,
-    encoder: &mut E,
-    input: &[u32],
-    input_index: usize,
-    count: usize,
-) -> std::io::Result<usize>
-where
-    E: TranscodeEncoder<
-            Input = u32,
-            Output = u16,
-            EncodeError = PairEncodeError,
-            Error = TranscodeEncodeError<PairEncodeError, u32>,
-        >,
-{
-    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, u32>) -> Error = map_error;
-    output.transcode(encoder, &mut mapper, input, input_index, count)
-}
-
-fn finish_with<E>(output: &mut TranscodeEncodeOutput<UnitOutput>, encoder: &mut E) -> std::io::Result<()>
-where
-    E: Transcoder<Input = u32, Output = u16, Error = TranscodeEncodeError<PairEncodeError, u32>>,
-{
-    let mut mapper: fn(TranscodeEncodeError<PairEncodeError, u32>) -> Error = map_error;
-    output.finish(encoder, &mut mapper)
 }
 
 #[test]
@@ -2218,11 +2145,11 @@ struct ZeroWriteOutput;
 impl Output for ZeroWriteOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> IoResult<usize> {
         Ok(0)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         Ok(())
     }
 }
@@ -2370,7 +2297,7 @@ impl ScriptedByteOutput {
 impl Output for ScriptedByteOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
         self.calls += 1;
         let result = self.steps.pop_front().unwrap_or(Ok(count));
         let written = match result {
@@ -2382,7 +2309,7 @@ impl Output for ScriptedByteOutput {
         Ok(written)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         Ok(())
     }
 }
@@ -2472,11 +2399,11 @@ struct BrokenPipeByteOutput;
 impl Output for BrokenPipeByteOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, _input: &[u8], _index: usize, _count: usize) -> IoResult<usize> {
         Err(Error::new(ErrorKind::BrokenPipe, "byte output failure"))
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         Err(Error::new(ErrorKind::BrokenPipe, "byte output flush failure"))
     }
 }
@@ -2637,13 +2564,13 @@ struct PanicOutput {
 impl Output for PanicOutput {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
         let committed = count.min(1);
         self.bytes.extend_from_slice(&input[index..index + committed]);
         panic!("scripted output panic after committing a prefix");
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
+    fn flush(&mut self) -> IoResult<()> {
         Ok(())
     }
 }
@@ -2652,7 +2579,7 @@ impl Output for PanicOutput {
 fn test_into_parts_preserves_indeterminate_after_inner_write_panics() {
     let mut output = TranscodeEncodeOutput::new(PanicOutput::default());
     Write::write_all(&mut output, b"buffered").expect("bytes should be buffered");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Write::flush(&mut output)));
+    let result = catch_unwind(AssertUnwindSafe(|| Write::flush(&mut output)));
     assert!(result.is_err());
 
     let (inner, recovery) = output.into_parts();

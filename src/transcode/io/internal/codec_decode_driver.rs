@@ -20,6 +20,11 @@ use crate::Codec;
 use crate::DecodeFailure;
 
 /// Drives one codec decode operation against persistent buffered input.
+///
+/// # Type Parameters
+///
+/// - `'a`: Lifetime of the mutable borrow of the shared input buffer.
+/// - `I`: Input implementation whose items are the codec's decode units.
 pub(in crate::transcode::io) struct CodecDecodeDriver<'a, I>
 where
     I: Input,
@@ -55,6 +60,11 @@ where
     /// The driver fills the shared buffer until the codec minimum is
     /// available, retries after an incomplete report, and switches to
     /// `Codec::decode_eof` once the underlying input is exhausted.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec that decodes units from the shared input buffer.
+    /// - `M`: Callback that converts codec errors to I/O errors.
     ///
     /// # Parameters
     ///
@@ -95,16 +105,7 @@ where
             let (available, end_of_input) = self.prepare_buffered_window(min_units_per_value, max_units_per_value)?;
             let units = &self.input.unread()[..available];
             debug_assert!(units.len() >= min_units_per_value);
-            let decode_result = unsafe {
-                // SAFETY: `min_units_per_value <= units.len()` guarantees
-                // the selected decode entry point's preconditions for this
-                // slice.
-                if end_of_input {
-                    codec.decode_eof(units, 0)
-                } else {
-                    codec.decode(units, 0)
-                }
-            };
+            let decode_result = Self::decode_window(codec, units, end_of_input);
             match decode_result {
                 Ok((value, consumed)) => {
                     return self.accept(value, consumed, available);
@@ -118,29 +119,81 @@ where
                         return self.handle_eof_incomplete::<C, M>(source, required_total, map_error);
                     }
                     if !self.refill_after_incomplete(required_total, available)? {
-                        let available = self.input.unread_len();
-                        let units = &self.input.unread()[..available];
-                        let eof_result = unsafe {
-                            // SAFETY: the original decode established that at
-                            // least the codec minimum units remain available.
-                            codec.decode_eof(units, 0)
-                        };
-                        match eof_result {
-                            Ok((value, consumed)) => {
-                                return self.accept(value, consumed, available);
-                            }
-                            Err(DecodeFailure::Invalid { source, consumed }) => {
-                                return self.reject::<C, M>(source, consumed, available, map_error);
-                            }
-                            Err(DecodeFailure::Incomplete { source, required_total }) => {
-                                return self.handle_eof_incomplete::<C, M>(source, required_total, map_error);
-                            }
-                        }
+                        return self.retry_decode_at_eof::<C, M>(codec, map_error);
                     }
                 }
                 Err(DecodeFailure::Invalid { source, consumed }) => {
                     return self.reject::<C, M>(source, consumed, available, map_error);
                 }
+            }
+        }
+    }
+
+    /// Decodes the prepared window using the entry point selected by EOF state.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec that decodes the prepared unit window.
+    /// - `units`: Readable units starting at the current value boundary.
+    /// - `end_of_input`: Whether the underlying input has been exhausted.
+    ///
+    /// # Returns
+    ///
+    /// Returns the codec's decode result without changing the buffered input.
+    fn decode_window<C>(
+        codec: &mut C,
+        units: &[I::Item],
+        end_of_input: bool,
+    ) -> core::result::Result<(C::Value, NonZeroUsize), DecodeFailure<C::DecodeError>>
+    where
+        C: Codec<Unit = I::Item>,
+    {
+        // SAFETY: the caller prepared at least the codec minimum number of
+        // readable units, satisfying either decode entry point's preconditions.
+        unsafe {
+            if end_of_input {
+                codec.decode_eof(units, 0)
+            } else {
+                codec.decode(units, 0)
+            }
+        }
+    }
+
+    /// Retries decoding with EOF semantics after refill reports exhaustion.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec that decodes the final buffered window.
+    /// - `M`: Callback that converts codec errors to I/O errors.
+    ///
+    /// # Parameters
+    ///
+    /// - `codec`: Codec whose EOF-aware entry point decodes the final window.
+    /// - `map_error`: Converts codec errors into reported I/O errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ErrorKind::UnexpectedEof` for an unresolved incomplete value
+    /// without codec context, the mapped codec error when context is present,
+    /// or `ErrorKind::InvalidData` when the codec reports an invalid
+    /// consumption count or an already available required width.
+    fn retry_decode_at_eof<C, M>(&mut self, codec: &mut C, map_error: &mut M) -> Result<C::Value>
+    where
+        C: Codec<Unit = I::Item>,
+        M: FnMut(C::DecodeError) -> Error,
+    {
+        let available = self.input.unread_len();
+        let units = &self.input.unread()[..available];
+        // SAFETY: the failed streaming decode established that at least the
+        // codec minimum units remain readable in this unchanged buffer.
+        let eof_result = unsafe { codec.decode_eof(units, 0) };
+        match eof_result {
+            Ok((value, consumed)) => self.accept(value, consumed, available),
+            Err(DecodeFailure::Invalid { source, consumed }) => {
+                self.reject::<C, M>(source, consumed, available, map_error)
+            }
+            Err(DecodeFailure::Incomplete { source, required_total }) => {
+                self.handle_eof_incomplete::<C, M>(source, required_total, map_error)
             }
         }
     }
@@ -191,6 +244,10 @@ where
     }
 
     /// Accepts a decoded value and consumes its source units.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `Value`: Decoded value returned after consuming its source units.
     ///
     /// # Parameters
     ///
@@ -256,6 +313,11 @@ where
 
     /// Consumes the unread tail and reports an incomplete value at EOF.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec whose incomplete decode report is being handled.
+    /// - `M`: Callback that converts a present codec error to an I/O error.
+    ///
     /// # Parameters
     ///
     /// - `source`: Optional codec error associated with the incomplete value.
@@ -306,6 +368,11 @@ where
     ///
     /// The optional consumption hint is honored first so the mapped error
     /// describes a window that already advanced past the rejected units.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec that reported invalid input.
+    /// - `M`: Callback that converts the codec error to an I/O error.
     ///
     /// # Parameters
     ///

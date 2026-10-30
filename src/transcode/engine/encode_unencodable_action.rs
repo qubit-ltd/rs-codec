@@ -11,6 +11,9 @@ use crate::Codec;
 
 /// Unencodable-value action for a codec-backed encode hook.
 ///
+/// This alias uses the codec's [`Codec::Value`] as the replacement payload
+/// type, keeping hook signatures tied to the codec they serve.
+///
 /// # Type Parameters
 ///
 /// - `C`: Codec whose associated `Value` is carried by replacement actions.

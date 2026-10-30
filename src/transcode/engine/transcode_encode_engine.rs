@@ -180,7 +180,7 @@ where
     ///
     /// Returns a shared reference to the codec owned by this engine.
     #[inline]
-    #[must_use]
+    #[must_use = "use the codec reference to inspect the wrapped codec"]
     pub const fn codec(&self) -> &C {
         &self.codec
     }
@@ -191,7 +191,7 @@ where
     ///
     /// Returns a mutable reference to the codec owned by this engine.
     #[inline]
-    #[must_use]
+    #[must_use = "use the codec reference to configure the wrapped codec"]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
     }
@@ -202,7 +202,7 @@ where
     ///
     /// Returns a shared reference to the hook object owned by this engine.
     #[inline]
-    #[must_use]
+    #[must_use = "use the hook reference to inspect the encode policy"]
     pub const fn hooks(&self) -> &H {
         &self.hooks
     }
@@ -213,7 +213,7 @@ where
     ///
     /// Returns a mutable reference to the hook object owned by this engine.
     #[inline]
-    #[must_use]
+    #[must_use = "use the hook reference to configure the encode policy"]
     pub fn hooks_mut(&mut self) -> &mut H {
         &mut self.hooks
     }

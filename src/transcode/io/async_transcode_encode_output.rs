@@ -23,7 +23,7 @@ use qubit_io::Buffer;
 use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
-use super::transcode_progress_validation::validate_encode_progress;
+use super::internal::validate_encode_progress;
 use crate::CapacityError;
 use crate::TranscodeEncoder;
 use crate::TranscodeProgress;
@@ -127,6 +127,7 @@ use crate::Transcoder;
 ///
 /// `finish_async` commits final units to the adapter buffer. `flush_async`
 /// delivers those units and flushes the wrapped sink.
+#[must_use]
 pub struct AsyncTranscodeEncodeOutput<O>
 where
     O: AsyncOutput,
@@ -152,7 +153,12 @@ where
     /// # Returns
     ///
     /// Returns a buffered asynchronous output adapter.
-    #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the default buffer requires `O::Item::default()`
+    /// or `O::Item::clone()` and either operation panics, or if the default
+    /// backing length exceeds `Vec`'s supported capacity.
     pub fn new(inner: O) -> Self {
         Self {
             output: AsyncBufferedOutput::new(inner),
@@ -170,7 +176,12 @@ where
     /// # Returns
     ///
     /// Returns a buffered asynchronous output adapter.
-    #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics, or if the requested
+    /// backing length exceeds `Vec`'s supported capacity.
     pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
             output: AsyncBufferedOutput::with_capacity(inner, capacity),
@@ -194,6 +205,11 @@ where
     ///
     /// Returns an allocation error when the internal unit buffer cannot be
     /// allocated.
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn try_with_capacity(inner: O, capacity: usize) -> std::result::Result<Self, TryReserveError> {
         Ok(Self {
             output: AsyncBufferedOutput::try_with_capacity(inner, capacity)?,

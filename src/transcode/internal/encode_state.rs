@@ -102,6 +102,7 @@ impl<'a, Value, Unit> EncodeState<'a, Value, Unit> {
     ///
     /// - `required`: Total output units required from the current output
     ///   position.
+    ///
     /// # Returns
     ///
     /// Returns [`TranscodeProgress::need_output`] with missing-capacity

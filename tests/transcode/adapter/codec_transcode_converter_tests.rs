@@ -854,7 +854,7 @@ fn test_codec_transcode_converter_finish_rejects_insufficient_output() {
         .expect_err("finish should reject insufficient output");
 
     assert_eq!(
-        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(4, 2, 0)),
+        codec::TranscodeConvertError::Failure(codec::TranscodeFailure::insufficient_output(4, 2, 0,)),
         error,
     );
 }

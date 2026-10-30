@@ -55,7 +55,7 @@ impl<Value> PendingValue<Value> {
     ///
     /// Returns the retained decoded value by shared reference.
     #[inline]
-    #[must_use]
+    #[must_use = "the decoded value must be inspected before encoding"]
     pub(in crate::transcode) const fn value(&self) -> &Value {
         &self.value
     }
@@ -66,7 +66,7 @@ impl<Value> PendingValue<Value> {
     ///
     /// Returns the owned decoded value.
     #[inline]
-    #[must_use]
+    #[must_use = "the decoded value must be retained for downstream encoding"]
     pub(in crate::transcode) fn into_value(self) -> Value {
         self.value
     }

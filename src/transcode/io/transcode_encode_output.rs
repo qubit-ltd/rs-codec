@@ -27,7 +27,7 @@ use qubit_utils::allocation_error;
 
 use super::internal::capacity_error_to_invalid_data;
 use super::internal::map_encode_value_result;
-use super::transcode_progress_validation::validate_encode_progress;
+use super::internal::validate_encode_progress;
 use crate::CapacityError;
 use crate::Codec;
 use crate::TranscodeEncodeErrorOf;
@@ -263,6 +263,7 @@ where
     /// # Errors
     ///
     /// Returns errors from the wrapped output while flushing pending units.
+    #[inline]
     pub fn flush(&mut self) -> Result<()> {
         self.output.flush()
     }
@@ -796,6 +797,7 @@ where
     /// # Errors
     ///
     /// Returns flush or seek errors from the wrapped output.
+    #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
         self.output.seek_to(position)
     }
