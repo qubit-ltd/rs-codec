@@ -284,7 +284,9 @@ I/O bridge 可能在所有可见输入都已消费后，仍用空输入切片派
 
 ## 处理生命周期 decode 输出
 
-无状态 codec 的 reset/finish 上界为零。若 decoder 会从 `decode_reset` 或 `decode_finish` 输出 value，必须声明 `MAX_DECODE_RESET_VALUES` 或 `MAX_DECODE_FINISH_VALUES`。严格的 `CodecValueDecoder::decode` 会拒绝会产出生命周期 value 的输入；此时应改用 `decode_lifecycle` 或 `decode_lifecycle_with_scratch`。
+无状态 codec 的 reset/finish 上界为零。`CodecValueDecoder::decode` 要求 `MAX_DECODE_RESET_VALUES` 与 `MAX_DECODE_FINISH_VALUES` 均为零。任一上界非零时，即使本次调用不会输出生命周期 value，也会在检查输入或执行 codec hook 前返回 `UnsupportedDecodeLifecycleOutput`。这类 codec 应使用 `decode_lifecycle` 或 `decode_lifecycle_with_scratch`。
+
+`decode_lifecycle_with_scratch` 会先检查两块 scratch 的容量，再执行任何 hook；容量不足时 codec 状态与 scratch 均不变。执行开始后若发生错误，codec 状态和任一 scratch 缓冲区都可能已经改变，且不会回滚。错误结果不提供可用的 reset 或 finish 输出长度，因此不能消费 scratch 中残留的内容。只有成功结果报告的 `reset_written` 和 `finish_written` 前缀可供消费。失败后仅当具体 codec 定义了恢复协议时才重试。
 
 可运行的[生命周期示例](../examples/decode_lifecycle.rs) 演示了一个在 decode 状态打开和关闭时输出 marker value 的单字节 codec。调用 `decode_lifecycle` 后，应分别检查 reset、main 与 finish 部分，而不是把它们合并成一个 main value。
 

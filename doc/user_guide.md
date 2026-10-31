@@ -288,7 +288,9 @@ Built-in transcode engines start uninitialized. The first successful operation m
 
 ## Handle lifecycle decode output
 
-Stateless codecs use zero reset and finish bounds. A decoder that emits values from `decode_reset` or `decode_finish` must declare `MAX_DECODE_RESET_VALUES` or `MAX_DECODE_FINISH_VALUES`. Strict `CodecValueDecoder::decode` rejects inputs that emit lifecycle values; use `decode_lifecycle` or `decode_lifecycle_with_scratch` instead.
+Stateless codecs use zero reset and finish bounds. `CodecValueDecoder::decode` requires both `MAX_DECODE_RESET_VALUES` and `MAX_DECODE_FINISH_VALUES` to be zero. If either bound is nonzero, it returns `UnsupportedDecodeLifecycleOutput` before inspecting input or running codec hooks, even if this call would emit no lifecycle values. Use `decode_lifecycle` or `decode_lifecycle_with_scratch` for such codecs.
+
+`decode_lifecycle_with_scratch` checks both scratch capacities before running any hooks; an insufficient capacity leaves codec state and scratch unchanged. After execution starts, an error may leave codec state and either scratch buffer changed, and those changes are not rolled back. An error provides no usable reset or finish output lengths, so do not consume leftover scratch contents. Consume only the `reset_written` and `finish_written` prefixes reported by a successful result. Retry after failure only when the concrete codec defines a recovery protocol.
 
 The runnable [lifecycle example](../examples/decode_lifecycle.rs) shows a one-byte codec that emits marker values when decode state opens and closes. After `decode_lifecycle`, inspect reset, main, and finish parts separately rather than collapsing them into one main value.
 

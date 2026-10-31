@@ -244,6 +244,14 @@ where
     /// error. Returns phase-aware domain errors when reset, decode, or finish
     /// fails.
     ///
+    /// Both output capacities are checked before any hook runs, so insufficient
+    /// capacity leaves codec state and scratch unchanged. After lifecycle
+    /// execution starts, an error may leave codec state and either output
+    /// buffer changed; these changes are not rolled back. An error provides no
+    /// usable reset or finish output lengths. Consume output prefixes only
+    /// using lengths from a successful result, and retry after failure only
+    /// when the concrete codec defines a recovery protocol.
+    ///
     /// # Panics
     ///
     /// Panics when the wrapped codec violates its declared reset, decode, or
