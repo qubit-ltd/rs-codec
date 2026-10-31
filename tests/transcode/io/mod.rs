@@ -9,6 +9,7 @@
 mod async_transcode_decode_input_tests;
 mod async_transcode_decode_step_tests;
 mod async_transcode_encode_output_tests;
+mod async_transcode_sequence_tests;
 mod internal;
 mod transcode_decode_input_tests;
 mod transcode_encode_output_tests;
