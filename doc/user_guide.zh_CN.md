@@ -499,6 +499,12 @@ fn main() -> Result<(), Error> {
 
 `write_encoded_with` 的完整单值生命周期遵循相同边界。容量规划发生在 codec 运行前，但准备 spare buffer 时可能先交付旧 pending。reset、encode 或 finish 出错时，本次调用写入的单位不会提交；codec 状态不会回滚，准备容量时已经交付的旧输出也无法撤销。成功写入的单位只会加入 pending，并按正常输出契约交付给 sink。发生错误后，只有在具体 codec 定义了状态恢复方式时才重试。
 
+单值解码方法 `read_decoded_with`、`read_decoded_lifecycle_with` 和
+`read_decoded_lifecycle_with_scratch` 对 mapper 映射后的 codec 错误也使用相同的阶段包装。
+Main 解码错误的输入下标为 `0`，表示本次单值输入窗口的起点；它不是全流绝对偏移，
+也不会推断已消费数量。finish 错误返回时主体值可能已经消费，因此阶段信息只说明解码失败
+位置，不能据此安全重试。
+
 codec 领域错误现在由 `io::Error` 包含一个 `TranscodeDomainError<io::Error>`，从而保留 reset、main 或 finish 阶段。若原先直接把外层错误 downcast 为 mapper 返回的 payload，应先检查阶段包装：
 
 ```rust

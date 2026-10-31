@@ -36,6 +36,7 @@ use crate::CapacityError;
 use crate::Codec;
 use crate::DecodeLifecycleOutput;
 use crate::DecodeLifecycleProgress;
+use crate::TranscodeDomainError;
 use crate::TranscodeFailure;
 use crate::TranscodeProgress;
 use crate::TranscodeStatus;
@@ -502,8 +503,11 @@ where
     /// input when reset or finish may emit values. Otherwise, returns I/O
     /// errors from the wrapped input, `UnexpectedEof` when EOF occurs before a
     /// complete value is available, `InvalidData` when the codec reports an
-    /// impossible incomplete state, or the error returned by `map_error` for
-    /// codec reset, invalid input, or codec finish failures.
+    /// impossible incomplete state, or a mapped codec-domain error for reset,
+    /// invalid input, or finish failures. Each mapped error owns a
+    /// [`TranscodeDomainError`] identifying the phase; main decode errors use
+    /// index `0`, the start of this single-value input window. The mapper's
+    /// error remains the wrapper source, preserving its kind and payload.
     ///
     /// This operation is not transactional. A successful main decode consumes
     /// its source units before codec finalization. If finalization fails, the
@@ -556,8 +560,11 @@ where
     ///
     /// Returns I/O errors from the wrapped input, `UnexpectedEof` when EOF
     /// occurs before a complete value is available, `InvalidData` when the
-    /// codec reports an impossible incomplete state, or the error returned
-    /// by `map_error` for codec reset, invalid input, or codec finish failures.
+    /// codec reports an impossible incomplete state, or a mapped codec-domain
+    /// error for reset, invalid input, or finish failures. Each mapped error
+    /// owns a [`TranscodeDomainError`] identifying the phase; main decode
+    /// errors use index `0`, the start of this input window. The mapper's error
+    /// remains the wrapper source, preserving its kind and payload.
     /// Returns `OutOfMemory` when lifecycle output storage cannot be reserved.
     ///
     /// This operation is not transactional. A successful main decode consumes
@@ -624,8 +631,11 @@ where
     /// than the corresponding codec bound. Returns I/O errors from the wrapped
     /// input, `UnexpectedEof` when EOF occurs before a complete value is
     /// available, `InvalidData` when the codec reports an impossible
-    /// incomplete state, or the error returned by `map_error` for codec reset,
-    /// invalid input, or codec finish failures.
+    /// incomplete state, or a mapped codec-domain error for reset, invalid
+    /// input, or finish failures. Each mapped error owns a
+    /// [`TranscodeDomainError`] identifying the phase; main decode errors use
+    /// index `0`, the start of this input window. The mapper's error remains
+    /// the wrapper source, preserving its kind and payload.
     ///
     /// This operation is not transactional. A successful main decode consumes
     /// its source units before codec finalization. If finalization fails, the
@@ -961,7 +971,10 @@ where
     ///
     /// Returns InvalidInput for insufficient scratch capacity, input I/O
     /// errors, UnexpectedEof for a truncated value, InvalidData for invalid
-    /// codec progress, or mapped codec reset, decode, and finish errors.
+    /// codec progress, or mapped codec reset, decode, and finish errors. Each
+    /// mapped codec-domain error owns a [`TranscodeDomainError`] identifying
+    /// the phase; main decode errors use index `0`, the start of this input
+    /// window. The mapper's error remains the wrapper source.
     ///
     /// # Panics
     ///
@@ -990,25 +1003,31 @@ where
                 "decode finish output is shorter than the codec finish bound",
             ));
         }
+        let mut map_domain_error = |error: TranscodeDomainError<C::DecodeError>| {
+            let contextual = error.map_source(&mut map_error);
+            Error::new(contextual.source().kind(), contextual)
+        };
         let reset_written = unsafe {
             // SAFETY: The reset output length check above reserves the codec's
             // declared decode-reset output bound.
             codec.decode_reset(reset_output, 0)
         }
-        .map_err(&mut map_error)?;
+        .map_err(|source| map_domain_error(TranscodeDomainError::reset(source)))?;
         assert!(
             reset_written <= C::MAX_DECODE_RESET_VALUES,
             "Codec::decode_reset wrote beyond its reset bound",
         );
 
-        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut map_error)?;
+        let value = CodecDecodeDriver::new(&mut self.input).read_one(codec, &mut |source| {
+            map_domain_error(TranscodeDomainError::main(source, 0))
+        })?;
 
         let finish_written = unsafe {
             // SAFETY: The finish output length check above reserves the
             // codec's declared decode-finish output bound.
             codec.decode_finish(finish_output, 0)
         }
-        .map_err(&mut map_error)?;
+        .map_err(|source| map_domain_error(TranscodeDomainError::finish(source)))?;
         assert!(
             finish_written <= C::MAX_DECODE_FINISH_VALUES,
             "Codec::decode_finish wrote beyond its finish bound",

@@ -503,6 +503,8 @@ Errors do not provide general transactional rollback or complete progress. A ran
 
 `write_encoded_with` follows the same boundary for a complete single-value lifecycle. Capacity planning happens before the codec runs, but preparing the spare buffer may deliver older pending units first. A reset, encode, or finish error leaves units written by the failed call uncommitted; it does not restore codec state, and earlier output delivered while preparing capacity cannot be rolled back. Successful output is added to pending units and is not sent to the sink until the normal output contract delivers it. After an error, retry only if the concrete codec defines how to recover its state.
 
+The single-value decode methods `read_decoded_with`, `read_decoded_lifecycle_with`, and `read_decoded_lifecycle_with_scratch` use the same phase wrapper for mapped codec errors. A main decode error reports input index `0`, the start of that call's single-value input window; it is not an absolute stream offset, and consumed-count metadata is not inferred. A finish error can be returned after the main value has already been consumed, so the phase identifies where decoding failed but does not make the operation safe to retry.
+
 For codec-domain failures, the returned `io::Error` now owns a `TranscodeDomainError<io::Error>`, preserving the reset, main, or finish phase. Code that previously downcast the outer error directly to a mapper payload should inspect the wrapper first:
 
 ```rust

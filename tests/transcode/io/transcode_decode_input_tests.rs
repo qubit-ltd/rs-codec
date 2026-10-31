@@ -23,6 +23,7 @@ use qubit_codec::CodecTranscodeDecoder;
 use qubit_codec::DecodeFailure;
 use qubit_codec::TranscodeDecodeError;
 use qubit_codec::TranscodeDecodeInput;
+use qubit_codec::TranscodeDomainError;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
 use qubit_io as io_crate;
@@ -386,6 +387,7 @@ enum DecodeLifecycleMode {
     #[default]
     Normal,
     ResetError,
+    MainError,
     FinishError,
     ResetOverreport,
     FinishOverreport,
@@ -430,6 +432,9 @@ impl Codec for DecodeLifecycleCodec {
     ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         assert_eq!(1, self.state, "decode must run after reset");
         self.state = 2;
+        if matches!(self.mode, DecodeLifecycleMode::MainError) {
+            return Err(DecodeFailure::invalid_unknown(PairDecodeError::BadInputIndex));
+        }
         Ok((u32::from(input[input_index]), crate::nonzero(1)))
     }
 
@@ -1514,9 +1519,13 @@ fn test_buffered_decode_input_lifecycle_rejects_short_reset_storage() {
     let mut codec = DecodeLifecycleCodec::default();
     let mut reset_output = [];
     let mut finish_output = [0_u32; 1];
+    let mut mapper_calls = 0;
 
     let error = input
-        .read_decoded_lifecycle_with_scratch(&mut codec, &mut reset_output, &mut finish_output, map_codec_error)
+        .read_decoded_lifecycle_with_scratch(&mut codec, &mut reset_output, &mut finish_output, |_| {
+            mapper_calls += 1;
+            Error::other("unexpected mapper call")
+        })
         .expect_err("short reset output must be rejected");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
@@ -1526,6 +1535,13 @@ fn test_buffered_decode_input_lifecycle_rejects_short_reset_storage() {
     );
     assert_eq!(0, input.inner().reads);
     assert_eq!(0, codec.state);
+    assert_eq!(0, mapper_calls);
+    assert!(
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .is_none()
+    );
 }
 
 #[test]
@@ -1535,9 +1551,13 @@ fn test_buffered_decode_input_lifecycle_rejects_short_finish_storage() {
     let mut codec = DecodeLifecycleCodec::default();
     let mut reset_output = [0_u32; 1];
     let mut finish_output = [];
+    let mut mapper_calls = 0;
 
     let error = input
-        .read_decoded_lifecycle_with_scratch(&mut codec, &mut reset_output, &mut finish_output, map_codec_error)
+        .read_decoded_lifecycle_with_scratch(&mut codec, &mut reset_output, &mut finish_output, |_| {
+            mapper_calls += 1;
+            Error::other("unexpected mapper call")
+        })
         .expect_err("short finish output must be rejected");
 
     assert_eq!(ErrorKind::InvalidInput, error.kind());
@@ -1547,6 +1567,13 @@ fn test_buffered_decode_input_lifecycle_rejects_short_finish_storage() {
     );
     assert_eq!(0, input.inner().reads);
     assert_eq!(0, codec.state);
+    assert_eq!(0, mapper_calls);
+    assert!(
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .is_none()
+    );
 }
 
 #[test]
@@ -1579,8 +1606,85 @@ fn test_buffered_decode_input_lifecycle_maps_lifecycle_errors() {
             .expect_err("configured lifecycle stage should fail");
 
         assert_eq!(ErrorKind::InvalidData, error.kind());
-        assert_eq!(expected, error.to_string());
+        let context = error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .expect("codec failure should retain its lifecycle phase");
+        assert_eq!(expected, context.source().to_string());
+        assert_eq!(None, context.input_index());
     }
+}
+
+#[test]
+fn test_buffered_decode_input_lifecycle_preserves_mapped_error_once() {
+    for (mode, expected_phase, expected_source) in [
+        (DecodeLifecycleMode::ResetError, 0, PairDecodeError::BadOutputIndex),
+        (DecodeLifecycleMode::MainError, 1, PairDecodeError::BadInputIndex),
+        (DecodeLifecycleMode::FinishError, 2, PairDecodeError::BadInputIndex),
+    ] {
+        let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![0x1234]]), 1);
+        assert!(input.fill_until(1).expect("buffer input"));
+        let mut codec = DecodeLifecycleCodec { state: 0, mode };
+        let mut mapper_calls = 0;
+        let error = input
+            .read_decoded_lifecycle_with(&mut codec, |source| {
+                mapper_calls += 1;
+                Error::new(ErrorKind::PermissionDenied, source)
+            })
+            .expect_err("configured lifecycle stage should fail");
+
+        assert_eq!(1, mapper_calls);
+        assert_eq!(ErrorKind::PermissionDenied, error.kind());
+        let context = error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .expect("codec failure should retain its lifecycle phase");
+        assert_eq!(ErrorKind::PermissionDenied, context.source().kind());
+        assert_eq!(
+            Some(&expected_source),
+            context
+                .source()
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<PairDecodeError>()),
+        );
+        match (expected_phase, context) {
+            (0, TranscodeDomainError::Reset { .. }) => assert_eq!(0, codec.state),
+            (
+                1,
+                TranscodeDomainError::Main {
+                    input_index: 0,
+                    input_consumed: None,
+                    ..
+                },
+            ) => {
+                assert_eq!(2, codec.state);
+            }
+            (2, TranscodeDomainError::Finish { .. }) => assert_eq!(2, codec.state),
+            _ => panic!("reported lifecycle phase must match the failing codec operation"),
+        }
+    }
+}
+
+#[test]
+fn test_buffered_decode_input_lifecycle_preserves_mapped_os_error() {
+    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![0x1234]]), 1);
+    assert!(input.fill_until(1).expect("buffer input"));
+    let mut codec = DecodeLifecycleCodec {
+        state: 0,
+        mode: DecodeLifecycleMode::MainError,
+    };
+    let error = input
+        .read_decoded_lifecycle_with(&mut codec, |_| Error::from_raw_os_error(5))
+        .expect_err("configured main decode should fail");
+
+    assert_eq!(Error::from_raw_os_error(5).kind(), error.kind());
+    assert_eq!(None, error.raw_os_error());
+    let context = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+        .expect("codec failure should retain its lifecycle phase");
+    assert!(matches!(context, TranscodeDomainError::Main { input_index: 0, .. }));
+    assert_eq!(Some(5), context.source().raw_os_error());
 }
 
 #[test]
@@ -1605,7 +1709,13 @@ fn test_read_decoded_finish_error_consumes_main_value() {
                 .expect_err("finish should fail after main decode")
         };
         assert_eq!(ErrorKind::InvalidData, error.kind());
-        assert_eq!("bad input index", error.to_string());
+        let context = error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .expect("finish failure should retain its lifecycle phase");
+        assert!(matches!(context, TranscodeDomainError::Finish { .. }));
+        assert_eq!("bad input index", context.source().to_string());
+        assert_eq!(None, context.input_index());
         assert_eq!(&[0x5678], input.unread());
         assert_eq!(2, codec.state);
         if scratch {
@@ -1619,6 +1729,27 @@ fn test_read_decoded_finish_error_consumes_main_value() {
         assert_eq!(&0x5678, next.value());
         assert!(input.unread().is_empty());
     }
+}
+
+#[test]
+fn test_read_decoded_main_error_retains_phase_and_window_index() {
+    let mut input = TranscodeDecodeInput::with_capacity(ChunkedInput::new(vec![vec![0x1234]]), 1);
+    assert!(input.fill_until(1).expect("buffer input"));
+    let mut codec = DecodeLifecycleCodec {
+        state: 0,
+        mode: DecodeLifecycleMode::MainError,
+    };
+    let error = input
+        .read_decoded_lifecycle_with(&mut codec, map_codec_error)
+        .expect_err("configured main decode should fail");
+    let context = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+        .expect("main decode failure should retain its phase");
+    assert!(matches!(context, TranscodeDomainError::Main { .. }));
+    assert_eq!(Some(0), context.input_index());
+    assert_eq!("bad input index", context.source().to_string());
+    assert_eq!(2, codec.state);
 }
 
 #[test]
@@ -2467,7 +2598,19 @@ fn test_buffered_decode_input_maps_incomplete_source_at_eof() {
         .expect_err("EOF should preserve the codec incomplete source");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
+    let context = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+        .expect("EOF incomplete codec source should retain the Main phase");
+    assert!(matches!(
+        context,
+        TranscodeDomainError::Main {
+            input_index: 0,
+            input_consumed: None,
+            ..
+        }
+    ));
     assert!(input.unread().is_empty());
 }
 
@@ -2482,7 +2625,7 @@ fn test_buffered_decode_input_read_decoded_maps_invalid_input() {
         .expect_err("invalid codec input should be mapped");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
 }
 
 #[test]
@@ -2900,7 +3043,7 @@ fn test_buffered_decode_input_configurable_codec_validates_buffered_decode_contr
         ScratchReadMode::Invalid,
     );
     assert_eq!(
-        "bad input index",
+        "codec main error at input index 0: bad input index",
         result.expect_err("codec errors should be mapped").to_string(),
     );
     assert_eq!(&[0x0002], input.unread());
@@ -2921,7 +3064,7 @@ fn test_buffered_decode_input_configurable_codec_validates_buffered_decode_contr
         ScratchReadMode::InvalidUnknown,
     );
     assert_eq!(
-        "bad input index",
+        "codec main error at input index 0: bad input index",
         result.expect_err("unknown consumption should be mapped").to_string(),
     );
     assert_eq!(&[0x0001, 0x0002], input.unread());
@@ -2970,7 +3113,7 @@ fn test_buffered_decode_input_configurable_codec_validates_scratch_decode_contra
         ScratchReadMode::Invalid,
     );
     assert_eq!(
-        "bad input index",
+        "codec main error at input index 0: bad input index",
         result.expect_err("scratch codec errors should be mapped").to_string(),
     );
     assert_eq!(&[0x0002], input.unread());
@@ -2991,7 +3134,7 @@ fn test_buffered_decode_input_configurable_codec_validates_scratch_decode_contra
         ScratchReadMode::InvalidUnknown,
     );
     assert_eq!(
-        "bad input index",
+        "codec main error at input index 0: bad input index",
         result
             .expect_err("unknown scratch consumption should be mapped")
             .to_string(),
@@ -3164,7 +3307,7 @@ fn test_buffered_decode_input_read_decoded_scratch_maps_invalid_input() {
         .expect_err("scratch decode should map invalid codec input");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
     assert_eq!(&[0x0002], input.unread());
 }
 
@@ -3179,7 +3322,7 @@ fn test_buffered_decode_input_read_decoded_scratch_maps_invalid_unknown() {
         .expect_err("scratch decode should map invalid unknown input");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
     assert_eq!(&[0x0001, 0x0002], input.unread());
 }
 
@@ -3255,11 +3398,22 @@ fn test_buffered_decode_input_read_decoded_reports_eof_before_minimum_width() {
     assert!(!input.unread().is_empty());
     let mut codec = FixedPairCodec;
 
+    let mut mapper_calls = 0;
     let error = input
-        .read_decoded_with(&mut codec, map_codec_error)
+        .read_decoded_with(&mut codec, |_| {
+            mapper_calls += 1;
+            Error::other("unexpected mapper call")
+        })
         .expect_err("single unit input should fail before a pair is available");
 
     assert_eq!(ErrorKind::UnexpectedEof, error.kind());
+    assert_eq!(0, mapper_calls);
+    assert!(
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .is_none()
+    );
     assert!(input.unread().is_empty());
 }
 
@@ -3549,7 +3703,7 @@ fn test_buffered_decode_input_read_decoded_consumes_invalid_consumed_hint() {
         .expect_err("invalid consumed hints should be mapped after consumption");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
     assert_eq!(1, input.unread_len());
 }
 
@@ -3558,11 +3712,22 @@ fn test_buffered_decode_input_read_decoded_propagates_initial_refill_error() {
     let mut input = TranscodeDecodeInput::with_capacity(FailingReadInput, 2);
     let mut codec = FixedPairCodec;
 
+    let mut mapper_calls = 0;
     let error = input
-        .read_decoded_with(&mut codec, map_codec_error)
+        .read_decoded_with(&mut codec, |_| {
+            mapper_calls += 1;
+            Error::other("unexpected mapper call")
+        })
         .expect_err("initial non-scratch refill errors should propagate");
 
     assert_eq!(ErrorKind::BrokenPipe, error.kind());
+    assert_eq!(0, mapper_calls);
+    assert!(
+        error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<TranscodeDomainError<Error>>())
+            .is_none()
+    );
 }
 
 #[test]
@@ -3601,7 +3766,7 @@ fn test_buffered_decode_input_read_decoded_maps_invalid_unknown() {
         .expect_err("invalid unknown decode should be mapped");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad input index", error.to_string());
     assert_eq!(2, input.unread_len());
 }
 
