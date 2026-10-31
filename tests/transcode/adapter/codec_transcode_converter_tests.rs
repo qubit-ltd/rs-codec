@@ -7,6 +7,9 @@
 // =============================================================================
 //! Tests for the codec-backed buffered converter adapter.
 
+use core::convert::Infallible;
+use core::num::NonZeroUsize;
+
 use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::Codec;
@@ -18,6 +21,7 @@ use qubit_codec::Transcoder;
 
 use crate::common::EofAwareCodec;
 use crate::common::IdentityCodec;
+use crate::nonzero;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct FixedPairDecoder;
@@ -25,8 +29,8 @@ struct FixedPairDecoder;
 impl Codec for FixedPairDecoder {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
     const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
@@ -36,9 +40,9 @@ impl Codec for FixedPairDecoder {
         &mut self,
         input: &[u8],
         index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input.len().saturating_sub(index) >= 2);
-        Ok((input[index].wrapping_add(input[index + 1]), crate::nonzero(2)))
+        Ok((input[index].wrapping_add(input[index + 1]), nonzero(2)))
     }
 
     unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Self::EncodeError> {
@@ -54,7 +58,7 @@ impl Codec for VariableByteDecoder {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -66,7 +70,7 @@ impl Codec for VariableByteDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
         let first = input[input_index];
@@ -74,18 +78,16 @@ impl Codec for VariableByteDecoder {
             0x80 => {
                 let available = input.len() - input_index;
                 if available < 2 {
-                    Err(codec::DecodeFailure::incomplete(crate::nonzero(2)))
+                    Err(codec::DecodeFailure::incomplete(nonzero(2)))
                 } else {
-                    Ok((input[input_index + 1], unsafe {
-                        core::num::NonZeroUsize::new_unchecked(2)
-                    }))
+                    Ok((input[input_index + 1], unsafe { NonZeroUsize::new_unchecked(2) }))
                 }
             }
             0xff => Err(codec::DecodeFailure::invalid(
                 TestDecodeError::Invalid { consumed: 1 },
-                core::num::NonZeroUsize::MIN,
+                NonZeroUsize::MIN,
             )),
-            value => Ok((value, core::num::NonZeroUsize::MIN)),
+            value => Ok((value, NonZeroUsize::MIN)),
         }
     }
 
@@ -119,7 +121,7 @@ struct PairByteEncoder;
 impl Codec for PairByteEncoder {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = TestEncodeError;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -132,10 +134,10 @@ impl Codec for PairByteEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -162,7 +164,7 @@ impl Codec for FlushFailDecoder {
     type Value = u8;
     type Unit = u8;
     type DecodeError = &'static str;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -174,8 +176,8 @@ impl Codec for FlushFailDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -199,7 +201,7 @@ struct ResetFailEncoder;
 impl Codec for ResetFailEncoder {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
     type EncodeError = &'static str;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
@@ -214,8 +216,8 @@ impl Codec for ResetFailEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -240,7 +242,7 @@ impl Codec for MinTwoDecoder {
     type Value = u8;
     type Unit = u8;
     type DecodeError = TestDecodeError;
-    type EncodeError = core::convert::Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 2;
 
@@ -252,11 +254,11 @@ impl Codec for MinTwoDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index + 1 < input.len());
 
         Ok((input[input_index].wrapping_add(input[input_index + 1]), unsafe {
-            core::num::NonZeroUsize::new_unchecked(2)
+            NonZeroUsize::new_unchecked(2)
         }))
     }
 
@@ -287,8 +289,8 @@ struct FlushValueDecoder;
 impl Codec for FlushValueDecoder {
     type Value = u8;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -302,10 +304,10 @@ impl Codec for FlushValueDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(u8, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(u8, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((input[input_index], core::num::NonZeroUsize::MIN))
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -337,8 +339,8 @@ struct NonDefaultDecoder;
 impl Codec for NonDefaultDecoder {
     type Value = NonCloneValue;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -350,10 +352,10 @@ impl Codec for NonDefaultDecoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonCloneValue, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((NonCloneValue(input[input_index]), core::num::NonZeroUsize::MIN))
+        Ok((NonCloneValue(input[input_index]), NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -375,8 +377,8 @@ struct NonDefaultEncoder;
 impl Codec for NonDefaultEncoder {
     type Value = NonCloneValue;
     type Unit = u8;
-    type DecodeError = core::convert::Infallible;
-    type EncodeError = core::convert::Infallible;
+    type DecodeError = Infallible;
+    type EncodeError = Infallible;
 
     const MIN_UNITS_PER_VALUE: usize = 1;
 
@@ -392,10 +394,10 @@ impl Codec for NonDefaultEncoder {
         &mut self,
         input: &[u8],
         input_index: usize,
-    ) -> Result<(NonCloneValue, core::num::NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
+    ) -> Result<(NonCloneValue, NonZeroUsize), codec::DecodeFailure<Self::DecodeError>> {
         debug_assert!(input_index < input.len());
 
-        Ok((NonCloneValue(input[input_index]), core::num::NonZeroUsize::MIN))
+        Ok((NonCloneValue(input[input_index]), NonZeroUsize::MIN))
     }
 
     unsafe fn encode(
@@ -512,7 +514,7 @@ fn test_codec_transcode_converter_inherent_eof_dispatches_to_codec_eof() {
         .expect("ordinary transcode should retain an incomplete marker");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: core::num::NonZeroUsize::new(2).unwrap()
+            required: NonZeroUsize::new(2).unwrap()
         },
         progress.status()
     );
@@ -541,7 +543,7 @@ fn test_codec_transcode_converter_trait_eof_dispatches_to_codec_eof() {
         .expect("ordinary trait transcode should retain an incomplete marker");
     assert_eq!(
         TranscodeStatus::NeedInput {
-            required: core::num::NonZeroUsize::new(2).unwrap()
+            required: NonZeroUsize::new(2).unwrap()
         },
         progress.status()
     );
@@ -586,12 +588,7 @@ fn test_codec_transcode_converter_converts_values_until_output_needs_capacity() 
         .transcode(&[3, 5, 7], 0, &mut output, 0)
         .expect("conversion should succeed until output fills");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(2) }, progress.status(),);
     assert_eq!(3, progress.read());
     assert_eq!(4, progress.written());
     assert_eq!([3, 4, 5, 6], output);
@@ -660,12 +657,7 @@ fn test_codec_transcode_converter_reports_variable_width_incomplete_input() {
     let progress = converter
         .transcode(&[0x80], 0, &mut output, 0)
         .expect("strict converter should classify incomplete input");
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 
@@ -690,12 +682,7 @@ fn test_codec_transcode_converter_reports_short_minimum_input_without_consuming_
         .transcode(&[7], 0, &mut output, 0)
         .expect("short input should request another unit");
 
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
     assert_eq!(0, progress.read());
     assert_eq!(0, progress.written());
 }
@@ -713,12 +700,7 @@ fn test_codec_transcode_converter_keeps_decoded_value_pending_when_output_is_sho
         .transcode(&[3], 0, &mut output, 0)
         .expect("short output should retain the decoded value");
 
-    assert_eq!(
-        TranscodeStatus::NeedOutput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedOutput { required: nonzero(2) }, progress.status(),);
     assert_eq!(1, progress.read());
     assert_eq!(0, progress.written());
     assert_eq!([0], output);
@@ -802,7 +784,7 @@ fn test_codec_transcode_converter_wraps_decode_and_encode_errors() {
         TranscodeConvertError::decode_domain_main_with_consumed(
             TestDecodeError::Invalid { consumed: 1 },
             0,
-            Some(crate::nonzero(1)),
+            Some(nonzero(1)),
         ),
         error,
     );
@@ -853,12 +835,7 @@ fn test_codec_transcode_converter_finish_does_not_handle_input_tail() {
     let progress = converter
         .transcode(&[7], 0, &mut output, 0)
         .expect("partial value should not be retained");
-    assert_eq!(
-        TranscodeStatus::NeedInput {
-            required: crate::nonzero(2),
-        },
-        progress.status(),
-    );
+    assert_eq!(TranscodeStatus::NeedInput { required: nonzero(2) }, progress.status(),);
 
     let written = converter
         .finish(&mut output, 0)

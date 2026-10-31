@@ -288,7 +288,9 @@ fn semantic_oracle(
         if value == 0xfe {
             model.encode_decisions += 1;
             match unencodable {
-                EncodeMode::Reject => return Err(ModelError::Unencodable { position: index, value }),
+                EncodeMode::Reject => {
+                    return Err(ModelError::Unencodable { position: index, value });
+                }
                 EncodeMode::Skip => {}
                 EncodeMode::Replace => append_encoded(&mut model.output, 3),
             }
@@ -411,7 +413,9 @@ fn run_partition(payload: &[u8], schedule: &[u8], engine: &mut Engine) -> Result
                 cursor = cursor.checked_add(progress.read()).expect("cursor overflow");
                 output.extend_from_slice(&buffer[..progress.written()]);
                 match progress.status() {
-                    TranscodeStatus::NeedOutput { required, .. } => required_window = Some(required.get()),
+                    TranscodeStatus::NeedOutput { required, .. } => {
+                        required_window = Some(required.get());
+                    }
                     TranscodeStatus::NeedInput { .. } => {
                         if visible < payload.len() {
                             visible = (visible + usize::from(control % 16) + 1).min(payload.len());

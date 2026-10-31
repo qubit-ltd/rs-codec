@@ -7,26 +7,34 @@
 // =============================================================================
 //! Owned byte-oriented Serde target for JSON string-content tests.
 
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::de::Error;
+use serde::de::Visitor;
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct OwnedJsonBytes(pub(crate) Vec<u8>);
 
-impl<'de> serde::Deserialize<'de> for OwnedJsonBytes {
+impl<'de> Deserialize<'de> for OwnedJsonBytes {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: Deserializer<'de>,
     {
         struct BytesVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for BytesVisitor {
+        impl<'de> Visitor<'de> for BytesVisitor {
             type Value = OwnedJsonBytes;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            fn expecting(&self, formatter: &mut Formatter<'_>) -> FmtResult {
                 formatter.write_str("a byte string")
             }
 
             fn visit_bytes<E>(self, value: &[u8]) -> Result<Self::Value, E>
             where
-                E: serde::de::Error,
+                E: Error,
             {
                 Ok(OwnedJsonBytes(value.to_vec()))
             }

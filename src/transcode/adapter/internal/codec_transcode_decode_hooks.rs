@@ -50,7 +50,9 @@ where
     ///
     /// - `_codec`: Low-level codec instance.
     /// - `_error`: Invalid domain error produced by the low-level codec.
-    /// - `_consumed`: Invalid units that a non-strict policy may consume.
+    /// - `_consumed`: `Some` gives the known invalid span length; `None` means
+    ///   the codec cannot state its length. A non-strict policy may consume the
+    ///   known span.
     /// - `_context`: Decoding context carrying input position.
     ///
     /// # Returns

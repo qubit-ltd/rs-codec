@@ -25,9 +25,9 @@ use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
 use super::async_transcode_decode_step::AsyncTranscodeDecodeStep;
+use super::internal::capacity_error_to_invalid_data;
 use super::internal::validate_decode_progress;
 use super::internal::validate_eof_decode_progress;
-use crate::CapacityError;
 use crate::TranscodeProgress;
 use crate::Transcoder;
 
@@ -227,6 +227,7 @@ where
     ///
     /// Returns the allocation error when the internal buffer cannot be
     /// allocated.
+    #[inline]
     pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {
             input: AsyncBufferedInput::try_with_capacity(inner, capacity)?,
@@ -241,7 +242,7 @@ where
     /// # Returns
     ///
     /// A shared borrow of the underlying source, excluding buffered units.
-    #[must_use]
+    #[must_use = "the wrapped input should be inspected or used"]
     #[inline]
     pub const fn inner(&self) -> &I {
         self.input.inner()
@@ -255,7 +256,7 @@ where
     /// # Returns
     ///
     /// An exclusive borrow of the source; direct reads bypass buffered units.
-    #[must_use]
+    #[must_use = "the wrapped input should be inspected or used"]
     #[inline]
     pub fn inner_mut(&mut self) -> &mut I {
         self.input.inner_mut()
@@ -382,7 +383,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder.max_reset_output_len().map_err(capacity_to_io_error)?;
+        let required = decoder.max_reset_output_len().map_err(capacity_error_to_invalid_data)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -441,7 +442,9 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder.max_finish_output_len().map_err(capacity_to_io_error)?;
+        let required = decoder
+            .max_finish_output_len()
+            .map_err(capacity_error_to_invalid_data)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -744,7 +747,8 @@ where
     ///
     /// # Safety
     ///
-    /// The caller must provide a valid indexed output range.
+    /// The caller must guarantee that `index..index + count` is a valid range
+    /// inside `output` and that the addition does not overflow.
     unsafe fn poll_read_unchecked(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -784,17 +788,4 @@ where
             .field("input", &self.input)
             .finish()
     }
-}
-
-/// Converts decoder capacity failures into invalid stream data.
-///
-/// # Parameters
-///
-/// - `error`: Capacity failure retained as the I/O error payload.
-///
-/// # Returns
-///
-/// An invalid-data error owning the original capacity failure.
-fn capacity_to_io_error(error: CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
 }

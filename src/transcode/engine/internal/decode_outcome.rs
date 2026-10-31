@@ -16,6 +16,7 @@ use core::num::NonZeroUsize;
 /// value to its caller-provided consumer. It does not describe target output
 /// capacity for conversion pipelines; downstream encode backpressure is
 /// reported separately by the encode side.
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum DecodeOutcome {
     /// A logical value was emitted to the decode consumer.
@@ -51,7 +52,6 @@ impl DecodeOutcome {
     ///
     /// Returns `Emitted` with both counters preserved.
     #[inline]
-    #[must_use]
     pub(crate) const fn emitted(read: NonZeroUsize, emitted: NonZeroUsize) -> Self {
         Self::Emitted { read, emitted }
     }
@@ -66,7 +66,6 @@ impl DecodeOutcome {
     ///
     /// Returns `Skipped` with the consumed-unit count.
     #[inline]
-    #[must_use]
     pub(crate) const fn skipped(read: NonZeroUsize) -> Self {
         Self::Skipped { read }
     }
@@ -82,7 +81,6 @@ impl DecodeOutcome {
     /// Returns `NeedInput` with the required total, not an additional-unit
     /// count.
     #[inline]
-    #[must_use]
     pub(crate) const fn need_input(required: NonZeroUsize) -> Self {
         Self::NeedInput { required }
     }

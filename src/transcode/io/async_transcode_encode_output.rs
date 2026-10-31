@@ -11,7 +11,6 @@ use core::fmt;
 use std::collections::TryReserveError;
 use std::future::poll_fn;
 use std::io::Error;
-use std::io::ErrorKind;
 use std::io::Result;
 use std::pin::Pin;
 use std::task::Context;
@@ -23,8 +22,8 @@ use qubit_io::Buffer;
 use qubit_utils::SliceRange;
 use qubit_utils::allocation_error;
 
+use super::internal::capacity_error_to_invalid_data;
 use super::internal::validate_encode_progress;
-use crate::CapacityError;
 use crate::TranscodeEncoder;
 use crate::TranscodeProgress;
 use crate::TranscodeStatus;
@@ -594,20 +593,6 @@ where
         self.output.try_reserve_capacity(count).map_err(allocation_error)?;
         self.output.ensure_spare_capacity_async(count).await
     }
-}
-
-/// Converts capacity planning failures into invalid asynchronous stream data.
-///
-/// # Parameters
-///
-/// * `error` - Capacity failure retained as the source of the I/O error.
-///
-/// # Returns
-///
-/// An `InvalidData` error owning the capacity failure.
-#[must_use]
-fn capacity_error_to_invalid_data(error: CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
 }
 
 impl<O> fmt::Debug for AsyncTranscodeEncodeOutput<O>

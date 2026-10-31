@@ -46,6 +46,8 @@ use qubit_codec::engine::TranscodeDecodeHooks;
 use qubit_codec::engine::TranscodeEncodeEngine;
 use qubit_codec::engine::TranscodeEncodeHooks;
 
+use crate::nonzero;
+
 #[derive(Default)]
 struct EchoCodec;
 
@@ -181,7 +183,7 @@ fn test_prelude_imports_core_codec_traits_and_markers() {
     );
     let _: DecodeInvalidActionOf<EchoCodec> = DecodeInvalidAction::Emit {
         value: 1,
-        consumed: crate::nonzero(1),
+        consumed: nonzero(1),
     };
     let _: EncodeUnencodableActionOf<EchoCodec> = EncodeUnencodableAction::Replace { value: 1 };
     let _: TranscodeDecodeErrorOf<EchoCodec> =

@@ -6,8 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::cell::Cell;
 use std::future::Future;
+use std::future::poll_fn;
 use std::io;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -24,10 +28,11 @@ use qubit_codec::TranscodeProgress;
 use qubit_codec::TranscodeStatus;
 use qubit_codec::Transcoder;
 use qubit_io::AsyncInput;
-use qubit_utils as utils_crate;
+use qubit_utils::nonzero;
+use thiserror::Error;
 
 /// Domain error type required by the transcode decoder contract.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error("test decoder error")]
 struct TestDecodeError;
 
@@ -116,6 +121,8 @@ where
 #[derive(Debug, Default)]
 struct PairDecoder;
 
+/// Decoder fixture that writes output before returning an error or invalid
+/// progress.
 #[derive(Debug, Default)]
 struct FailedDecodeProgress {
     calls: usize,
@@ -253,10 +260,10 @@ impl Transcoder for PairDecoder {
         let available_input = input.len() - input_index;
         let available_output = output.len() - output_index;
         if available_input < 2 {
-            return Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0));
+            return Ok(TranscodeProgress::need_input(nonzero(2), 0, 0));
         }
         if available_output == 0 {
-            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
+            return Ok(TranscodeProgress::need_output(nonzero(1), 0, 0));
         }
         output[output_index] = u16::from_be_bytes([input[input_index], input[input_index + 1]]);
         Ok(TranscodeProgress::complete(2, 1))
@@ -296,7 +303,7 @@ impl Transcoder for EofTailDecoder {
         _output: &mut [u16],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0))
+        Ok(TranscodeProgress::need_input(nonzero(2), 0, 0))
     }
 
     /// Emits a single remaining byte as a value when the source reaches EOF.
@@ -376,7 +383,7 @@ impl Transcoder for EmptyEofDecoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if output.len() - output_index < 2 {
-            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0));
+            return Ok(TranscodeProgress::need_output(nonzero(2), 0, 0));
         }
         let value = self.retained.take().map_or(42, u16::from);
         output[output_index] = value;
@@ -426,10 +433,10 @@ impl Transcoder for PairAndTailDecoder {
     ) -> Result<TranscodeProgress, Self::Error> {
         let available = input.len() - input_index;
         if available < 2 {
-            return Ok(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0));
+            return Ok(TranscodeProgress::need_input(nonzero(2), 0, 0));
         }
         if output.len() == output_index {
-            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), 0, 0));
+            return Ok(TranscodeProgress::need_output(nonzero(1), 0, 0));
         }
         output[output_index] = u16::from_be_bytes([input[input_index], input[input_index + 1]]);
         Ok(TranscodeProgress::complete(2, 1))
@@ -447,7 +454,7 @@ impl Transcoder for PairAndTailDecoder {
             return Ok(TranscodeProgress::complete(0, 0));
         }
         if available == 1 && output.len() - output_index < 2 {
-            return Ok(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0));
+            return Ok(TranscodeProgress::need_output(nonzero(2), 0, 0));
         }
         if available == 1 {
             output[output_index] = u16::from(input[input_index]);
@@ -466,6 +473,7 @@ impl Transcoder for PairAndTailDecoder {
     }
 }
 
+/// Decoder fixture that requests more input even after the source reports EOF.
 #[derive(Debug, Default)]
 struct EofNeedInputDecoder {
     eof_read: usize,
@@ -491,11 +499,7 @@ impl Transcoder for EofNeedInputDecoder {
         _out: &mut [u16],
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
-        Ok(TranscodeProgress::need_input(
-            utils_crate::nonzero(input.len() - index + 1),
-            0,
-            0,
-        ))
+        Ok(TranscodeProgress::need_input(nonzero(input.len() - index + 1), 0, 0))
     }
 
     fn transcode_eof(
@@ -506,11 +510,7 @@ impl Transcoder for EofNeedInputDecoder {
         _output_index: usize,
     ) -> Result<TranscodeProgress, Self::Error> {
         let remaining = input.len() - index - self.eof_read;
-        Ok(TranscodeProgress::need_input(
-            utils_crate::nonzero(remaining + 1),
-            self.eof_read,
-            0,
-        ))
+        Ok(TranscodeProgress::need_input(nonzero(remaining + 1), self.eof_read, 0))
     }
 
     fn finish(&mut self, _out: &mut [u16], _index: usize) -> Result<usize, Self::Error> {
@@ -747,16 +747,16 @@ fn test_async_transcode_decode_input_refills_and_decodes() -> io::Result<()> {
 
 #[test]
 fn test_async_transcode_wake_driver_rejects_unnotified_pending() {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        super::internal::complete_when_woken(std::future::poll_fn::<(), _>(|_| Poll::Pending))
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        super::internal::complete_when_woken(poll_fn::<(), _>(|_| Poll::Pending))
     }));
     assert!(result.is_err());
 }
 
 #[test]
 fn test_async_transcode_wake_driver_repolls_only_after_notification() {
-    let polls = std::cell::Cell::new(0);
-    let value = super::internal::complete_when_woken(std::future::poll_fn(|cx| {
+    let polls = Cell::new(0);
+    let value = super::internal::complete_when_woken(poll_fn(|cx| {
         let count = polls.get() + 1;
         polls.set(count);
         if count == 1 {
@@ -777,16 +777,19 @@ fn test_async_transcode_wake_refill_completes_after_pending() {
     assert_eq!([0x5a], input.unread());
 }
 
+/// Shared readiness and waker state for the latest-waker input fixture.
 #[derive(Debug, Default)]
 struct WakeGate {
     ready: bool,
     waker: Option<Waker>,
 }
 
+/// Async input fixture that wakes only the most recently registered task.
 #[derive(Debug, Clone, Default)]
 struct LatestWakerInput(Arc<Mutex<WakeGate>>);
 
 impl LatestWakerInput {
+    /// Marks the source ready and wakes the task waiting on its latest poll.
     fn release(&self) {
         let waker = {
             let mut gate = self.0.lock().expect("wake gate lock");
@@ -823,8 +826,8 @@ fn test_async_transcode_wake_latest_refill_waker() {
     let mut input = AsyncTranscodeDecodeInput::with_capacity(source.clone(), 1);
     let a = Arc::new(super::internal::WakeCount::default());
     let b = Arc::new(super::internal::WakeCount::default());
-    let wa = std::task::Waker::from(a.clone());
-    let wb = std::task::Waker::from(b.clone());
+    let wa = Waker::from(a.clone());
+    let wb = Waker::from(b.clone());
     let mut ca = Context::from_waker(&wa);
     let mut cb = Context::from_waker(&wb);
     let mut future = Box::pin(input.fill_more_async());
@@ -848,7 +851,7 @@ fn test_async_transcode_decode_input_preserves_incomplete_eof_suffix() -> io::Re
     let step = complete(input.transcode_async(&mut decoder, &mut map_error, &mut output, 0, 1))?;
 
     assert_eq!(
-        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(utils_crate::nonzero(2), 0, 0,)),
+        AsyncTranscodeDecodeStep::Progress(TranscodeProgress::need_input(nonzero(2), 0, 0)),
         step
     );
     assert_eq!([0x12], input.unread());
@@ -925,7 +928,7 @@ fn test_async_transcode_decode_input_drives_complete_prefix_and_eof_tail() -> io
         written,
         1,
     )?;
-    assert_eq!(TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0), tail);
+    assert_eq!(TranscodeProgress::need_output(nonzero(2), 0, 0), tail);
     let tail = input.transcode_eof_step(
         &mut decoder,
         &mut |error| io::Error::new(io::ErrorKind::InvalidData, error),
@@ -1206,7 +1209,7 @@ fn test_async_transcode_decode_input_dispatches_empty_eof_and_retries_output() -
     );
     assert_eq!(0, decoder.eof_calls);
     assert_eq!(
-        TranscodeProgress::need_output(utils_crate::nonzero(2), 0, 0),
+        TranscodeProgress::need_output(nonzero(2), 0, 0),
         input.transcode_eof_step(&mut decoder, &mut map_error, &mut output, 0, 1)?,
     );
     assert_eq!(1, decoder.eof_calls);

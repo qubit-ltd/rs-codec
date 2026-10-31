@@ -49,6 +49,10 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// encoders can use [`Self::reset`], [`Self::transcode`], and [`Self::finish`]
 /// explicitly.
 ///
+/// Pending units should be flushed or recovered before this adapter is
+/// dropped. Its wrapped buffer only makes a best-effort drain during drop,
+/// skips that drain after an inner I/O panic, and ignores any output error.
+///
 /// # Type Parameters
 ///
 /// * `O` - Wrapped unit output.
@@ -105,6 +109,7 @@ use crate::value::codec_value_lifecycle::max_complete_encode_units;
 /// `finish` commits final units, drains the buffered output, and flushes the
 /// wrapped sink. Use `finish_to_buffer` followed by `flush` when those steps
 /// need to be controlled separately.
+#[must_use = "flush or recover pending output before dropping the adapter"]
 pub struct TranscodeEncodeOutput<O>
 where
     O: Output,
@@ -128,7 +133,12 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the default buffer requires
+    /// `O::Item::default()` or `O::Item::clone()` and either operation panics,
+    /// or if the default backing length exceeds `Vec`'s supported capacity.
     pub fn new(inner: O) -> Self {
         Self {
             output: BufferedOutput::new(inner),
@@ -145,7 +155,12 @@ where
     /// # Returns
     ///
     /// A new buffered encoder output.
-    #[must_use]
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics, or if the requested
+    /// backing length exceeds `Vec`'s supported capacity.
     pub fn with_capacity(inner: O, capacity: usize) -> Self {
         Self {
             output: BufferedOutput::with_capacity(inner, capacity),
@@ -159,14 +174,19 @@ where
     /// * `inner` - Unit output written by this adapter.
     /// * `capacity` - Requested internal unit buffer capacity.
     ///
+    /// # Returns
+    ///
+    /// A buffered adapter owning `inner` on success.
+    ///
     /// # Errors
     ///
     /// Returns an allocation error when the requested buffer cannot be
     /// allocated.
     ///
-    /// # Returns
+    /// # Panics
     ///
-    /// A buffered adapter owning `inner` on success.
+    /// Panics if initializing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn try_with_capacity(inner: O, capacity: usize) -> CoreResult<Self, TryReserveError> {
         Ok(Self {
             output: BufferedOutput::try_with_capacity(inner, capacity)?,
@@ -237,6 +257,11 @@ where
     ///
     /// Returns allocation errors mapped to [`ErrorKind::OutOfMemory`], or I/O
     /// errors from the wrapped output while delivering pending units.
+    ///
+    /// # Panics
+    ///
+    /// Panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn ensure_spare_capacity(&mut self, count: usize) -> Result<()> {
         self.output.try_reserve_capacity(count).map_err(allocation_error)?;
         self.output.ensure_spare_capacity(count)
@@ -318,7 +343,9 @@ where
     ///
     /// Panics when the codec violates its declared reset, value-width, or
     /// finish bounds, or when `encode` writes a length different from
-    /// `encode_len` in the same reset state.
+    /// `encode_len` in the same reset state. Also panics if growing the buffer
+    /// requires `O::Item::default()` or `O::Item::clone()` and either
+    /// operation panics.
     pub fn write_encoded_with<C, M>(&mut self, codec: &mut C, value: &C::Value, mut map_error: M) -> Result<()>
     where
         C: Codec<Unit = O::Item>,
@@ -374,6 +401,8 @@ where
     /// # Panics
     ///
     /// Panics when `encoder` writes more than its declared reset bound.
+    /// Also panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn reset<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
@@ -408,6 +437,12 @@ where
     /// and returns complete progress without delivering pending units or
     /// calling the encoder.
     ///
+    /// # Type Parameters
+    ///
+    /// * `E` - Encoder producing the wrapped output unit type.
+    /// * `M` - Mapper from encoder errors into I/O errors.
+    /// * `Value` - Source value type accepted by the encoder.
+    ///
     /// # Parameters
     ///
     /// * `encoder` - Encoder that processes one progress step.
@@ -432,6 +467,11 @@ where
     /// recovery protocol. Earlier pending units retain the wrapped output's
     /// recovery contract; reset starts a new logical stream and does not undo
     /// output already delivered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     ///
     /// # Examples
     ///
@@ -581,6 +621,11 @@ where
     /// output remains subject to the wrapped output's recovery contract, and
     /// reset starts a new logical stream without undoing output already
     /// delivered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     ///
     /// # Examples
     ///
@@ -738,6 +783,8 @@ where
     /// # Panics
     ///
     /// Panics when the encoder exceeds its declared finish-output bound.
+    /// Also panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn finish<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,
@@ -773,6 +820,8 @@ where
     /// # Panics
     ///
     /// Panics when `encoder` writes more units than its declared finish bound.
+    /// Also panics if growing the buffer requires `O::Item::default()` or
+    /// `O::Item::clone()` and either operation panics.
     pub fn finish_to_buffer<E, M, Value>(&mut self, encoder: &mut E, map_error: &mut M) -> Result<()>
     where
         E: Transcoder<Input = Value, Output = O::Item>,

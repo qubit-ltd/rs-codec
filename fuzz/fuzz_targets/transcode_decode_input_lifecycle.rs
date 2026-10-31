@@ -38,6 +38,8 @@ fuzz_target!(|data: &[u8]| {
     run_case(&short_tail, actions);
 });
 
+/// Exercises decode input lifecycle transitions and checks their observable
+/// output.
 fn run_case(payload: &[u8], actions: &[u8]) {
     let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(payload.to_vec()), 1);
     let mut decoder = MarkerDecoder::default();
@@ -114,6 +116,8 @@ fn run_case(payload: &[u8], actions: &[u8]) {
     assert_eq!(inner.position() as usize, payload.len());
 }
 
+/// Tracks EOF calls while emitting reset and finish markers for lifecycle
+/// checks.
 #[derive(Default)]
 struct MarkerDecoder {
     eof_empty_calls: usize,

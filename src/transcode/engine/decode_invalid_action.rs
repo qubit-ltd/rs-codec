@@ -9,19 +9,6 @@
 
 use core::num::NonZeroUsize;
 
-use crate::Codec;
-
-/// Invalid-decode action type used by a codec-backed decode hook.
-///
-/// This alias binds the action's replacement value to the codec's decoded
-/// value type, so hook implementations can name their result in terms of the
-/// codec they serve.
-///
-/// # Type Parameters
-///
-/// - `C`: Codec whose decoded value is carried by replacement actions.
-pub type DecodeInvalidActionOf<C> = DecodeInvalidAction<<C as Codec>::Value>;
-
 /// Action selected after a codec reports invalid encoded input.
 ///
 /// While the stream is open, incomplete input is not an invalid-input policy

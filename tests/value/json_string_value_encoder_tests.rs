@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Tests JSON-string encoding of Serde values.
 
 use qubit_codec::JsonStringValueEncoder;
 use qubit_codec::ValueEncoder;

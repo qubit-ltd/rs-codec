@@ -67,7 +67,7 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     ///
     /// Returns a duplicate-ID error when multiple entries claim one ID.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// This example uses a local static registration; it does not submit an
     /// entry to the process-wide inventory.

@@ -26,27 +26,34 @@ impl Codec for EofAwareCodec {
     const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
     const MAX_DECODE_UNITS_PER_VALUE: usize = 2;
 
-    unsafe fn decode(&mut self, input: &[u8], index: usize) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
-        if input[index] == 0xfe && input.len() - index == 1 {
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        input_index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
+        debug_assert!(input_index < input.len());
+        if input[input_index] == 0xfe && input.len() - input_index == 1 {
             return Err(DecodeFailure::incomplete(NonZeroUsize::new(2).unwrap()));
         }
-        Ok((input[index], NonZeroUsize::MIN))
+        Ok((input[input_index], NonZeroUsize::MIN))
     }
 
     unsafe fn decode_eof(
         &mut self,
         input: &[u8],
-        index: usize,
+        input_index: usize,
     ) -> Result<(u8, NonZeroUsize), DecodeFailure<Infallible>> {
-        if input[index] == 0xfe && input.len() - index == 1 {
+        debug_assert!(input_index < input.len());
+        if input[input_index] == 0xfe && input.len() - input_index == 1 {
             return Ok((b'?', NonZeroUsize::MIN));
         }
         // SAFETY: The caller supplies the same readable range as decode.
-        unsafe { self.decode(input, index) }
+        unsafe { self.decode(input, input_index) }
     }
 
-    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, Infallible> {
-        output[index] = *value;
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], output_index: usize) -> Result<usize, Infallible> {
+        debug_assert!(output_index < output.len());
+        output[output_index] = *value;
         Ok(1)
     }
 }

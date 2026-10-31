@@ -974,7 +974,8 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the resulting decode outcome and an optional consumer result.
+    /// Returns the decode outcome and `Some` consumer result when the policy
+    /// emits a value; returns `None` when it skips the incomplete tail.
     ///
     /// # Errors
     ///

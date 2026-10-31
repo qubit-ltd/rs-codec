@@ -10,6 +10,7 @@
 
 use core::convert::Infallible;
 use std::io::Cursor;
+use std::io::Error;
 
 use libfuzzer_sys::fuzz_target;
 use qubit_codec::CapacityError;
@@ -18,7 +19,7 @@ use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
 use qubit_codec::TranscodeProgress;
 use qubit_codec::Transcoder;
-use qubit_utils as utils_crate;
+use qubit_utils::nonzero;
 
 const RESET: u8 = 0xa1;
 const FINISH: u8 = 0xf1;
@@ -30,7 +31,7 @@ fuzz_target!(|data: &[u8]| {
     let mut output = TranscodeEncodeOutput::with_capacity(Cursor::new(Vec::new()), 1);
     let mut encoder = MarkerEncoder;
     let mut expected = Vec::new();
-    let mut mapper = |_error: TranscodeEncodeError<Infallible, u8>| std::io::Error::other("marker encoder cannot fail");
+    let mut mapper = |_error: TranscodeEncodeError<Infallible, u8>| Error::other("marker encoder cannot fail");
     let mut cursor = 0;
 
     while cursor < data.len() {
@@ -94,7 +95,7 @@ impl Transcoder for MarkerEncoder {
         if copied == input.len() {
             return Ok(TranscodeProgress::complete(copied, copied));
         }
-        Ok(TranscodeProgress::need_output(utils_crate::nonzero(1), copied, copied))
+        Ok(TranscodeProgress::need_output(nonzero(1), copied, copied))
     }
     fn finish(&mut self, output: &mut [u8], index: usize) -> Result<usize, Self::Error> {
         output[index] = FINISH;

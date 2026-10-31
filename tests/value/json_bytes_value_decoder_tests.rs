@@ -85,7 +85,9 @@ fn test_rejects_malformed_json_bytes() {
 #[test]
 fn test_json_bytes_utf8_decoder_target_controls_validation() {
     let input = b"\"\xff\"";
-    let output = JsonBytesValueDecoder::<OwnedJsonBytes>::new().decode(input).unwrap();
+    let output = JsonBytesValueDecoder::<OwnedJsonBytes>::new()
+        .decode(input)
+        .expect("valid JSON string bytes should decode");
     assert_eq!(vec![0xff], output.0);
     assert!(JsonBytesValueDecoder::<String>::new().decode(input).is_err());
 }

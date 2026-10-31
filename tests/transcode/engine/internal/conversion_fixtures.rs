@@ -1089,12 +1089,14 @@ impl TranscodeEncodeHooks<TargetCodec> for FactoryEncodeHooks {
 pub(in crate::transcode::engine) type CopyConvertEngine =
     TranscodeConvertEngine<SourceCodec, TargetCodec, StrictDecodeHooks, StrictEncodeHooks>;
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_copy_engine() -> CopyConvertEngine {
     let mut engine = TranscodeConvertEngine::new(SourceCodec, TargetCodec, StrictDecodeHooks, StrictEncodeHooks);
     engine.reset(&mut [], 0).expect("reset before copy conversion");
     engine
 }
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_error_path_engine(
     hooks: ErrorPathHooks,
 ) -> TranscodeConvertEngine<SourceCodec, TargetCodec, ErrorPathDecodeHooks, ErrorPathEncodeHooks> {
@@ -1112,6 +1114,7 @@ pub(in crate::transcode::engine) fn new_error_path_engine(
     TranscodeConvertEngine::new(SourceCodec, TargetCodec, decode_hooks, encode_hooks)
 }
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_finish_engine(
     hooks: FinishHooks,
 ) -> TranscodeConvertEngine<SourceCodec, TargetCodec, FinishDecodeHooks, StrictEncodeHooks> {
@@ -1129,6 +1132,7 @@ pub(in crate::transcode::engine) fn new_finish_engine(
     engine
 }
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_batch_finish_engine()
 -> TranscodeConvertEngine<SourceCodec, TargetCodec, BatchFinishDecodeHooks, StrictEncodeHooks> {
     let mut engine = TranscodeConvertEngine::new(
@@ -1141,6 +1145,7 @@ pub(in crate::transcode::engine) fn new_batch_finish_engine()
     engine
 }
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_finish_encode_engine()
 -> TranscodeConvertEngine<SourceCodec, TargetCodec, StrictDecodeHooks, FinishEncodeHooks> {
     let mut engine = TranscodeConvertEngine::new(
@@ -1153,6 +1158,7 @@ pub(in crate::transcode::engine) fn new_finish_encode_engine()
     engine
 }
 
+#[must_use]
 pub(in crate::transcode::engine) fn new_repair_engine(
     action: RepairAction,
 ) -> TranscodeConvertEngine<ErrorSourceCodec, TargetCodec, RepairDecodeHooks, StrictEncodeHooks> {

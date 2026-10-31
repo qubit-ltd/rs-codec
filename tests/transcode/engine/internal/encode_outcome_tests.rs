@@ -30,6 +30,11 @@ fn test_encode_outcome_reports_output_pressure_through_progress() {
             required: crate::nonzero(1),
         },
         progress.status(),
+        "output pressure should report the required capacity",
     );
-    assert_eq!((0, 0), (progress.read(), progress.written()));
+    assert_eq!(
+        (0, 0),
+        (progress.read(), progress.written()),
+        "output pressure should leave input and output untouched",
+    );
 }

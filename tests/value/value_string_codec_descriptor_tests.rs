@@ -61,6 +61,7 @@ impl ValueEncoder<String> for MirrorTextStringCodec {
     }
 }
 
+/// Stateful string codec used to verify that descriptors create fresh codecs.
 #[derive(Default)]
 struct FreshStringCodec {
     calls: usize,
@@ -99,6 +100,7 @@ static U32_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::
 static TEXT_DESCRIPTOR: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<MirrorTextStringCodec, String>();
 static FRESH_STRING: ValueStringCodecDescriptor = ValueStringCodecDescriptor::of::<FreshStringCodec, String>();
 
+/// Borrowing codec used to verify owned descriptor values and preserved errors.
 #[derive(Default)]
 struct ReviewBorrowedCodec;
 
@@ -123,6 +125,7 @@ impl ValueDecoder<str> for ReviewBorrowedCodec {
     }
 }
 
+/// String borrowing codec used to exercise borrowed `str` descriptor inputs.
 #[derive(Default)]
 struct ReviewBorrowedTextCodec;
 
@@ -147,6 +150,7 @@ impl ValueDecoder<str> for ReviewBorrowedTextCodec {
 static REVIEW_BORROWED: ValueStringCodecDescriptor =
     ValueStringCodecDescriptor::of_borrowed::<ReviewBorrowedCodec, Vec<u8>, [u8]>();
 
+/// Local-only codec proving descriptors do not require thread-safe values.
 #[derive(Default)]
 struct LocalValueCodec {
     _local: Rc<()>,

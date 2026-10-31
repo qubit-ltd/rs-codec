@@ -109,7 +109,7 @@ impl<'a, Input, Output> TranscodeState<'a, Input, Output> {
     /// Returns the immutable input slice and mutable output slice. This helper
     /// lets callers borrow the two disjoint fields at the same time.
     #[inline]
-    #[must_use]
+    #[must_use = "use the returned slices to access the transcode buffers"]
     pub(in crate::transcode) fn input_output_mut(&mut self) -> (&[Input], &mut [Output]) {
         (self.input, self.output)
     }

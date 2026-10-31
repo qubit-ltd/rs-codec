@@ -144,6 +144,7 @@ impl<'a, Unit, Value> DecodeState<'a, Unit, Value> {
     /// - `required`: Current minimum total source units required before
     ///   retrying from the current input position. A later retry may raise this
     ///   lower bound.
+    ///
     /// # Returns
     ///
     /// Returns progress at the current decode cursor.

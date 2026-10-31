@@ -229,12 +229,15 @@ where
     /// Returned consuming actions must not consume more than
     /// `context.available()` input units.
     ///
-    /// The engine treats violations as hook bugs and panics.
-    ///
     /// # Errors
     ///
     /// Returns [`crate::TranscodeDecodeError`] when the policy rejects the
     /// input with a codec-domain error.
+    ///
+    /// # Panics
+    ///
+    /// The engine panics if a consuming action exceeds
+    /// `context.available()` input units.
     fn handle_invalid_decode(
         &mut self,
         codec: &mut C,

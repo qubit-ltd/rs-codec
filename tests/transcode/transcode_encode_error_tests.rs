@@ -35,12 +35,15 @@ fn test_encode_error_accessors_mapping_and_validation() {
     let finish = TranscodeEncodeError::<&str, char>::domain_finish("finish");
     let no_context = TranscodeEncodeError::<&str, char>::unencodable_without_context(8);
 
-    assert!(!failure.is_domain());
-    assert!(domain.is_domain());
-    assert!(matches!(
-        trailing.failure_ref(),
-        Some(TranscodeFailure::TrailingInput { .. })
-    ));
+    assert!(
+        !failure.is_domain(),
+        "framework failures must not be classified as domain errors"
+    );
+    assert!(domain.is_domain(), "domain errors must be classified as domain errors");
+    assert!(
+        matches!(trailing.failure_ref(), Some(TranscodeFailure::TrailingInput { .. })),
+        "trailing input must expose its framework failure"
+    );
     assert_eq!(None, domain.failure_ref());
     assert_eq!(None, failure.domain_error_ref());
     assert_eq!(
@@ -79,30 +82,39 @@ fn test_encode_error_accessors_mapping_and_validation() {
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
         TranscodeFailure::ensure_output_index(2, 2).map_err(TranscodeEncodeError::<&str, char>::from)
     );
-    assert!(matches!(
-        TranscodeFailure::ensure_output_index(2, 3).map_err(TranscodeEncodeError::<&str, char>::from),
-        Err(TranscodeEncodeError::Failure(
-            TranscodeFailure::InvalidOutputIndex { .. }
-        ))
-    ));
+    assert!(
+        matches!(
+            TranscodeFailure::ensure_output_index(2, 3).map_err(TranscodeEncodeError::<&str, char>::from),
+            Err(TranscodeEncodeError::Failure(
+                TranscodeFailure::InvalidOutputIndex { .. }
+            ))
+        ),
+        "an output index beyond the output length must be rejected"
+    );
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
         TranscodeFailure::ensure_transcode_indices(2, 1, 2, 1).map_err(TranscodeEncodeError::<&str, char>::from),
     );
-    assert!(matches!(
-        TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1).map_err(TranscodeEncodeError::<&str, char>::from),
-        Err(TranscodeEncodeError::Failure(
-            TranscodeFailure::InvalidInputIndex { .. }
-        ))
-    ));
+    assert!(
+        matches!(
+            TranscodeFailure::ensure_transcode_indices(2, 3, 2, 1).map_err(TranscodeEncodeError::<&str, char>::from),
+            Err(TranscodeEncodeError::Failure(
+                TranscodeFailure::InvalidInputIndex { .. }
+            ))
+        ),
+        "an input index beyond the input length must be rejected"
+    );
     assert_eq!(
         Ok::<(), TranscodeEncodeError<&str, char>>(()),
         TranscodeFailure::ensure_output_capacity(3, 1, 2).map_err(TranscodeEncodeError::<&str, char>::from),
     );
-    assert!(matches!(
-        TranscodeFailure::ensure_output_capacity(3, 1, 3).map_err(TranscodeEncodeError::<&str, char>::from),
-        Err(TranscodeEncodeError::Failure(
-            TranscodeFailure::InsufficientOutput { .. }
-        ))
-    ));
+    assert!(
+        matches!(
+            TranscodeFailure::ensure_output_capacity(3, 1, 3).map_err(TranscodeEncodeError::<&str, char>::from),
+            Err(TranscodeEncodeError::Failure(
+                TranscodeFailure::InsufficientOutput { .. }
+            ))
+        ),
+        "insufficient output capacity must be rejected"
+    );
 }

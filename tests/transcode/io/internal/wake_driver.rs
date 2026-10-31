@@ -15,6 +15,7 @@ use std::task::Poll;
 use std::task::Wake;
 use std::task::Waker;
 
+/// Counts notifications sent through the current task's waker.
 #[derive(Default)]
 pub(crate) struct WakeCount(pub(crate) AtomicUsize);
 
@@ -28,6 +29,10 @@ impl Wake for WakeCount {
     }
 }
 
+/// Polls a fixture future until it completes, enforcing wake-before-repoll.
+///
+/// Panics if a pending poll does not notify the waker or if the future exceeds
+/// the bounded number of polls.
 pub(crate) fn complete_when_woken<F: Future>(future: F) -> F::Output {
     let notifications = Arc::new(WakeCount::default());
     let waker = Waker::from(Arc::clone(&notifications));

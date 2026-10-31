@@ -210,7 +210,7 @@ impl<'a, Input, Output> ConvertState<'a, Input, Output> {
     /// Panics when `read` exceeds the remaining input units.
     #[inline]
     pub(crate) fn advance_input(&mut self, read: usize) {
-        assert!(read <= self.available_input(), "conversion step read beyond input");
+        assert!(read <= self.available_input(), "conversion step read beyond input",);
         self.state.advance_input(read);
     }
 

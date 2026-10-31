@@ -30,9 +30,9 @@ use qubit_utils::allocation_error;
 use qubit_utils::try_reserve_vec;
 
 use super::internal::CodecDecodeDriver;
+use super::internal::capacity_error_to_invalid_data;
 use super::internal::validate_decode_progress;
 use super::internal::validate_eof_decode_progress;
-use crate::CapacityError;
 use crate::Codec;
 use crate::DecodeLifecycleOutput;
 use crate::DecodeLifecycleProgress;
@@ -60,7 +60,9 @@ use crate::codec::assert_unit_bounds;
 /// use core::convert::Infallible;
 /// use core::num::NonZeroUsize;
 /// use std::io::Cursor;
-/// use qubit_codec::{Codec, DecodeFailure, TranscodeDecodeInput};
+/// use qubit_codec::Codec;
+/// use qubit_codec::DecodeFailure;
+/// use qubit_codec::TranscodeDecodeInput;
 ///
 /// struct Identity;
 /// impl Codec for Identity {
@@ -723,7 +725,7 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder.max_reset_output_len().map_err(capacity_to_io_error)?;
+        let required = decoder.max_reset_output_len().map_err(capacity_error_to_invalid_data)?;
         let output_end = SliceRange::checked_range_end(
             output.len(),
             output_index,
@@ -915,7 +917,9 @@ where
         D: Transcoder<Input = I::Item, Output = Value>,
         M: FnMut(D::Error) -> Error,
     {
-        let required = decoder.max_finish_output_len().map_err(capacity_to_io_error)?;
+        let required = decoder
+            .max_finish_output_len()
+            .map_err(capacity_error_to_invalid_data)?;
         // Validate the caller-supplied count range first (InvalidInput).
         let output_end = SliceRange::checked_range_end(
             output.len(),
@@ -1155,17 +1159,4 @@ where
             .field("input", &self.input)
             .finish()
     }
-}
-
-/// Converts a capacity planning failure into an I/O error.
-///
-/// # Parameters
-///
-/// - `error`: Capacity failure preserved as the I/O error source.
-///
-/// # Returns
-///
-/// Returns an `InvalidData` I/O error owning the capacity failure.
-fn capacity_to_io_error(error: CapacityError) -> Error {
-    Error::new(ErrorKind::InvalidData, error)
 }

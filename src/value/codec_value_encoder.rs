@@ -104,8 +104,10 @@ where
     ///
     /// The codec borrowed for as long as this adapter is shared, without
     /// cloning.
+    ///
+    /// The returned reference should be used to inspect the wrapped codec.
     #[inline]
-    #[must_use]
+    #[must_use = "use the reference to inspect the wrapped codec"]
     pub const fn codec(&self) -> &C {
         &self.codec
     }
@@ -115,11 +117,13 @@ where
     /// The next value operation starts a fresh codec lifecycle, so mutations
     /// are applied to the following operation.
     ///
+    /// The returned reference should be used to update the wrapped codec.
+    ///
     /// # Returns
     ///
     /// An exclusive codec borrow that prevents simultaneous adapter operations.
     #[inline]
-    #[must_use]
+    #[must_use = "use the reference to update the wrapped codec"]
     pub fn codec_mut(&mut self) -> &mut C {
         &mut self.codec
     }
