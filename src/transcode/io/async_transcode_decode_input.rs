@@ -187,6 +187,12 @@ where
     /// # Returns
     ///
     /// Returns a new buffered asynchronous decoder input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the default buffer requires `I::Item::default()`
+    /// or `I::Item::clone()` and either operation panics, or if the default
+    /// backing length exceeds `Vec`'s supported capacity.
     #[inline]
     pub fn new(inner: I) -> Self {
         Self {
@@ -204,6 +210,12 @@ where
     /// # Returns
     ///
     /// Returns a new buffered asynchronous decoder input.
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the buffer requires `I::Item::default()` or
+    /// `I::Item::clone()` and either operation panics, or if the requested
+    /// backing length exceeds `Vec`'s supported capacity.
     #[inline]
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
@@ -227,6 +239,12 @@ where
     ///
     /// Returns the allocation error when the internal buffer cannot be
     /// allocated.
+    ///
+    /// # Panics
+    ///
+    /// Panics if initializing the buffer requires `I::Item::default()` or
+    /// `I::Item::clone()` and either operation panics. Allocation failures are
+    /// returned as errors; panics from element initialization are not caught.
     #[inline]
     pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {

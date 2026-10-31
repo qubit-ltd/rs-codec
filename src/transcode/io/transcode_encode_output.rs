@@ -186,7 +186,8 @@ where
     /// # Panics
     ///
     /// Panics if initializing the buffer requires `O::Item::default()` or
-    /// `O::Item::clone()` and either operation panics.
+    /// `O::Item::clone()` and either operation panics. Allocation failures are
+    /// returned as errors; panics from element initialization are not caught.
     pub fn try_with_capacity(inner: O, capacity: usize) -> CoreResult<Self, TryReserveError> {
         Ok(Self {
             output: BufferedOutput::try_with_capacity(inner, capacity)?,
