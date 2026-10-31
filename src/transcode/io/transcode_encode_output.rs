@@ -289,7 +289,30 @@ where
     /// Returns I/O errors from the wrapped output, `InvalidInput` when the
     /// codec output bound overflows or the value is outside the codec domain,
     /// or the error returned by `map_error` for codec encode, reset, and finish
-    /// failures.
+    /// failures. A mapped codec error is wrapped in
+    /// [`crate::TranscodeDomainError`] so its reset, main, or finish phase
+    /// remains available through the returned I/O error's source chain. The
+    /// mapped error itself is retained as that wrapper's source, including any
+    /// custom payload or OS error code.
+    ///
+    /// Capacity planning fails before the codec runs. Preparing the spare
+    /// buffer can first deliver older pending units to the wrapped output; it
+    /// is not a transaction boundary for the whole call. If reset, encode, or
+    /// finish fails, the codec may already have changed state, but units
+    /// written into this call's spare window are not committed to the
+    /// adapter. Older pending units remain subject to the wrapped output's
+    /// buffering contract, and units delivered while preparing capacity
+    /// cannot be rolled back. A successful call commits the actual written
+    /// count to pending output but does not flush the sink. Do not replay
+    /// the value after an error unless the codec provides a recovery
+    /// protocol; reset does not undo state changes or output already
+    /// delivered.
+    ///
+    /// Callers that previously downcast the outer I/O error directly to their
+    /// mapped payload should first downcast it to
+    /// `TranscodeDomainError<std::io::Error>`, then inspect its `source()`.
+    /// For mapped OS errors, `raw_os_error()` is available on that inner
+    /// source.
     ///
     /// # Panics
     ///

@@ -501,6 +501,24 @@ The returned `written()` units are already committed to the adapter; do not adva
 
 Errors do not provide general transactional rollback or complete progress. A range or capacity error occurs before the encoder runs, although preparing capacity may deliver older pending units. A sink delivery error follows the wrapped output's pending/recovery contract. If the encoder or progress validation fails, the encoder may already have advanced, while units written by that failed call are not committed to this adapter's pending output. Do not replay the original input range unless that encoder defines a recovery protocol. A successful reset may start a new logical stream; it does not undo output already delivered from the old one.
 
+`write_encoded_with` follows the same boundary for a complete single-value lifecycle. Capacity planning happens before the codec runs, but preparing the spare buffer may deliver older pending units first. A reset, encode, or finish error leaves units written by the failed call uncommitted; it does not restore codec state, and earlier output delivered while preparing capacity cannot be rolled back. Successful output is added to pending units and is not sent to the sink until the normal output contract delivers it. After an error, retry only if the concrete codec defines how to recover its state.
+
+For codec-domain failures, the returned `io::Error` now owns a `TranscodeDomainError<io::Error>`, preserving the reset, main, or finish phase. Code that previously downcast the outer error directly to a mapper payload should inspect the wrapper first:
+
+```rust
+use std::io::Error;
+use qubit_codec::TranscodeDomainError;
+
+fn mapped_source(error: &Error) -> Option<&Error> {
+    error
+        .get_ref()?
+        .downcast_ref::<TranscodeDomainError<Error>>()
+        .map(TranscodeDomainError::source)
+}
+```
+
+The wrapper's `source()` is the original mapper result, so custom payloads remain downcastable there and mapped OS errors retain their `raw_os_error()` there. The outer error keeps the mapper's `ErrorKind`; its display text now includes the codec phase, and its own `raw_os_error()` is `None` for a mapped OS error. Sink I/O, allocation, and bounds failures keep their existing mapping and do not receive a codec phase.
+
 ## Register codecs for runtime lookup
 
 Enable feature `registry` when several crates must discover bidirectional whole-value codecs (string or bytes wire) by stable ID at link time:

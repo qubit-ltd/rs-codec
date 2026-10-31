@@ -83,7 +83,11 @@ fn map_encode_value_error<E, Value>(
     map_error: &mut dyn FnMut(E) -> Error,
 ) -> Error {
     match error {
-        TranscodeEncodeError::Domain(error) => map_error(error.into_source()),
+        TranscodeEncodeError::Domain(error) => {
+            let contextual = error.map_source(&mut *map_error);
+            let kind = contextual.source().kind();
+            Error::new(kind, contextual)
+        }
         TranscodeEncodeError::Unencodable { .. } => Error::new(ErrorKind::InvalidInput, "codec cannot encode value"),
         TranscodeEncodeError::Failure(_) => Error::new(ErrorKind::InvalidInput, "codec output bound overflow"),
     }

@@ -497,6 +497,24 @@ fn main() -> Result<(), Error> {
 
 错误不提供通用事务回滚或完整进度。范围或容量预检错误发生在 encoder 调用前，但准备容量时可能已交付旧 pending；sink 交付错误遵循底层输出的 pending 与恢复契约。如果 encoder 或进度验证失败，encoder 可能已经推进，但失败调用写入的单位不会提交到该 bridge 的 pending 输出。除非具体 encoder 定义了恢复协议，否则不要从原输入范围起点重放。成功的 reset 可以开始新的逻辑流，但不能撤销旧流已交付的输出。
 
+`write_encoded_with` 的完整单值生命周期遵循相同边界。容量规划发生在 codec 运行前，但准备 spare buffer 时可能先交付旧 pending。reset、encode 或 finish 出错时，本次调用写入的单位不会提交；codec 状态不会回滚，准备容量时已经交付的旧输出也无法撤销。成功写入的单位只会加入 pending，并按正常输出契约交付给 sink。发生错误后，只有在具体 codec 定义了状态恢复方式时才重试。
+
+codec 领域错误现在由 `io::Error` 包含一个 `TranscodeDomainError<io::Error>`，从而保留 reset、main 或 finish 阶段。若原先直接把外层错误 downcast 为 mapper 返回的 payload，应先检查阶段包装：
+
+```rust
+use std::io::Error;
+use qubit_codec::TranscodeDomainError;
+
+fn mapped_source(error: &Error) -> Option<&Error> {
+    error
+        .get_ref()?
+        .downcast_ref::<TranscodeDomainError<Error>>()
+        .map(|context| context.source())
+}
+```
+
+包装内的 `source()` 是 mapper 返回的原始错误，因此可继续 downcast 自定义 payload，也可从这里读取 mapper OS 错误的 `raw_os_error()`。外层错误保留 mapper 的 `ErrorKind`；Display 现在包含 codec 阶段，而映射 OS 错误时外层 `raw_os_error()` 为 `None`。sink I/O、分配和上界错误保持原有映射，不会伪造 codec 阶段。
+
 ## 在链接期注册 codec 供运行时查找
 
 当多个 crate 需要按稳定 ID 在链接期发现双向 value codec（字符串或字节 whole-value）时，启用 `registry` feature：

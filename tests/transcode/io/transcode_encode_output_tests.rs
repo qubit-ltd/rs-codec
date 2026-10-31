@@ -24,6 +24,7 @@ use qubit_codec as codec;
 use qubit_codec::CapacityError;
 use qubit_codec::Codec;
 use qubit_codec::DecodeFailure;
+use qubit_codec::TranscodeDomainError;
 use qubit_codec::TranscodeEncodeError;
 use qubit_codec::TranscodeEncodeOutput;
 use qubit_codec::TranscodeEncoder;
@@ -2252,7 +2253,203 @@ fn test_buffered_encode_output_write_encoded_maps_domain_error() {
         .expect_err("domain encode failure should be mapped");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad output index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad output index", error.to_string());
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LifecycleErrorPhase {
+    Reset,
+    Main,
+    Finish,
+}
+
+#[derive(Debug, Eq, PartialEq, ThisError)]
+#[error("marker error {0}")]
+struct MarkerError(u8);
+
+#[derive(Debug)]
+struct FailingLifecycleCodec {
+    phase: Option<LifecycleErrorPhase>,
+    reset_calls: usize,
+    main_calls: usize,
+    finish_calls: usize,
+}
+
+impl FailingLifecycleCodec {
+    fn new(phase: Option<LifecycleErrorPhase>) -> Self {
+        Self {
+            phase,
+            reset_calls: 0,
+            main_calls: 0,
+            finish_calls: 0,
+        }
+    }
+}
+
+impl Codec for FailingLifecycleCodec {
+    type Value = u16;
+    type Unit = u16;
+    type DecodeError = MarkerError;
+    type EncodeError = MarkerError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_RESET_UNITS: usize = 1;
+    const MAX_ENCODE_FINISH_UNITS: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u16],
+        input_index: usize,
+    ) -> Result<(u16, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
+        Ok((input[input_index], crate::nonzero(1)))
+    }
+
+    unsafe fn encode_reset(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::EncodeError> {
+        self.reset_calls += 1;
+        if self.phase == Some(LifecycleErrorPhase::Reset) {
+            return Err(MarkerError(7));
+        }
+        output[output_index] = 0xa001;
+        Ok(1)
+    }
+
+    unsafe fn encode(
+        &mut self,
+        value: &u16,
+        output: &mut [u16],
+        output_index: usize,
+    ) -> Result<usize, Self::EncodeError> {
+        self.main_calls += 1;
+        if self.phase == Some(LifecycleErrorPhase::Main) {
+            output[output_index] = 0xa002;
+            return Err(MarkerError(7));
+        }
+        output[output_index] = *value;
+        Ok(1)
+    }
+
+    unsafe fn encode_finish(&mut self, output: &mut [u16], output_index: usize) -> Result<usize, Self::EncodeError> {
+        self.finish_calls += 1;
+        if self.phase == Some(LifecycleErrorPhase::Finish) {
+            output[output_index] = 0xa003;
+            return Err(MarkerError(7));
+        }
+        output[output_index] = 0xa004;
+        Ok(1)
+    }
+}
+
+#[test]
+fn test_write_encoded_error_preserves_phase_and_mapped_source() {
+    for phase in [
+        LifecycleErrorPhase::Reset,
+        LifecycleErrorPhase::Main,
+        LifecycleErrorPhase::Finish,
+    ] {
+        let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 16);
+        let mut codec = FailingLifecycleCodec::new(Some(phase));
+        let mut mapper_calls = 0;
+        let error = output
+            .write_encoded_with(&mut codec, &0x1234, |_| {
+                mapper_calls += 1;
+                Error::new(ErrorKind::PermissionDenied, MarkerError(7))
+            })
+            .expect_err("configured lifecycle phase must fail");
+
+        assert_eq!(1, mapper_calls);
+        assert_eq!(ErrorKind::PermissionDenied, error.kind());
+        let context = error
+            .get_ref()
+            .and_then(|value| value.downcast_ref::<TranscodeDomainError<Error>>())
+            .expect("codec phase must survive I/O mapping");
+        assert_eq!(
+            Some(&MarkerError(7)),
+            context
+                .source()
+                .get_ref()
+                .and_then(|value| value.downcast_ref::<MarkerError>()),
+        );
+        match (phase, context) {
+            (LifecycleErrorPhase::Reset, TranscodeDomainError::Reset { .. }) => {
+                assert_eq!((1, 0, 0), (codec.reset_calls, codec.main_calls, codec.finish_calls));
+            }
+            (
+                LifecycleErrorPhase::Main,
+                TranscodeDomainError::Main {
+                    input_index,
+                    input_consumed,
+                    ..
+                },
+            ) => {
+                assert_eq!(0, *input_index);
+                assert_eq!(None, *input_consumed);
+                assert_eq!((1, 1, 0), (codec.reset_calls, codec.main_calls, codec.finish_calls));
+            }
+            (LifecycleErrorPhase::Finish, TranscodeDomainError::Finish { .. }) => {
+                assert_eq!((1, 1, 1), (codec.reset_calls, codec.main_calls, codec.finish_calls));
+            }
+            _ => panic!("reported lifecycle phase must match the failing hook"),
+        }
+    }
+}
+
+#[test]
+fn test_write_encoded_error_retains_mapped_os_error() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 8);
+    let mut codec = FailingLifecycleCodec::new(Some(LifecycleErrorPhase::Main));
+    let error = output
+        .write_encoded_with(&mut codec, &0x1234, |_| Error::from_raw_os_error(13))
+        .expect_err("main encode must fail");
+    assert_eq!(Error::from_raw_os_error(13).kind(), error.kind());
+    assert_eq!(None, error.raw_os_error());
+    let context = error
+        .get_ref()
+        .and_then(|value| value.downcast_ref::<TranscodeDomainError<Error>>())
+        .expect("phase wrapper must retain mapped OS error");
+    assert_eq!(Some(13), context.source().raw_os_error());
+}
+
+#[test]
+fn test_write_encoded_failure_does_not_commit_current_spare() {
+    let expected_old = [0xa001, 0x1234, 0xa004];
+    for phase in [
+        LifecycleErrorPhase::Reset,
+        LifecycleErrorPhase::Main,
+        LifecycleErrorPhase::Finish,
+    ] {
+        let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 16);
+        let mut success_codec = FailingLifecycleCodec::new(None);
+        output
+            .write_encoded_with(&mut success_codec, &0x1234, |_| Error::other("unused"))
+            .expect("old value buffers successfully");
+        let mut failing_codec = FailingLifecycleCodec::new(Some(phase));
+        let error = output
+            .write_encoded_with(&mut failing_codec, &0x5678, |_| Error::other("codec failure"))
+            .expect_err("current value must fail");
+        assert_eq!(ErrorKind::Other, error.kind());
+        output.flush().expect("only prior pending output should flush");
+        assert_eq!(expected_old, output.inner().units.as_slice());
+    }
+}
+
+#[test]
+fn test_write_encoded_failure_keeps_previously_delivered_prefix() {
+    let mut output = TranscodeEncodeOutput::with_capacity(UnitOutput::default(), 4);
+    let mut success_codec = FailingLifecycleCodec::new(None);
+    output
+        .write_encoded_with(&mut success_codec, &0x1234, |_| Error::other("unused"))
+        .expect("old value buffers successfully");
+    let mut failing_codec = FailingLifecycleCodec::new(Some(LifecycleErrorPhase::Finish));
+    let error = output
+        .write_encoded_with(&mut failing_codec, &0x5678, |_| Error::other("codec failure"))
+        .expect_err("finish must fail after old prefix delivery");
+    assert_eq!(ErrorKind::Other, error.kind());
+    assert_eq!(&[0xa001, 0x1234, 0xa004], output.inner().units.as_slice());
+    assert_eq!(4, output.spare_capacity());
+    output.flush().expect("no uncommitted current output remains");
+    assert_eq!(&[0xa001, 0x1234, 0xa004], output.inner().units.as_slice());
 }
 
 #[test]
@@ -2501,7 +2698,7 @@ fn test_buffered_encode_output_write_encoded_maps_domain_error_via_scratch() {
         .expect_err("scratch encode should map domain failures");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad output index", error.to_string());
+    assert_eq!("codec main error at input index 0: bad output index", error.to_string());
 }
 
 #[test]
@@ -2514,7 +2711,7 @@ fn test_buffered_encode_output_write_encoded_maps_finish_error_via_scratch() {
         .expect_err("scratch encode should map finish failures");
 
     assert_eq!(ErrorKind::InvalidData, error.kind());
-    assert_eq!("bad input index", error.to_string());
+    assert_eq!("codec finish error: bad input index", error.to_string());
 }
 
 #[test]
