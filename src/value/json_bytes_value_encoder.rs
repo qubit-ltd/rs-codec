@@ -50,6 +50,14 @@ pub struct JsonBytesValueEncoder<T> {
 impl<T> Copy for JsonBytesValueEncoder<T> {}
 
 impl<T> Clone for JsonBytesValueEncoder<T> {
+    /// Returns the same stateless encoder marker without constructing or
+    /// cloning a value of type `T`.
+    ///
+    /// This implementation does not require `T: Clone`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a copy of this encoder.
     #[inline]
     fn clone(&self) -> Self {
         *self
@@ -57,6 +65,14 @@ impl<T> Clone for JsonBytesValueEncoder<T> {
 }
 
 impl<T> Default for JsonBytesValueEncoder<T> {
+    /// Creates the default encoder by calling [`Self::new`].
+    ///
+    /// This implementation does not require `T: Default` and performs no
+    /// allocation.
+    ///
+    /// # Returns
+    ///
+    /// Returns a stateless encoder for values of type `T`.
     #[inline]
     fn default() -> Self {
         Self::new()

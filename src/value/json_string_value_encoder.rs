@@ -10,6 +10,8 @@
 use core::marker::PhantomData;
 
 use serde::Serialize;
+use serde_json::Error as JsonError;
+use serde_json::to_string;
 
 use super::ValueEncoder;
 
@@ -78,7 +80,9 @@ impl<T> ValueEncoder<T> for JsonStringValueEncoder<T>
 where
     T: Serialize,
 {
-    type Error = serde_json::Error;
+    /// JSON serialization error returned when `T` cannot be serialized.
+    type Error = JsonError;
+    /// UTF-8 JSON text owned by the caller.
     type Output = String;
 
     /// Serializes `input` into a compact JSON string.
@@ -95,6 +99,6 @@ where
     /// data.
     #[inline]
     fn encode(&mut self, input: &T) -> Result<Self::Output, Self::Error> {
-        serde_json::to_string(input)
+        to_string(input)
     }
 }
