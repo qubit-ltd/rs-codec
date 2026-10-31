@@ -95,6 +95,10 @@ impl Transcoder for EofRetryDecoder {
             output[output_index..output_index + 2].copy_from_slice(&[7, 8]);
             return Ok(TranscodeProgress::complete(2, 2));
         }
+        if input[index..] == [8] {
+            output[output_index] = 8;
+            return Ok(TranscodeProgress::complete(1, 1));
+        }
         assert_eq!(&input[index..], &[7]);
         Ok(TranscodeProgress::need_input(crate::nonzero(2), 0, 0))
     }
@@ -361,6 +365,54 @@ fn test_eof_tail_single_value_preflight_preserves_retry() {
         2
     );
     assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_successful_single_value_read_exits_batch_context() {
+    let source = ChunkedByteInput(VecDeque::from([Some(vec![7_u8]), None, Some(vec![8_u8])]));
+    let mut input = TranscodeDecodeInput::with_capacity(source, 2);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+
+    let mut codec = SingleByteCodec;
+    assert_eq!(input.read_decoded_with(&mut codec, map_codec_error).unwrap(), 7);
+    assert_eq!(input.unread_len(), 0);
+
+    decoder.reset(&mut [], 0).expect("reset decoder for new window");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 2];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 0, 2).unwrap(),
+        1
+    );
+    assert_eq!(output, [8, 99]);
+    assert_eq!(decoder.calls, ["ordinary", "eof"]);
+}
+
+struct SingleByteCodec;
+
+impl Codec for SingleByteCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<PairDecodeError>> {
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, PairDecodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
 }
 
 struct UnsupportedSingleValueCodec;
