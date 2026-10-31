@@ -2504,6 +2504,7 @@ impl Codec for InvalidPairReadCodec {
 #[derive(Debug, Default)]
 struct GrowingPairReadCodec {
     pass: bool,
+    incomplete_attempts: usize,
 }
 
 impl Codec for GrowingPairReadCodec {
@@ -2524,6 +2525,7 @@ impl Codec for GrowingPairReadCodec {
     ) -> Result<(u32, NonZeroUsize), DecodeFailure<Self::DecodeError>> {
         let available = input.len().saturating_sub(input_index);
         if !self.pass && available < 4 {
+            self.incomplete_attempts += 1;
             return Err(DecodeFailure::incomplete(crate::nonzero(4)));
         }
         self.pass = true;
@@ -2644,7 +2646,7 @@ fn test_buffered_decode_input_read_decoded_grows_when_value_exceeds_capacity() {
 
 #[test]
 fn test_buffered_decode_input_read_decoded_refills_after_incomplete() {
-    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002], vec![0x0003, 0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     let mut codec = GrowingPairReadCodec::default();
 
@@ -2653,6 +2655,9 @@ fn test_buffered_decode_input_read_decoded_refills_after_incomplete() {
         .expect("incomplete input should refill before decoding");
 
     assert_eq!(0x0001_0002, value);
+    assert_eq!(1, codec.incomplete_attempts);
+    assert_eq!(2, input.inner().reads);
+    assert_eq!(&[0x0003, 0x0004], input.unread());
 }
 
 #[test]
@@ -2911,16 +2916,21 @@ impl Codec for ScratchByteCodec {
 
 #[test]
 fn test_buffered_decode_input_read_decoded_refills_after_incomplete_hint() {
-    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003, 0x0004]]);
+    let input = ChunkedInput::new(vec![vec![0x0001, 0x0002, 0x0003], vec![0x0004]]);
     let mut input = TranscodeDecodeInput::with_capacity(input, 4);
     let mut codec = GrowingPairReadCodec::default();
 
     assert!(input.fill_until(3).expect("prefill should succeed"));
+    assert_eq!(&[0x0001, 0x0002, 0x0003], input.unread());
+    assert_eq!(1, input.inner().reads);
     let value = input
         .read_decoded_with(&mut codec, map_codec_error)
         .expect("decoder should refill to satisfy its incomplete hint");
 
     assert_eq!(0x0001_0002, value);
+    assert_eq!(1, codec.incomplete_attempts);
+    assert_eq!(2, input.inner().reads);
+    assert_eq!(&[0x0003, 0x0004], input.unread());
 }
 
 #[test]

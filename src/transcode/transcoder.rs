@@ -600,6 +600,12 @@ pub trait Transcoder {
     ///         output: &mut [u8],
     ///         output_index: usize,
     ///     ) -> Result<TranscodeProgress, Self::Error> {
+    ///         TranscodeFailure::ensure_transcode_indices(
+    ///             input.len(),
+    ///             input_index,
+    ///             output.len(),
+    ///             output_index,
+    ///         )?;
     ///         let mut read = 0;
     ///         let mut written = 0;
     ///         while input_index + read < input.len() && output_index + written < output.len() {
@@ -641,6 +647,18 @@ pub trait Transcoder {
     ///     .transcode(&[7], 0, &mut output, 0)
     ///     .expect("writer consumes one unit");
     /// assert_eq!(TranscodeStatus::Complete, progress.status());
+    ///
+    /// let error = transcoder.transcode(&[7], 2, &mut output, 0).unwrap_err();
+    /// assert!(matches!(
+    ///     error.failure_ref(),
+    ///     Some(TranscodeFailure::InvalidInputIndex { index: 2, input_len: 1 })
+    /// ));
+    /// let error = transcoder.transcode(&[7], 0, &mut output, 2).unwrap_err();
+    /// assert!(matches!(
+    ///     error.failure_ref(),
+    ///     Some(TranscodeFailure::InvalidOutputIndex { index: 2, output_len: 1 })
+    /// ));
+    /// assert_eq!([7], output);
     ///
     /// let written = transcoder
     ///     .finish(&mut output, 1)
