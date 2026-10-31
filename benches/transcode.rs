@@ -181,20 +181,34 @@ impl Transcoder for CopyTranscoder {
 fn bench_complete_paths(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
     let mut transcoder = CopyTranscoder;
     let mut output = vec![0_u8; input.len()];
+    let mut direct_probe = vec![0_u8; input.len()];
+    let direct_progress = transcoder
+        .transcode(input, 0, &mut direct_probe, 0)
+        .expect("copy transcoder is infallible");
+    assert!(direct_progress.is_complete());
+    assert_eq!(input, &direct_probe[..direct_progress.written()]);
     group.bench_function("direct_transcode", |bencher| {
         bencher.iter(|| {
             let progress = transcoder
                 .transcode(black_box(input), 0, output.as_mut_slice(), 0)
                 .expect("copy transcoder is infallible");
+            black_box(&output[..progress.written()]);
             black_box((progress.read(), progress.written()));
         });
     });
 
+    let mut complete_probe = vec![0_u8; input.len()];
+    let complete_written = transcoder
+        .transcode_complete_into(input, &mut complete_probe)
+        .expect("copy transcoder is infallible");
+    assert_eq!(input.len(), complete_written);
+    assert_eq!(input, &complete_probe[..complete_written]);
     group.bench_function("complete_lifecycle", |bencher| {
         bencher.iter(|| {
             let written = transcoder
                 .transcode_complete_into(black_box(input), output.as_mut_slice())
                 .expect("copy transcoder is infallible");
+            black_box(&output[..written]);
             black_box((written, output[0]));
         });
     });
@@ -213,6 +227,7 @@ fn bench_decode_engine(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
             let progress = decoder
                 .transcode(black_box(input), 0, output.as_mut_slice(), 0)
                 .expect("copy codec is infallible");
+            black_box(&output[..progress.written()]);
             black_box((progress.read(), progress.written()));
         });
     });
@@ -239,6 +254,7 @@ fn bench_codec_adapter(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8]) {
             let progress = decoder
                 .transcode(black_box(input), 0, adapter_output.as_mut_slice(), 0)
                 .expect("copy codec is infallible");
+            black_box(&adapter_output[..progress.written()]);
             black_box((progress.read(), progress.written(), adapter_output[0]));
         });
     });
@@ -258,6 +274,7 @@ fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
         let name = format!("output_window_{window}");
         group.bench_function(name, |bencher| {
             let mut transcoder = CopyTranscoder;
+            verify_output_windows(&mut transcoder, input, window);
             let mut output = vec![0_u8; window];
             bencher.iter(|| {
                 let mut input_index = 0;
@@ -266,6 +283,7 @@ fn bench_streaming_windows(group: &mut BenchmarkGroup<'_, WallTime>, input: &[u8
                     let progress = transcoder
                         .transcode(black_box(input), input_index, output.as_mut_slice(), 0)
                         .expect("copy transcoder is infallible");
+                    black_box(&output[..progress.written()]);
                     input_index += progress.read();
                     written_total += progress.written();
                 }

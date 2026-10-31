@@ -58,10 +58,9 @@ Correctness and progress-state checks run once outside timing and verify that
 the full output matches the input, with `NeedOutput` between windows and
 `Complete` at the end.
 
-That output observation applies to the production decode-engine and adapter
-window paths. The older `CopyTranscoder` `output_window_32` and
-`output_window_1024` paths observe only final read and written counts; they do
-not observe each window before reuse.
+The older audit entries below describe the source as it stood at each audit
+date. The current `CopyTranscoder` window paths also observe each written
+slice before reuse; see the 2026-10-31 RSC-002 baseline entry.
 
 ## Variable-width encode and convert engines
 
@@ -483,3 +482,49 @@ LTO machine code cannot resolve whether each complete write survives. No
 benchmark source was changed: the evidence does not confirm omitted writes.
 This audit does not establish retention or elimination and cannot support
 performance tradeoffs.
+
+### RSC-002 follow-up: 2026-10-31 output observation and baseline
+
+The source now passes each complete written range through `black_box` in the
+previously identified direct, lifecycle, decode-engine, codec-adapter, and
+`CopyTranscoder` window paths. The window path observes the slice before
+reusing its buffer. The direct and complete-lifecycle paths also run a
+correctness probe outside timing and compare the full output with the fixture;
+the window paths run `verify_output_windows` outside timing to check progress
+and complete output. Existing workload names, fixtures, throughput units, and
+timed setup remain unchanged.
+
+The post-change default artifact was built with
+`cargo bench --locked --bench transcode --no-run --message-format=json` using
+Cargo's default feature set. Cargo JSON selected
+`target/release/deps/transcode-518bb86cbd866b72` (SHA-256
+`13e9931994c5b67d7ec1b2aeac1d210dcbabd28429d7f773af9d1b3d2418f9c7`); the
+bench source SHA-256 was
+`72fb918d048c87437f1bea618a85dd18d369e2c39d8c367aad7da84220efc378`.
+The environment was rustc/Cargo 1.94.0, LLVM 21.1.8,
+`x86_64-unknown-linux-gnu`, Intel Core i5-9600K (6 CPUs), and the default
+bench profile (`opt-level=3`, `lto=true`, `codegen-units=1`). `nm` found
+`transcode::bench_transcoder` but no individual timed-closure symbols;
+`objdump` showed memcpy references that cannot be attributed to individual
+closures in the LTO-inlined function. **Actual elimination of writes in the
+previous baseline remains undetermined.** The source observation gap is
+corrected independently of that unresolved machine-code question.
+
+Criterion ran the following groups after the source change. These are local
+intervals from this shared host; concurrent repository CI and outliers were
+observed, so they are a new baseline only and must not be compared with older
+intervals as evidence of engine performance change.
+
+| Workload | Time interval |
+| --- | ---: |
+| `direct_transcode` | 2.5382–3.6128 µs |
+| `complete_lifecycle` | 1.6526–2.3596 µs |
+| `decode_engine` | 1.8678–2.3724 µs |
+| `codec_adapter` | 2.4347–3.3779 µs |
+| `safe_copy_loop` | 2.2418–2.9005 µs |
+| `output_window_32` | 24.382–34.336 µs |
+| `output_window_1024` | 4.3828–5.4601 µs |
+| `decode_engine_output_window_32` | 27.746–36.002 µs |
+| `codec_adapter_output_window_32` | 16.092–26.637 µs |
+| `decode_engine_output_window_1024` | 7.5713–10.862 µs |
+| `codec_adapter_output_window_1024` | 4.9929–8.5702 µs |
