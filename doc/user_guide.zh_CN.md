@@ -276,6 +276,8 @@ source。除非 decoder 定义了恢复协议，否则不要重放原输入。�
 
 源确认 EOF 后，保留任何未读尾部，并根据每次 `transcode_eof` 返回的 `read()` 与 `written()` 推进游标。如果返回 `NeedOutput`，就排空或扩展输出并重试 EOF 操作；不要回到普通 `transcode`。EOF 操作返回 `Complete` 后，根据 `max_finish_output_len` 分配输出并调用 `finish`。如果某次调用已经完成 EOF 操作，就不要重复派发同一个 EOF 事件。这些操作不提供通用回滚；EOF 出错后，除非 transcoder 定义了恢复协议，否则不要重放原输入。
 
+同步 `TranscodeDecodeInput::transcode` 批量方法在 EOF 返回 `NeedOutput` 后会继续调用 EOF，包括首次调用写入零个值的情况。短返回不表示处理完成；需要准确停止原因时使用 `transcode_step` 和 `transcode_eof_step`。显式补入新 unit 或 seek 会开始新的输入窗口。非零 raw read 或单值读取会切换批量处理上下文；继续处理前由调用方管理 decoder 生命周期。
+
 I/O bridge 可能在所有可见输入都已消费后，仍用空输入切片派发这次 EOF 调用。即使 unread 输入为空，只要 transcoder 返回 `NeedInput`，默认实现仍会报告 `IncompleteInput`。如果格式需要在 EOF 时排空内部缓存，或把空流视为正常结束，自定义 transcoder 必须覆盖 `transcode_eof`，并为这种情况返回相应进度。
 
 内置 transcode engine 新建时尚未初始化。第一次成功操作必须是 `reset`；成功 `finish` 后，复用前必须再次 `reset`。生命周期操作失败可能使实例进入 poisoned 状态，直到下一次成功 `reset`。

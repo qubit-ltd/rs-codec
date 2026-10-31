@@ -153,8 +153,7 @@ EOF 后，可使用 codec-backed decoder 的 `transcode_eof`，由 codec 的
   和 convert 语义。
 - 方向错误保留各自的错误分支；结构错误继续复用 `TranscodeFailure`，不恢复已移除的
   forwarding helper。
-- `D::Value: Default` 对 converter finish 冷路径的限制暂不改变；普通 transcode 热
-  路不依赖该 bound，后续可另行设计无需 Default 的 finish scratch。
+- `D::Value: Default` 当前用于 converter 的 reset／finish 生命周期 scratch；普通 inherent `transcode` 方法不依赖该 bound，但正常初始化及完整生命周期仍需要它。后续若设计无需 Default 的 scratch，必须同时覆盖 reset 与 finish。本轮只更正文档，不取消约束。
 - 不把 `EncodeContext` 的内部输出权限暴露给公共 hook API；若未来确需更强扩展点，
   应新增显式的 engine-owned writer，而不是恢复裸 `&mut [Unit]`。
 

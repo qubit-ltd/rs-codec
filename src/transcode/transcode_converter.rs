@@ -58,9 +58,11 @@ use super::Transcoder;
 ///
 /// let mut converter = ByteToWord::default();
 /// let mut output = [0_u16; 2];
+/// assert_eq!(converter.reset(&mut output, 0).unwrap(), 0);
 /// let progress = converter.transcode(&[7, 9], 0, &mut output, 0).unwrap();
 /// assert_eq!(output, [7, 9]);
 /// assert_eq!(progress, TranscodeProgress::complete(2, 2));
+/// assert_eq!(converter.finish(&mut output, progress.written()).unwrap(), 0);
 /// ```
 pub trait TranscodeConverter:
     Transcoder<Error = TranscodeConvertError<Self::DecodeError, Self::EncodeError, Self::Value>>

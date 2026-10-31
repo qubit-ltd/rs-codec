@@ -100,6 +100,8 @@ where
 {
     /// Owns the unit source and retains unread units across decode operations.
     input: BufferedInput<I>,
+    /// Tracks an EOF call that stopped for output capacity and must be resumed.
+    eof_retry_pending: bool,
 }
 
 impl<I> TranscodeDecodeInput<I>
@@ -126,6 +128,7 @@ where
     pub fn new(inner: I) -> Self {
         Self {
             input: BufferedInput::new(inner),
+            eof_retry_pending: false,
         }
     }
 
@@ -149,6 +152,7 @@ where
     pub fn with_capacity(inner: I, capacity: usize) -> Self {
         Self {
             input: BufferedInput::with_capacity(inner, capacity),
+            eof_retry_pending: false,
         }
     }
 
@@ -175,6 +179,7 @@ where
     pub fn try_with_capacity(inner: I, capacity: usize) -> StdResult<Self, TryReserveError> {
         Ok(Self {
             input: BufferedInput::try_with_capacity(inner, capacity)?,
+            eof_retry_pending: false,
         })
     }
 
@@ -247,7 +252,12 @@ where
         if count > self.input.capacity() {
             self.input.try_reserve_capacity(count).map_err(allocation_error)?;
         }
-        self.input.fill_until(count)
+        let previous_unread = self.input.unread_len();
+        let result = self.input.fill_until(count);
+        if self.input.unread_len() > previous_unread {
+            self.eof_retry_pending = false;
+        }
+        result
     }
 
     /// Performs one decode step and preserves the transcoder stop status.
@@ -379,6 +389,7 @@ where
             .map_err(&mut *map_error)
             .and_then(|progress| validate_eof_decode_progress(progress, 0, available_input, output_index, count))?;
         self.consume(progress.read());
+        self.eof_retry_pending = matches!(progress.status(), TranscodeStatus::NeedOutput { .. });
         Ok(progress)
     }
 
@@ -473,6 +484,7 @@ where
         if count == 0 {
             return Ok(0);
         }
+        self.eof_retry_pending = false;
         // SAFETY: The caller guarantees the destination range is valid.
         unsafe { self.input.read_unchecked(output, output_index, count) }
     }
@@ -770,7 +782,13 @@ where
     /// remain observable after a later failure.
     /// The method does not refill for later values once the requested output
     /// range is full; the underlying input may still prefetch units beyond
-    /// that range during an earlier read.
+    /// that range during an earlier read. If EOF processing stops with
+    /// `NeedOutput`, the next batch call resumes EOF processing directly;
+    /// a short return, including zero, does not mean conversion is complete.
+    /// Use the step methods when the exact stop reason is needed. Explicitly
+    /// refilling new units, seeking, or switching to raw/single-value reads
+    /// changes the input context; callers remain responsible for the decoder
+    /// lifecycle when continuing after such a switch.
     pub fn transcode<D, M, Value>(
         &mut self,
         decoder: &mut D,
@@ -791,6 +809,11 @@ where
         )?;
         if count == 0 {
             return Ok(0);
+        }
+        if self.eof_retry_pending {
+            return self
+                .transcode_eof_step(decoder, map_error, output, output_index, count)
+                .map(|progress| progress.written());
         }
         let output = &mut output[..output_end];
         let mut written_total = 0;
@@ -935,7 +958,9 @@ where
     /// Returns seek errors from the wrapped input.
     #[inline]
     pub fn seek(&mut self, position: SeekFrom) -> Result<u64> {
-        self.input.seek_to(position)
+        let position = self.input.seek_to(position)?;
+        self.eof_retry_pending = false;
+        Ok(position)
     }
 }
 
@@ -1003,6 +1028,7 @@ where
                 "decode finish output is shorter than the codec finish bound",
             ));
         }
+        self.eof_retry_pending = false;
         let mut map_domain_error = |error: TranscodeDomainError<C::DecodeError>| {
             let contextual = error.map_source(&mut map_error);
             Error::new(contextual.source().kind(), contextual)
@@ -1047,7 +1073,11 @@ where
     /// Propagates errors from the wrapped input while refilling.
     #[inline]
     fn fill_more(&mut self) -> Result<bool> {
-        self.input.fill_more()
+        let result = self.input.fill_more();
+        if matches!(result, Ok(true)) {
+            self.eof_retry_pending = false;
+        }
+        result
     }
 }
 

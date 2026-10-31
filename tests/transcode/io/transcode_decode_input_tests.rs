@@ -60,6 +60,337 @@ fn domain(error: PairDecodeError) -> TranscodeDecodeError<PairDecodeError> {
 }
 
 #[derive(Debug, Default)]
+struct EofRetryDecoder {
+    eof_seen: bool,
+    calls: Vec<&'static str>,
+}
+
+impl Transcoder for EofRetryDecoder {
+    type Input = u8;
+    type Output = u32;
+    type Error = TranscodeDecodeError<PairDecodeError>;
+
+    fn max_transcode_output_len(&self, len: usize) -> Result<usize, CapacityError> {
+        len.checked_mul(2).ok_or(CapacityError::OutputLengthOverflow)
+    }
+
+    fn reset(&mut self, _output: &mut [u32], _index: usize) -> Result<usize, Self::Error> {
+        self.eof_seen = false;
+        self.calls.clear();
+        Ok(0)
+    }
+
+    fn transcode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.calls.push("ordinary");
+        if self.eof_seen {
+            return Err(domain(PairDecodeError::BadInputIndex));
+        }
+        if input[index..] == [7, 8] {
+            output[output_index..output_index + 2].copy_from_slice(&[7, 8]);
+            return Ok(TranscodeProgress::complete(2, 2));
+        }
+        assert_eq!(&input[index..], &[7]);
+        Ok(TranscodeProgress::need_input(crate::nonzero(2), 0, 0))
+    }
+
+    fn transcode_eof(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        output: &mut [u32],
+        output_index: usize,
+    ) -> Result<TranscodeProgress, Self::Error> {
+        self.calls.push("eof");
+        self.eof_seen = true;
+        if index == input.len() {
+            return Ok(TranscodeProgress::complete(0, 0));
+        }
+        assert_eq!(&input[index..], &[7]);
+        if output.len() - output_index < 2 {
+            return Ok(TranscodeProgress::need_output(crate::nonzero(2), 0, 0));
+        }
+        output[output_index..output_index + 2].copy_from_slice(&[7, 8]);
+        Ok(TranscodeProgress::complete(1, 2))
+    }
+
+    fn finish(&mut self, _output: &mut [u32], _index: usize) -> Result<usize, Self::Error> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn test_eof_tail_explicit_steps_support_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    decoder.reset(&mut [], 0).expect("reset decoder");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert!(input.fill_until(1).expect("buffer the final unit"));
+    assert_eq!(
+        Some(TranscodeProgress::need_input(crate::nonzero(2), 0, 0)),
+        input
+            .transcode_step(&mut decoder, &mut mapper, &mut output, 1, 1)
+            .unwrap(),
+    );
+    assert!(!input.fill_until(2).expect("establish EOF"));
+    assert_eq!(
+        TranscodeProgress::need_output(crate::nonzero(2), 0, 0),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 1, 1)
+            .unwrap(),
+    );
+    assert_eq!(input.unread(), &[7]);
+    assert_eq!(
+        TranscodeProgress::complete(1, 2),
+        input
+            .transcode_eof_step(&mut decoder, &mut mapper, &mut output, 1, 2)
+            .unwrap(),
+    );
+    assert_eq!(output, [99, 7, 8, 99]);
+    assert_eq!(input.unread_len(), 0);
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+    assert_eq!(decoder.finish(&mut [], 0).unwrap(), 0);
+}
+
+#[test]
+fn test_eof_tail_batch_retries_eof_without_ordinary_decode() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    decoder.reset(&mut [], 0).expect("reset decoder");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 1).unwrap(),
+        0,
+    );
+    assert_eq!(input.unread(), &[7]);
+    assert_eq!(output, [99; 4]);
+    assert_eq!(
+        input
+            .transcode(&mut decoder, &mut mapper, &mut output, 1, 2)
+            .expect("batch must resume EOF after output backpressure"),
+        2,
+    );
+    assert_eq!(output, [99, 7, 8, 99]);
+    assert_eq!(input.unread_len(), 0);
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+    assert_eq!(decoder.finish(&mut [], 0).unwrap(), 0);
+}
+
+fn start_eof_backpressure<I>(input: &mut TranscodeDecodeInput<I>, decoder: &mut EofRetryDecoder)
+where
+    I: Input<Item = u8>,
+{
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    decoder.reset(&mut [], 0).expect("reset decoder");
+    assert_eq!(input.transcode(decoder, &mut mapper, &mut output, 1, 1).unwrap(), 0);
+    assert_eq!(input.unread(), &[7]);
+}
+
+#[test]
+fn test_eof_tail_repeated_output_backpressure() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 1).unwrap(),
+        0
+    );
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 1).unwrap(),
+        0
+    );
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof", "eof", "eof"]);
+    assert_eq!(input.unread_len(), 0);
+    assert_eq!(output, [99, 7, 8, 99]);
+}
+
+#[test]
+fn test_eof_tail_zero_count_preserves_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 0).unwrap(),
+        0
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof"]);
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_invalid_range_preserves_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    let error = input
+        .transcode(&mut decoder, &mut mapper, &mut output, 4, 1)
+        .unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    assert_eq!(decoder.calls, ["ordinary", "eof"]);
+    assert_eq!(output, [99; 4]);
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_successful_seek_starts_new_window() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    assert_eq!(input.seek(SeekFrom::Start(0)).unwrap(), 0);
+    decoder.reset(&mut [], 0).expect("reset decoder for new window");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_failed_seek_preserves_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(FailingSeekWithData(Cursor::new(vec![7_u8])), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    assert_eq!(
+        ErrorKind::BrokenPipe,
+        input.seek(SeekFrom::Start(0)).unwrap_err().kind()
+    );
+    assert_eq!(input.unread(), &[7]);
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_refill_without_new_units_preserves_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    assert!(!input.fill_until(2).unwrap());
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+#[test]
+fn test_eof_tail_explicit_refill_starts_new_window() {
+    let source = ChunkedByteInput(VecDeque::from([Some(vec![7_u8]), None, Some(vec![8_u8])]));
+    let mut input = TranscodeDecodeInput::with_capacity(source, 2);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    assert!(input.fill_until(2).unwrap());
+    assert_eq!(input.unread(), &[7, 8]);
+    decoder.reset(&mut [], 0).expect("reset decoder for new window");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 0, 2).unwrap(),
+        2
+    );
+    assert_eq!(output, [7, 8, 99, 99]);
+    assert_eq!(input.unread_len(), 0);
+    assert_eq!(decoder.calls, ["ordinary"]);
+}
+
+#[test]
+fn test_eof_tail_raw_mode_switch_leaves_batch_context() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    let mut raw = [0_u8; 1];
+    assert_eq!(Read::read(&mut input, &mut raw).unwrap(), 1);
+    assert_eq!(raw, [7]);
+    decoder.reset(&mut [], 0).expect("reset decoder for new mode");
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        0
+    );
+    assert_eq!(decoder.calls, ["eof"]);
+}
+
+#[test]
+fn test_eof_tail_single_value_preflight_preserves_retry() {
+    let mut input = TranscodeDecodeInput::with_capacity(Cursor::new(vec![7_u8]), 1);
+    let mut decoder = EofRetryDecoder::default();
+    start_eof_backpressure(&mut input, &mut decoder);
+    let mut codec = UnsupportedSingleValueCodec;
+    let error = input.read_decoded_with(&mut codec, map_codec_error).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Unsupported);
+    assert_eq!(input.unread(), &[7]);
+    let mut mapper = map_error;
+    let mut output = [99_u32; 4];
+    assert_eq!(
+        input.transcode(&mut decoder, &mut mapper, &mut output, 1, 2).unwrap(),
+        2
+    );
+    assert_eq!(decoder.calls, ["ordinary", "eof", "eof"]);
+}
+
+struct UnsupportedSingleValueCodec;
+
+impl Codec for UnsupportedSingleValueCodec {
+    type Value = u8;
+    type Unit = u8;
+    type DecodeError = PairDecodeError;
+    type EncodeError = PairDecodeError;
+
+    const MIN_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_ENCODE_UNITS_PER_VALUE: usize = 1;
+    const MAX_DECODE_RESET_VALUES: usize = 1;
+
+    unsafe fn decode(
+        &mut self,
+        input: &[u8],
+        index: usize,
+    ) -> Result<(u8, NonZeroUsize), DecodeFailure<PairDecodeError>> {
+        Ok((input[index], NonZeroUsize::MIN))
+    }
+
+    unsafe fn encode(&mut self, value: &u8, output: &mut [u8], index: usize) -> Result<usize, PairDecodeError> {
+        output[index] = *value;
+        Ok(1)
+    }
+}
+
+#[derive(Debug, Default)]
 struct FailedDecodeProgress {
     calls: usize,
     invalid_progress: bool,
@@ -1137,6 +1468,41 @@ impl Input for FailingSeekInput {
 }
 
 impl io_crate::Seekable for FailingSeekInput {
+    type Unit = u8;
+
+    fn seek_to(&mut self, _position: SeekFrom) -> IoResult<u64> {
+        Err(Error::new(ErrorKind::BrokenPipe, "seek failure"))
+    }
+}
+
+#[derive(Debug)]
+struct FailingSeekWithData(Cursor<Vec<u8>>);
+
+impl Input for FailingSeekWithData {
+    type Item = u8;
+
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
+        Read::read(&mut self.0, &mut output[index..index + count])
+    }
+}
+
+#[derive(Debug)]
+struct ChunkedByteInput(VecDeque<Option<Vec<u8>>>);
+
+impl Input for ChunkedByteInput {
+    type Item = u8;
+
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
+        let Some(Some(chunk)) = self.0.pop_front() else {
+            return Ok(0);
+        };
+        let copied = count.min(chunk.len());
+        output[index..index + copied].copy_from_slice(&chunk[..copied]);
+        Ok(copied)
+    }
+}
+
+impl io_crate::Seekable for FailingSeekWithData {
     type Unit = u8;
 
     fn seek_to(&mut self, _position: SeekFrom) -> IoResult<u64> {
