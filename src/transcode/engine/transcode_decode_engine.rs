@@ -965,6 +965,11 @@ where
 
     /// Applies the hook policy to an incomplete input tail.
     ///
+    /// # Type Parameters
+    ///
+    /// - `R`: Consumer result for an emitted value.
+    /// - `F`: Callback used to consume an emitted value and its source index.
+    ///
     /// # Parameters
     ///
     /// - `source`: Optional codec error associated with the incomplete tail.

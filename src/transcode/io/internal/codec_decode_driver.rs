@@ -131,6 +131,11 @@ where
 
     /// Decodes the prepared window using the entry point selected by EOF state.
     ///
+    /// # Type Parameters
+    ///
+    /// - `C`: Codec that decodes the input units and supplies the associated
+    ///   value and decode error types.
+    ///
     /// # Parameters
     ///
     /// - `codec`: Codec that decodes the prepared unit window.

@@ -44,6 +44,10 @@ where
 
 /// Encodes one value through reset, encode, and finish into reserved output.
 ///
+/// # Type Parameters
+///
+/// - `C`: Codec defining the value and unit types and their lifecycle bounds.
+///
 /// # Parameters
 ///
 /// - `codec`: Codec used for the complete encode lifecycle.
@@ -141,6 +145,10 @@ where
 ///
 /// Reset and finish output values are written into separate caller-provided
 /// buffers so both phases remain observable.
+///
+/// # Type Parameters
+///
+/// - `C`: Codec defining the value and unit types and their lifecycle bounds.
 ///
 /// # Parameters
 ///
