@@ -8,9 +8,6 @@
 
 //! Local immutable value-codec registry.
 
-use std::collections::BTreeMap;
-
-use crate::ValueCodecId;
 use crate::ValueCodecRegistration;
 use crate::ValueCodecRegistryError;
 
@@ -44,10 +41,8 @@ pub use value_string_codec_registry::ValueStringCodecRegistry;
 /// ```
 #[derive(Debug)]
 pub struct ValueCodecRegistry<D: 'static> {
-    /// Owned registrations sorted once by stable ID during construction.
+    /// Owned registrations sorted once by stable ID for binary-search lookup.
     registrations: Box<[ValueCodecRegistration<D>]>,
-    /// Stable ID to position mapping into the immutable registration slice.
-    indices: BTreeMap<ValueCodecId, usize>,
 }
 
 impl<D: Copy + 'static> ValueCodecRegistry<D> {
@@ -132,25 +127,24 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     ///
     /// # Returns
     ///
-    /// A local registry with no registrations or indexed IDs.
+    /// A local registry with no registrations.
     #[must_use]
     #[inline]
     pub fn empty() -> Self {
         Self {
             registrations: Box::new([]),
-            indices: BTreeMap::new(),
         }
     }
 
-    /// Freezes registrations and rejects duplicate IDs.
+    /// Sorts registrations and rejects duplicate IDs.
     ///
     /// # Parameters
     ///
-    /// - `registrations`: Owned entries sorted in place before indexing.
+    /// - `registrations`: Owned entries sorted in place by stable ID.
     ///
     /// # Returns
     ///
-    /// An immutable registry owning the sorted entries and their lookup index.
+    /// An immutable registry owning the sorted entries used for lookup.
     ///
     /// # Errors
     ///
@@ -174,14 +168,8 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
                 });
             }
         }
-        let indices = registrations
-            .iter()
-            .enumerate()
-            .map(|(index, registration)| (registration.id(), index))
-            .collect();
         Ok(Self {
             registrations: registrations.into_boxed_slice(),
-            indices,
         })
     }
 
@@ -194,10 +182,14 @@ impl<D: Copy + 'static> ValueCodecRegistry<D> {
     /// # Returns
     ///
     /// `Some` borrows the matching registration from this registry; `None`
-    /// means the ID is absent. Lookup uses a logarithmic tree search.
+    /// means the ID is absent. Lookup uses a binary search over the sorted
+    /// registration array.
     #[inline]
     pub fn get(&self, id: &str) -> Option<&ValueCodecRegistration<D>> {
-        let index = *self.indices.get(id)?;
+        let index = self
+            .registrations
+            .binary_search_by(|registration| registration.id().as_str().cmp(id))
+            .ok()?;
         self.registrations.get(index)
     }
 

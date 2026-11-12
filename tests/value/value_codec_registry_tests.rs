@@ -112,6 +112,16 @@ static SMALLER_ID_DUPLICATE: ValueStringCodecRegistration = ValueStringCodecRegi
     &STRING_DESCRIPTOR,
     ValueCodecRegistrationSource::new("fixture", "small_duplicate", "small_duplicate.rs", 5),
 );
+static MIDDLE_ID: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.middle"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "middle", "middle.rs", 6),
+);
+static LAST_ID: ValueStringCodecRegistration = ValueStringCodecRegistration::new(
+    ValueCodecId::new("example.zzz"),
+    &STRING_DESCRIPTOR,
+    ValueCodecRegistrationSource::new("fixture", "last", "last.rs", 7),
+);
 static BYTES_FIRST: ValueBytesCodecRegistration = ValueBytesCodecRegistration::new(
     ValueCodecId::new("example.local"),
     &BYTES_DESCRIPTOR,
@@ -291,6 +301,41 @@ fn test_local_value_string_codec_registry_owns_and_queries_entries() {
     assert!(
         ValueStringCodecRegistry::empty().registrations().is_empty(),
         "an empty registry has no registrations"
+    );
+}
+
+#[test]
+fn test_local_value_string_codec_registry_binary_searches_sorted_ids() {
+    let registry = ValueStringCodecRegistry::from_registrations([&LAST_ID, &FIRST, &MIDDLE_ID, &SMALLER_ID])
+        .expect("unique registry sorts registrations");
+
+    assert_eq!(
+        registry
+            .registrations()
+            .iter()
+            .map(|registration| registration.id().as_str())
+            .collect::<Vec<_>>(),
+        ["example.aaa", "example.local", "example.middle", "example.zzz"],
+        "registrations are sorted regardless of input order"
+    );
+    for id in ["example.aaa", "example.middle", "example.zzz"] {
+        assert_eq!(
+            registry.get(id).map(|registration| registration.id().as_str()),
+            Some(id),
+            "binary search finds first, middle, and last registrations"
+        );
+    }
+    for id in [
+        "example.loc",  // Prefix of an existing ID.
+        "example.n",    // Missing ID between registered IDs.
+        "example.aa",   // Below the registered range.
+        "example.zzzz", // Above the registered range.
+    ] {
+        assert!(registry.get(id).is_none(), "lookup rejects non-exact ID {id}");
+    }
+    assert!(
+        ValueStringCodecRegistry::empty().get("example.anything").is_none(),
+        "binary search on an empty registry returns none"
     );
 }
 
