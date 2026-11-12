@@ -294,23 +294,24 @@ fn bench_converter_phases(criterion: &mut Criterion) {
                     let id = format!("bound-{}/count-{count}", $bound);
                     let mut group = criterion.benchmark_group("converter_lifecycle_phase");
                     group.bench_function(BenchmarkId::new("reset", &id), |bencher| {
-                        bencher.iter_batched(
+                        bencher.iter_batched_ref(
                             || {
-                                CodecTranscodeConverter::new(
+                                let converter = CodecTranscodeConverter::new(
                                     LifecycleCodec::<u8, $bound>::new(count, count),
                                     LifecycleCodec::<u8, $bound>::new(count, count),
-                                )
+                                );
+                                let output = vec![0_u8; $bound * 2 + 1];
+                                (converter, output)
                             },
-                            |mut converter| {
-                                let mut output = vec![0_u8; $bound * 2 + 1];
-                                black_box(converter.reset(&mut output, 0).expect("converter reset"));
-                                black_box(output)
+                            |(converter, output)| {
+                                black_box(converter.reset(output, 0).expect("converter reset"));
+                                black_box(output.as_slice());
                             },
                             criterion::BatchSize::SmallInput,
                         );
                     });
                     group.bench_function(BenchmarkId::new("finish", &id), |bencher| {
-                        bencher.iter_batched(
+                        bencher.iter_batched_ref(
                             || {
                                 let mut converter = CodecTranscodeConverter::new(
                                     LifecycleCodec::<u8, $bound>::new(count, count),
@@ -320,9 +321,9 @@ fn bench_converter_phases(criterion: &mut Criterion) {
                                 converter.reset(&mut output, 0).expect("converter setup reset");
                                 (converter, output)
                             },
-                            |(mut converter, mut output)| {
-                                black_box(converter.finish(&mut output, 0).expect("converter finish"));
-                                black_box(output)
+                            |(converter, output)| {
+                                black_box(converter.finish(output, 0).expect("converter finish"));
+                                black_box(output.as_slice());
                             },
                             criterion::BatchSize::SmallInput,
                         );

@@ -17,8 +17,15 @@ through `black_box`; the difference includes these distinct drop patterns.
 Untimed prechecks verify reset values, the main value, finish values, ordering,
 written counts, and exact `Default` call counts (twice the bound for owned;
 zero for reusable scratch). A separate group measures converter `reset` and
-`finish` calls; its setup and output allocation happen outside the timed
-closure, and prechecks verify the phase output and order. Converter phase
+`finish` calls. Both phases use Criterion 0.8.2 `iter_batched_ref` with
+`BatchSize::SmallInput`: setup creates the converter and output buffer, and
+finish setup also performs a successful reset. The timed routine borrows that
+pair, calls only the target phase, and black-boxes its written count and output
+slice. Criterion's locked implementation places setup and routine-input
+destruction outside the per-routine measurement interval for this batch size;
+the output tuple therefore is not moved or destroyed inside the routine.
+Allocations and drops performed internally by reset or finish remain timed.
+Untimed phase prechecks still verify output bytes and order. Converter phase
 numbers must not be read as a full transcode measurement.
 
 ## Commands
@@ -103,8 +110,14 @@ output), and the suite has no identified production workload for these owned
 lifecycle bounds. The 10% comparison rule alone is therefore insufficient to
 justify a production change.
 
-Converter reset and finish were measured separately. These have no owned vs.
-scratch pair; selected bound-1024 means and 95% intervals in nanoseconds were:
+**Historical converter phase results (old timing boundary).** These have no
+owned vs. scratch pair and predate the `iter_batched_ref` correction above.
+The old reset routine created and initialized the caller output Vec inside the
+timed closure, then dropped the converter there; old finish setup created the
+output and reset the converter outside timing, while its routine dropped the
+converter before returning the output Vec. Do not compare these values with
+future measurements using the corrected boundary. Selected bound-1024 means
+and 95% intervals in nanoseconds from those historical runs were:
 
 | Phase/count | Run 1 | Run 2 | Run 3 |
 | --- | ---: | ---: | ---: |
@@ -117,6 +130,12 @@ scratch pair; selected bound-1024 means and 95% intervals in nanoseconds were:
 
 All three runs meet the mechanics of repeated measurement, but not the quiet
 host condition. No production lifecycle-buffer optimization was made.
+
+No measurements using the corrected converter phase boundary are recorded
+here. The required test-mode and filtered runs verify the benchmark entry
+points only; they are not new performance samples. Publish new phase values
+only after three repeatable measurements with complete logs and recorded
+environment and host contention.
 
 ## Downstream relevance checked
 
