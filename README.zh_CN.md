@@ -264,6 +264,10 @@ hooks 的 engine 见[用户手册](doc/user_guide.zh_CN.md)。
 ## 测试
 
 ```bash
+# 测试提取器并直接编译 Markdown 中的 Rust 示例
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+python3 scripts/check-doc-examples.py
+
 # 使用默认 feature 集运行测试
 cargo test
 

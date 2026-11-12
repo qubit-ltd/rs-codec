@@ -1,0 +1,480 @@
+{
+  "version": 1,
+  "pairs": [
+    {
+      "left": "readme_en_01",
+      "right": "readme_zh_01"
+    },
+    {
+      "left": "readme_en_02",
+      "right": "readme_zh_02"
+    },
+    {
+      "left": "guide_en_01",
+      "right": "guide_zh_01"
+    },
+    {
+      "left": "guide_en_02",
+      "right": "guide_zh_02"
+    },
+    {
+      "left": "guide_en_03",
+      "right": "guide_zh_03"
+    },
+    {
+      "left": "guide_en_04",
+      "right": "guide_zh_04"
+    },
+    {
+      "left": "guide_en_05",
+      "right": "guide_zh_05"
+    },
+    {
+      "left": "guide_en_06",
+      "right": "guide_zh_06"
+    },
+    {
+      "left": "guide_en_09",
+      "right": "guide_zh_09"
+    },
+    {
+      "left": "guide_en_11",
+      "right": "guide_zh_11"
+    },
+    {
+      "left": "guide_en_12",
+      "right": "guide_zh_12"
+    },
+    {
+      "left": "guide_en_13",
+      "right": "guide_zh_13"
+    },
+    {
+      "left": "guide_en_14",
+      "right": "guide_zh_14"
+    },
+    {
+      "left": "guide_en_15",
+      "right": "guide_zh_15"
+    }
+  ],
+  "cases": [
+    {
+      "id": "readme_en_01",
+      "source": "README.md",
+      "heading": "Installation",
+      "fence": 1,
+      "features": [
+        "json"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "readme_zh_01"
+    },
+    {
+      "id": "readme_en_02",
+      "source": "README.md",
+      "heading": "Quick start",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "readme_zh_02"
+    },
+    {
+      "id": "readme_en_03",
+      "source": "README.md",
+      "heading": "Quick start",
+      "fence": 2,
+      "features": [],
+      "prerequisites": [
+        "readme_en_02"
+      ],
+      "mode": "run",
+      "pair": null,
+      "wrapper": "result_main"
+    },
+    {
+      "id": "readme_zh_01",
+      "source": "README.zh_CN.md",
+      "heading": "安装",
+      "fence": 1,
+      "features": [
+        "json"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "readme_en_01"
+    },
+    {
+      "id": "readme_zh_02",
+      "source": "README.zh_CN.md",
+      "heading": "快速开始",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "readme_en_02"
+    },
+    {
+      "id": "readme_zh_03",
+      "source": "README.zh_CN.md",
+      "heading": "快速开始",
+      "fence": 2,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": null
+    },
+    {
+      "id": "guide_en_01",
+      "source": "doc/user_guide.md",
+      "heading": "Implement the representation once",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_01"
+    },
+    {
+      "id": "guide_en_02",
+      "source": "doc/user_guide.md",
+      "heading": "Expose owned one-value operations",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_en_01"
+      ],
+      "mode": "run",
+      "pair": "guide_zh_02"
+    },
+    {
+      "id": "guide_en_03",
+      "source": "doc/user_guide.md",
+      "heading": "Encode many values into a caller-owned buffer",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_en_01"
+      ],
+      "mode": "run",
+      "pair": "guide_zh_03"
+    },
+    {
+      "id": "guide_en_04",
+      "source": "doc/user_guide.md",
+      "heading": "What success looks like",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_en_01"
+      ],
+      "mode": "run",
+      "pair": "guide_zh_04"
+    },
+    {
+      "id": "guide_en_05",
+      "source": "doc/user_guide.md",
+      "heading": "Incomplete input versus invalid input",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_en_01"
+      ],
+      "mode": "run",
+      "pair": "guide_zh_05"
+    },
+    {
+      "id": "guide_en_06",
+      "source": "doc/user_guide.md",
+      "heading": "Use generic JSON value codecs",
+      "fence": 1,
+      "features": [
+        "json"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_06"
+    },
+    {
+      "id": "guide_en_08",
+      "source": "doc/user_guide.md",
+      "heading": "Apply policy for malformed input or EOF",
+      "fence": 2,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": null,
+      "wrapper": "result_main"
+    },
+    {
+      "id": "guide_en_09",
+      "source": "doc/user_guide.md",
+      "heading": "Connect buffered I/O",
+      "fence": 1,
+      "features": [
+        "io"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_09"
+    },
+    {
+      "id": "guide_en_11",
+      "source": "doc/user_guide.md",
+      "heading": "Build a local registry without global registration",
+      "fence": 1,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_11"
+    },
+    {
+      "id": "guide_en_12",
+      "source": "doc/user_guide.md",
+      "heading": "Build a local registry without global registration",
+      "fence": 2,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_12"
+    },
+    {
+      "id": "guide_en_13",
+      "source": "doc/user_guide.md",
+      "heading": "Build a local registry without global registration",
+      "fence": 3,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_13"
+    },
+    {
+      "id": "guide_en_14",
+      "source": "doc/user_guide.md",
+      "heading": "Build a local registry without global registration",
+      "fence": 4,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_zh_14",
+      "wrapper": "result_main"
+    },
+    {
+      "id": "guide_en_15",
+      "source": "doc/user_guide.md",
+      "heading": "Build a local registry without global registration",
+      "fence": 5,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [
+        "guide_en_14"
+      ],
+      "mode": "run",
+      "pair": "guide_zh_15"
+    },
+    {
+      "id": "guide_zh_01",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "只实现一次表示规则",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_01"
+    },
+    {
+      "id": "guide_zh_02",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "提供自有单值操作",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_zh_01"
+      ],
+      "mode": "run",
+      "pair": "guide_en_02"
+    },
+    {
+      "id": "guide_zh_03",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "把多个 value 编码到调用方缓冲区",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_zh_01"
+      ],
+      "mode": "run",
+      "pair": "guide_en_03"
+    },
+    {
+      "id": "guide_zh_04",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "成功时能看到什么",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_zh_01"
+      ],
+      "mode": "run",
+      "pair": "guide_en_04"
+    },
+    {
+      "id": "guide_zh_05",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "不完整输入与非法输入",
+      "fence": 1,
+      "features": [],
+      "prerequisites": [
+        "guide_zh_01"
+      ],
+      "mode": "run",
+      "pair": "guide_en_05"
+    },
+    {
+      "id": "guide_zh_06",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "使用通用 JSON value codec",
+      "fence": 1,
+      "features": [
+        "json"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_06"
+    },
+    {
+      "id": "guide_zh_08",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "为畸形输入或 EOF 配置策略",
+      "fence": 2,
+      "features": [],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": null,
+      "wrapper": "result_main"
+    },
+    {
+      "id": "guide_zh_09",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "接入缓冲 I/O",
+      "fence": 1,
+      "features": [
+        "io"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_09"
+    },
+    {
+      "id": "guide_zh_11",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "构造不依赖全局注册的局部注册表",
+      "fence": 1,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_11"
+    },
+    {
+      "id": "guide_zh_12",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "构造不依赖全局注册的局部注册表",
+      "fence": 2,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_12"
+    },
+    {
+      "id": "guide_zh_13",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "构造不依赖全局注册的局部注册表",
+      "fence": 3,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_13"
+    },
+    {
+      "id": "guide_zh_14",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "构造不依赖全局注册的局部注册表",
+      "fence": 4,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [],
+      "mode": "run",
+      "pair": "guide_en_14",
+      "wrapper": "result_main"
+    },
+    {
+      "id": "guide_zh_15",
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "构造不依赖全局注册的局部注册表",
+      "fence": 5,
+      "features": [
+        "registry"
+      ],
+      "prerequisites": [
+        "guide_zh_14"
+      ],
+      "mode": "run",
+      "pair": "guide_en_15"
+    }
+  ],
+  "exclusions": [
+    {
+      "source": "doc/user_guide.md",
+      "heading": "Apply policy for malformed input or EOF",
+      "fence": 1,
+      "reason": "该 fence 仅构造 DecodeIncompleteAction 值，不执行转换；相邻完整 hooks fence 执行同一策略。"
+    },
+    {
+      "source": "doc/user_guide.md",
+      "heading": "Connect buffered I/O",
+      "fence": 2,
+      "reason": "该 fence 是 I/O 示例的后续错误映射代码片段，依赖前一 fence 中定义的 mapper 类型；完整 I/O 主流程由前一 fence 编译验证。"
+    },
+    {
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "为畸形输入或 EOF 配置策略",
+      "fence": 1,
+      "reason": "该 fence 仅构造 DecodeIncompleteAction 值，不执行转换；相邻完整 hooks fence 执行同一策略。"
+    },
+    {
+      "source": "doc/user_guide.zh_CN.md",
+      "heading": "接入缓冲 I/O",
+      "fence": 2,
+      "reason": "该 fence 是 I/O 示例的后续错误映射代码片段，依赖前一 fence 中定义的 mapper 类型；完整 I/O 主流程由前一 fence 编译验证。"
+    },
+    {
+      "source": "README.zh_CN.md",
+      "heading": "快速开始",
+      "fence": 3,
+      "reason": "该片段是 src/owned.rs 文件内容，引用 crate::u16_be 模块；Markdown 没有包含 crate 模块骨架，单独 doctest 会测试缺失包装而非示例 API。"
+    },
+    {
+      "source": "README.zh_CN.md",
+      "heading": "快速开始",
+      "fence": 4,
+      "reason": "该片段是 src/batch.rs 文件内容，引用 crate::u16_be 模块；Markdown 没有包含 crate 模块骨架，单独 doctest 会测试缺失包装而非示例 API。"
+    }
+  ]
+}

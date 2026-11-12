@@ -234,6 +234,10 @@ callers dispatch the same EOF event with `transcode_eof_step` after `EndOfInput`
 ## Testing
 
 ```bash
+# Test and compile Rust examples extracted from the Markdown files
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+python3 scripts/check-doc-examples.py
+
 # Run tests with the default feature set
 cargo test
 
