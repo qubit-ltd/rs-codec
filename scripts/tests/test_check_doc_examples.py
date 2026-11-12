@@ -13,6 +13,70 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class ExtractFencesTests(unittest.TestCase):
+    def test_non_rust_block_hides_nested_rust(self):
+        doc = "# Real\n````markdown\n# Fake\n```rust\nnot rust\n```\n````\n"
+        self.assertEqual([], CHECKER.extract_fences(doc, "guide.md"))
+
+    def test_non_rust_heading_does_not_change_following_rust(self):
+        doc = "# Real\n```text\n# Fake\n```\n```rust\nassert!(true);\n```\n"
+        fences = CHECKER.extract_fences(doc, "guide.md")
+        self.assertEqual(1, len(fences))
+        self.assertEqual("Real", fences[0].heading)
+        self.assertEqual(1, fences[0].fence)
+        self.assertEqual(5, fences[0].line)
+
+    def test_fence_boundaries_preserve_code_and_location(self):
+        cases = [
+            ("~~~rust\n", "tilde\n", "~~~\n", "tilde\n"),
+            ("````rust\n", "```\n", "```\n````\n", "```\n```\n"),
+            ("```rust\n", "~~~\n", "~~~\n```\n", "~~~\n~~~\n"),
+            ("```rust\n", "", "````\n", ""),
+            ("   ```rust\n", "indented\n", "   ```\n", "indented\n"),
+        ]
+        for opener, code, closer, expected_code in cases:
+            with self.subTest(opener=opener, closer=closer):
+                doc = "# Topic\n" + opener + code + closer
+                fences = CHECKER.extract_fences(doc, "guide.md")
+                self.assertEqual(1, len(fences))
+                self.assertEqual(("guide.md", "Topic", 1), fences[0].location)
+                self.assertEqual(2, fences[0].line)
+                self.assertEqual(expected_code, fences[0].code)
+
+    def test_crlf_fence_preserves_code_and_location(self):
+        doc = "# Topic\r\n```rust\r\nassert!(true);\r\n```\r\n"
+        fences = CHECKER.extract_fences(doc, "guide.md")
+        self.assertEqual(1, len(fences))
+        self.assertEqual(("guide.md", "Topic", 1), fences[0].location)
+        self.assertEqual(2, fences[0].line)
+        self.assertEqual("assert!(true);\r\n", fences[0].code)
+
+    def test_opening_and_closing_fences_allow_zero_to_three_spaces(self):
+        for indent in range(4):
+            with self.subTest(indent=indent):
+                spaces = " " * indent
+                doc = f"# Topic\n{spaces}```rust\nassert!(true);\n{spaces}```\n"
+                fences = CHECKER.extract_fences(doc, "guide.md")
+                self.assertEqual(1, len(fences))
+                self.assertEqual(("guide.md", "Topic", 1), fences[0].location)
+                self.assertEqual(2, fences[0].line)
+                self.assertEqual("assert!(true);\n", fences[0].code)
+
+    def test_unclosed_non_rust_block_hides_remainder(self):
+        doc = "# Topic\n```text\n# Fake\n```rust\nnot rust\n"
+        self.assertEqual([], CHECKER.extract_fences(doc, "guide.md"))
+
+    def test_unclosed_rust_fence_is_rejected_with_opener_line(self):
+        with self.assertRaisesRegex(CHECKER.CheckError, r"guide.md:2: unclosed Rust fence"):
+            CHECKER.extract_fences("# Topic\n  ```rust\nassert!(true);\n", "guide.md")
+
+    def test_backtick_in_info_does_not_open_fence(self):
+        doc = "# Topic\n```rust`extra\nordinary text\n```rust\nassert!(true);\n```\n"
+        fences = CHECKER.extract_fences(doc, "guide.md")
+        self.assertEqual(1, len(fences))
+        self.assertEqual(("guide.md", "Topic", 1), fences[0].location)
+        self.assertEqual(4, fences[0].line)
+        self.assertEqual("assert!(true);\n", fences[0].code)
+
     def test_source_edit_changes_extracted_code(self):
         before = CHECKER.extract_fences("# Topic\n\n```rust\nassert_eq!(1, 1);\n```\n", "guide.md")
         after = CHECKER.extract_fences("# Topic\n\n```rust\nassert_eq!(2, 2);\n```\n", "guide.md")

@@ -57,19 +57,22 @@ def _strict_extract(markdown: str, source: str) -> list[Fence]:
             index += 1
             continue
         marker, info = fence.group(1), fence.group(2).strip()
-        is_rust = bool(re.match(r"^(?:rust|rs)(?:\s|,|$)", info, re.I) or re.match(r"^\{\.?rust(?:[ ,}]|$)", info, re.I))
-        if not is_rust:
+        if marker[0] == "`" and "`" in info:
             index += 1
             continue
-        title = headings[-1][1] if headings else ""
-        counts[title] = counts.get(title, 0) + 1
+        is_rust = bool(re.match(r"^(?:rust|rs)(?:\s|,|$)", info, re.I) or re.match(r"^\{\.?rust(?:[ ,}]|$)", info, re.I))
         close_re = re.compile(r"^ {0,3}" + re.escape(marker[0]) + "{" + str(len(marker)) + r",}[ \t]*(?:\r?\n)?$")
         end = index + 1
         while end < len(lines) and not close_re.match(lines[end]):
             end += 1
         if end == len(lines):
-            raise CheckError(f"{source}:{index + 1}: unclosed Rust fence")
-        result.append(Fence(source, title, counts[title], index + 1, "".join(lines[index + 1:end])))
+            if is_rust:
+                raise CheckError(f"{source}:{index + 1}: unclosed Rust fence")
+            break
+        if is_rust:
+            title = headings[-1][1] if headings else ""
+            counts[title] = counts.get(title, 0) + 1
+            result.append(Fence(source, title, counts[title], index + 1, "".join(lines[index + 1:end])))
         index = end + 1
     return result
 
